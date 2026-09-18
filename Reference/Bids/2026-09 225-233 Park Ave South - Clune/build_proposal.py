@@ -127,12 +127,12 @@ TERMS = ("Northern Wolves Inc provides one year warranty for the system it will 
 
 PRICES = [
   ("10th Floor - HVAC make-safe for demolition", "$18,000.00"),
-  ("10th Floor MER - new mechanical work", "$84,000.00"),
+  ("10th Floor MER - new mechanical work", "$114,000.00"),
   ("11th Floor - HVAC make-safe for demolition", "$18,000.00"),
-  ("11th Floor MER - new mechanical work", "$84,000.00"),
+  ("11th Floor MER - new mechanical work", "$114,000.00"),
   ("12th Floor - HVAC make-safe for demolition", "$14,000.00"),
 ]
-TOTAL = "$218,000.00"
+TOTAL = "$278,000.00"
 
 pB = ParagraphStyle("b", fontName="Arial", fontSize=10.5, leading=12, textColor=BLACK)
 pBB = ParagraphStyle("bb", fontName="Arial-Bold", fontSize=10.5, leading=12, textColor=BLACK)

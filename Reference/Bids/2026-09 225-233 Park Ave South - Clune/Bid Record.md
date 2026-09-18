@@ -33,11 +33,11 @@ Drawing requirements worth remembering: all piping shutdowns and drain-downs on 
 | Package | Price |
 |---|---|
 | 10th Floor make-safe | $18,000 |
-| 10th Floor MER install | $84,000 |
+| 10th Floor MER install | $114,000 (was $84,000 in first draft) |
 | 11th Floor make-safe | $18,000 |
-| 11th Floor MER install | $84,000 |
+| 11th Floor MER install | $114,000 (was $84,000 in first draft) |
 | 12th Floor make-safe | $14,000 |
-| Total | $218,000 |
+| Total | $278,000 |
 
 ### Price check (2026-09-18)
 
@@ -56,4 +56,4 @@ MER packages, per floor, at the bid method:
 | Sales tax 8.875% on material | $3,450 |
 | Bid price | ~$114,300 (OFCI 30%) / ~$105,900 (20%) |
 
-Observation: $84,000 equals the base subtotal before overhead, misc and tax. Recommended MER price $105,000 to $115,000 each. At T&M billed rates the same scope is ~$137,000. Decision pending with Ruslan; proposal was issued at $84,000 per MER as instructed.
+Observation: $84,000 equals the base subtotal before overhead, misc and tax. Recommended MER price $105,000 to $115,000 each. At T&M billed rates the same scope is ~$137,000. Decision 2026-09-18: Ruslan set MER packages at $114,000 each (bid method, 30% OFCI overhead). Revised proposal total $278,000, Quote 3127.
