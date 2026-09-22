@@ -14,8 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supabase-config.js?v=179"></script>
-<script src="auth.js?v=179"></script>
+<script src="supabase-config.js?v=180"></script>
+<script src="auth.js?v=180"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: 1200px; margin: 0 auto; }
@@ -290,6 +290,71 @@
     .g702-panel, .li-panel { margin: 8px 8px; padding: 12px 14px; }
     .modal-card .row { flex-direction: column; gap: 0; }
   }
+
+  /* ═══ Prime Contracts (Procore-style) ═══ */
+  .pc-toolbar { display:flex; align-items:center; gap:10px; padding:12px 16px; }
+  .pc-search { padding:8px 12px; border:1px solid var(--nw-border); border-radius:7px; font-size:13px; min-width:260px; }
+  .btn-create { background:#f97316; color:#fff; border:none; padding:9px 16px; border-radius:7px; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 2px 8px rgba(249,115,22,.25); }
+  .btn-create:hover { filter:brightness(1.05); }
+  .pc-table-wrap { margin:0 16px 16px; background:var(--nw-card); border:1px solid var(--nw-border); border-radius:10px; overflow:auto; }
+  .pc-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:900px; }
+  .pc-table th, .pc-table td { padding:9px 10px; border-bottom:1px solid var(--nw-border); white-space:nowrap; vertical-align:middle; }
+  .pc-table thead th { background:#f8fafc; font-weight:700; font-size:11px; color:#334155; text-align:left; position:sticky; top:0; z-index:2; }
+  .pc-table th.num, .pc-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .pc-table td.ctr { text-align:center; }
+  .pc-table tbody tr:hover { background:#f0f9ff; cursor:pointer; }
+  .pc-table tfoot td { background:#f8fafc; font-weight:700; border-top:2px solid #cbd5e1; }
+  .pc-table .pc-title-cell { white-space:normal; min-width:220px; }
+  .pc-table .pc-empty { text-align:center; color:var(--nw-muted); font-style:italic; padding:22px; }
+  .pc-link { color:#0369a1; font-weight:600; text-decoration:underline; }
+  .pc-pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:700; border:1px solid transparent; }
+  .pc-pill.st-approved, .pc-pill.st-certified, .pc-pill.st-complete { background:#dcfce7; color:#166534; border-color:#86efac; }
+  .pc-pill.st-pending, .pc-pill.st-submitted, .pc-pill.st-out_for_signature { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
+  .pc-pill.st-draft { background:#e2e8f0; color:#475569; border-color:#cbd5e1; }
+  .pc-pill.st-paid { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+  .pc-pill.st-void, .pc-pill.st-rejected, .pc-pill.st-terminated { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
+
+  .pc-head { background:var(--nw-card); border-bottom:1px solid var(--nw-border); padding:10px 16px 0; }
+  .pc-crumb { font-size:12px; color:var(--nw-muted); margin-bottom:6px; }
+  .pc-crumb a { color:#0369a1; text-decoration:none; font-weight:600; }
+  .pc-crumb .sep { color:#cbd5e1; margin:0 4px; }
+  .pc-title-row { display:flex; align-items:center; gap:12px; }
+  .pc-title-row h2 { margin:0; font-size:20px; font-weight:800; color:var(--nw-text); flex:1; }
+  .pc-actions { position:relative; }
+  .pc-menu { position:absolute; right:0; top:100%; margin-top:4px; background:#fff; border:1px solid var(--nw-border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); min-width:260px; z-index:60; }
+  .pc-menu a { display:block; padding:10px 14px; font-size:13px; color:#334155; text-decoration:none; border-bottom:1px solid #f1f5f9; }
+  .pc-menu a:hover { background:#f0f9ff; }
+  .pc-tabs { display:flex; gap:0; margin-top:10px; overflow-x:auto; }
+  .pc-tab { padding:10px 16px; font-size:13px; font-weight:600; color:#64748b; text-decoration:none; border-bottom:3px solid transparent; white-space:nowrap; }
+  .pc-tab:hover { color:#0369a1; }
+  .pc-tab.active { color:#0f172a; border-bottom-color:#f97316; font-weight:700; }
+  .pc-body { padding:14px 0 24px; }
+  .pc-section-h { display:flex; align-items:center; gap:12px; padding:4px 16px 12px; }
+  .pc-section-h h2 { margin:0; font-size:18px; font-weight:800; flex:1; }
+  .pc-sub-h { margin:0 16px 8px; font-size:14px; font-weight:700; color:#334155; }
+
+  .pc-general { display:grid; grid-template-columns:200px 1fr; gap:16px; padding:0 16px; }
+  .pc-subnav { position:sticky; top:12px; align-self:start; display:flex; flex-direction:column; gap:8px; font-size:13px; }
+  .pc-subnav a { color:#475569; text-decoration:none; }
+  .pc-subnav a:hover { color:#0369a1; }
+  .pc-cards { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .pc-card { background:var(--nw-card); border:1px solid var(--nw-border); border-radius:10px; padding:16px 18px; }
+  .pc-card-h { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .pc-card-h h3 { margin:0; font-size:16px; font-weight:800; flex:1; }
+  .pc-edit { padding:5px 12px; font-size:12px; }
+  .pc-mini { padding:3px 8px; font-size:10px; }
+  .pc-grid1 { display:grid; grid-template-columns:1fr; gap:14px; }
+  .pc-grid3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px 20px; }
+  .pc-grid4 { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px 20px; }
+  .pc-kv .k { font-size:12px; font-weight:700; color:#334155; margin-bottom:3px; }
+  .pc-kv .v { font-size:13px; color:#0f172a; }
+  .pc-kv.span3 { grid-column:1 / -1; }
+  .pc-sov { min-width:0; }
+  .pc-warn { margin-top:8px; padding:8px 10px; background:#fef3c7; color:#92400e; border-radius:6px; font-size:12px; font-weight:600; }
+  @media (max-width: 900px) {
+    .pc-general { grid-template-columns:1fr; } .pc-subnav { display:none; }
+    .pc-grid3, .pc-grid4 { grid-template-columns:1fr 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -313,11 +378,21 @@
 <!-- Setup Billing modal (create/edit aia_projects) -->
 <div class="modal-overlay" id="setupModal">
   <div class="modal-card" style="max-width:680px">
-    <h2 id="setupTitle">Set up AIA Billing for project</h2>
+    <h2 id="setupTitle">New Prime Contract</h2>
     <div class="field">
       <label>Project *</label>
       <select id="sProject"></select>
-      <div class="field-hint">Choose an active project. Each project can have one billing setup.</div>
+      <div class="field-hint">Choose an active project. Each project can have one prime contract.</div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:0 0 150px"><label>Contract #</label><input type="text" id="sContractNumber" placeholder="e.g. 11010174"></div>
+      <div class="field"><label>Title</label><input type="text" id="sTitle" placeholder="e.g. Snowflake-Boston Properties 7 Times Square, 29-31 FLs"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Status</label>
+        <select id="sStatus"><option value="draft">Draft</option><option value="out_for_signature">Out for Signature</option><option value="approved" selected>Approved</option><option value="complete">Complete</option><option value="terminated">Terminated</option><option value="void">Void</option></select>
+      </div>
+      <div class="field" style="flex:0 0 130px"><label><input type="checkbox" id="sExecuted"> Executed</label></div>
     </div>
     <div class="row">
       <div class="field">
@@ -383,6 +458,21 @@
     <div class="field">
       <label>Architect / Engineer address (optional)</label>
       <textarea id="sArchAddr" style="min-height:50px"></textarea>
+    </div>
+    <div class="field"><label>Description</label><textarea id="sDescription" style="min-height:50px"></textarea></div>
+    <div class="row">
+      <div class="field"><label>Inclusions</label><textarea id="sInclusions" style="min-height:60px"></textarea></div>
+      <div class="field"><label>Exclusions</label><textarea id="sExclusions" style="min-height:60px"></textarea></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Start date</label><input type="date" id="sStartDate"></div>
+      <div class="field"><label>Estimated completion</label><input type="date" id="sEstCompletion"></div>
+      <div class="field"><label>Substantial completion</label><input type="date" id="sSubCompletion"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Actual completion</label><input type="date" id="sActCompletion"></div>
+      <div class="field"><label>Signed contract received</label><input type="date" id="sSignedReceived"></div>
+      <div class="field"><label>Contract termination</label><input type="date" id="sTermination"></div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" id="setupCancel">Cancel</button>
@@ -496,6 +586,83 @@
   </div>
 </div>
 
+
+<!-- SOV line modal -->
+<div class="modal-overlay" id="sovModal">
+  <div class="modal-card" style="max-width:520px">
+    <h2 id="sovTitle">Add SOV Line</h2>
+    <div class="row">
+      <div class="field" style="flex:0 0 160px"><label>Budget code</label><input type="text" id="sovCode" placeholder="optional"></div>
+      <div class="field"><label>Amount *</label><input type="number" id="sovAmt" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="field"><label>Description *</label><input type="text" id="sovDesc" placeholder="e.g. F/I Ductwork, dampers, insulation"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="sovCancel">Cancel</button>
+      <button class="btn-save" id="sovSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Order modal -->
+<div class="modal-overlay" id="coModal">
+  <div class="modal-card" style="max-width:680px">
+    <h2 id="coTitleH">New Change Order</h2>
+    <div class="row">
+      <div class="field" style="flex:0 0 110px"><label>PCCO #</label><input type="text" id="coNumber" placeholder="001"></div>
+      <div class="field" style="flex:0 0 110px"><label>PCO #</label><input type="text" id="coPco" placeholder="001"></div>
+      <div class="field" style="flex:0 0 90px"><label>Revision</label><input type="number" id="coRev" min="0" step="1" value="0"></div>
+      <div class="field"><label>Status</label>
+        <select id="coStatus"><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="void">Void</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Title *</label><input type="text" id="coTitle" placeholder="CE #COP-SF-03 - DEHUMIDIFIERS"></div>
+    <div class="row">
+      <div class="field"><label>Amount * (negative = deduction)</label><input type="number" id="coAmount" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Change reason</label>
+        <select id="coReason"><option value="">--</option><option>Client Request</option><option>Design Development</option><option>Unforeseen Conditions</option><option>Owner Change</option><option>Allowance</option><option>Back Charge</option><option>Other</option></select>
+      </div>
+      <div class="field" style="flex:0 0 140px"><label>Schedule impact (days)</label><input type="number" id="coImpact" step="1" placeholder="--"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Date initiated</label><input type="date" id="coInit"></div>
+      <div class="field"><label>Due date</label><input type="date" id="coDue"></div>
+      <div class="field"><label>Review date</label><input type="date" id="coReview"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Designated reviewer</label><input type="text" id="coReviewer" placeholder="optional"></div>
+      <div class="field" style="flex:0 0 140px"><label><input type="checkbox" id="coExecuted"> Executed</label></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="coNotes" style="min-height:50px"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="coDelete" style="margin-right:auto;color:#991b1b">Delete</button>
+      <button class="btn-cancel" id="coCancel">Cancel</button>
+      <button class="btn-save" id="coSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Payment modal -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal-card" style="max-width:560px">
+    <h2 id="payTitleH">Add Payment</h2>
+    <div class="field"><label>Invoice</label><select id="payApp"></select></div>
+    <div class="row">
+      <div class="field"><label>Amount *</label><input type="number" id="payAmount" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Date paid *</label><input type="date" id="payDate"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Payment number</label><input type="text" id="payNumber" placeholder="01"></div>
+      <div class="field"><label>Check number</label><input type="text" id="payCheck" placeholder="ACH or check #"></div>
+    </div>
+    <div class="field"><label>Notes</label><input type="text" id="payNotes"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="payDelete" style="margin-right:auto;color:#991b1b">Delete</button>
+      <button class="btn-cancel" id="payCancel">Cancel</button>
+      <button class="btn-save" id="paySave">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -513,7 +680,8 @@ requireAuth().catch(function(){});
   // URL state
   var params = new URLSearchParams(window.location.search);
   var currentAppId    = params.get('app')     || null;
-  var currentAiaProjId = params.get('project') || null;
+  var currentAiaProjId = params.get('contract') || params.get('project') || null;
+  var currentTab      = params.get('tab') || 'general';
 
   var editingLineId = null;
 
@@ -536,8 +704,10 @@ requireAuth().catch(function(){});
 
     if (currentAppId) {
       await renderApplication(currentAppId);
+    } else if (currentAiaProjId) {
+      await renderContract(currentAiaProjId, currentTab);
     } else {
-      await renderProjects();
+      await renderContracts();
     }
   }
 
@@ -551,8 +721,18 @@ requireAuth().catch(function(){});
     // Line item modal
     document.getElementById('lCancel').addEventListener('click', function() { closeModal('lineModal'); });
     document.getElementById('lSave').addEventListener('click', saveLineItem);
+    // SOV / Change Order / Payment modals
+    document.getElementById('sovCancel').addEventListener('click', function() { closeModal('sovModal'); });
+    document.getElementById('sovSave').addEventListener('click', saveSov);
+    document.getElementById('coCancel').addEventListener('click', function() { closeModal('coModal'); });
+    document.getElementById('coSave').addEventListener('click', saveCo);
+    document.getElementById('coDelete').addEventListener('click', deleteCo);
+    document.getElementById('payCancel').addEventListener('click', function() { closeModal('payModal'); });
+    document.getElementById('paySave').addEventListener('click', savePayment);
+    document.getElementById('payDelete').addEventListener('click', function() { if (editingPayId) deletePayment(editingPayId); });
+    document.getElementById('payApp').addEventListener('change', function() { if (!editingPayId) updatePayNumberHint(); });
     // Close on backdrop click
-    ['setupModal','newAppModal','lineModal'].forEach(function(id) {
+    ['setupModal','newAppModal','lineModal','sovModal','coModal','payModal'].forEach(function(id) {
       document.getElementById(id).addEventListener('click', function(e) {
         if (e.target === this) closeModal(id);
       });
@@ -566,91 +746,6 @@ requireAuth().catch(function(){});
   //   PROJECTS LIST VIEW
   // ═══════════════════════════════════════════════════════════════════════
 
-  async function renderProjects() {
-    document.getElementById('pageTitle').textContent = 'Invoicing';
-    document.getElementById('crumb').innerHTML =
-      'Projects with AIA billing setup' +
-      (canEdit ? ' · <a href="#" id="crumbSetup">+ Set up new</a>' : '');
-    var link = document.getElementById('crumbSetup');
-    if (link) link.addEventListener('click', function(e) { e.preventDefault(); openSetupModal(); });
-
-    var main = document.getElementById('mainView');
-    main.innerHTML = '<div class="iv-empty"><div class="icon">⏳</div><p>Loading…</p></div>';
-
-    // Load aia_projects + join projects table
-    var r = await supabaseClient
-      .from('aia_projects')
-      .select('*, project:projects(id, short_code, project_name, pm_name, status)')
-      .order('created_at', { ascending: false });
-    if (r.error) {
-      main.innerHTML = '<div class="iv-empty"><div class="icon">⚠️</div><p>Error: ' + escHtml(r.error.message) + '</p></div>';
-      return;
-    }
-    var aiaProjs = r.data || [];
-    if (!aiaProjs.length) {
-      main.innerHTML =
-        '<div class="iv-empty"><div class="icon">📄</div>' +
-        '<p>No projects have AIA billing set up yet.<br>' +
-        (canEdit ? 'Click <b>+ Set up new</b> above to configure the first one.' : 'Ask a PM or admin to set one up.') +
-        '</p></div>';
-      return;
-    }
-
-    // Load recent applications per project (last 6 each)
-    var projIds = aiaProjs.map(function(p) { return p.id; });
-    var appsRes = await supabaseClient
-      .from('aia_applications')
-      .select('id, aia_project_id, application_no, period_from, period_to, status, application_date')
-      .in('aia_project_id', projIds)
-      .order('application_no', { ascending: false });
-    var appsByProj = {};
-    (appsRes.data || []).forEach(function(a) {
-      (appsByProj[a.aia_project_id] = appsByProj[a.aia_project_id] || []).push(a);
-    });
-
-    var html = '';
-    aiaProjs.forEach(function(ap) {
-      var pj = ap.project || {};
-      var apps = appsByProj[ap.id] || [];
-      var contract = Number(ap.original_contract_sum || 0);
-      html += '<div class="proj-card">' +
-        '<div class="pc-title">' +
-          (pj.short_code ? '<span class="short-code">' + escHtml(pj.short_code) + '</span>' : '') +
-          '<span class="name">' + escHtml(pj.project_name || '(unnamed project)') + '</span>' +
-          (pj.pm_name ? '<span class="pm">👤 ' + escHtml(pj.pm_name) + '</span>' : '') +
-        '</div>' +
-        '<div class="meta">' +
-          '<span>Contract: <b>' + fmtMoney(contract) + '</b></span>' +
-          '<span>Retainage: <b>' + Number(ap.retainage_rate * 100).toFixed(2) + '%</b></span>' +
-          (ap.contract_date ? '<span>Contract date: <b>' + escHtml(ap.contract_date) + '</b></span>' : '') +
-          '<span>Applications: <b>' + apps.length + '</b></span>' +
-        '</div>' +
-        '<div class="apps-strip">';
-      apps.slice(0, 6).forEach(function(a) {
-        var pf = a.period_to ? shortDate(a.period_to) : '';
-        html += '<a class="app-pill" href="?app=' + a.id + '">' +
-          'App #' + a.application_no + (pf ? ' · ' + pf : '') +
-          ' <span class="status ' + a.status + '">' + a.status + '</span>' +
-        '</a>';
-      });
-      if (apps.length > 6) html += '<span style="font-size:11px;color:var(--nw-muted)">+' + (apps.length - 6) + ' more</span>';
-      if (canEdit) {
-        html += '<button class="btn-new" data-newapp="' + ap.id + '">+ New Application</button>';
-        html += '<button class="btn-secondary" data-edit="' + ap.id + '">Edit setup</button>';
-      }
-      html += '</div></div>';
-    });
-
-    main.innerHTML = html;
-    // Bind buttons
-    main.querySelectorAll('[data-newapp]').forEach(function(btn) {
-      btn.addEventListener('click', function() { openNewAppModal(btn.getAttribute('data-newapp')); });
-    });
-    main.querySelectorAll('[data-edit]').forEach(function(btn) {
-      btn.addEventListener('click', function() { openSetupModal(btn.getAttribute('data-edit')); });
-    });
-  }
-
   // ═══════════════════════════════════════════════════════════════════════
   //   SETUP MODAL — create / edit aia_projects
   // ═══════════════════════════════════════════════════════════════════════
@@ -660,8 +755,8 @@ requireAuth().catch(function(){});
   async function openSetupModal(aiaProjectId) {
     editingSetupId = aiaProjectId || null;
     document.getElementById('setupTitle').textContent = editingSetupId
-      ? 'Edit AIA Billing Setup'
-      : 'Set up AIA Billing for project';
+      ? 'Edit Prime Contract'
+      : 'New Prime Contract';
 
     // Load projects list (only active ones without a billing setup yet, unless editing)
     var pjRes = await supabaseClient.from('projects')
@@ -700,6 +795,19 @@ requireAuth().catch(function(){});
       document.getElementById('sProjectNo').value    = d.project_no || '';
       document.getElementById('sContractNo').value   = d.contract_no || '';
       document.getElementById('sProjectAddr').value  = d.project_address || '';
+      document.getElementById('sContractNumber').value = d.contract_number || '';
+      document.getElementById('sTitle').value        = d.title || '';
+      document.getElementById('sStatus').value       = d.status || 'approved';
+      document.getElementById('sExecuted').checked   = !!d.executed;
+      document.getElementById('sDescription').value  = d.description || '';
+      document.getElementById('sInclusions').value   = d.inclusions || '';
+      document.getElementById('sExclusions').value   = d.exclusions || '';
+      document.getElementById('sStartDate').value    = d.start_date || '';
+      document.getElementById('sEstCompletion').value = d.estimated_completion_date || '';
+      document.getElementById('sSubCompletion').value = d.substantial_completion_date || '';
+      document.getElementById('sActCompletion').value = d.actual_completion_date || '';
+      document.getElementById('sSignedReceived').value = d.signed_contract_received_date || '';
+      document.getElementById('sTermination').value  = d.contract_termination_date || '';
     } else {
       sel.disabled = false;
       document.getElementById('sContractSum').value  = '';
@@ -715,6 +823,10 @@ requireAuth().catch(function(){});
       document.getElementById('sProjectNo').value    = '';
       document.getElementById('sContractNo').value   = '';
       document.getElementById('sProjectAddr').value  = '';
+      ['sContractNumber','sTitle','sDescription','sInclusions','sExclusions','sStartDate','sEstCompletion','sSubCompletion','sActCompletion','sSignedReceived','sTermination']
+        .forEach(function(id) { document.getElementById(id).value = ''; });
+      document.getElementById('sStatus').value = 'approved';
+      document.getElementById('sExecuted').checked = false;
     }
     openModal('setupModal');
   }
@@ -735,7 +847,20 @@ requireAuth().catch(function(){});
       form_variant:          document.getElementById('sVariant').value || 'owner',
       project_no:            document.getElementById('sProjectNo').value.trim() || null,
       contract_no:           document.getElementById('sContractNo').value.trim() || null,
-      project_address:       document.getElementById('sProjectAddr').value.trim() || null
+      project_address:       document.getElementById('sProjectAddr').value.trim() || null,
+      contract_number:       document.getElementById('sContractNumber').value.trim() || null,
+      title:                 document.getElementById('sTitle').value.trim() || null,
+      status:                document.getElementById('sStatus').value || 'approved',
+      executed:              document.getElementById('sExecuted').checked,
+      description:           document.getElementById('sDescription').value.trim() || null,
+      inclusions:            document.getElementById('sInclusions').value.trim() || null,
+      exclusions:            document.getElementById('sExclusions').value.trim() || null,
+      start_date:            document.getElementById('sStartDate').value || null,
+      estimated_completion_date:     document.getElementById('sEstCompletion').value || null,
+      substantial_completion_date:   document.getElementById('sSubCompletion').value || null,
+      actual_completion_date:        document.getElementById('sActCompletion').value || null,
+      signed_contract_received_date: document.getElementById('sSignedReceived').value || null,
+      contract_termination_date:     document.getElementById('sTermination').value || null
     };
     if (!patch.project_id || !patch.original_contract_sum) {
       showToast('Project and Contract Sum are required', 'error'); return;
@@ -747,13 +872,14 @@ requireAuth().catch(function(){});
       res = await supabaseClient.from('aia_projects').update(patch).eq('id', editingSetupId);
     } else {
       patch.created_by = currentUserId;
-      res = await supabaseClient.from('aia_projects').insert(patch);
+      res = await supabaseClient.from('aia_projects').insert(patch).select().single();
     }
     btn.disabled = false; btn.textContent = 'Save';
     if (res.error) { showToast('Save failed: ' + res.error.message, 'error'); return; }
     showToast('✅ Saved', 'success');
     closeModal('setupModal');
-    renderProjects();
+    if (!editingSetupId && res.data && res.data.id) { window.location.href = 'invoicing.html?contract=' + res.data.id; return; }
+    if (pc && pc.setup && pc.setup.id === editingSetupId) reloadContract(); else renderContracts();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -820,6 +946,18 @@ requireAuth().catch(function(){});
       }
     }
 
+    // Change Order Summary auto-fill from approved change orders (deductions stored negative)
+    var coSum = { co_prev_additions: 0, co_prev_deductions: 0, co_this_additions: 0, co_this_deductions: 0 };
+    var coq = await supabaseClient.from('aia_change_orders').select('amount, date_initiated, status')
+      .eq('aia_project_id', newAppProjectId).eq('status', 'approved');
+    (coq.data || []).forEach(function(c) {
+      var amt = Number(c.amount || 0), d = c.date_initiated || '';
+      var isThis = d >= from && d <= to, isPrev = d < from;
+      if (!isThis && !isPrev) return;
+      var k = (isThis ? 'co_this_' : 'co_prev_') + (amt >= 0 ? 'additions' : 'deductions');
+      coSum[k] += amt;
+    });
+
     var insRes = await supabaseClient.from('aia_applications').insert({
       aia_project_id: newAppProjectId,
       application_no: appNo,
@@ -828,6 +966,8 @@ requireAuth().catch(function(){});
       application_date: dateVal || null,
       invoice_no:     document.getElementById('naInvoiceNo').value.trim() || String(appNo),
       previous_certificates: priorLine6,
+      co_prev_additions: coSum.co_prev_additions, co_prev_deductions: coSum.co_prev_deductions,
+      co_this_additions: coSum.co_this_additions, co_this_deductions: coSum.co_this_deductions,
       status: 'draft',
       created_by: currentUserId
     }).select().single();
@@ -863,6 +1003,15 @@ requireAuth().catch(function(){});
       if (toInsert.length) {
         await supabaseClient.from('aia_line_items').insert(toInsert);
       }
+    } else if (!priorId) {
+      // First invoice: seed contract lines from the prime contract's Schedule of Values
+      var sov = await supabaseClient.from('aia_sov_items').select('*').eq('aia_project_id', newAppProjectId).order('sort_order', { ascending: true });
+      var seed = (sov.data || []).map(function(it, i) {
+        return { application_id: newAppId, item_no: String(i + 1), budget_code: it.budget_code, description: it.description,
+                 scheduled_value: Number(it.amount || 0), prev_amount: 0, this_amount: 0, stored_amount: 0,
+                 is_change_order: false, is_parent: false, parent_item_no: null, sort_order: i + 1 };
+      });
+      if (seed.length) await supabaseClient.from('aia_line_items').insert(seed);
     }
 
     btn.disabled = false; btn.textContent = 'Create Application';
@@ -898,14 +1047,15 @@ requireAuth().catch(function(){});
     currentLines = linesRes.data || [];
 
     document.getElementById('pageTitle').textContent =
-      'App #' + currentApp.application_no + ' — ' + (currentSetup.project.project_name || '');
+      'Invoice #' + (currentApp.invoice_no || currentApp.application_no) + ' — ' + contractTitle(currentSetup);
     document.getElementById('crumb').innerHTML =
-      '<a href="invoicing.html">Invoicing</a> · ' +
-      escHtml(currentSetup.project.project_name || '') + ' · Application #' + currentApp.application_no;
+      '<a href="invoicing.html">Prime Contracts</a> · <a href="invoicing.html?contract=' + currentSetup.id + '&tab=invoices">Prime Contract #' +
+      escHtml(contractNo(currentSetup)) + '</a> · Invoice #' + escHtml(currentApp.invoice_no || String(currentApp.application_no));
+    var shellHtml = await applicationShellHtml(currentSetup, currentApp);
 
     var totals = computeTotals();
 
-    var html = '';
+    var html = shellHtml;
     // ── App header ─────────
     html += '<div class="app-header">' +
       '<h2>Application for Payment #' + currentApp.application_no + '  ' +
@@ -965,11 +1115,11 @@ requireAuth().catch(function(){});
     });
   }
 
-  function computeTotals() {
+  function computeTotalsFor(setup, app, lines) {
     // Sum non-parent lines
     var totalG = 0, totalCompleted = 0, totalStored = 0;
     var totalCoG = 0, totalCoCompleted = 0, totalCoStored = 0;
-    currentLines.forEach(function(li) {
+    lines.forEach(function(li) {
       if (li.is_parent) return;
       var d = Number(li.prev_amount   || 0);
       var e = Number(li.this_amount   || 0);
@@ -982,17 +1132,17 @@ requireAuth().catch(function(){});
       }
     });
 
-    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
-    var rateStored = Number(currentSetup.retainage_rate_stored || 0);
+    var rate = setup.retainage_rate == null ? 0.05 : Number(setup.retainage_rate);
+    var rateStored = Number(setup.retainage_rate_stored || 0);
     var grandG = totalG + totalCoG;
     var grandCompleted = totalCompleted + totalCoCompleted;
     var grandStored    = totalStored    + totalCoStored;
 
-    var line1 = Number(currentSetup.original_contract_sum || 0);
-    var coNet = Number(currentApp.co_prev_additions || 0)
-              + Number(currentApp.co_prev_deductions || 0)
-              + Number(currentApp.co_this_additions || 0)
-              + Number(currentApp.co_this_deductions || 0);
+    var line1 = Number(setup.original_contract_sum || 0);
+    var coNet = Number(app.co_prev_additions || 0)
+              + Number(app.co_prev_deductions || 0)
+              + Number(app.co_this_additions || 0)
+              + Number(app.co_this_deductions || 0);
     var line2 = coNet;
     var line3 = line1 + line2;
     var line4 = grandG;
@@ -1000,7 +1150,7 @@ requireAuth().catch(function(){});
     var line5b = grandStored    * rateStored;
     var line5t = line5a + line5b;
     var line6 = line4 - line5t;
-    var line7 = Number(currentApp.previous_certificates || 0);
+    var line7 = Number(app.previous_certificates || 0);
     var line8 = line6 - line7;
     var line9 = line3 - line6;
 
@@ -1012,6 +1162,8 @@ requireAuth().catch(function(){});
                    L6:line6, L7:line7, L8:line8, L9:line9}
     };
   }
+
+  function computeTotals() { return computeTotalsFor(currentSetup, currentApp, currentLines); }
 
   function renderG702Panel(t) {
     var L = t.lines;
@@ -1329,6 +1481,630 @@ requireAuth().catch(function(){});
     if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
     showToast('Deleted', 'success');
     renderApplication(currentApp.id);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //   PRIME CONTRACTS — Procore-style list + contract detail
+  //   (General / Change Orders / Invoices / Payments Received)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  var CONTRACT_STATUS = {
+    draft: 'Draft', out_for_signature: 'Out for Signature', approved: 'Approved',
+    complete: 'Complete', terminated: 'Terminated', void: 'Void'
+  };
+  var CO_STATUS = { draft: 'Draft', pending: 'Pending', approved: 'Approved', rejected: 'Rejected', void: 'Void' };
+  var INVOICE_STATUS = { draft: 'Draft', submitted: 'Under Review', certified: 'Approved', paid: 'Paid', void: 'Void' };
+
+  function pill(label, cls) { return '<span class="pc-pill ' + cls + '">' + escHtml(label) + '</span>'; }
+  function money0(n) { return fmtMoney(n); }
+  function mdyShort(iso) {   // 9/21/2026
+    if (!iso) return '--';
+    var d = new Date(iso + 'T00:00:00');
+    return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+  }
+  function mdy2(iso) {       // 9/1/26
+    if (!iso) return '';
+    var d = new Date(iso + 'T00:00:00');
+    return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(-2);
+  }
+  function contractNo(setup) {
+    return setup.contract_number || setup.project_no || (setup.project && setup.project.short_code) || '';
+  }
+  function contractTitle(setup) {
+    return setup.title || (setup.project && setup.project.project_name) || 'Prime Contract';
+  }
+
+  // Roll-ups for one contract given its apps (+ lines grouped by app), COs, payments
+  function contractRollup(setup, apps, linesByApp, cos, pays) {
+    var r = { original: Number(setup.original_contract_sum || 0), approvedCO: 0, pendingCO: 0, draftCO: 0,
+              invoiced: 0, payments: 0, latestApp: null };
+    (cos || []).forEach(function(c) {
+      var a = Number(c.amount || 0);
+      if (c.status === 'approved') r.approvedCO += a;
+      else if (c.status === 'pending') r.pendingCO += a;
+      else if (c.status === 'draft') r.draftCO += a;
+    });
+    (pays || []).forEach(function(p) { r.payments += Number(p.amount || 0); });
+    var latest = null;
+    (apps || []).forEach(function(a) { if (!latest || a.application_no > latest.application_no) latest = a; });
+    if (latest) {
+      r.latestApp = latest;
+      r.invoiced = computeTotalsFor(setup, latest, linesByApp[latest.id] || []).lines.L6;
+    }
+    r.revised = r.original + r.approvedCO;
+    r.pendingRevised = r.revised + r.pendingCO;
+    r.remaining = r.revised - r.payments;
+    r.pctPaid = r.revised ? r.payments / r.revised : 0;
+    return r;
+  }
+
+  function groupBy(rows, key) {
+    var m = {};
+    (rows || []).forEach(function(x) { (m[x[key]] = m[x[key]] || []).push(x); });
+    return m;
+  }
+
+  // ─── LIST ─────────────────────────────────────────────────────────────
+  async function renderContracts() {
+    document.getElementById('pageTitle').textContent = 'Prime Contracts';
+    document.getElementById('crumb').innerHTML = 'Prime Contracts';
+    var main = document.getElementById('mainView');
+    main.innerHTML = '<div class="iv-empty"><div class="icon">⏳</div><p>Loading…</p></div>';
+
+    var r = await supabaseClient.from('aia_projects')
+      .select('*, project:projects(id, short_code, project_name, pm_name, status)')
+      .order('created_at', { ascending: false });
+    if (r.error) { main.innerHTML = '<div class="iv-empty"><div class="icon">⚠️</div><p>' + escHtml(r.error.message) + '</p></div>'; return; }
+    var setups = r.data || [];
+    var ids = setups.map(function(s) { return s.id; });
+
+    var apps = [], lines = [], cos = [], pays = [];
+    if (ids.length) {
+      var a = await supabaseClient.from('aia_applications').select('*').in('aia_project_id', ids);
+      apps = a.data || [];
+      var appIds = apps.map(function(x) { return x.id; });
+      if (appIds.length) {
+        var l = await supabaseClient.from('aia_line_items')
+          .select('application_id, scheduled_value, prev_amount, this_amount, stored_amount, is_parent, is_change_order')
+          .in('application_id', appIds);
+        lines = l.data || [];
+      }
+      var c = await supabaseClient.from('aia_change_orders').select('aia_project_id, status, amount').in('aia_project_id', ids);
+      cos = c.data || [];
+      var p = await supabaseClient.from('aia_payments').select('aia_project_id, amount').in('aia_project_id', ids);
+      pays = p.data || [];
+    }
+    var appsByC = groupBy(apps, 'aia_project_id'), linesByApp = groupBy(lines, 'application_id');
+    var cosByC = groupBy(cos, 'aia_project_id'), paysByC = groupBy(pays, 'aia_project_id');
+
+    var html = '<div class="pc-toolbar">' +
+      '<input type="search" id="pcSearch" placeholder="Search" class="pc-search">' +
+      '<span class="grow"></span>' +
+      (canEdit ? '<button class="btn-create" id="pcCreate">＋ Create</button>' : '') +
+    '</div>';
+
+    if (!setups.length) {
+      html += '<div class="iv-empty"><div class="icon">📄</div><p>No prime contracts yet.' +
+        (canEdit ? '<br>Click <b>＋ Create</b> to add the first one.' : '') + '</p></div>';
+      main.innerHTML = html;
+      var cb0 = document.getElementById('pcCreate'); if (cb0) cb0.addEventListener('click', function() { openSetupModal(); });
+      return;
+    }
+
+    var tot = { original: 0, approvedCO: 0, revised: 0, pendingCO: 0, draftCO: 0, invoiced: 0, payments: 0, remaining: 0 };
+    var rows = setups.map(function(s) {
+      var ru = contractRollup(s, appsByC[s.id], linesByApp, cosByC[s.id], paysByC[s.id]);
+      Object.keys(tot).forEach(function(k) { tot[k] += ru[k] || 0; });
+      return '<tr data-contract="' + s.id + '">' +
+        '<td><a href="invoicing.html?contract=' + s.id + '" class="pc-link">' + escHtml(contractNo(s) || '—') + '</a></td>' +
+        '<td>' + escHtml(s.client_name || '—') + '</td>' +
+        '<td class="pc-title-cell">' + escHtml(contractTitle(s)) + '</td>' +
+        '<td>' + pill(CONTRACT_STATUS[s.status] || s.status || 'Approved', 'st-' + (s.status || 'approved')) + '</td>' +
+        '<td>' + (s.executed ? 'Yes' : 'No') + '</td>' +
+        '<td class="num">' + money0(ru.original) + '</td>' +
+        '<td class="num">' + money0(ru.approvedCO) + '</td>' +
+        '<td class="num">' + money0(ru.revised) + '</td>' +
+        '<td class="num">' + money0(ru.pendingCO) + '</td>' +
+        '<td class="num">' + money0(ru.draftCO) + '</td>' +
+        '<td class="num">' + money0(ru.invoiced) + '</td>' +
+        '<td class="num">' + money0(ru.payments) + '</td>' +
+        '<td class="num">' + (ru.pctPaid * 100).toFixed(2) + '%</td>' +
+        '<td class="num">' + money0(ru.remaining) + '</td>' +
+        '<td>' + (s.is_private === false ? 'No' : 'Yes') + '</td>' +
+      '</tr>';
+    }).join('');
+
+    html += '<div class="pc-table-wrap"><table class="pc-table" id="pcTable"><thead><tr>' +
+      '<th>Number</th><th>Owner/Client</th><th>Title</th><th>Status</th><th>Executed</th>' +
+      '<th class="num">Original Contract Amount</th><th class="num">Approved Change Orders</th>' +
+      '<th class="num">Revised Contract Amount</th><th class="num">Pending Change Orders</th>' +
+      '<th class="num">Draft Change Orders</th><th class="num">Invoiced</th><th class="num">Payments Received</th>' +
+      '<th class="num">% Paid</th><th class="num">Remaining Balance Outstanding</th><th>Private</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody>' +
+      '<tfoot><tr><td colspan="5"></td>' +
+      '<td class="num">' + money0(tot.original) + '</td><td class="num">' + money0(tot.approvedCO) + '</td>' +
+      '<td class="num">' + money0(tot.revised) + '</td><td class="num">' + money0(tot.pendingCO) + '</td>' +
+      '<td class="num">' + money0(tot.draftCO) + '</td><td class="num">' + money0(tot.invoiced) + '</td>' +
+      '<td class="num">' + money0(tot.payments) + '</td><td class="num">' + (tot.revised ? (tot.payments / tot.revised * 100).toFixed(2) : '0.00') + '%</td>' +
+      '<td class="num">' + money0(tot.remaining) + '</td><td></td></tr></tfoot></table></div>';
+
+    main.innerHTML = html;
+    var cb = document.getElementById('pcCreate'); if (cb) cb.addEventListener('click', function() { openSetupModal(); });
+    document.getElementById('pcSearch').addEventListener('input', function() {
+      var q = this.value.trim().toLowerCase();
+      main.querySelectorAll('#pcTable tbody tr').forEach(function(tr) {
+        tr.style.display = (!q || tr.textContent.toLowerCase().indexOf(q) >= 0) ? '' : 'none';
+      });
+    });
+    main.querySelectorAll('#pcTable tbody tr').forEach(function(tr) {
+      tr.addEventListener('click', function(e) {
+        if (e.target.closest('a')) return;
+        window.location.href = 'invoicing.html?contract=' + tr.getAttribute('data-contract');
+      });
+    });
+  }
+  var renderProjects = renderContracts;   // legacy callers
+
+  // ─── CONTRACT BUNDLE ────────────────────────────────────────────────
+  var pc = null;   // { setup, apps, linesByApp, cos, pays, sov, rollup }
+
+  async function loadContract(id) {
+    var s = await supabaseClient.from('aia_projects')
+      .select('*, project:projects(id, short_code, project_name, pm_name, status)').eq('id', id).maybeSingle();
+    if (s.error || !s.data) return null;
+    var apps = await supabaseClient.from('aia_applications').select('*').eq('aia_project_id', id).order('application_no', { ascending: true });
+    var appRows = apps.data || [];
+    var appIds = appRows.map(function(x) { return x.id; });
+    var lines = { data: [] };
+    if (appIds.length) {
+      lines = await supabaseClient.from('aia_line_items')
+        .select('application_id, scheduled_value, prev_amount, this_amount, stored_amount, is_parent, is_change_order')
+        .in('application_id', appIds);
+    }
+    var cos = await supabaseClient.from('aia_change_orders').select('*').eq('aia_project_id', id).order('number', { ascending: true });
+    var pays = await supabaseClient.from('aia_payments').select('*').eq('aia_project_id', id).order('date_paid', { ascending: true });
+    var sov = await supabaseClient.from('aia_sov_items').select('*').eq('aia_project_id', id).order('sort_order', { ascending: true });
+    var b = { setup: s.data, apps: appRows, linesByApp: groupBy(lines.data || [], 'application_id'),
+              cos: cos.data || [], pays: pays.data || [], sov: sov.data || [] };
+    b.rollup = contractRollup(b.setup, b.apps, b.linesByApp, b.cos, b.pays);
+    return b;
+  }
+
+  function contractShell(b, activeTab) {
+    var s = b.setup, no = contractNo(s);
+    var tabs = [
+      ['general', 'General', null],
+      ['change-orders', 'Change Orders', b.cos.length],
+      ['invoices', 'Invoices', b.apps.length],
+      ['payments', 'Payments Received', b.pays.length]
+    ];
+    return '<div class="pc-head">' +
+      '<div class="pc-crumb"><a href="invoicing.html">Prime Contracts</a> <span class="sep">›</span> <b>Prime Contract #' + escHtml(no) + '</b></div>' +
+      '<div class="pc-title-row"><h2>' + escHtml(contractTitle(s)) + (s.client_name ? ' - ' + escHtml(s.client_name) : '') + '</h2>' +
+        (canEdit ? '<div class="pc-actions"><button class="btn-create" id="pcCreateMenu">＋ Create ▾</button>' +
+          '<div class="pc-menu" id="pcCreateMenuList" style="display:none">' +
+            '<a href="#" data-create="invoice">Invoice (Application for Payment)</a>' +
+            '<a href="#" data-create="co">Change Order</a>' +
+            '<a href="#" data-create="payment">Payment Received</a>' +
+          '</div></div>' : '') +
+      '</div>' +
+      '<div class="pc-tabs">' + tabs.map(function(t) {
+        return '<a href="invoicing.html?contract=' + s.id + '&tab=' + t[0] + '" class="pc-tab' + (t[0] === activeTab ? ' active' : '') + '">' +
+          t[1] + (t[2] != null ? ' (' + t[2] + ')' : '') + '</a>';
+      }).join('') + '</div>' +
+    '</div>';
+  }
+
+  function bindShell(b) {
+    var btn = document.getElementById('pcCreateMenu');
+    if (!btn) return;
+    var menu = document.getElementById('pcCreateMenuList');
+    btn.addEventListener('click', function(e) { e.stopPropagation(); menu.style.display = menu.style.display === 'none' ? 'block' : 'none'; });
+    document.addEventListener('click', function() { menu.style.display = 'none'; });
+    menu.querySelectorAll('[data-create]').forEach(function(a) {
+      a.addEventListener('click', function(e) {
+        e.preventDefault(); menu.style.display = 'none';
+        var k = a.getAttribute('data-create');
+        if (k === 'invoice') openNewAppModal(b.setup.id);
+        else if (k === 'co') openCoModal(null);
+        else if (k === 'payment') openPayModal(null);
+      });
+    });
+  }
+
+  async function renderContract(id, tab) {
+    tab = tab || 'general';
+    var main = document.getElementById('mainView');
+    main.innerHTML = '<div class="iv-empty"><div class="icon">⏳</div><p>Loading contract…</p></div>';
+    pc = await loadContract(id);
+    if (!pc) { main.innerHTML = '<div class="iv-empty"><div class="icon">⚠️</div><p>Contract not found.</p></div>'; return; }
+    var s = pc.setup;
+    document.getElementById('pageTitle').textContent = 'Prime Contract #' + contractNo(s);
+    document.getElementById('crumb').innerHTML = '<a href="invoicing.html">Prime Contracts</a> · ' + escHtml(contractTitle(s));
+
+    var body = '';
+    if (tab === 'general') body = renderGeneralTab(pc);
+    else if (tab === 'change-orders') body = renderChangeOrdersTab(pc);
+    else if (tab === 'invoices') body = renderInvoicesTab(pc);
+    else if (tab === 'payments') body = renderPaymentsTab(pc);
+    main.innerHTML = contractShell(pc, tab) + '<div class="pc-body">' + body + '</div>';
+    bindShell(pc);
+    bindTab(tab);
+  }
+
+  // ─── GENERAL ────────────────────────────────────────────────────────
+  function kv(label, value, extra) {
+    return '<div class="pc-kv' + (extra ? ' ' + extra : '') + '"><div class="k">' + label + '</div><div class="v">' + (value === '' || value == null ? '--' : value) + '</div></div>';
+  }
+  function renderGeneralTab(b) {
+    var s = b.setup, ru = b.rollup;
+    var editBtn = canEdit ? '<button class="btn-secondary pc-edit" data-edit-setup>Edit</button>' : '';
+    var sovRows = b.sov.map(function(it) {
+      return '<tr data-sov="' + it.id + '"><td>' + escHtml(it.budget_code || '') + '</td><td>' + escHtml(it.description) + '</td>' +
+        '<td class="num">' + fmtMoney(it.amount) + '</td>' +
+        (canEdit ? '<td class="ctr"><button class="btn-secondary pc-mini" data-sov-edit="' + it.id + '">Edit</button> <button class="del-btn" data-sov-del="' + it.id + '">✕</button></td>' : '') +
+      '</tr>';
+    }).join('');
+    var sovTotal = b.sov.reduce(function(a, x) { return a + Number(x.amount || 0); }, 0);
+    var sovWarn = (b.sov.length && Math.abs(sovTotal - ru.original) > 0.005)
+      ? '<div class="pc-warn">SOV total ' + fmtMoney(sovTotal) + ' ≠ Original Contract Amount ' + fmtMoney(ru.original) + '</div>' : '';
+
+    return '<div class="pc-general">' +
+      '<nav class="pc-subnav">' +
+        '<a href="#gi">General Information</a><a href="#cs">Contract Summary</a><a href="#sov">Schedule of Values</a>' +
+        '<a href="#ie">Inclusions &amp; Exclusions</a><a href="#cd">Contract Dates</a>' +
+      '</nav>' +
+      '<div class="pc-cards">' +
+
+      '<section class="pc-card" id="gi"><div class="pc-card-h"><h3>General Information</h3>' + editBtn + '</div>' +
+        '<div class="pc-grid3">' +
+          kv('Contract #', escHtml(contractNo(s))) +
+          kv('Owner/Client', escHtml(s.client_name || '')) +
+          kv('Title', escHtml(contractTitle(s))) +
+          kv('Status', pill(CONTRACT_STATUS[s.status] || 'Approved', 'st-' + (s.status || 'approved'))) +
+          kv('Executed', s.executed ? '✓' : '--') +
+          kv('Default Retainage', (Number(s.retainage_rate || 0) * 100).toFixed(0) + '%') +
+          kv('Contractor', escHtml(s.contractor_name || 'Northern Wolves, Inc.')) +
+          kv('Architect/Engineer', escHtml(s.architect_name || '')) +
+          kv('Project', escHtml((s.project && s.project.project_name) || '')) +
+          kv('Description', escHtml(s.description || ''), 'span3') +
+        '</div></section>' +
+
+      '<section class="pc-card" id="cs"><div class="pc-card-h"><h3>Contract Summary</h3></div>' +
+        '<div class="pc-grid4">' +
+          kv('Original Contract Amount', fmtMoney(ru.original)) +
+          kv('Pending Change Orders', fmtMoney(ru.pendingCO)) +
+          kv('Invoices', fmtMoney(ru.invoiced)) +
+          kv('Payments Received', fmtMoney(ru.payments)) +
+          kv('Approved Change Orders', fmtMoney(ru.approvedCO)) +
+          kv('Pending Revised Contract Amount', fmtMoney(ru.pendingRevised)) +
+          kv('Remaining Balance', fmtMoney(ru.remaining)) +
+          kv('Percent Paid', (ru.pctPaid * 100).toFixed(2) + '%') +
+          kv('Revised Contract Amount', fmtMoney(ru.revised)) +
+          kv('Draft Change Orders', fmtMoney(ru.draftCO)) +
+        '</div></section>' +
+
+      '<section class="pc-card" id="sov"><div class="pc-card-h"><h3>Schedule of Values</h3>' +
+          (canEdit ? '<button class="btn-secondary pc-edit" data-sov-import-app>Import from latest invoice</button>' : '') + '</div>' +
+        '<table class="pc-table pc-sov"><thead><tr><th style="width:160px">Budget Code</th><th>Description</th><th class="num" style="width:160px">Amount</th>' + (canEdit ? '<th style="width:110px"></th>' : '') + '</tr></thead>' +
+        '<tbody>' + (sovRows || '<tr><td colspan="4" class="pc-empty">No lines yet.</td></tr>') + '</tbody>' +
+        '<tfoot><tr><td' + (canEdit ? '' : '') + '>' + (canEdit ? '<button class="btn-create" data-sov-add>Add Line</button>' : '') + '</td><td class="num"><b>Total:</b></td><td class="num"><b>' + fmtMoney(sovTotal) + '</b></td>' + (canEdit ? '<td></td>' : '') + '</tr></tfoot></table>' +
+        sovWarn +
+        '<div class="field-hint" style="margin-top:6px">New invoice #1 is seeded from these lines. Later invoices carry forward from the previous one.</div>' +
+      '</section>' +
+
+      '<section class="pc-card" id="ie"><div class="pc-card-h"><h3>Inclusions &amp; Exclusions</h3>' + editBtn + '</div>' +
+        '<div class="pc-grid1">' + kv('Inclusions', escHtml(s.inclusions || '').replace(/\n/g, '<br>')) + kv('Exclusions', escHtml(s.exclusions || '').replace(/\n/g, '<br>')) + '</div></section>' +
+
+      '<section class="pc-card" id="cd"><div class="pc-card-h"><h3>Contract Dates</h3>' + editBtn + '</div>' +
+        '<div class="pc-grid3">' +
+          kv('Start Date', mdyShort(s.start_date)) + kv('Estimated Completion Date', mdyShort(s.estimated_completion_date)) +
+          kv('Substantial Completion Date', mdyShort(s.substantial_completion_date)) + kv('Actual Completion Date', mdyShort(s.actual_completion_date)) +
+          kv('Signed Contract Received Date', mdyShort(s.signed_contract_received_date)) + kv('Contract Termination Date', mdyShort(s.contract_termination_date)) +
+          kv('Contract Date', mdyShort(s.contract_date)) +
+        '</div></section>' +
+      '</div></div>';
+  }
+
+  // ─── CHANGE ORDERS ──────────────────────────────────────────────────
+  function renderChangeOrdersTab(b) {
+    var total = b.cos.reduce(function(a, c) { return a + (c.status === 'approved' ? Number(c.amount || 0) : 0); }, 0);
+    var pcco = b.cos.map(function(c) {
+      return '<tr data-co="' + c.id + '">' +
+        '<td><a href="#" class="pc-link" data-co-edit="' + c.id + '">' + escHtml(c.number) + '</a></td>' +
+        '<td>' + (c.revision || 0) + '</td><td class="pc-title-cell">' + escHtml(c.title) + '</td>' +
+        '<td>' + pill(CO_STATUS[c.status] || c.status, 'st-' + c.status) + '</td>' +
+        '<td>' + (c.executed ? 'Yes' : 'No') + '</td>' +
+        '<td class="num">' + fmtMoney(c.amount) + '</td>' +
+        '<td>' + mdyShort(c.date_initiated) + '</td><td>' + mdyShort(c.due_date) + '</td><td>' + mdyShort(c.review_date) + '</td>' +
+        '<td>' + escHtml(c.designated_reviewer || '--') + '</td>' +
+        '<td>' + (c.pco_number ? 'PCO #' + escHtml(c.pco_number) : '--') + '</td>' +
+      '</tr>';
+    }).join('');
+    var pco = b.cos.map(function(c) {
+      return '<tr data-co="' + c.id + '">' +
+        '<td><a href="#" class="pc-link" data-co-edit="' + c.id + '">' + escHtml(c.pco_number || c.number) + '</a></td>' +
+        '<td>' + (c.revision || 0) + '</td><td class="pc-title-cell">' + escHtml(c.title) + '</td>' +
+        '<td>' + pill(CO_STATUS[c.status] || c.status, 'st-' + c.status) + '</td>' +
+        '<td>' + (c.executed ? 'Yes' : 'No') + '</td>' +
+        '<td class="num">' + fmtMoney(c.amount) + '</td>' +
+        '<td>' + (c.schedule_impact_days != null ? c.schedule_impact_days + ' days' : '--') + '</td>' +
+        '<td>' + mdyShort(c.date_initiated) + '</td><td>' + escHtml(c.change_reason || '--') + '</td>' +
+        '<td>PCCO #' + escHtml(c.number) + '</td>' +
+      '</tr>';
+    }).join('');
+    var empty = '<tr><td colspan="11" class="pc-empty">No change orders yet.</td></tr>';
+    return '<div class="pc-section-h"><h2>Change Orders</h2>' +
+        (canEdit ? '<button class="btn-create" id="coAdd">＋ Add Change Order</button>' : '') + '</div>' +
+      '<h3 class="pc-sub-h">Prime Contract Change Orders</h3>' +
+      '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
+        '<th>Number</th><th>Revision</th><th>Title</th><th>Status</th><th>Executed</th><th class="num">Amount</th>' +
+        '<th>Date Initiated</th><th>Due Date</th><th>Review Date</th><th>Designated Reviewer</th><th>PCO</th></tr></thead>' +
+        '<tbody>' + (pcco || empty) + '</tbody>' +
+        '<tfoot><tr><td colspan="5"><b>Total: ' + b.cos.length + ' PCCO' + (b.cos.length === 1 ? '' : 's') + ' (approved)</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="5"></td></tr></tfoot></table></div>' +
+      '<h3 class="pc-sub-h" style="margin-top:22px">Potential Change Orders</h3>' +
+      '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
+        '<th>Number</th><th>Revision</th><th>Title</th><th>Status</th><th>Executed</th><th class="num">Amount</th>' +
+        '<th>Schedule Impact</th><th>Date Initiated</th><th>Change Reason</th><th>PCCO</th></tr></thead>' +
+        '<tbody>' + (pco || empty) + '</tbody>' +
+        '<tfoot><tr><td colspan="5"><b>Total: ' + b.cos.length + ' PCO' + (b.cos.length === 1 ? '' : 's') + '</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="4"></td></tr></tfoot></table></div>';
+  }
+
+  // ─── INVOICES ───────────────────────────────────────────────────────
+  function renderInvoicesTab(b) {
+    var s = b.setup;
+    var rows = b.apps.slice().sort(function(x, y) { return y.application_no - x.application_no; }).map(function(a) {
+      var t = computeTotalsFor(s, a, b.linesByApp[a.id] || []).lines;
+      var pctC = t.L3 ? (t.L4 / t.L3) : 0;
+      return '<tr data-app="' + a.id + '">' +
+        '<td><a href="invoicing.html?app=' + a.id + '" class="pc-link">' + a.application_no + '</a></td>' +
+        '<td><a href="invoicing.html?app=' + a.id + '" class="pc-link">' + escHtml(a.invoice_no || String(a.application_no)) + '</a></td>' +
+        '<td>' + mdy2(a.period_from) + ' - ' + mdy2(a.period_to) + '</td>' +
+        '<td>' + mdy2(a.application_date) + '</td>' +
+        '<td>' + pill(INVOICE_STATUS[a.status] || a.status, 'st-' + a.status) + '</td>' +
+        '<td class="num">' + fmtMoney(t.L1) + '</td><td class="num">' + fmtMoney(t.L2) + '</td><td class="num">' + fmtMoney(t.L3) + '</td>' +
+        '<td class="num">' + fmtMoney(t.L4) + '</td><td class="num">' + fmtMoney(t.L5t) + '</td><td class="num">' + fmtMoney(t.L6) + '</td>' +
+        '<td class="num"><b>' + fmtMoney(t.L8) + '</b></td><td class="num">' + fmtMoney(t.L9) + '</td>' +
+        '<td class="num">' + (pctC * 100).toFixed(2) + '%</td>' +
+      '</tr>';
+    }).join('');
+    return '<div class="pc-section-h"><h2>Invoices (Payment Applications)</h2>' +
+        (canEdit ? '<button class="btn-create" id="invAdd">＋ New Invoice</button>' : '') + '</div>' +
+      '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
+        '<th>Invoice Position</th><th>Invoice #</th><th>Billing Period</th><th>Billing Date</th><th>Status</th>' +
+        '<th class="num">Original Contract Sum</th><th class="num">Net Change By Change Orders</th><th class="num">Revised Contract Sum</th>' +
+        '<th class="num">Total Completed and Stored To Date</th><th class="num">Total Retainage</th><th class="num">Total Earned Less Retainage</th>' +
+        '<th class="num">Payment Due</th><th class="num">Balance To Finish</th><th class="num">% Complete</th></tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="14" class="pc-empty">No invoices yet.</td></tr>') + '</tbody></table></div>';
+  }
+
+  // ─── PAYMENTS ───────────────────────────────────────────────────────
+  function invoiceLabel(b, appId) {
+    var a = b.apps.find(function(x) { return x.id === appId; });
+    if (!a) return '--';
+    var t = computeTotalsFor(b.setup, a, b.linesByApp[a.id] || []).lines;
+    return 'Prime Contract #' + contractNo(b.setup) + ' Invoice #' + (a.invoice_no || a.application_no) + ' - ' + fmtMoney(t.L8) +
+      ' - ' + mdyShort(a.period_from) + ' - ' + mdyShort(a.period_to);
+  }
+  function renderPaymentsTab(b) {
+    var total = 0;
+    var rows = b.pays.map(function(p) {
+      total += Number(p.amount || 0);
+      var a = b.apps.find(function(x) { return x.id === p.application_id; });
+      return '<tr data-pay="' + p.id + '">' +
+        '<td>' + (a ? '<a href="invoicing.html?app=' + a.id + '" class="pc-link">' + escHtml(invoiceLabel(b, a.id)) + '</a>' : '--') + '</td>' +
+        '<td class="num">' + fmtMoney(p.amount) + '</td><td>' + mdyShort(p.date_paid) + '</td>' +
+        '<td>' + escHtml(p.payment_number || '--') + '</td><td>' + escHtml(a ? (a.invoice_no || String(a.application_no)).padStart(2, '0') : '--') + '</td>' +
+        '<td>' + escHtml(p.check_number || '--') + '</td><td>' + escHtml(p.notes || '--') + '</td>' +
+        (canEdit ? '<td class="ctr"><button class="btn-secondary pc-mini" data-pay-edit="' + p.id + '">Edit</button> <button class="del-btn" data-pay-del="' + p.id + '">✕</button></td>' : '') +
+      '</tr>';
+    }).join('');
+    return '<div class="pc-section-h"><h2>Payments Received</h2>' +
+        (canEdit ? '<button class="btn-create" id="payAdd">＋ Add Payment</button>' : '') + '</div>' +
+      '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
+        '<th>Invoice</th><th class="num">Amount</th><th>Date Paid</th><th>Payment Number</th><th>Invoice Number</th><th>Check Number</th><th>Notes</th>' + (canEdit ? '<th></th>' : '') + '</tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="8" class="pc-empty">No payments recorded yet.</td></tr>') + '</tbody>' +
+        '<tfoot><tr><td><b>Grand Totals</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="6"></td></tr></tfoot></table></div>';
+  }
+
+  // ─── TAB EVENT BINDING ──────────────────────────────────────────────
+  function bindTab(tab) {
+    var main = document.getElementById('mainView');
+    main.querySelectorAll('[data-edit-setup]').forEach(function(bt) { bt.addEventListener('click', function() { openSetupModal(pc.setup.id); }); });
+    main.querySelectorAll('[data-sov-add]').forEach(function(bt) { bt.addEventListener('click', function() { openSovModal(null); }); });
+    main.querySelectorAll('[data-sov-edit]').forEach(function(bt) { bt.addEventListener('click', function() { openSovModal(bt.getAttribute('data-sov-edit')); }); });
+    main.querySelectorAll('[data-sov-del]').forEach(function(bt) { bt.addEventListener('click', function() { deleteSov(bt.getAttribute('data-sov-del')); }); });
+    main.querySelectorAll('[data-sov-import-app]').forEach(function(bt) { bt.addEventListener('click', importSovFromLatestApp); });
+    var coAdd = document.getElementById('coAdd'); if (coAdd) coAdd.addEventListener('click', function() { openCoModal(null); });
+    main.querySelectorAll('[data-co-edit]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); openCoModal(a.getAttribute('data-co-edit')); }); });
+    var invAdd = document.getElementById('invAdd'); if (invAdd) invAdd.addEventListener('click', function() { openNewAppModal(pc.setup.id); });
+    var payAdd = document.getElementById('payAdd'); if (payAdd) payAdd.addEventListener('click', function() { openPayModal(null); });
+    main.querySelectorAll('[data-pay-edit]').forEach(function(bt) { bt.addEventListener('click', function() { openPayModal(bt.getAttribute('data-pay-edit')); }); });
+    main.querySelectorAll('[data-pay-del]').forEach(function(bt) { bt.addEventListener('click', function() { deletePayment(bt.getAttribute('data-pay-del')); }); });
+  }
+  function reloadContract() {
+    var tab = new URLSearchParams(window.location.search).get('tab') || 'general';
+    renderContract(pc.setup.id, tab);
+  }
+
+  // ─── SOV modal ──────────────────────────────────────────────────────
+  var editingSovId = null;
+  function openSovModal(id) {
+    editingSovId = id;
+    var it = id ? pc.sov.find(function(x) { return x.id === id; }) : null;
+    document.getElementById('sovTitle').textContent = id ? 'Edit SOV Line' : 'Add SOV Line';
+    document.getElementById('sovCode').value = it ? (it.budget_code || '') : '';
+    document.getElementById('sovDesc').value = it ? it.description : '';
+    document.getElementById('sovAmt').value  = it ? it.amount : '';
+    openModal('sovModal');
+  }
+  async function saveSov() {
+    if (!canEdit) return;
+    var patch = {
+      aia_project_id: pc.setup.id,
+      budget_code: document.getElementById('sovCode').value.trim() || null,
+      description: document.getElementById('sovDesc').value.trim(),
+      amount: Number(document.getElementById('sovAmt').value || 0)
+    };
+    if (!patch.description) { showToast('Description required', 'error'); return; }
+    var r;
+    if (editingSovId) r = await supabaseClient.from('aia_sov_items').update(patch).eq('id', editingSovId);
+    else { patch.sort_order = pc.sov.length + 1; r = await supabaseClient.from('aia_sov_items').insert(patch); }
+    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
+    closeModal('sovModal'); showToast('✅ Saved', 'success'); reloadContract();
+  }
+  async function deleteSov(id) {
+    if (!canEdit || !confirm('Delete this SOV line?')) return;
+    var r = await supabaseClient.from('aia_sov_items').delete().eq('id', id);
+    if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
+    reloadContract();
+  }
+  async function importSovFromLatestApp() {
+    if (!canEdit || !pc.rollup.latestApp) { showToast('No invoice to import from', 'error'); return; }
+    if (pc.sov.length && !confirm('Replace the current SOV with the latest invoice\'s contract lines?')) return;
+    var li = await supabaseClient.from('aia_line_items').select('*').eq('application_id', pc.rollup.latestApp.id)
+      .eq('is_change_order', false).order('sort_order', { ascending: true });
+    var rows = (li.data || []).filter(function(l) { return !l.is_parent; }).map(function(l, i) {
+      return { aia_project_id: pc.setup.id, budget_code: l.budget_code, description: l.description, amount: Number(l.scheduled_value || 0), sort_order: i + 1 };
+    });
+    if (!rows.length) { showToast('That invoice has no contract lines', 'error'); return; }
+    if (pc.sov.length) await supabaseClient.from('aia_sov_items').delete().eq('aia_project_id', pc.setup.id);
+    var r = await supabaseClient.from('aia_sov_items').insert(rows);
+    if (r.error) { showToast('Import failed: ' + r.error.message, 'error'); return; }
+    showToast('✅ Imported ' + rows.length + ' lines', 'success'); reloadContract();
+  }
+
+  // ─── Change Order modal ─────────────────────────────────────────────
+  var editingCoId = null;
+  function openCoModal(id) {
+    editingCoId = id;
+    var c = id ? pc.cos.find(function(x) { return x.id === id; }) : null;
+    document.getElementById('coTitleH').textContent = id ? 'Edit Change Order' : 'New Change Order';
+    var nextNo = String(pc.cos.length + 1).padStart(3, '0');
+    document.getElementById('coNumber').value   = c ? c.number : nextNo;
+    document.getElementById('coPco').value      = c ? (c.pco_number || '') : nextNo;
+    document.getElementById('coRev').value      = c ? (c.revision || 0) : 0;
+    document.getElementById('coTitle').value    = c ? c.title : '';
+    document.getElementById('coStatus').value   = c ? c.status : 'draft';
+    document.getElementById('coExecuted').checked = c ? !!c.executed : false;
+    document.getElementById('coAmount').value   = c ? c.amount : '';
+    document.getElementById('coInit').value     = c ? (c.date_initiated || '') : ymd(new Date());
+    document.getElementById('coDue').value      = c ? (c.due_date || '') : '';
+    document.getElementById('coReview').value   = c ? (c.review_date || '') : '';
+    document.getElementById('coReason').value   = c ? (c.change_reason || '') : '';
+    document.getElementById('coImpact').value   = c && c.schedule_impact_days != null ? c.schedule_impact_days : '';
+    document.getElementById('coReviewer').value = c ? (c.designated_reviewer || '') : '';
+    document.getElementById('coNotes').value    = c ? (c.notes || '') : '';
+    document.getElementById('coDelete').style.display = id ? '' : 'none';
+    openModal('coModal');
+  }
+  async function saveCo() {
+    if (!canEdit) return;
+    var patch = {
+      aia_project_id: pc.setup.id,
+      number: document.getElementById('coNumber').value.trim(),
+      pco_number: document.getElementById('coPco').value.trim() || null,
+      revision: parseInt(document.getElementById('coRev').value, 10) || 0,
+      title: document.getElementById('coTitle').value.trim(),
+      status: document.getElementById('coStatus').value,
+      executed: document.getElementById('coExecuted').checked,
+      amount: Number(document.getElementById('coAmount').value || 0),
+      date_initiated: document.getElementById('coInit').value || null,
+      due_date: document.getElementById('coDue').value || null,
+      review_date: document.getElementById('coReview').value || null,
+      change_reason: document.getElementById('coReason').value || null,
+      schedule_impact_days: document.getElementById('coImpact').value === '' ? null : parseInt(document.getElementById('coImpact').value, 10),
+      designated_reviewer: document.getElementById('coReviewer').value.trim() || null,
+      notes: document.getElementById('coNotes').value.trim() || null
+    };
+    if (!patch.number || !patch.title) { showToast('Number and title are required', 'error'); return; }
+    var r;
+    if (editingCoId) r = await supabaseClient.from('aia_change_orders').update(patch).eq('id', editingCoId);
+    else { patch.created_by = currentUserId; r = await supabaseClient.from('aia_change_orders').insert(patch); }
+    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
+    closeModal('coModal'); showToast('✅ Change order saved', 'success'); reloadContract();
+  }
+  async function deleteCo() {
+    if (!canEdit || !editingCoId || !confirm('Delete this change order?')) return;
+    var r = await supabaseClient.from('aia_change_orders').delete().eq('id', editingCoId);
+    if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
+    closeModal('coModal'); reloadContract();
+  }
+
+  // ─── Payment modal ──────────────────────────────────────────────────
+  var editingPayId = null;
+  function openPayModal(id) {
+    editingPayId = id;
+    var p = id ? pc.pays.find(function(x) { return x.id === id; }) : null;
+    document.getElementById('payTitleH').textContent = id ? 'Edit Payment' : 'Add Payment';
+    var sel = document.getElementById('payApp');
+    sel.innerHTML = '<option value="">— not tied to an invoice —</option>';
+    pc.apps.slice().sort(function(x, y) { return y.application_no - x.application_no; }).forEach(function(a) {
+      var o = document.createElement('option'); o.value = a.id; o.textContent = invoiceLabel(pc, a.id); sel.appendChild(o);
+    });
+    sel.value = p ? (p.application_id || '') : (pc.rollup.latestApp ? pc.rollup.latestApp.id : '');
+    document.getElementById('payAmount').value = p ? p.amount : '';
+    document.getElementById('payDate').value   = p ? p.date_paid : ymd(new Date());
+    document.getElementById('payNumber').value = p ? (p.payment_number || '') : '';
+    document.getElementById('payCheck').value  = p ? (p.check_number || '') : 'ACH';
+    document.getElementById('payNotes').value  = p ? (p.notes || '') : '';
+    document.getElementById('payDelete').style.display = id ? '' : 'none';
+    if (!p) updatePayNumberHint();
+    openModal('payModal');
+  }
+  function updatePayNumberHint() {
+    var appId = document.getElementById('payApp').value;
+    if (!appId) return;
+    var n = pc.pays.filter(function(x) { return x.application_id === appId; }).length + 1;
+    document.getElementById('payNumber').value = String(n).padStart(2, '0');
+  }
+  async function savePayment() {
+    if (!canEdit) return;
+    var patch = {
+      aia_project_id: pc.setup.id,
+      application_id: document.getElementById('payApp').value || null,
+      amount: Number(document.getElementById('payAmount').value || 0),
+      date_paid: document.getElementById('payDate').value,
+      payment_number: document.getElementById('payNumber').value.trim() || null,
+      check_number: document.getElementById('payCheck').value.trim() || null,
+      notes: document.getElementById('payNotes').value.trim() || null
+    };
+    if (!patch.amount || !patch.date_paid) { showToast('Amount and date paid are required', 'error'); return; }
+    var r;
+    if (editingPayId) r = await supabaseClient.from('aia_payments').update(patch).eq('id', editingPayId);
+    else { patch.created_by = currentUserId; r = await supabaseClient.from('aia_payments').insert(patch); }
+    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
+    // Mark invoice paid when payments cover Line 8
+    if (patch.application_id) {
+      var a = pc.apps.find(function(x) { return x.id === patch.application_id; });
+      if (a) {
+        var due = computeTotalsFor(pc.setup, a, pc.linesByApp[a.id] || []).lines.L8;
+        var paid = pc.pays.filter(function(x) { return x.application_id === a.id && x.id !== editingPayId; })
+          .reduce(function(s, x) { return s + Number(x.amount || 0); }, 0) + patch.amount;
+        if (paid >= due - 0.005 && a.status !== 'paid' && a.status !== 'void') {
+          await supabaseClient.from('aia_applications').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', a.id);
+        }
+      }
+    }
+    closeModal('payModal'); showToast('✅ Payment saved', 'success'); reloadContract();
+  }
+  async function deletePayment(id) {
+    if (!canEdit || !confirm('Delete this payment?')) return;
+    var r = await supabaseClient.from('aia_payments').delete().eq('id', id);
+    if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
+    closeModal('payModal'); reloadContract();
+  }
+
+  // ─── Shell for the application (invoice) view ───────────────────────
+  async function applicationShellHtml(setup, app) {
+    var id = setup.id;
+    var c1 = await supabaseClient.from('aia_change_orders').select('id', { count: 'exact', head: true }).eq('aia_project_id', id);
+    var c2 = await supabaseClient.from('aia_applications').select('id', { count: 'exact', head: true }).eq('aia_project_id', id);
+    var c3 = await supabaseClient.from('aia_payments').select('id', { count: 'exact', head: true }).eq('aia_project_id', id);
+    var fake = { setup: setup, cos: new Array(c1.count || 0), apps: new Array(c2.count || 0), pays: new Array(c3.count || 0) };
+    var html = contractShell(fake, 'invoices').replace(/<div class="pc-actions">[\s\S]*?<\/div><\/div>/, '');
+    return html.replace('<b>Prime Contract #', '<a href="invoicing.html?contract=' + id + '">Prime Contract #')
+               .replace('</b></div>', '</a> <span class="sep">›</span> <b>Invoice #' + escHtml(app.invoice_no || String(app.application_no)) + '</b></div>');
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1730,6 +2506,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=179"></script>
+<script src="sw-register.js?v=180"></script>
 </body>
 </html>
