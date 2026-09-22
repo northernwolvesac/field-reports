@@ -14,8 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supabase-config.js?v=180"></script>
-<script src="auth.js?v=180"></script>
+<script src="supabase-config.js?v=181"></script>
+<script src="auth.js?v=181"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: 1200px; margin: 0 auto; }
@@ -350,11 +350,47 @@
   .pc-kv .v { font-size:13px; color:#0f172a; }
   .pc-kv.span3 { grid-column:1 / -1; }
   .pc-sov { min-width:0; }
+  .pc-note { margin:-4px 0 10px; padding:9px 12px; background:#fef9c3; border-left:4px solid #f59e0b; border-radius:6px; font-size:12px; color:#713f12; }
+  .pc-sov input { width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font:inherit; font-size:12.5px; background:#fff; }
+  .pc-sov input.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .pc-sov input:disabled { background:#f8fafc; color:#475569; border-color:#e2e8f0; }
+  .pc-sov tr.locked td { background:#fafafa; }
+  .pc-sov td.muted { color:#475569; }
+  .pc-sov tbody tr:hover { background:transparent; cursor:default; }
+  .sov-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
+  .sov-actions button { padding:8px 18px; border-radius:7px; font-weight:700; font-size:13px; cursor:pointer; }
   .pc-warn { margin-top:8px; padding:8px 10px; background:#fef3c7; color:#92400e; border-radius:6px; font-size:12px; font-weight:600; }
   @media (max-width: 900px) {
     .pc-general { grid-template-columns:1fr; } .pc-subnav { display:none; }
     .pc-grid3, .pc-grid4 { grid-template-columns:1fr 1fr; }
   }
+
+  /* ═══ Invoice view (Summary | Detail) ═══ */
+  .inv-head { display:flex; align-items:center; gap:14px; padding:12px 16px 0; background:var(--nw-card); border-bottom:1px solid var(--nw-border); flex-wrap:wrap; }
+  .inv-head h2 { margin:0 0 8px; font-size:20px; font-weight:400; color:#334155; flex:1 1 100%; }
+  .inv-tabs { display:flex; gap:0; }
+  .inv-tab { padding:8px 14px; font-size:13px; font-weight:600; color:#64748b; text-decoration:none; border-bottom:3px solid transparent; }
+  .inv-tab.active { color:#0f172a; border-bottom-color:#f97316; font-weight:700; }
+  .inv-actions { margin-left:auto; display:flex; gap:8px; padding-bottom:8px; }
+  .inv-card { margin:12px 16px; background:var(--nw-card); border:1px solid var(--nw-border); border-radius:10px; padding:14px 16px; }
+  .inv-card-h { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .inv-card-h h3 { margin:0; font-size:12px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:#334155; flex:1; }
+  .inv-settings { display:grid; grid-template-columns:1fr 1fr; gap:0 24px; border:1px solid var(--nw-border); border-radius:8px; overflow:hidden; }
+  .inv-kv { display:flex; gap:12px; padding:8px 12px; font-size:13px; border-bottom:1px solid #f1f5f9; }
+  .inv-kv:nth-child(4n+1), .inv-kv:nth-child(4n+2) { background:#f8fafc; }
+  .inv-kv .k { color:#475569; min-width:150px; }
+  .inv-kv .v { font-weight:600; color:#0f172a; }
+  .inv-preview-head { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px 24px; font-size:13px; color:#334155; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid var(--nw-border); }
+  .inv-preview-head .k { font-size:11px; font-weight:700; letter-spacing:.5px; color:#0f172a; margin-bottom:3px; }
+  .inv-card .g702-panel { margin:0; border:none; padding:0; }
+  .li-panel .inv-card-h { margin-bottom:12px; }
+  .li-panel .inv-card-h button { margin-left:0; }
+  .li-table thead tr.letters th { background:#e2e8f0; font-size:11px; padding:3px; }
+  .li-table td.edit { padding:3px 4px; white-space:nowrap; }
+  .li-table td.edit input { width:86px; box-sizing:border-box; padding:5px 6px; border:1px solid #93c5fd; border-radius:4px; font:inherit; font-size:12px; text-align:right; background:#fff; }
+  .li-table td.edit input.pctin { width:54px; margin-left:4px; border-color:#cbd5e1; }
+  .li-table.editing tbody tr.parent td { background:#f1f5f9; }
+  .li-table tbody tr.parent td.desc { font-weight:700; }
 </style>
 </head>
 <body>
@@ -484,41 +520,45 @@
 <!-- New Application modal -->
 <div class="modal-overlay" id="newAppModal">
   <div class="modal-card">
-    <h2>New Application for Payment</h2>
+    <h2>New Invoice (Payment Application)</h2>
     <div class="row">
-      <div class="field">
+      <div class="field" style="flex:0 0 110px">
         <label>Application No *</label>
         <input type="number" id="naNo" min="1" step="1">
       </div>
-      <div class="field">
-        <label>Invoice No</label>
+      <div class="field" style="flex:0 0 110px">
+        <label>Invoice # *</label>
         <input type="text" id="naInvoiceNo" placeholder="same as App No">
       </div>
       <div class="field">
-        <label>Application date</label>
+        <label>Billing date</label>
         <input type="date" id="naDate">
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select id="naStatus"><option value="draft">Draft</option><option value="submitted">Under Review</option></select>
       </div>
     </div>
     <div class="row">
       <div class="field">
-        <label>Period from *</label>
+        <label>Period start *</label>
         <input type="date" id="naFrom">
       </div>
       <div class="field">
-        <label>Period to *</label>
+        <label>Period end *</label>
         <input type="date" id="naTo">
       </div>
     </div>
     <div class="field">
       <label>
         <input type="checkbox" id="naCarryForward" checked>
-        Copy line items from previous application (carry forward)
+        Carry forward line items from the previous invoice
       </label>
-      <div class="field-hint">Uses the most recent application's Schedule of Values; previous amounts pre-fill with prior D+E+F totals.</div>
+      <div class="field-hint">Invoice #1 is seeded from the contract Schedule of Values. Approved change orders not yet on the invoice are added as PCCO / PCO groups. Previous amounts pre-fill from prior D+E+F.</div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" id="naCancel">Cancel</button>
-      <button class="btn-save" id="naCreate">Create Application</button>
+      <button class="btn-save" id="naCreate">Create</button>
     </div>
   </div>
 </div>
@@ -586,22 +626,6 @@
   </div>
 </div>
 
-
-<!-- SOV line modal -->
-<div class="modal-overlay" id="sovModal">
-  <div class="modal-card" style="max-width:520px">
-    <h2 id="sovTitle">Add SOV Line</h2>
-    <div class="row">
-      <div class="field" style="flex:0 0 160px"><label>Budget code</label><input type="text" id="sovCode" placeholder="optional"></div>
-      <div class="field"><label>Amount *</label><input type="number" id="sovAmt" step="0.01" placeholder="0.00"></div>
-    </div>
-    <div class="field"><label>Description *</label><input type="text" id="sovDesc" placeholder="e.g. F/I Ductwork, dampers, insulation"></div>
-    <div class="modal-actions">
-      <button class="btn-cancel" id="sovCancel">Cancel</button>
-      <button class="btn-save" id="sovSave">Save</button>
-    </div>
-  </div>
-</div>
 
 <!-- Change Order modal -->
 <div class="modal-overlay" id="coModal">
@@ -722,8 +746,6 @@ requireAuth().catch(function(){});
     document.getElementById('lCancel').addEventListener('click', function() { closeModal('lineModal'); });
     document.getElementById('lSave').addEventListener('click', saveLineItem);
     // SOV / Change Order / Payment modals
-    document.getElementById('sovCancel').addEventListener('click', function() { closeModal('sovModal'); });
-    document.getElementById('sovSave').addEventListener('click', saveSov);
     document.getElementById('coCancel').addEventListener('click', function() { closeModal('coModal'); });
     document.getElementById('coSave').addEventListener('click', saveCo);
     document.getElementById('coDelete').addEventListener('click', deleteCo);
@@ -732,7 +754,7 @@ requireAuth().catch(function(){});
     document.getElementById('payDelete').addEventListener('click', function() { if (editingPayId) deletePayment(editingPayId); });
     document.getElementById('payApp').addEventListener('change', function() { if (!editingPayId) updatePayNumberHint(); });
     // Close on backdrop click
-    ['setupModal','newAppModal','lineModal','sovModal','coModal','payModal'].forEach(function(id) {
+    ['setupModal','newAppModal','lineModal','coModal','payModal'].forEach(function(id) {
       document.getElementById(id).addEventListener('click', function(e) {
         if (e.target === this) closeModal(id);
       });
@@ -968,12 +990,12 @@ requireAuth().catch(function(){});
       previous_certificates: priorLine6,
       co_prev_additions: coSum.co_prev_additions, co_prev_deductions: coSum.co_prev_deductions,
       co_this_additions: coSum.co_this_additions, co_this_deductions: coSum.co_this_deductions,
-      status: 'draft',
+      status: document.getElementById('naStatus').value || 'draft',
       created_by: currentUserId
     }).select().single();
 
     if (insRes.error) {
-      btn.disabled = false; btn.textContent = 'Create Application';
+      btn.disabled = false; btn.textContent = 'Create';
       showToast('Create failed: ' + insRes.error.message, 'error'); return;
     }
     var newAppId = insRes.data.id;
@@ -1014,29 +1036,53 @@ requireAuth().catch(function(){});
       if (seed.length) await supabaseClient.from('aia_line_items').insert(seed);
     }
 
-    btn.disabled = false; btn.textContent = 'Create Application';
+    // Approved change orders not yet on this invoice → PCCO#/PCO# groups (Procore layout)
+    var existing = await supabaseClient.from('aia_line_items').select('item_no, budget_code, sort_order').eq('application_id', newAppId);
+    var have = {}; var maxNo = 0; var maxSort = 0;
+    (existing.data || []).forEach(function(l) {
+      if (l.budget_code) have[l.budget_code.toUpperCase()] = true;
+      var n = parseInt(String(l.item_no), 10); if (n > maxNo) maxNo = n;
+      if (l.sort_order > maxSort) maxSort = l.sort_order;
+    });
+    var approvedCos = await supabaseClient.from('aia_change_orders').select('*').eq('aia_project_id', newAppProjectId)
+      .eq('status', 'approved').lte('date_initiated', to).order('number', { ascending: true });
+    var coRows = [];
+    (approvedCos.data || []).forEach(function(c) {
+      var pcco = 'PCCO#' + c.number;
+      if (have[pcco.toUpperCase()]) return;
+      maxNo += 1;
+      var n = String(maxNo), pco = 'PCO#' + (c.pco_number || c.number);
+      coRows.push({ application_id: newAppId, item_no: n,          budget_code: pcco, description: c.title, scheduled_value: 0, prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true, is_parent: true,  parent_item_no: null,      sort_order: ++maxSort });
+      coRows.push({ application_id: newAppId, item_no: n + '.1',   budget_code: pco,  description: c.title, scheduled_value: 0, prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true, is_parent: true,  parent_item_no: n,         sort_order: ++maxSort });
+      coRows.push({ application_id: newAppId, item_no: n + '.1.1', budget_code: null, description: c.title, scheduled_value: Number(c.amount || 0), prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true, is_parent: false, parent_item_no: n + '.1', sort_order: ++maxSort });
+    });
+    if (coRows.length) await supabaseClient.from('aia_line_items').insert(coRows);
+
+    btn.disabled = false; btn.textContent = 'Create';
     closeModal('newAppModal');
-    showToast('✅ Application #' + appNo + ' created', 'success');
-    window.location.href = 'invoicing.html?app=' + newAppId;
+    showToast('✅ Invoice #' + appNo + ' created', 'success');
+    window.location.href = 'invoicing.html?app=' + newAppId + '&sub=detail';
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //   APPLICATION DETAIL VIEW
+  //   INVOICE (APPLICATION) VIEW — Procore-style: Summary | Detail
   // ═══════════════════════════════════════════════════════════════════════
 
   var currentApp    = null;   // aia_applications row
   var currentSetup  = null;   // aia_projects row
   var currentLines  = [];     // aia_line_items rows
+  var invoiceSub    = (params.get('sub') === 'detail') ? 'detail' : 'summary';
+  var linesEditMode = false;
 
   async function renderApplication(appId) {
     var main = document.getElementById('mainView');
-    main.innerHTML = '<div class="iv-empty"><div class="icon">⏳</div><p>Loading application…</p></div>';
+    main.innerHTML = '<div class="iv-empty"><div class="icon">⏳</div><p>Loading invoice…</p></div>';
 
     var appRes = await supabaseClient.from('aia_applications')
       .select('*, setup:aia_projects(*, project:projects(id, short_code, project_name, pm_name))')
       .eq('id', appId).maybeSingle();
     if (appRes.error || !appRes.data) {
-      main.innerHTML = '<div class="iv-empty"><div class="icon">⚠️</div><p>Application not found.</p></div>';
+      main.innerHTML = '<div class="iv-empty"><div class="icon">⚠️</div><p>Invoice not found.</p></div>';
       return;
     }
     currentApp = appRes.data;
@@ -1046,73 +1092,275 @@ requireAuth().catch(function(){});
       .select('*').eq('application_id', appId).order('sort_order', { ascending: true });
     currentLines = linesRes.data || [];
 
-    document.getElementById('pageTitle').textContent =
-      'Invoice #' + (currentApp.invoice_no || currentApp.application_no) + ' — ' + contractTitle(currentSetup);
+    var invNo = currentApp.invoice_no || String(currentApp.application_no);
+    document.getElementById('pageTitle').textContent = 'Invoice #' + invNo + ' — ' + contractTitle(currentSetup);
     document.getElementById('crumb').innerHTML =
       '<a href="invoicing.html">Prime Contracts</a> · <a href="invoicing.html?contract=' + currentSetup.id + '&tab=invoices">Prime Contract #' +
-      escHtml(contractNo(currentSetup)) + '</a> · Invoice #' + escHtml(currentApp.invoice_no || String(currentApp.application_no));
+      escHtml(contractNo(currentSetup)) + '</a> · Invoice #' + escHtml(invNo);
     var shellHtml = await applicationShellHtml(currentSetup, currentApp);
 
-    var totals = computeTotals();
+    var t = computeTotals();
+    var pctComplete = t.lines.L3 ? (t.lines.L4 / t.lines.L3) : 0;
+    var base = 'invoicing.html?app=' + currentApp.id;
 
-    var html = shellHtml;
-    // ── App header ─────────
-    html += '<div class="app-header">' +
-      '<h2>Application for Payment #' + currentApp.application_no + '  ' +
-        '<span class="status-badge ' + currentApp.status + '">' + currentApp.status + '</span></h2>' +
-      '<div class="app-sub">' +
-        '<span><b>Period:</b> ' + escHtml(currentApp.period_from) + ' → ' + escHtml(currentApp.period_to) + '</span>' +
-        '<span><b>Contract:</b> ' + fmtMoney(currentSetup.original_contract_sum) + '</span>' +
-        '<span><b>Retainage:</b> ' + Number(currentSetup.retainage_rate * 100).toFixed(2) + '%</span>' +
-        '<span><b>Client:</b> ' + escHtml(currentSetup.client_name || '—') + '</span>' +
-        (currentSetup.project.pm_name ? '<span><b>PM:</b> ' + escHtml(currentSetup.project.pm_name) + '</span>' : '') +
-      '</div>' +
-      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn-new" id="pdfBtn">\uD83D\uDCC4 Export PDF (Procore G702/G703)</button>' +
-        (canEdit ? '<button class="btn-secondary" id="statusBtn">Change status</button>' +
-                   '<button class="btn-secondary" id="editHdrBtn">Edit period / dates / previous cert</button>' : '') +
-      '</div>' +
-    '</div>';
+    var html = shellHtml +
+      '<div class="inv-head">' +
+        '<h2>Invoice (Payment Application) #' + escHtml(invNo) + ' ' + pill(INVOICE_STATUS[currentApp.status] || currentApp.status, 'st-' + currentApp.status) + '</h2>' +
+        '<div class="inv-tabs">' +
+          '<a href="' + base + '&sub=summary" class="inv-tab' + (invoiceSub === 'summary' ? ' active' : '') + '">Summary</a>' +
+          '<a href="' + base + '&sub=detail"  class="inv-tab' + (invoiceSub === 'detail'  ? ' active' : '') + '">Detail</a>' +
+        '</div>' +
+        '<div class="inv-actions">' +
+          '<button class="btn-new" id="pdfBtn">📄 Export PDF</button>' +
+          (canEdit ? '<button class="btn-secondary" id="statusBtn">Change status</button>' : '') +
+        '</div>' +
+      '</div>';
 
-    // ── G702 Summary panel ─────
-    html += renderG702Panel(totals);
-
-    // ── Line items panel ─────
-    html += renderLinesPanel();
-
-    // ── CO Summary panel ─────
-    html += renderCoSummaryPanel(totals);
+    if (invoiceSub === 'summary') {
+      html += '<div class="inv-card"><div class="inv-card-h"><h3>General Settings</h3>' +
+          (canEdit ? '<button class="btn-secondary pc-edit" id="editHdrBtn">Edit</button>' : '') + '</div>' +
+        '<div class="inv-settings">' +
+          kvRow('Invoice #:', escHtml(invNo)) +
+          kvRow('Period Start:', mdy2(currentApp.period_from)) +
+          kvRow('Period End:', mdy2(currentApp.period_to)) +
+          kvRow('Billing Date:', mdy2(currentApp.application_date) || '--') +
+          kvRow('Status:', INVOICE_STATUS[currentApp.status] || currentApp.status) +
+          kvRow('Percent Complete:', (pctComplete * 100).toFixed(2) + '%') +
+        '</div></div>';
+      html += '<div class="inv-card"><div class="inv-card-h"><h3>Summary Preview</h3></div>' +
+        '<div class="inv-preview-head">' +
+          '<div><div class="k">TO OWNER/CLIENT</div><div>' + escHtml(currentSetup.client_name || '') + '<br>' + escHtml(currentSetup.client_address || '').replace(/\n/g, '<br>') + '</div></div>' +
+          '<div><div class="k">PROJECT</div><div>' + escHtml((currentSetup.project && currentSetup.project.project_name) || '') + '<br>' + escHtml(currentSetup.project_address || '').replace(/\n/g, '<br>') + '</div></div>' +
+          '<div><div class="k">APPLICATION NO</div><div>' + currentApp.application_no + '</div>' +
+               '<div class="k" style="margin-top:8px">PERIOD</div><div>' + mdy2(currentApp.period_from) + ' - ' + mdy2(currentApp.period_to) + '</div>' +
+               '<div class="k" style="margin-top:8px">PROJECT NO</div><div>' + escHtml(currentSetup.project_no || contractNo(currentSetup)) + '</div></div>' +
+          '<div><div class="k">FROM CONTRACTOR</div><div>' + escHtml(currentSetup.contractor_name || 'Northern Wolves, Inc.') + '</div></div>' +
+          '<div><div class="k">VIA ARCHITECT/ENGINEER</div><div>' + escHtml(currentSetup.architect_name || '--') + '</div></div>' +
+          '<div><div class="k">CONTRACT FOR</div><div>' + escHtml(currentSetup.contract_for || contractTitle(currentSetup)) + '</div></div>' +
+        '</div>' +
+        renderG702Panel(t) +
+        renderCoSummaryPanel(t) +
+      '</div>';
+    } else {
+      html += renderLinesPanel();
+    }
 
     main.innerHTML = html;
 
-    // Bind row action buttons
+    var pb = document.getElementById('pdfBtn');
+    if (pb) pb.addEventListener('click', function() {
+      try { exportAiaPdf(); } catch (err) { console.error(err); showToast('PDF failed: ' + err.message, 'error'); }
+    });
+    var sb = document.getElementById('statusBtn'); if (sb) sb.addEventListener('click', changeStatus);
+    var eb = document.getElementById('editHdrBtn'); if (eb) eb.addEventListener('click', editHeader);
+    ['coPrevAdd','coPrevDed','coThisAdd','coThisDed'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('change', saveCoSummary);
+    });
+    if (invoiceSub === 'detail') bindLinesPanel();
+  }
+
+  function kvRow(k, v) { return '<div class="inv-kv"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>'; }
+
+  // ─── Detail tab: line items grid with global Edit mode ──────────────
+  function lineChildren(parent) {
+    var pfx = String(parent.item_no) + '.';
+    return currentLines.filter(function(l) { return !l.is_parent && String(l.item_no).indexOf(pfx) === 0; });
+  }
+  function lineVals(l, rate, rateStored) {
+    var c, d, e, f;
+    if (l.is_parent) {
+      c = d = e = f = 0;
+      lineChildren(l).forEach(function(k) { c += Number(k.scheduled_value || 0); d += Number(k.prev_amount || 0); e += Number(k.this_amount || 0); f += Number(k.stored_amount || 0); });
+    } else {
+      c = Number(l.scheduled_value || 0); d = Number(l.prev_amount || 0); e = Number(l.this_amount || 0); f = Number(l.stored_amount || 0);
+    }
+    var g = d + e + f;
+    return { c: c, d: d, e: e, f: f, g: g, pct: c ? g / c : 0, bal: c - g, ret: (d + e) * rate + f * rateStored };
+  }
+
+  function renderLinesPanel() {
+    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
+    var rateStored = Number(currentSetup.retainage_rate_stored || 0);
+    var contractLines = currentLines.filter(function(l) { return !l.is_change_order; });
+    var coLines       = currentLines.filter(function(l) { return  l.is_change_order; });
+    var cols = 11;
+
+    var html = '<div class="li-panel">' +
+      '<div class="inv-card-h"><h3>Line Items</h3>' +
+        (canEdit ? (linesEditMode
+          ? '<span class="field-hint" style="margin-right:auto">Enter <b>This Period</b> and <b>Stored</b> amounts (or a % complete). Parent rows roll up automatically.</span>' +
+            '<button class="btn-cancel" id="linesCancel">Cancel</button><button class="btn-create" id="linesSave">Save</button>'
+          : '<button class="btn-secondary" data-addline="contract">+ Contract Line</button>' +
+            '<button class="btn-secondary" data-addline="co">+ Change Order Line</button>' +
+            '<button class="btn-create" id="linesEdit">Edit</button>') : '') +
+      '</div>' +
+      '<table class="li-table' + (linesEditMode ? ' editing' : '') + '">' +
+      '<thead>' +
+        '<tr class="letters"><th>A</th><th colspan="2">B</th><th>C</th><th>D</th><th>E</th><th>F</th><th colspan="2">G</th><th>H</th><th>I</th></tr>' +
+        '<tr>' +
+        '<th style="width:60px">Item No</th>' +
+        '<th style="width:100px">Budget Code</th>' +
+        '<th>Description of Work</th>' +
+        '<th style="width:100px">Scheduled Value</th>' +
+        '<th style="width:100px">From Previous Application (D+E)</th>' +
+        '<th style="width:110px">This Period</th>' +
+        '<th style="width:100px">Materials Presently Stored</th>' +
+        '<th style="width:100px">Total Completed and Stored To Date</th>' +
+        '<th style="width:60px">% (G÷C)</th>' +
+        '<th style="width:100px">Balance To Finish (C-G)</th>' +
+        '<th style="width:90px">Retainage</th>' +
+      '</tr></thead><tbody>';
+
+    html += '<tr class="section-header-row"><td colspan="' + cols + '">Contract Lines</td></tr>';
+    contractLines.forEach(function(l) { html += renderLineRow(l, rate, rateStored, false); });
+    html += renderTotalsRow(contractLines, rate, rateStored, 'total-row', 'CONTRACT SUBTOTAL');
+    if (coLines.length) {
+      html += '<tr class="section-header-row"><td colspan="' + cols + '">Change Orders</td></tr>';
+      coLines.forEach(function(l) { html += renderLineRow(l, rate, rateStored, true); });
+      html += renderTotalsRow(coLines, rate, rateStored, 'total-row', 'CHANGE ORDER SUBTOTAL');
+    }
+    html += renderTotalsRow(currentLines, rate, rateStored, 'grand-row', 'TOTAL');
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function renderLineRow(l, rate, rateStored, isCo) {
+    var v = lineVals(l, rate, rateStored);
+    var rowCls = (isCo ? 'co-row ' : '') + (l.is_parent ? 'parent' : '');
+    var depth = (String(l.item_no).match(/\./g) || []).length;
+    var cells = [
+      '<td class="ctr">' + escHtml(l.item_no || '') + '</td>',
+      '<td class="ctr" style="font-size:10px">' + escHtml(l.budget_code || '') + '</td>',
+      '<td class="desc" style="padding-left:' + (8 + depth * 14) + 'px">' + escHtml(l.description || '') +
+        (!linesEditMode && canEdit && !l.is_parent ? ' <button class="pc-mini btn-secondary" data-lineedit="' + l.id + '" title="Edit description / value">✎</button>' : '') +
+        (!linesEditMode && canEdit ? ' <button class="del-btn" data-linedel="' + l.id + '" title="Delete">✕</button>' : '') +
+      '</td>'
+    ];
+    if (linesEditMode && !l.is_parent) {
+      cells = cells.concat([
+        '<td class="num">' + fmtMoney(v.c) + '</td>',
+        '<td class="num">' + fmtMoney(v.d) + '</td>',
+        '<td class="num edit"><input type="number" step="0.01" data-line="' + l.id + '" data-f="this_amount" value="' + (v.e || '') + '" placeholder="0.00">' +
+          '<input type="number" step="0.01" min="0" max="100" data-line="' + l.id + '" data-f="pct" value="' + (v.c ? (v.pct * 100).toFixed(2) : '') + '" title="% complete" class="pctin">%</td>',
+        '<td class="num edit"><input type="number" step="0.01" data-line="' + l.id + '" data-f="stored_amount" value="' + (v.f || '') + '" placeholder="0.00"></td>',
+        '<td class="num" data-calc="g">' + fmtMoney(v.g) + '</td>',
+        '<td class="num" data-calc="pct">' + (v.pct * 100).toFixed(2) + '%</td>',
+        '<td class="num" data-calc="bal">' + fmtMoney(v.bal) + '</td>',
+        '<td class="num" data-calc="ret">' + fmtMoney(v.ret) + '</td>'
+      ]);
+    } else {
+      cells = cells.concat([
+        '<td class="num">' + fmtMoney(v.c) + '</td>',
+        '<td class="num">' + fmtMoney(v.d) + '</td>',
+        '<td class="num">' + fmtMoney(v.e) + '</td>',
+        '<td class="num">' + fmtMoney(v.f) + '</td>',
+        '<td class="num">' + fmtMoney(v.g) + '</td>',
+        '<td class="num">' + (v.pct * 100).toFixed(2) + '%</td>',
+        '<td class="num">' + fmtMoney(v.bal) + '</td>',
+        '<td class="num">' + fmtMoney(v.ret) + '</td>'
+      ]);
+    }
+    return '<tr class="' + rowCls + '" data-row="' + l.id + '">' + cells.join('') + '</tr>';
+  }
+
+  function renderTotalsRow(lines, rate, rateStored, cls, label) {
+    var c = 0, d = 0, e = 0, f = 0;
+    lines.forEach(function(l) {
+      if (l.is_parent) return;
+      c += Number(l.scheduled_value || 0); d += Number(l.prev_amount || 0); e += Number(l.this_amount || 0); f += Number(l.stored_amount || 0);
+    });
+    var g = d + e + f, pct = c ? g / c : 0;
+    return '<tr class="' + cls + '">' +
+      '<td colspan="3" class="desc" style="text-align:right;font-weight:800">' + label + ':</td>' +
+      '<td class="num">' + fmtMoney(c) + '</td><td class="num">' + fmtMoney(d) + '</td><td class="num">' + fmtMoney(e) + '</td>' +
+      '<td class="num">' + fmtMoney(f) + '</td><td class="num">' + fmtMoney(g) + '</td><td class="num">' + (pct * 100).toFixed(2) + '%</td>' +
+      '<td class="num">' + fmtMoney(c - g) + '</td><td class="num">' + fmtMoney((d + e) * rate + f * rateStored) + '</td>' +
+    '</tr>';
+  }
+
+  function bindLinesPanel() {
+    var main = document.getElementById('mainView');
+    var ed = document.getElementById('linesEdit');
+    if (ed) ed.addEventListener('click', function() { linesEditMode = true; rerenderLines(); });
+    var cn = document.getElementById('linesCancel');
+    if (cn) cn.addEventListener('click', function() { linesEditMode = false; renderApplication(currentApp.id); });
+    var sv = document.getElementById('linesSave');
+    if (sv) sv.addEventListener('click', saveLinesEdit);
     main.querySelectorAll('[data-lineedit]').forEach(function(btn) {
       btn.addEventListener('click', function() { openLineModal(btn.getAttribute('data-lineedit')); });
     });
     main.querySelectorAll('[data-linedel]').forEach(function(btn) {
       btn.addEventListener('click', function() { deleteLine(btn.getAttribute('data-linedel')); });
     });
-    // Add line buttons
     main.querySelectorAll('[data-addline]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var isCo = btn.getAttribute('data-addline') === 'co';
-        openLineModal(null, isCo);
+      btn.addEventListener('click', function() { openLineModal(null, btn.getAttribute('data-addline') === 'co'); });
+    });
+    // Live recalculation while editing
+    main.querySelectorAll('.li-table input[data-line]').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var l = currentLines.find(function(x) { return x.id === inp.getAttribute('data-line'); });
+        if (!l) return;
+        var f = inp.getAttribute('data-f');
+        var c = Number(l.scheduled_value || 0), d = Number(l.prev_amount || 0);
+        if (f === 'pct') {
+          var pct = Math.max(0, Math.min(100, Number(inp.value || 0)));
+          l.this_amount = Math.round((c * pct / 100 - d - Number(l.stored_amount || 0)) * 100) / 100;
+          var eIn = main.querySelector('input[data-line="' + l.id + '"][data-f="this_amount"]'); if (eIn) eIn.value = l.this_amount;
+        } else {
+          l[f] = Number(inp.value || 0);
+          var pIn = main.querySelector('input[data-line="' + l.id + '"][data-f="pct"]');
+          if (pIn) pIn.value = c ? (((d + Number(l.this_amount || 0) + Number(l.stored_amount || 0)) / c) * 100).toFixed(2) : '';
+        }
+        refreshLineCalcs();
       });
     });
-    // Live inputs on CO Summary
-    ['coPrevAdd','coPrevDed','coThisAdd','coThisDed'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.addEventListener('change', saveCoSummary);
+  }
+  function rerenderLines() {
+    var panel = document.querySelector('.li-panel');
+    if (!panel) return;
+    panel.outerHTML = renderLinesPanel();
+    bindLinesPanel();
+  }
+  function refreshLineCalcs() {
+    // Recompute calculated cells for every row + totals without losing input focus
+    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
+    var rateStored = Number(currentSetup.retainage_rate_stored || 0);
+    var main = document.getElementById('mainView');
+    currentLines.forEach(function(l) {
+      var tr = main.querySelector('tr[data-row="' + l.id + '"]'); if (!tr) return;
+      var v = lineVals(l, rate, rateStored);
+      if (l.is_parent) {
+        var tds = tr.querySelectorAll('td.num');
+        if (tds.length >= 8) { tds[0].textContent = fmtMoney(v.c); tds[1].textContent = fmtMoney(v.d); tds[2].textContent = fmtMoney(v.e); tds[3].textContent = fmtMoney(v.f);
+          tds[4].textContent = fmtMoney(v.g); tds[5].textContent = (v.pct * 100).toFixed(2) + '%'; tds[6].textContent = fmtMoney(v.bal); tds[7].textContent = fmtMoney(v.ret); }
+      } else {
+        var g = tr.querySelector('[data-calc="g"]'), p = tr.querySelector('[data-calc="pct"]'), b = tr.querySelector('[data-calc="bal"]'), r = tr.querySelector('[data-calc="ret"]');
+        if (g) g.textContent = fmtMoney(v.g); if (p) p.textContent = (v.pct * 100).toFixed(2) + '%'; if (b) b.textContent = fmtMoney(v.bal); if (r) r.textContent = fmtMoney(v.ret);
+      }
     });
-    // Status button
-    var sb = document.getElementById('statusBtn');
-    if (sb) sb.addEventListener('click', changeStatus);
-    var eb = document.getElementById('editHdrBtn');
-    if (eb) eb.addEventListener('click', editHeader);
-    var pb = document.getElementById('pdfBtn');
-    if (pb) pb.addEventListener('click', function() {
-      try { exportAiaPdf(); } catch (err) { console.error(err); showToast('PDF failed: ' + err.message, 'error'); }
-    });
+    // totals rows: rebuild them in place
+    var rows = { contract: currentLines.filter(function(l) { return !l.is_change_order; }), co: currentLines.filter(function(l) { return l.is_change_order; }) };
+    var totalRows = main.querySelectorAll('.li-table tr.total-row, .li-table tr.grand-row');
+    var i = 0;
+    var tmp = document.createElement('tbody');
+    if (totalRows[i]) { tmp.innerHTML = renderTotalsRow(rows.contract, rate, rateStored, 'total-row', 'CONTRACT SUBTOTAL'); totalRows[i].innerHTML = tmp.firstElementChild.innerHTML; i++; }
+    if (rows.co.length && totalRows[i]) { tmp.innerHTML = renderTotalsRow(rows.co, rate, rateStored, 'total-row', 'CHANGE ORDER SUBTOTAL'); totalRows[i].innerHTML = tmp.firstElementChild.innerHTML; i++; }
+    if (totalRows[i]) { tmp.innerHTML = renderTotalsRow(currentLines, rate, rateStored, 'grand-row', 'TOTAL'); totalRows[i].innerHTML = tmp.firstElementChild.innerHTML; }
+  }
+  async function saveLinesEdit() {
+    if (!canEdit) return;
+    var btn = document.getElementById('linesSave'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var fails = 0;
+    for (var i = 0; i < currentLines.length; i++) {
+      var l = currentLines[i]; if (l.is_parent) continue;
+      var r = await supabaseClient.from('aia_line_items')
+        .update({ this_amount: Number(l.this_amount || 0), stored_amount: Number(l.stored_amount || 0) }).eq('id', l.id);
+      if (r.error) fails++;
+    }
+    linesEditMode = false;
+    showToast(fails ? ('⚠ ' + fails + ' line(s) failed to save') : '✅ Line items saved', fails ? 'error' : 'success');
+    renderApplication(currentApp.id);
   }
 
   function computeTotalsFor(setup, app, lines) {
@@ -1168,7 +1416,7 @@ requireAuth().catch(function(){});
   function renderG702Panel(t) {
     var L = t.lines;
     return '<div class="g702-panel">' +
-      '<h3>G702 — Application and Certificate for Payment</h3>' +
+      '<h3>Contractor\'s Application for Payment (G702)</h3>' +
       '<div class="g702-grid">' +
         row('1. Original Contract Sum',                                             L.L1) +
         row('2. Net Change by Change Orders',                                       L.L2) +
@@ -1198,116 +1446,6 @@ requireAuth().catch(function(){});
       return '<div class="lbl">' + lbl + '</div>' +
              '<div class="val">' + valHtml + '</div>';
     }
-  }
-
-  function renderLinesPanel() {
-    // Split by contract vs change order
-    var contractLines = currentLines.filter(function(l) { return !l.is_change_order; });
-    var coLines       = currentLines.filter(function(l) { return  l.is_change_order; });
-    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
-
-    var html = '<div class="li-panel">' +
-      '<h3>G703 — Schedule of Values ' +
-        (canEdit ? '<button class="btn-secondary" data-addline="contract">+ Add Contract Line</button> ' +
-                   '<button class="btn-secondary" data-addline="co">+ Add Change Order Line</button>' : '') +
-      '</h3>' +
-      '<table class="li-table">' +
-      '<thead><tr>' +
-        '<th style="width:60px">Item</th>' +
-        '<th style="width:100px">Budget Code</th>' +
-        '<th>Description</th>' +
-        '<th style="width:90px">Sched Val</th>' +
-        '<th style="width:90px">From Prev</th>' +
-        '<th style="width:90px">This Period</th>' +
-        '<th style="width:90px">Stored</th>' +
-        '<th style="width:90px">Total (G)</th>' +
-        '<th style="width:55px">%</th>' +
-        '<th style="width:90px">Balance</th>' +
-        '<th style="width:80px">Retainage</th>' +
-        (canEdit ? '<th style="width:60px"></th>' : '') +
-      '</tr></thead><tbody>';
-
-    // Contract Lines section
-    html += '<tr class="section-header-row"><td colspan="' + (canEdit ? 12 : 11) + '">Contract Lines</td></tr>';
-    contractLines.forEach(function(l) { html += renderLineRow(l, rate, false); });
-    // Contract totals
-    html += renderTotalsRow(contractLines, rate, 'total-row', 'CONTRACT SUBTOTAL', canEdit);
-    // CO section
-    if (coLines.length) {
-      html += '<tr class="section-header-row"><td colspan="' + (canEdit ? 12 : 11) + '">Change Orders</td></tr>';
-      coLines.forEach(function(l) { html += renderLineRow(l, rate, true); });
-      html += renderTotalsRow(coLines, rate, 'total-row', 'CHANGE ORDER SUBTOTAL', canEdit);
-    }
-    // Grand total
-    html += renderTotalsRow(currentLines, rate, 'grand-row', 'GRAND TOTAL', canEdit);
-
-    html += '</tbody></table></div>';
-    return html;
-  }
-
-  function renderLineRow(l, rate, isCo) {
-    var d = Number(l.prev_amount || 0);
-    var e = Number(l.this_amount || 0);
-    var f = Number(l.stored_amount || 0);
-    var g = d + e + f;
-    var c = Number(l.scheduled_value || 0);
-    var pct = c ? (g / c) : 0;
-    var balance = c - g;
-    var retainage = g * rate;
-    var rowCls = (isCo ? 'co-row ' : '') + (l.is_parent ? 'parent' : '');
-    var cells = [
-      '<td class="ctr">' + escHtml(l.item_no || '') + '</td>',
-      '<td class="ctr" style="font-size:10px">' + escHtml(l.budget_code || '') + '</td>',
-      '<td class="desc">' + escHtml(l.description || '') + '</td>'
-    ];
-    if (l.is_parent) {
-      cells.push('<td class="num readonly" colspan="8" style="text-align:left;color:var(--nw-muted)">— header row —</td>');
-    } else {
-      cells = cells.concat([
-        '<td class="num">' + fmtMoney(c) + '</td>',
-        '<td class="num">' + fmtMoney(d) + '</td>',
-        '<td class="num">' + fmtMoney(e) + '</td>',
-        '<td class="num">' + fmtMoney(f) + '</td>',
-        '<td class="num">' + fmtMoney(g) + '</td>',
-        '<td class="num">' + (pct * 100).toFixed(2) + '%</td>',
-        '<td class="num">' + fmtMoney(balance) + '</td>',
-        '<td class="num">' + fmtMoney(retainage) + '</td>'
-      ]);
-    }
-    if (canEdit) {
-      cells.push('<td class="ctr">' +
-        '<button class="btn-secondary" data-lineedit="' + l.id + '" style="padding:2px 8px;font-size:10px">Edit</button> ' +
-        '<button class="del-btn" data-linedel="' + l.id + '" title="Delete">✕</button>' +
-      '</td>');
-    }
-    return '<tr class="' + rowCls + '">' + cells.join('') + '</tr>';
-  }
-
-  function renderTotalsRow(lines, rate, cls, label, editCol) {
-    var c=0, d=0, e=0, f=0;
-    lines.forEach(function(l) {
-      if (l.is_parent) return;
-      c += Number(l.scheduled_value || 0);
-      d += Number(l.prev_amount || 0);
-      e += Number(l.this_amount || 0);
-      f += Number(l.stored_amount || 0);
-    });
-    var g = d + e + f;
-    var pct = c ? (g / c) : 0;
-    var balance = c - g;
-    var retainage = g * rate;
-    return '<tr class="' + cls + '">' +
-      '<td colspan="3" class="desc" style="text-align:right;font-weight:800">' + label + ':</td>' +
-      '<td class="num">' + fmtMoney(c) + '</td>' +
-      '<td class="num">' + fmtMoney(d) + '</td>' +
-      '<td class="num">' + fmtMoney(e) + '</td>' +
-      '<td class="num">' + fmtMoney(f) + '</td>' +
-      '<td class="num">' + fmtMoney(g) + '</td>' +
-      '<td class="num">' + (pct * 100).toFixed(2) + '%</td>' +
-      '<td class="num">' + fmtMoney(balance) + '</td>' +
-      '<td class="num">' + fmtMoney(retainage) + '</td>' +
-      (editCol ? '<td></td>' : '') +
-    '</tr>';
   }
 
   function renderCoSummaryPanel(t) {
@@ -1739,16 +1877,7 @@ requireAuth().catch(function(){});
   function renderGeneralTab(b) {
     var s = b.setup, ru = b.rollup;
     var editBtn = canEdit ? '<button class="btn-secondary pc-edit" data-edit-setup>Edit</button>' : '';
-    var sovRows = b.sov.map(function(it) {
-      return '<tr data-sov="' + it.id + '"><td>' + escHtml(it.budget_code || '') + '</td><td>' + escHtml(it.description) + '</td>' +
-        '<td class="num">' + fmtMoney(it.amount) + '</td>' +
-        (canEdit ? '<td class="ctr"><button class="btn-secondary pc-mini" data-sov-edit="' + it.id + '">Edit</button> <button class="del-btn" data-sov-del="' + it.id + '">✕</button></td>' : '') +
-      '</tr>';
-    }).join('');
-    var sovTotal = b.sov.reduce(function(a, x) { return a + Number(x.amount || 0); }, 0);
-    var sovWarn = (b.sov.length && Math.abs(sovTotal - ru.original) > 0.005)
-      ? '<div class="pc-warn">SOV total ' + fmtMoney(sovTotal) + ' ≠ Original Contract Amount ' + fmtMoney(ru.original) + '</div>' : '';
-
+    var sovTotal = b.sov.reduce(function(acc, x) { return acc + Number(x.amount || 0); }, 0);
     return '<div class="pc-general">' +
       '<nav class="pc-subnav">' +
         '<a href="#gi">General Information</a><a href="#cs">Contract Summary</a><a href="#sov">Schedule of Values</a>' +
@@ -1786,13 +1915,9 @@ requireAuth().catch(function(){});
 
       '<section class="pc-card" id="sov"><div class="pc-card-h"><h3>Schedule of Values</h3>' +
           (canEdit ? '<button class="btn-secondary pc-edit" data-sov-import-app>Import from latest invoice</button>' : '') + '</div>' +
-        '<table class="pc-table pc-sov"><thead><tr><th style="width:160px">Budget Code</th><th>Description</th><th class="num" style="width:160px">Amount</th>' + (canEdit ? '<th style="width:110px"></th>' : '') + '</tr></thead>' +
-        '<tbody>' + (sovRows || '<tr><td colspan="4" class="pc-empty">No lines yet.</td></tr>') + '</tbody>' +
-        '<tfoot><tr><td' + (canEdit ? '' : '') + '>' + (canEdit ? '<button class="btn-create" data-sov-add>Add Line</button>' : '') + '</td><td class="num"><b>Total:</b></td><td class="num"><b>' + fmtMoney(sovTotal) + '</b></td>' + (canEdit ? '<td></td>' : '') + '</tr></tfoot></table>' +
-        sovWarn +
-        '<div class="field-hint" style="margin-top:6px">New invoice #1 is seeded from these lines. Later invoices carry forward from the previous one.</div>' +
+        (canEdit ? '<div class="pc-note">⚠ <b>Any changes will only apply to future invoices.</b> Existing invoices will not be affected.</div>' : '') +
+        '<div id="sovGrid"></div>' +
       '</section>' +
-
       '<section class="pc-card" id="ie"><div class="pc-card-h"><h3>Inclusions &amp; Exclusions</h3>' + editBtn + '</div>' +
         '<div class="pc-grid1">' + kv('Inclusions', escHtml(s.inclusions || '').replace(/\n/g, '<br>')) + kv('Exclusions', escHtml(s.exclusions || '').replace(/\n/g, '<br>')) + '</div></section>' +
 
@@ -1911,10 +2036,8 @@ requireAuth().catch(function(){});
   function bindTab(tab) {
     var main = document.getElementById('mainView');
     main.querySelectorAll('[data-edit-setup]').forEach(function(bt) { bt.addEventListener('click', function() { openSetupModal(pc.setup.id); }); });
-    main.querySelectorAll('[data-sov-add]').forEach(function(bt) { bt.addEventListener('click', function() { openSovModal(null); }); });
-    main.querySelectorAll('[data-sov-edit]').forEach(function(bt) { bt.addEventListener('click', function() { openSovModal(bt.getAttribute('data-sov-edit')); }); });
-    main.querySelectorAll('[data-sov-del]').forEach(function(bt) { bt.addEventListener('click', function() { deleteSov(bt.getAttribute('data-sov-del')); }); });
     main.querySelectorAll('[data-sov-import-app]').forEach(function(bt) { bt.addEventListener('click', importSovFromLatestApp); });
+    if (document.getElementById('sovGrid')) initSovGrid();
     var coAdd = document.getElementById('coAdd'); if (coAdd) coAdd.addEventListener('click', function() { openCoModal(null); });
     main.querySelectorAll('[data-co-edit]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); openCoModal(a.getAttribute('data-co-edit')); }); });
     var invAdd = document.getElementById('invAdd'); if (invAdd) invAdd.addEventListener('click', function() { openNewAppModal(pc.setup.id); });
@@ -1927,38 +2050,123 @@ requireAuth().catch(function(){});
     renderContract(pc.setup.id, tab);
   }
 
-  // ─── SOV modal ──────────────────────────────────────────────────────
-  var editingSovId = null;
-  function openSovModal(id) {
-    editingSovId = id;
-    var it = id ? pc.sov.find(function(x) { return x.id === id; }) : null;
-    document.getElementById('sovTitle').textContent = id ? 'Edit SOV Line' : 'Add SOV Line';
-    document.getElementById('sovCode').value = it ? (it.budget_code || '') : '';
-    document.getElementById('sovDesc').value = it ? it.description : '';
-    document.getElementById('sovAmt').value  = it ? it.amount : '';
-    openModal('sovModal');
+  // ─── Schedule of Values — inline grid (Procore-style) ───────────────
+  var sovDraft = [];      // [{id, budget_code, description, amount, billed, locked, _del}]
+  var sovDirty = false;
+
+  async function initSovGrid() {
+    // Billed-to-date per contract line from the latest invoice (match by position, then description)
+    var billed = [];
+    if (pc.rollup.latestApp) {
+      var li = await supabaseClient.from('aia_line_items')
+        .select('description, prev_amount, this_amount, stored_amount, is_parent, is_change_order, sort_order')
+        .eq('application_id', pc.rollup.latestApp.id).eq('is_change_order', false).order('sort_order', { ascending: true });
+      billed = (li.data || []).filter(function(l) { return !l.is_parent; })
+        .map(function(l) { return { description: (l.description || '').trim().toLowerCase(), g: Number(l.prev_amount || 0) + Number(l.this_amount || 0) + Number(l.stored_amount || 0) }; });
+    }
+    sovDraft = pc.sov.map(function(it, i) {
+      var m = billed[i] && billed[i].description === (it.description || '').trim().toLowerCase() ? billed[i]
+            : billed.find(function(x) { return x.description === (it.description || '').trim().toLowerCase(); });
+      var g = m ? m.g : 0;
+      return { id: it.id, budget_code: it.budget_code || '', description: it.description || '', amount: Number(it.amount || 0), billed: g, locked: g > 0, _del: false };
+    });
+    sovDirty = false;
+    renderSovGrid();
   }
-  async function saveSov() {
+
+  function renderSovGrid() {
+    var host = document.getElementById('sovGrid'); if (!host) return;
+    var rows = sovDraft.filter(function(r) { return !r._del; });
+    var tot = { amt: 0, billed: 0 };
+    var body = rows.map(function(r) {
+      var idx = sovDraft.indexOf(r);
+      tot.amt += Number(r.amount || 0); tot.billed += r.billed;
+      var rem = Number(r.amount || 0) - r.billed;
+      var dis = (!canEdit || r.locked) ? ' disabled' : '';
+      return '<tr data-i="' + idx + '"' + (r.locked ? ' class="locked"' : '') + '>' +
+        '<td class="ctr">' + (rows.indexOf(r) + 1) + '</td>' +
+        '<td><input type="text" data-f="budget_code" value="' + escHtml(r.budget_code) + '" placeholder="—"' + dis + '></td>' +
+        '<td><input type="text" data-f="description" value="' + escHtml(r.description) + '" placeholder="Description"' + dis + '></td>' +
+        '<td><input type="number" step="0.01" data-f="amount" value="' + (r.amount || '') + '" placeholder="0.00" class="num"' + dis + '></td>' +
+        '<td class="num muted">' + fmtMoney(r.billed) + '</td>' +
+        '<td class="num muted">' + fmtMoney(rem) + '</td>' +
+        '<td class="ctr">' + (r.locked ? '<span title="Billed on an invoice — locked">🔒</span>' : (canEdit ? '<button class="del-btn" data-del="' + idx + '" title="Remove line">✕</button>' : '')) + '</td>' +
+      '</tr>';
+    }).join('');
+    host.innerHTML =
+      '<table class="pc-table pc-sov"><thead><tr><th style="width:40px">#</th><th style="width:150px">Budget Code</th><th>Description</th>' +
+      '<th class="num" style="width:140px">Amount</th><th class="num" style="width:140px">Billed to Date</th><th class="num" style="width:150px">Amount Remaining</th><th style="width:44px"></th></tr></thead>' +
+      '<tbody>' + (body || '<tr><td colspan="7" class="pc-empty">No lines yet — click <b>Add Line</b>.</td></tr>') + '</tbody>' +
+      '<tfoot><tr><td colspan="3">' + (canEdit ? '<button class="btn-create" id="sovAddLine">Add Line</button>' : '') + '<span style="margin-left:12px;font-weight:700">Total:</span></td>' +
+      '<td class="num">' + fmtMoney(tot.amt) + '</td><td class="num">' + fmtMoney(tot.billed) + '</td><td class="num">' + fmtMoney(tot.amt - tot.billed) + '</td><td></td></tr></tfoot></table>' +
+      (Math.abs(tot.amt - Number(pc.setup.original_contract_sum || 0)) > 0.005 && rows.length
+        ? '<div class="pc-warn">SOV total ' + fmtMoney(tot.amt) + ' ≠ Original Contract Amount ' + fmtMoney(pc.setup.original_contract_sum) + '</div>' : '') +
+      (canEdit ? '<div class="sov-actions" id="sovActions" style="' + (sovDirty ? '' : 'display:none') + '">' +
+        '<button class="btn-cancel" id="sovCancelBtn">Cancel</button><button class="btn-create" id="sovSaveBtn">Save</button></div>' : '') +
+      '<div class="field-hint" style="margin-top:6px">New invoice #1 is seeded from these lines. Later invoices carry forward from the previous one.</div>';
+
+    host.querySelectorAll('input[data-f]').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var tr = inp.closest('tr'); var r = sovDraft[Number(tr.getAttribute('data-i'))];
+        var f = inp.getAttribute('data-f');
+        r[f] = f === 'amount' ? Number(inp.value || 0) : inp.value;
+        markSovDirty();
+        if (f === 'amount') refreshSovTotals();
+      });
+      inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); var tr = inp.closest('tr'); if (tr === tr.parentNode.lastElementChild && inp.getAttribute('data-f') === 'amount') addSovLine(); }
+      });
+    });
+    host.querySelectorAll('[data-del]').forEach(function(bt) {
+      bt.addEventListener('click', function() {
+        var r = sovDraft[Number(bt.getAttribute('data-del'))];
+        if (r.id) r._del = true; else sovDraft.splice(sovDraft.indexOf(r), 1);
+        markSovDirty(); renderSovGrid();
+      });
+    });
+    var add = document.getElementById('sovAddLine'); if (add) add.addEventListener('click', addSovLine);
+    var sv = document.getElementById('sovSaveBtn'); if (sv) sv.addEventListener('click', saveSovGrid);
+    var cn = document.getElementById('sovCancelBtn'); if (cn) cn.addEventListener('click', function() { initSovGrid(); });
+  }
+  function refreshSovTotals() {
+    // cheap: re-render totals only by re-rendering the grid while preserving focus
+    var active = document.activeElement, tr = active && active.closest ? active.closest('tr') : null;
+    var i = tr ? tr.getAttribute('data-i') : null, f = active ? active.getAttribute('data-f') : null, pos = active && active.selectionStart;
+    renderSovGrid();
+    if (i != null && f) { var el = document.querySelector('#sovGrid tr[data-i="' + i + '"] input[data-f="' + f + '"]'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) {} } }
+  }
+  function markSovDirty() { sovDirty = true; var a = document.getElementById('sovActions'); if (a) a.style.display = ''; }
+  function addSovLine() {
     if (!canEdit) return;
-    var patch = {
-      aia_project_id: pc.setup.id,
-      budget_code: document.getElementById('sovCode').value.trim() || null,
-      description: document.getElementById('sovDesc').value.trim(),
-      amount: Number(document.getElementById('sovAmt').value || 0)
-    };
-    if (!patch.description) { showToast('Description required', 'error'); return; }
-    var r;
-    if (editingSovId) r = await supabaseClient.from('aia_sov_items').update(patch).eq('id', editingSovId);
-    else { patch.sort_order = pc.sov.length + 1; r = await supabaseClient.from('aia_sov_items').insert(patch); }
-    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
-    closeModal('sovModal'); showToast('✅ Saved', 'success'); reloadContract();
+    sovDraft.push({ id: null, budget_code: '', description: '', amount: 0, billed: 0, locked: false, _del: false });
+    markSovDirty(); renderSovGrid();
+    var last = document.querySelector('#sovGrid tbody tr:last-child input[data-f="description"]'); if (last) last.focus();
   }
-  async function deleteSov(id) {
-    if (!canEdit || !confirm('Delete this SOV line?')) return;
-    var r = await supabaseClient.from('aia_sov_items').delete().eq('id', id);
-    if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
+  async function saveSovGrid() {
+    if (!canEdit) return;
+    var live = sovDraft.filter(function(r) { return !r._del; });
+    if (live.some(function(r) { return !r.description.trim(); })) { showToast('Every line needs a description', 'error'); return; }
+    var btn = document.getElementById('sovSaveBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var dels = sovDraft.filter(function(r) { return r._del && r.id; }).map(function(r) { return r.id; });
+    if (dels.length) { var d = await supabaseClient.from('aia_sov_items').delete().in('id', dels); if (d.error) { showToast('Delete failed: ' + d.error.message, 'error'); return; } }
+    var orig = {}; pc.sov.forEach(function(it) { orig[it.id] = it; });
+    for (var i = 0; i < live.length; i++) {
+      var r = live[i];
+      var row = { aia_project_id: pc.setup.id, budget_code: r.budget_code.trim() || null, description: r.description.trim(), amount: Number(r.amount || 0), sort_order: i + 1 };
+      var res;
+      if (r.id) {
+        var o = orig[r.id];
+        if (o && (o.budget_code || '') === (row.budget_code || '') && o.description === row.description && Number(o.amount) === row.amount && o.sort_order === row.sort_order) continue;
+        res = await supabaseClient.from('aia_sov_items').update(row).eq('id', r.id);
+      } else {
+        res = await supabaseClient.from('aia_sov_items').insert(row);
+      }
+      if (res.error) { showToast('Save failed: ' + res.error.message, 'error'); return; }
+    }
+    showToast('✅ Schedule of Values saved', 'success');
     reloadContract();
   }
+
   async function importSovFromLatestApp() {
     if (!canEdit || !pc.rollup.latestApp) { showToast('No invoice to import from', 'error'); return; }
     if (pc.sov.length && !confirm('Replace the current SOV with the latest invoice\'s contract lines?')) return;
@@ -2506,6 +2714,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=180"></script>
+<script src="sw-register.js?v=181"></script>
 </body>
 </html>
