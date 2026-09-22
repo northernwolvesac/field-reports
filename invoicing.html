@@ -12,8 +12,10 @@
 <title>Invoicing — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=164"></script>
-<script src="auth.js?v=164"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="supabase-config.js?v=179"></script>
+<script src="auth.js?v=179"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: 1200px; margin: 0 auto; }
@@ -323,10 +325,37 @@
         <input type="number" id="sContractSum" step="0.01" min="0" placeholder="e.g. 1200000.00">
       </div>
       <div class="field">
-        <label>Retainage rate</label>
+        <label>Retainage — completed work</label>
         <input type="number" id="sRetainage" step="0.01" min="0" max="20" value="5" placeholder="5">
-        <div class="field-hint">Percent (e.g. 5 for 5%)</div>
+        <div class="field-hint">Percent (Line 5a)</div>
       </div>
+      <div class="field">
+        <label>Retainage — stored material</label>
+        <input type="number" id="sRetainageStored" step="0.01" min="0" max="20" value="0" placeholder="0">
+        <div class="field-hint">Percent (Line 5b)</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Form variant</label>
+        <select id="sVariant">
+          <option value="owner">Owner / Client (with Architect's Certificate)</option>
+          <option value="subcontractor">Subcontractor (To Contractor, Contract No.)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Project No.</label>
+        <input type="text" id="sProjectNo" placeholder="defaults to project short code">
+      </div>
+      <div class="field">
+        <label>Contract No.</label>
+        <input type="text" id="sContractNo" placeholder="e.g. SC-26-132-009">
+      </div>
+    </div>
+    <div class="field">
+      <label>Project site address</label>
+      <textarea id="sProjectAddr" style="min-height:50px" placeholder="20 West 3rd Street&#10;New York, New York 10010"></textarea>
+      <div class="field-hint">Printed under PROJECT: on the PDF. One line per row.</div>
     </div>
     <div class="row">
       <div class="field">
@@ -344,7 +373,8 @@
     </div>
     <div class="field">
       <label>Client / Owner address</label>
-      <textarea id="sClientAddr" style="min-height:60px" placeholder="Street, City, State, ZIP"></textarea>
+      <textarea id="sClientAddr" style="min-height:60px" placeholder="14 West 23rd Street&#10;New York, New York 10010"></textarea>
+      <div class="field-hint">One line per row (street / city, state zip).</div>
     </div>
     <div class="field">
       <label>Architect / Engineer name (optional)</label>
@@ -369,6 +399,10 @@
       <div class="field">
         <label>Application No *</label>
         <input type="number" id="naNo" min="1" step="1">
+      </div>
+      <div class="field">
+        <label>Invoice No</label>
+        <input type="text" id="naInvoiceNo" placeholder="same as App No">
       </div>
       <div class="field">
         <label>Application date</label>
@@ -661,6 +695,11 @@ requireAuth().catch(function(){});
       document.getElementById('sClientAddr').value   = d.client_address || '';
       document.getElementById('sArchName').value     = d.architect_name || '';
       document.getElementById('sArchAddr').value     = d.architect_address || '';
+      document.getElementById('sRetainageStored').value = Number((d.retainage_rate_stored || 0) * 100).toFixed(2);
+      document.getElementById('sVariant').value      = d.form_variant || 'owner';
+      document.getElementById('sProjectNo').value    = d.project_no || '';
+      document.getElementById('sContractNo').value   = d.contract_no || '';
+      document.getElementById('sProjectAddr').value  = d.project_address || '';
     } else {
       sel.disabled = false;
       document.getElementById('sContractSum').value  = '';
@@ -671,6 +710,11 @@ requireAuth().catch(function(){});
       document.getElementById('sClientAddr').value   = '';
       document.getElementById('sArchName').value     = '';
       document.getElementById('sArchAddr').value     = '';
+      document.getElementById('sRetainageStored').value = 0;
+      document.getElementById('sVariant').value      = 'owner';
+      document.getElementById('sProjectNo').value    = '';
+      document.getElementById('sContractNo').value   = '';
+      document.getElementById('sProjectAddr').value  = '';
     }
     openModal('setupModal');
   }
@@ -686,7 +730,12 @@ requireAuth().catch(function(){});
       client_name:           document.getElementById('sClientName').value.trim() || null,
       client_address:        document.getElementById('sClientAddr').value.trim() || null,
       architect_name:        document.getElementById('sArchName').value.trim() || null,
-      architect_address:     document.getElementById('sArchAddr').value.trim() || null
+      architect_address:     document.getElementById('sArchAddr').value.trim() || null,
+      retainage_rate_stored: Number(document.getElementById('sRetainageStored').value || 0) / 100,
+      form_variant:          document.getElementById('sVariant').value || 'owner',
+      project_no:            document.getElementById('sProjectNo').value.trim() || null,
+      contract_no:           document.getElementById('sContractNo').value.trim() || null,
+      project_address:       document.getElementById('sProjectAddr').value.trim() || null
     };
     if (!patch.project_id || !patch.original_contract_sum) {
       showToast('Project and Contract Sum are required', 'error'); return;
@@ -721,6 +770,7 @@ requireAuth().catch(function(){});
       .order('application_no', { ascending: false }).limit(1).maybeSingle();
     var nextNo = last && last.data ? (last.data.application_no + 1) : 1;
     document.getElementById('naNo').value = nextNo;
+    document.getElementById('naInvoiceNo').value = String(nextNo);
     // Default dates: period covers previous month
     var today = new Date();
     var firstOfPrev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -757,7 +807,7 @@ requireAuth().catch(function(){});
         priorId = prior.data.id;
         // Compute Line 6 for prior app: G(prior) - Retainage(prior)
         var setupRes = await supabaseClient.from('aia_projects').select('retainage_rate').eq('id', newAppProjectId).maybeSingle();
-        var rate = (setupRes.data && setupRes.data.retainage_rate) || 0.05;
+        var rate = (setupRes.data && setupRes.data.retainage_rate != null) ? Number(setupRes.data.retainage_rate) : 0.05;
         var priorLines = await supabaseClient.from('aia_line_items')
           .select('scheduled_value, prev_amount, this_amount, stored_amount, is_parent')
           .eq('application_id', priorId);
@@ -776,6 +826,7 @@ requireAuth().catch(function(){});
       period_from:    from,
       period_to:      to,
       application_date: dateVal || null,
+      invoice_no:     document.getElementById('naInvoiceNo').value.trim() || String(appNo),
       previous_certificates: priorLine6,
       status: 'draft',
       created_by: currentUserId
@@ -866,10 +917,11 @@ requireAuth().catch(function(){});
         '<span><b>Client:</b> ' + escHtml(currentSetup.client_name || '—') + '</span>' +
         (currentSetup.project.pm_name ? '<span><b>PM:</b> ' + escHtml(currentSetup.project.pm_name) + '</span>' : '') +
       '</div>' +
-      (canEdit ? '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn-secondary" id="statusBtn">Change status</button>' +
-        '<button class="btn-secondary" id="editHdrBtn">Edit period / previous cert</button>' +
-      '</div>' : '') +
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn-new" id="pdfBtn">\uD83D\uDCC4 Export PDF (Procore G702/G703)</button>' +
+        (canEdit ? '<button class="btn-secondary" id="statusBtn">Change status</button>' +
+                   '<button class="btn-secondary" id="editHdrBtn">Edit period / dates / previous cert</button>' : '') +
+      '</div>' +
     '</div>';
 
     // ── G702 Summary panel ─────
@@ -907,6 +959,10 @@ requireAuth().catch(function(){});
     if (sb) sb.addEventListener('click', changeStatus);
     var eb = document.getElementById('editHdrBtn');
     if (eb) eb.addEventListener('click', editHeader);
+    var pb = document.getElementById('pdfBtn');
+    if (pb) pb.addEventListener('click', function() {
+      try { exportAiaPdf(); } catch (err) { console.error(err); showToast('PDF failed: ' + err.message, 'error'); }
+    });
   }
 
   function computeTotals() {
@@ -926,7 +982,8 @@ requireAuth().catch(function(){});
       }
     });
 
-    var rate = Number(currentSetup.retainage_rate || 0.05);
+    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
+    var rateStored = Number(currentSetup.retainage_rate_stored || 0);
     var grandG = totalG + totalCoG;
     var grandCompleted = totalCompleted + totalCoCompleted;
     var grandStored    = totalStored    + totalCoStored;
@@ -940,7 +997,7 @@ requireAuth().catch(function(){});
     var line3 = line1 + line2;
     var line4 = grandG;
     var line5a = grandCompleted * rate;
-    var line5b = grandStored    * rate;
+    var line5b = grandStored    * rateStored;
     var line5t = line5a + line5b;
     var line6 = line4 - line5t;
     var line7 = Number(currentApp.previous_certificates || 0);
@@ -967,7 +1024,7 @@ requireAuth().catch(function(){});
         row('4. Total Completed & Stored to Date (from G703 Column G)',             L.L4) +
         row('5. Retainage:',                                                        '',   'lbl') +
         row('   a. ' + (currentSetup.retainage_rate * 100).toFixed(2) + '% of Completed Work',  L.L5a, 'indent') +
-        row('   b. ' + (currentSetup.retainage_rate * 100).toFixed(2) + '% of Stored Material', L.L5b, 'indent') +
+        row('   b. ' + (Number(currentSetup.retainage_rate_stored || 0) * 100).toFixed(2) + '% of Stored Material', L.L5b, 'indent') +
         row('   Total Retainage (5a + 5b)',                                         L.L5t, 'indent') +
         row('6. Total Earned Less Retainage (Line 4 − 5)',                          L.L6) +
         row('7. Less Previous Certificates for Payment',                            L.L7) +
@@ -995,7 +1052,7 @@ requireAuth().catch(function(){});
     // Split by contract vs change order
     var contractLines = currentLines.filter(function(l) { return !l.is_change_order; });
     var coLines       = currentLines.filter(function(l) { return  l.is_change_order; });
-    var rate = Number(currentSetup.retainage_rate || 0.05);
+    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
 
     var html = '<div class="li-panel">' +
       '<h3>G703 — Schedule of Values ' +
@@ -1170,7 +1227,12 @@ requireAuth().catch(function(){});
     if (to === null) return;
     var prev = prompt('Previous certificates for payment ($):', currentApp.previous_certificates || 0);
     if (prev === null) return;
-    var patch = { period_from: from, period_to: to, previous_certificates: Number(prev) };
+    var adate = prompt('Application date (YYYY-MM-DD):', currentApp.application_date || '');
+    if (adate === null) return;
+    var inv = prompt('Invoice No:', currentApp.invoice_no || String(currentApp.application_no));
+    if (inv === null) return;
+    var patch = { period_from: from, period_to: to, previous_certificates: Number(prev),
+                  application_date: adate || null, invoice_no: inv.trim() || null };
     var r = await supabaseClient.from('aia_applications').update(patch).eq('id', currentApp.id);
     if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
     showToast('✅ Header updated', 'success');
@@ -1270,6 +1332,369 @@ requireAuth().catch(function(){});
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  //   PDF EXPORT — replicates Procore's G702/G703 output
+  //   (landscape Letter; page 1 = Application & Certificate summary sheet,
+  //    page 2+ = Continuation sheet with Contract Lines / Change Orders /
+  //    Grand Totals tables). Layout measured from Sept-2026 Procore samples.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  function exportAiaPdf() {
+    if (!window.jspdf || !window.jspdf.jsPDF) { showToast('PDF library not loaded — refresh and retry', 'error'); return; }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    var W = 792, H = 612, ML = 24, MR = 24, CW = W - ML - MR;   // usable width 744
+    var setup = currentSetup, app = currentApp, t = computeTotals(), L = t.lines;
+    var isSub = (setup.form_variant === 'subcontractor');
+    var rate = Number(setup.retainage_rate || 0), rateStored = Number(setup.retainage_rate_stored || 0);
+    var pageKinds = ['summary'];   // per-page header kind, filled as pages are added
+
+    function F(size, style) { doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size); }
+    function T(txt, x, y, opts) { doc.text(String(txt == null ? '' : txt), x, y, opts || {}); }
+    function TR(txt, xRight, y) { doc.text(String(txt == null ? '' : txt), xRight, y, { align: 'right' }); }
+    function line(x1, y1, x2, y2, w) { doc.setLineWidth(w || 0.5); doc.setDrawColor(0); doc.line(x1, y1, x2, y2); }
+    function addrLines(str) {
+      if (!str) return [];
+      var s = String(str).trim();
+      if (s.indexOf('\n') >= 0) return s.split(/\r?\n/).map(function(x){ return x.trim(); }).filter(Boolean);
+      var parts = s.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+      if (parts.length <= 1) return parts;
+      if (parts.length === 2) return parts;
+      var l2 = parts.slice(-2).join(', ');
+      var l1 = parts.slice(0, -2).join(', ');
+      return [l1, l2];
+    }
+    function mdy2(iso) {   // 09/01/26
+      if (!iso) return '';
+      var d = new Date(iso + 'T00:00:00');
+      return ('0' + (d.getMonth() + 1)).slice(-2) + '/' + ('0' + d.getDate()).slice(-2) + '/' + String(d.getFullYear()).slice(-2);
+    }
+    function mdy4(iso) {   // 9/20/2026
+      if (!iso) return '';
+      var d = new Date(iso + 'T00:00:00');
+      return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+    }
+    function pct(n) { return (Number(n || 0) * 100).toFixed(2) + '%'; }
+    function pctRate(n) { return (Number(n || 0) * 100).toFixed(2) + '%'; }
+
+    var period = mdy2(app.period_from) + ' - ' + mdy2(app.period_to);
+    var projectName = (setup.project && setup.project.project_name) || '';
+    var projectNo   = setup.project_no || (setup.project && setup.project.short_code) || '';
+    var invoiceNo   = app.invoice_no || String(app.application_no);
+    var contractorName = setup.contractor_name || 'Northern Wolves, Inc.';
+    var contractorAddr = addrLines(setup.contractor_address || '55 9th Str., Unit 55A-2\nBrooklyn, New York 11215');
+    var ownerLines  = [setup.client_name || ''].concat(addrLines(setup.client_address)).filter(Boolean);
+    var projLines   = [projectName].concat(addrLines(setup.project_address)).filter(Boolean);
+    var archLines   = [setup.architect_name || ''].concat(addrLines(setup.architect_address)).filter(Boolean);
+
+    // ─────────────────────────────────────────────────────────── PAGE 1 ──
+    // Header blocks
+    F(8, 'bold');
+    T(isSub ? 'TO CONTRACTOR:' : 'TO OWNER/CLIENT:', ML, 40);
+    T('PROJECT:', 211, 40);
+    F(8, 'normal');
+    ownerLines.forEach(function(s, i) { T(s, ML, 53 + i * 9.5); });
+    projLines.forEach(function(s, i)  { T(s, 211, 53 + i * 9.5); });
+
+    // Right meta column (labels right-aligned at 482, values at 487)
+    var metaY = 40;
+    function meta(lbl, val) {
+      F(8, 'bold'); TR(lbl, 482, metaY);
+      F(8, 'normal'); T(val || '', 487, metaY);
+      metaY += 13;
+    }
+    meta('APPLICATION NO:', app.application_no);
+    meta('INVOICE NO:', invoiceNo);
+    meta('PERIOD:', period);
+    meta('PROJECT NO:', projectNo);
+    if (isSub) {
+      meta('CONTRACT NO:', setup.contract_no || '');
+      meta('CONTRACT DATE:', mdy4(setup.contract_date));
+      meta('CERTIFICATE DATE:', mdy4(app.certificate_date));
+      meta('SUBMITTED DATE:', mdy4(app.submitted_date));
+    } else {
+      meta('CONTRACT DATE:', mdy4(setup.contract_date));
+    }
+
+    var fromY = Math.max(92, 53 + Math.max(ownerLines.length, projLines.length) * 9.5 + 12);
+    F(8, 'bold');
+    T(isSub ? 'FROM SUBCONTRACTOR:' : 'FROM CONTRACTOR:', ML, fromY);
+    if (!isSub) T('VIA ARCHITECT/ENGINEER:', 211, fromY);
+    F(8, 'normal');
+    T(contractorName, ML, fromY + 13);
+    contractorAddr.forEach(function(s, i) { T(s, ML, fromY + 13 + (i + 1) * 9.5); });
+    if (!isSub) archLines.forEach(function(s, i) { T(s, 211, fromY + 13 + i * 9.5); });
+
+    var cfY = fromY + 13 + (contractorAddr.length + 1) * 9.5 + 10;
+    F(8, 'bold'); T(isSub ? 'SUBCONTRACT FOR:' : 'CONTRACT FOR:', ML, cfY);
+    var cfLbl = isSub ? 'SUBCONTRACT FOR:' : 'CONTRACT FOR:';
+    F(8, 'normal'); T(setup.contract_for || '', ML + doc.getTextWidth(cfLbl) + 4, cfY);
+
+    var ruleY = cfY + 14;
+    line(ML, ruleY, W - MR, ruleY, 1.5);
+
+    // Two-column body
+    var divX = 397, colRight = divX - 13;            // left column right edge 384
+    line(divX, ruleY, divX, 573, 0.75);
+
+    var y = ruleY + 12;
+    F(8.5, 'bold'); T(isSub ? "SUBCONTRACTOR'S APPLICATION FOR PAYMENT" : "CONTRACTOR'S APPLICATION FOR PAYMENT", ML + 3, y);
+    y += 11;
+    F(8, 'normal');
+    var intro = 'Application is made for payment, as shown below, in connection with the ' +
+                (isSub ? 'Subcontract' : 'Contract') + '. Continuation Sheet is attached.';
+    doc.text(doc.splitTextToSize(intro, 350), ML + 3, y);
+    y += 26;
+
+    // Numbered lines 1–9
+    function numLine(no, label, sub, amount, small) {
+      var xNum = ML + 3, xLbl = ML + 23, xAmtR = small ? 302 : colRight, xUl = small ? 226 : 304;
+      F(8, 'normal');
+      if (no) T(no, xNum, y);
+      T(label, xLbl, y);
+      if (sub) { T(sub, xLbl, y + 9.5); }
+      var baseY = sub ? y + 9.5 : y;
+      if (amount !== null && amount !== undefined) {
+        TR(fmtMoney(amount), xAmtR, baseY);
+        line(xUl, baseY + 2.5, xAmtR, baseY + 2.5, 0.5);
+      }
+      y = baseY + 13.5;
+    }
+    numLine('1.', 'Original Contract Sum', null, L.L1);
+    numLine('2.', 'Net change by change orders', null, L.L2);
+    numLine('3.', 'Contract Sum to date (Line 1 ± 2)', null, L.L3);
+    numLine('4.', 'Total completed and stored to date', '(Column G on detail sheet)', L.L4);
+    numLine('5.', 'Retainage:', null, null);
+    // 5a / 5b with underlined % values
+    F(8, 'normal');
+    T('a.', ML + 23, y); T(pctRate(rate), ML + 33, y);
+    line(ML + 33, y + 1.5, ML + 33 + doc.getTextWidth(pctRate(rate)), y + 1.5, 0.5);
+    T('of completed work', ML + 33 + doc.getTextWidth(pctRate(rate)) + 3, y);
+    TR(fmtMoney(L.L5a), 302, y); line(226, y + 2.5, 302, y + 2.5, 0.5);
+    y += 13.5;
+    T('b.', ML + 23, y); T(pctRate(rateStored), ML + 33, y);
+    line(ML + 33, y + 1.5, ML + 33 + doc.getTextWidth(pctRate(rateStored)), y + 1.5, 0.5);
+    T('of stored material', ML + 33 + doc.getTextWidth(pctRate(rateStored)) + 3, y);
+    TR(fmtMoney(L.L5b), 302, y); line(226, y + 2.5, 302, y + 2.5, 0.5);
+    y += 13.5;
+    numLine('', 'Total retainage', '(Line 5a + 5b or total in column I of detail sheet)', L.L5t);
+    numLine('6.', 'Total earned less retainage', '(Line 4 less Line 5 Total)', L.L6);
+    numLine('7.', 'Less previous certificates for payment', '(Line 6 from prior certificate)', L.L7);
+    numLine('8.', 'Current payment due:', null, L.L8);
+    numLine('9.', 'Balance to finish, including retainage', '(Line 3 less Line 6)', L.L9);
+
+    // Change Order Summary table
+    var coY = y + 8;
+    var coAdd1 = Number(app.co_prev_additions || 0), coDed1 = Number(app.co_prev_deductions || 0);
+    var coAdd2 = Number(app.co_this_additions || 0), coDed2 = Number(app.co_this_deductions || 0);
+    doc.autoTable({
+      startY: coY, margin: { left: ML, right: W - colRight - 3 }, tableWidth: colRight + 3 - ML,
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+                lineColor: 0, lineWidth: 0.5, textColor: 0, valign: 'middle', overflow: 'linebreak' },
+      columnStyles: { 0: { cellWidth: 221 }, 1: { cellWidth: 75, halign: 'right' }, 2: { cellWidth: 67, halign: 'right' } },
+      head: [[{ content: 'CHANGE ORDER SUMMARY', styles: { halign: 'center', fontStyle: 'bold' } },
+              { content: 'ADDITIONS', styles: { halign: 'center', fontStyle: 'bold' } },
+              { content: 'DEDUCTIONS', styles: { halign: 'center', fontStyle: 'bold' } }]],
+      headStyles: { fillColor: false, textColor: 0 },
+      body: [
+        ['Total changes approved in previous months by Owner/Client:', fmtMoney(coAdd1), fmtMoney(coDed1)],
+        ['Total approved this month:', fmtMoney(coAdd2), fmtMoney(coDed2)],
+        [{ content: 'Totals:', styles: { halign: 'right' } }, fmtMoney(coAdd1 + coAdd2), fmtMoney(coDed1 + coDed2)],
+        ['Net change by change orders:', { content: fmtMoney(L.L2), colSpan: 2, styles: { halign: 'center' } }]
+      ]
+    });
+
+    // Right column — certification
+    var rx = divX + 13, rw = W - MR - rx;   // 410 → 768 (358 wide)
+    var ry = ruleY + 12;
+    F(8, 'normal');
+    var cert = isSub
+      ? "The undersigned certifies that to the best of the Subcontractor's knowledge, information and belief, the Work covered by this Application for Payment has been completed in accordance with the Subcontract Documents, that all amounts have been paid by the Subcontractor for Work which previous Certificates for payment were issued and payments received from the Owner/Client, and that current payments shown herein is now due."
+      : "The undersigned certifies that to the best of the Contractor's knowledge, information and belief, the Work covered by this Application for Payment has been completed in accordance with the Contract Documents, that all amounts have been paid by the Contractor for Work which previous Certificates for payment were issued and payments received from the Owner/Client, and that current payments shown herein is now due.";
+    var certLines = doc.splitTextToSize(cert, rw);
+    doc.text(certLines, rx, ry, { align: 'justify', maxWidth: rw });
+    ry += certLines.length * 11 + 4;
+    T((isSub ? 'SUBCONTRACTOR: ' : 'CONTRACTOR: ') + contractorName, rx, ry);
+    ry += 38;
+    T('By:', rx, ry); line(rx + 17, ry + 2, rx + 220, ry + 2, 0.5);
+    T('Date:', rx + 239, ry); line(rx + 264, ry + 2, W - MR, ry + 2, 0.5);
+    ry += 26;
+    T('State of:', rx, ry);                    ry += 13;
+    T('County of:', rx, ry);                   ry += 13;
+    T('Subscribed and sworn to before', rx, ry); ry += 13;
+    T('me this', rx, ry); T('day of', rx + 125, ry); ry += 13;
+    T('Notary Public:', rx, ry);               ry += 13;
+    T('My commission expires:', rx, ry);       ry += 20;
+
+    if (!isSub) {
+      line(rx, ry, W - MR, ry, 1.5);
+      ry += 17;
+      F(8.5, 'bold'); T("ARCHITECT'S/ENGINEER'S CERTIFICATE FOR PAYMENT", rx, ry);
+      ry += 12;
+      F(8, 'normal');
+      var arch = "In accordance with the Contract Documents, based on the on-site observations and the data comprising this application, the Architect/Engineer certifies to the Owner/Client that to the best of the Architect's/Engineer's knowledge, information and belief that Work is in accordance with the Contract Documents, and the Contractor is entitled to payment of the AMOUNT CERTIFIED.";
+      var archL = doc.splitTextToSize(arch, rw);
+      doc.text(archL, rx, ry, { align: 'justify', maxWidth: rw });
+      ry += archL.length * 11 + 3;
+      T('AMOUNT CERTIFIED:', rx, ry);
+      var amtCert = (app.amount_certified != null && app.amount_certified !== '') ? Number(app.amount_certified) : L.L8;
+      TR(fmtMoney(amtCert), W - MR, ry); line(W - MR - 90, ry + 2.5, W - MR, ry + 2.5, 0.5);
+      ry += 14;
+      F(8, 'italic');
+      var note = '(Attach explanation if amount certified differs from the amount applied for. Initial all figures on this Application and on the Continuation Sheet that are changed to confirm the amount certified.)';
+      var noteL = doc.splitTextToSize(note, rw);
+      doc.text(noteL, rx, ry, { align: 'justify', maxWidth: rw });
+      ry += noteL.length * 10.5 + 4;
+      F(8, 'normal');
+      T('ARCHITECT/ENGINEER:', rx, ry);
+      ry += 26;
+      T('By:', rx, ry); line(rx + 17, ry + 2, rx + 220, ry + 2, 0.5);
+      T('Date:', rx + 239, ry); line(rx + 264, ry + 2, W - MR, ry + 2, 0.5);
+      ry += 15;
+      var closing = 'This certificate is not negotiable. The amount certified is payable only to the Contractor named herein. Issuance, payment and acceptance of payment are without prejudice to the rights of the Owner/Client or Contractor under this Contract.';
+      var closL = doc.splitTextToSize(closing, rw);
+      doc.text(closL, rx, ry, { align: 'justify', maxWidth: rw });
+    }
+    line(ML, 573, W - MR, 573, 1.5);
+
+    // ───────────────────────────────────────────────────── PAGE 2+ (G703) ──
+    doc.addPage(); pageKinds.push('detail');
+    var topY = 34;
+    F(8, 'normal');
+    T('Document SUMMARY SHEET, APPLICATION AND CERTIFICATE FOR PAYMENT, containing', ML, topY);
+    T((isSub ? "Subcontractor's" : "Contractor's") + ' signed Certification is attached.', ML, topY + 13);
+    T('Use Column I on Contracts where variable retainage for line items apply.', ML, topY + 26);
+    T('APPLICATION NUMBER:  ' + app.application_no, 576, topY);
+    T('APPLICATION DATE:  ' + mdy4(app.application_date), 576, topY + 13);
+    T('PERIOD:  ' + period, 576, topY + 26);
+
+    var contractLines = currentLines.filter(function(l) { return !l.is_change_order; });
+    var coLines       = currentLines.filter(function(l) { return  l.is_change_order; });
+
+    var baseStyles = { font: 'helvetica', fontSize: 7, cellPadding: { top: 2, bottom: 2, left: 2.5, right: 2.5 },
+                       lineColor: 0, lineWidth: 0.5, textColor: 0, valign: 'middle', overflow: 'linebreak' };
+    var hdrCell = function(txt, extra) { return Object.assign({ content: txt, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: false } }, extra || {}); };
+    function headRows(withBudget) {
+      var letters = withBudget
+        ? [hdrCell('A'), hdrCell('B', { colSpan: 2 }), hdrCell('C'), hdrCell('D'), hdrCell('E'), hdrCell('F'), hdrCell('G', { colSpan: 2 }), hdrCell('H'), hdrCell('I')]
+        : [hdrCell('A'), hdrCell('B'), hdrCell('C'), hdrCell('D'), hdrCell('E'), hdrCell('F'), hdrCell('G', { colSpan: 2 }), hdrCell('H'), hdrCell('I')];
+      var titles = [hdrCell('ITEM\nNO.', { rowSpan: 2 })];
+      if (withBudget) titles.push(hdrCell('BUDGET CODE', { rowSpan: 2 }));
+      titles = titles.concat([
+        hdrCell('DESCRIPTION OF WORK', { rowSpan: 2 }),
+        hdrCell('SCHEDULED\nVALUE', { rowSpan: 2 }),
+        hdrCell('WORK COMPLETED', { colSpan: 2 }),
+        hdrCell('MATERIALS\nPRESENTLY\nSTORED\n(NOT IN  D OR E)', { rowSpan: 2 }),
+        hdrCell('TOTAL\nCOMPLETED\nAND STORED TO\nDATE\n(D + E + F)', { rowSpan: 2 }),
+        hdrCell('%\n(G / C)', { rowSpan: 2 }),
+        hdrCell('BALANCE TO\nFINISH\n(C - G)', { rowSpan: 2 }),
+        hdrCell('RETAINAGE', { rowSpan: 2 })
+      ]);
+      var sub = [hdrCell('FROM PREVIOUS\nAPPLICATION\n(D + E)'), hdrCell('THIS PERIOD')];
+      return [letters, titles, sub];
+    }
+    var colsContract = { 0: { cellWidth: 27, halign: 'center' }, 1: { cellWidth: 90, halign: 'left' }, 2: { cellWidth: 131, halign: 'left' },
+                         3: { cellWidth: 65, halign: 'right' }, 4: { cellWidth: 65, halign: 'right' }, 5: { cellWidth: 64, halign: 'right' },
+                         6: { cellWidth: 65, halign: 'right' }, 7: { cellWidth: 65, halign: 'right' }, 8: { cellWidth: 44, halign: 'right' },
+                         9: { cellWidth: 64, halign: 'right' }, 10: { cellWidth: 64, halign: 'right' } };
+    var colsCo = { 0: { cellWidth: 35, halign: 'left' }, 1: { cellWidth: 213, halign: 'left' },
+                   2: { cellWidth: 65, halign: 'right' }, 3: { cellWidth: 65, halign: 'right' }, 4: { cellWidth: 64, halign: 'right' },
+                   5: { cellWidth: 65, halign: 'right' }, 6: { cellWidth: 65, halign: 'right' }, 7: { cellWidth: 44, halign: 'right' },
+                   8: { cellWidth: 64, halign: 'right' }, 9: { cellWidth: 64, halign: 'right' } };
+
+    function rowVals(l) {
+      var c = Number(l.scheduled_value || 0), d = Number(l.prev_amount || 0), e = Number(l.this_amount || 0), f = Number(l.stored_amount || 0);
+      var g = d + e + f;
+      return { c: c, d: d, e: e, f: f, g: g, pct: c ? g / c : 0, bal: c - g, ret: (d + e) * rate + f * rateStored };
+    }
+    function sumLines(lines) {
+      var s = { c: 0, d: 0, e: 0, f: 0, g: 0, ret: 0 };
+      lines.forEach(function(l) { if (l.is_parent) return; var v = rowVals(l); s.c += v.c; s.d += v.d; s.e += v.e; s.f += v.f; s.g += v.g; s.ret += v.ret; });
+      s.pct = s.c ? s.g / s.c : 0; s.bal = s.c - s.g;
+      return s;
+    }
+    function totalsRow(lbl, s, labelSpan) {
+      var b = { fontStyle: 'bold' };
+      return [{ content: lbl, colSpan: labelSpan, styles: { halign: 'right', fontStyle: 'bold' } },
+              { content: fmtMoney(s.c), styles: b }, { content: fmtMoney(s.d), styles: b }, { content: fmtMoney(s.e), styles: b },
+              { content: fmtMoney(s.f), styles: b }, { content: fmtMoney(s.g), styles: b }, { content: pct(s.pct), styles: b },
+              { content: fmtMoney(s.bal), styles: b }, { content: fmtMoney(s.ret), styles: b }];
+    }
+    function bodyRows(lines, withBudget) {
+      return lines.map(function(l) {
+        if (l.is_parent) {
+          var grey = { fillColor: [217, 217, 217], fontStyle: 'bold', halign: 'left' };
+          return [{ content: l.item_no || '', styles: grey },
+                  { content: (l.description || '').toUpperCase(), colSpan: withBudget ? 10 : 9, styles: grey }];
+        }
+        var v = rowVals(l);
+        var cells = [l.item_no || ''];
+        if (withBudget) cells.push(l.budget_code || '');
+        cells = cells.concat([(l.description || '').toUpperCase(), fmtMoney(v.c), fmtMoney(v.d), fmtMoney(v.e), fmtMoney(v.f),
+                              fmtMoney(v.g), pct(v.pct), fmtMoney(v.bal), fmtMoney(v.ret)]);
+        return cells;
+      });
+    }
+    function sectionLabel(txt, yy) { F(7.5, 'bold'); T(txt, ML, yy); }
+    var tableCommon = {
+      theme: 'grid', margin: { left: ML, right: MR, top: 30, bottom: 24 }, tableWidth: CW,
+      styles: baseStyles, headStyles: { fillColor: false, textColor: 0, fontStyle: 'bold', halign: 'center', valign: 'middle' },
+      showHead: 'everyPage', rowPageBreak: 'avoid',
+      didAddPage: function() { pageKinds.push('detail'); }
+    };
+
+    // Contract Lines
+    var startY = topY + 48;
+    sectionLabel('Contract Lines', startY);
+    doc.autoTable(Object.assign({}, tableCommon, {
+      startY: startY + 4, columnStyles: colsContract,
+      head: headRows(true),
+      body: bodyRows(contractLines, true).concat([totalsRow('TOTALS:', sumLines(contractLines), 3)])
+    }));
+    var yAfter = doc.lastAutoTable.finalY;
+
+    // Change Orders
+    if (coLines.length) {
+      if (yAfter + 120 > H - 24) { doc.addPage(); pageKinds.push('detail'); yAfter = 30; }
+      var coStart = yAfter + 16;
+      sectionLabel('Change Orders', coStart);
+      doc.autoTable(Object.assign({}, tableCommon, {
+        startY: coStart + 4, columnStyles: colsCo,
+        head: headRows(false),
+        body: bodyRows(coLines, false).concat([totalsRow('TOTALS:', sumLines(coLines), 2)])
+      }));
+      yAfter = doc.lastAutoTable.finalY;
+    }
+
+    // Grand Totals
+    if (yAfter + 110 > H - 24) { doc.addPage(); pageKinds.push('detail'); yAfter = 30; }
+    var gtStart = yAfter + 16;
+    sectionLabel('Grand Totals', gtStart);
+    doc.autoTable(Object.assign({}, tableCommon, {
+      startY: gtStart + 4, columnStyles: colsCo,
+      head: headRows(false),
+      body: [totalsRow('GRAND TOTALS:', sumLines(currentLines), 2)]
+    }));
+
+    // ─────────────────────────────────────────── Page headers (all pages) ──
+    var total = doc.getNumberOfPages();
+    for (var p = 1; p <= total; p++) {
+      doc.setPage(p);
+      var kind = pageKinds[p - 1] || 'detail';
+      F(9, 'bold');   T(kind === 'summary' ? 'APPLICATION AND CERTIFICATE FOR PAYMENT' : 'CONTINUATION SHEET', ML, 18);
+      F(9, 'italic'); T(kind === 'summary' ? 'DOCUMENT SUMMARY SHEET' : 'DOCUMENT DETAIL SHEET', W / 2, 18, { align: 'center' });
+      F(8.5, 'normal'); TR('Page ' + p + ' of ' + total, W - MR, 18);
+      line(ML, 23, W - MR, 23, 1.5);
+    }
+
+    var safe = function(s) { return String(s || '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, ''); };
+    var fname = safe(projectNo ? projectNo + '-' + projectName : projectName) + '-' + app.application_no +
+                '-Invoice_' + safe(invoiceNo) + '-' + (app.application_date || ymd(new Date())) + '.pdf';
+    doc.save(fname);
+    showToast('✅ PDF exported', 'success');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   //   Helpers
   // ═══════════════════════════════════════════════════════════════════════
 
@@ -1305,6 +1730,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=164"></script>
+<script src="sw-register.js?v=179"></script>
 </body>
 </html>
