@@ -19,7 +19,7 @@
 <script src="labor-rates.js?v=186"></script>
 <style>
   body { padding-bottom: 24px; }
-  .iv-wrap { max-width: 1200px; margin: 0 auto; }
+  .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
 
   /* Top toolbar */
   .iv-toolbar {
@@ -164,8 +164,10 @@
   .li-panel h3 button { margin-left: auto; }
   .li-table {
     width: 100%; border-collapse: collapse; font-size: 12px;
-    min-width: 1050px;
+    min-width: 0; table-layout: auto;
   }
+  .li-table thead th { white-space: normal; }
+  .li-table td.num { white-space: nowrap; }
   .li-table th, .li-table td {
     padding: 6px 8px; border: 1px solid var(--nw-border);
     vertical-align: middle;
@@ -298,14 +300,15 @@
   .btn-create { background:#f97316; color:#fff; border:none; padding:9px 16px; border-radius:7px; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 2px 8px rgba(249,115,22,.25); }
   .btn-create:hover { filter:brightness(1.05); }
   .pc-table-wrap { margin:0 16px 16px; background:var(--nw-card); border:1px solid var(--nw-border); border-radius:10px; overflow:auto; }
-  .pc-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:900px; }
-  .pc-table th, .pc-table td { padding:9px 10px; border-bottom:1px solid var(--nw-border); white-space:nowrap; vertical-align:middle; }
+  .pc-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:0; }
+  .pc-table th, .pc-table td { padding:9px 8px; border-bottom:1px solid var(--nw-border); white-space:normal; vertical-align:middle; overflow-wrap:anywhere; }
+  .pc-table td.num, .pc-table td.ctr, .pc-table td .pc-pill { white-space:nowrap; }
   .pc-table thead th { background:#f8fafc; font-weight:700; font-size:11px; color:#334155; text-align:left; position:sticky; top:0; z-index:2; }
   .pc-table th.num, .pc-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
   .pc-table td.ctr { text-align:center; }
   .pc-table tbody tr:hover { background:#f0f9ff; cursor:pointer; }
   .pc-table tfoot td { background:#f8fafc; font-weight:700; border-top:2px solid #cbd5e1; }
-  .pc-table .pc-title-cell { white-space:normal; min-width:220px; }
+  .pc-table .pc-title-cell { white-space:normal; min-width:160px; }
   .pc-table .pc-empty { text-align:center; color:var(--nw-muted); font-style:italic; padding:22px; }
   .pc-link { color:#0369a1; font-weight:600; text-decoration:underline; }
   .pc-pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:700; border:1px solid transparent; }
@@ -2886,6 +2889,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=199"></script>
+<script src="sw-register.js?v=200"></script>
 </body>
 </html>
