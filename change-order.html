@@ -135,14 +135,20 @@ body{padding-bottom:100px}
       </div>
     </div>
     <button class="btn btn-secondary btn-small" onclick="addLabor()" style="margin-top:8px">+ Add Labor</button>
+    <div style="font-size:11px;color:#94a3b8;margin-top:4px">Labor rates already include overhead &amp; profit — OH/Profit apply to materials only.</div>
+
+    <label style="font-weight:700;font-size:13px;margin:16px 0 6px;display:block">Subcontractors</label>
+    <div id="subsList"></div>
+    <button class="btn btn-secondary btn-small" onclick="addSub()" style="margin-top:8px">+ Add Subcontractor</button>
 
     <!-- COST SUMMARY -->
     <div class="cost-summary">
       <div class="cost-row"><span>Materials</span><span id="costParts">$0.00</span></div>
       <div class="cost-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;OH (13%)</span><span id="costOH">$0.00</span></div>
-      <div class="cost-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;Profit (12%)</span><span id="costProfit">$0.00</span></div>
+      <div class="cost-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;Profit (10%)</span><span id="costProfit">$0.00</span></div>
       <div class="cost-row"><span>Materials Total</span><span id="costMaterialsTotal">$0.00</span></div>
       <div class="cost-row"><span>Labor</span><span id="costLabor">$0.00</span></div>
+      <div class="cost-row"><span>Subcontractors</span><span id="costSubs">$0.00</span></div>
       <div class="cost-row total"><span>TOTAL</span><span id="costTotal">$0.00</span></div>
     </div>
   </div>
@@ -386,6 +392,10 @@ async function syncCOToPrimeContract(projId) {
       var who = ((r.querySelector('.labor-tech') || {}).value || 'LABOR').trim();
       items.push({ description: 'LABOR - ' + who + ' (' + h + ' M/HRS @ $' + rt.toFixed(2) + ' PER M/HR)', amount: Math.round(h * rt * 100) / 100 });
     });
+    collectSubsData().forEach(function(x) {
+      var c = parseFloat(x.cost) || 0; if (!c) return;
+      items.push({ description: 'SUBCONTRACTOR - ' + (x.name || 'SUB') + (x.trade ? ' (' + x.trade + ')' : '') + (x.desc ? ': ' + x.desc.split('\n')[0].slice(0, 80) : ''), amount: Math.round(c * 100) / 100 });
+    });
     var amount = _coMoney((document.getElementById('costTotal') || {}).textContent);
     var desc = (v('changeDesc') || '').split('\n')[0].trim();
     var title = 'CO #' + (v('coNumber') || reportId) + (desc ? ' - ' + desc.slice(0, 90).toUpperCase() : '');
@@ -410,6 +420,65 @@ async function syncCOToPrimeContract(projId) {
     }
   } catch (e) { console.warn('[CO] prime contract sync failed', e); }
 }
+
+
+// ========== SUBCONTRACTORS ==========
+function addSub(data){
+  data=data||{};
+  var q=function(x){return String(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')};
+  var r=document.createElement('div');r.className='sub-row';
+  r.style.cssText='border:1px solid var(--nw-border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--nw-section)';
+  r.innerHTML='<div style="display:flex;gap:6px;margin-bottom:6px">'+
+    '<input type="text" class="sub-name" placeholder="Subcontractor company" value="'+q(data.name)+'" style="flex:2;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px">'+
+    '<input type="text" class="sub-trade" placeholder="Trade (e.g. Electrical, BMS)" value="'+q(data.trade)+'" style="flex:1.3;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px">'+
+    '<input type="number" step="0.01" class="sub-cost" placeholder="$ Cost" value="'+q(data.cost)+'" oninput="calcCosts()" style="flex:1;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px">'+
+    '<button class="btn btn-danger btn-small" onclick="this.closest(\'.sub-row\').remove();calcCosts()" style="width:32px;padding:6px;flex:none">✕</button></div>'+
+    '<textarea class="sub-desc" placeholder="Scope / description of subcontractor work, quote #, what is included / excluded…" style="width:100%;box-sizing:border-box;min-height:60px;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px;font-family:inherit">'+q(data.desc)+'</textarea>';
+  document.getElementById('subsList').appendChild(r);
+  calcCosts();
+}
+function collectSubsData(){
+  var out=[];document.querySelectorAll('.sub-row').forEach(function(r){
+    var d={name:r.querySelector('.sub-name').value,trade:r.querySelector('.sub-trade').value,cost:r.querySelector('.sub-cost').value,desc:r.querySelector('.sub-desc').value};
+    if(d.name||d.cost||d.desc)out.push(d);
+  });return out;
+}
+function restoreSubs(list){
+  document.getElementById('subsList').innerHTML='';
+  (list||[]).forEach(function(x){addSub(x)});
+}
+(function restoreLocalSubs(){
+  try{var raw=localStorage.getItem(SAVE_KEY_DRAFT);if(!raw)return;var d=JSON.parse(raw);if(d&&d._subs&&d._subs.length)restoreSubs(d._subs);}catch(e){}
+})();
+
+// ========== PREFILL FROM PRIME CONTRACT ==========
+var _prefilledFor = null;
+async function prefillFromContract(projId){
+  if(!projId||_prefilledFor===projId||_editCloudId)return;
+  _prefilledFor=projId;
+  try{
+    var r=await supabaseClient.from('aia_projects').select('id, contract_number, project_no, title, client_name, client_address, project_address, contract_for, project:projects(project_name, short_code)').eq('project_id',projId).maybeSingle();
+    var c=r.data;if(!c)return;
+    var set=function(id,val){var el=document.getElementById(id);if(el&&!el.value&&val){el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));}};
+    // 1. Next CO # on this contract
+    var cos=await supabaseClient.from('aia_change_orders').select('number').eq('aia_project_id',c.id);
+    var max=0;(cos.data||[]).forEach(function(x){var n=parseInt(x.number,10);if(n>max)max=n;});
+    set('coNumber',String(max+1).padStart(3,'0'));
+    // 2. Original contract
+    set('originalRef',c.contract_number||c.project_no||(c.project&&c.project.short_code)||'');
+    set('projectName',(c.project&&c.project.project_name)||c.title||'');
+    // 3. Customer / location
+    set('custName',c.client_name||'');
+    set('address',String(c.project_address||c.client_address||'').replace(/\s*\n\s*/g,', '));
+  }catch(e){console.warn('[CO] prefill failed',e);}
+}
+(function watchProject(){
+  var last=null;
+  setInterval(function(){
+    var id=(typeof getSelectedProjectId==='function'&&getSelectedProjectId())||_urlProjectId;
+    if(id&&id!==last){last=id;prefillFromContract(id);}
+  },700);
+})();
 
 // ========== EDIT MODE ==========
 var _editCloudId = null;
@@ -527,6 +596,8 @@ var _coStatus = 'submitted';
       });
     }
 
+    if (fd._subs) restoreSubs(fd._subs);
+
     // Set project picker if project ID stored
     if (fd._projectId && typeof selectProjectById === 'function') {
       selectProjectById(fd._projectId);
@@ -573,7 +644,7 @@ function addLabor(){const r=document.createElement('div');r.className='labor-row
 function calcCosts(){
   let matRaw=0;document.querySelectorAll('.parts-row').forEach(r=>{const q=parseFloat(r.querySelector('.part-qty')?.value)||1;const c=parseFloat(r.querySelector('.part-cost')?.value)||0;matRaw+=q*c});
   const oh=matRaw*0.13;
-  const profit=matRaw*0.12;
+  const profit=matRaw*0.10;
   const matTotal=matRaw+oh+profit;
   let labor=0;document.querySelectorAll('.labor-row').forEach(r=>{const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;labor+=h*rt});
   document.getElementById('costParts').textContent='$'+matRaw.toFixed(2);
@@ -581,7 +652,9 @@ function calcCosts(){
   document.getElementById('costProfit').textContent='$'+profit.toFixed(2);
   document.getElementById('costMaterialsTotal').textContent='$'+matTotal.toFixed(2);
   document.getElementById('costLabor').textContent='$'+labor.toFixed(2);
-  document.getElementById('costTotal').textContent='$'+(matTotal+labor).toFixed(2);
+  let subs=0;document.querySelectorAll('.sub-row').forEach(r=>{subs+=parseFloat(r.querySelector('.sub-cost')?.value)||0});
+  document.getElementById('costSubs').textContent='$'+subs.toFixed(2);
+  document.getElementById('costTotal').textContent='$'+(matTotal+labor+subs).toFixed(2);
 }
 
 function collectPartsData() {
@@ -846,6 +919,7 @@ function autoSave(){
   });
   data._parts=[];document.querySelectorAll('.parts-row').forEach(r=>{data._parts.push({desc:r.querySelector('.part-desc')?.value||'',qty:r.querySelector('.part-qty')?.value||'',cost:r.querySelector('.part-cost')?.value||''})});
   data._labor=[];document.querySelectorAll('.labor-row').forEach(r=>{data._labor.push({tech:r.querySelector('.labor-tech')?.value||'',hrs:r.querySelector('.labor-hrs')?.value||'',rate:r.querySelector('.labor-rate')?.value||''})});
+  data._subs=collectSubsData();
   data._reportId=reportId;
   localStorage.setItem(SAVE_KEY_DRAFT,JSON.stringify(data));
 }
@@ -871,6 +945,7 @@ _revisionNumber: _revisionNumber || 1,
 _coStatus: _coStatus || 'submitted',
 _parts: collectPartsData(),
 _labor: collectLaborData(),
+_subs: collectSubsData(),
 _photos: collectPhotosData()
 };
 }
@@ -923,6 +998,15 @@ function generatePDF(){
     y=doc.lastAutoTable.finalY+4;
   }
 
+  // Subcontractors
+  const subsPdf=collectSubsData().map(function(x){return [(x.name||'')+(x.trade?' ('+x.trade+')':''),x.desc||'','$'+(parseFloat(x.cost)||0).toFixed(2)]});
+  if(subsPdf.length>0){
+    if(y>220){doc.addPage();y=15}
+    sH('Subcontractors');
+    doc.autoTable({startY:y,margin:{left:mx,right:15},head:[['Subcontractor','Scope / Description','Cost']],body:subsPdf,theme:'grid',headStyles:{fillColor:dk,fontSize:8},bodyStyles:{fontSize:8,cellPadding:2},columnStyles:{0:{cellWidth:45},2:{halign:'right',cellWidth:25}}});
+    y=doc.lastAutoTable.finalY+4;
+  }
+
   // Cost summary
   if(y>230){doc.addPage();y=15}
   sH('Cost Summary');
@@ -931,8 +1015,9 @@ function generatePDF(){
   const profitTotal=document.getElementById('costProfit').textContent;
   const matTotalVal=document.getElementById('costMaterialsTotal').textContent;
   const lTotal=document.getElementById('costLabor').textContent;
+  const sTotal=document.getElementById('costSubs').textContent;
   const gTotal=document.getElementById('costTotal').textContent;
-  doc.autoTable({startY:y,margin:{left:mx,right:15},body:[['Materials',pTotal],['   OH (13%)',ohTotal],['   Profit (12%)',profitTotal],['Materials Total',matTotalVal],['Labor',lTotal],['TOTAL',gTotal]],theme:'plain',bodyStyles:{fontSize:10,cellPadding:3},columnStyles:{0:{fontStyle:'bold'},1:{halign:'right',fontStyle:'bold'}},didParseCell:function(data){if(data.row.index===5){data.cell.styles.fillColor=[49,149,202];data.cell.styles.textColor=[255,255,255];data.cell.styles.fontSize=12}if(data.row.index===1||data.row.index===2){data.cell.styles.fontSize=8;data.cell.styles.textColor=[148,163,184]}}});
+  doc.autoTable({startY:y,margin:{left:mx,right:15},body:[['Materials',pTotal],['   OH (13%)',ohTotal],['   Profit (10%)',profitTotal],['Materials Total',matTotalVal],['Labor',lTotal],['Subcontractors',sTotal],['TOTAL',gTotal]],theme:'plain',bodyStyles:{fontSize:10,cellPadding:3},columnStyles:{0:{fontStyle:'bold'},1:{halign:'right',fontStyle:'bold'}},didParseCell:function(data){if(data.row.index===6){data.cell.styles.fillColor=[49,149,202];data.cell.styles.textColor=[255,255,255];data.cell.styles.fontSize=12}if(data.row.index===1||data.row.index===2){data.cell.styles.fontSize=8;data.cell.styles.textColor=[148,163,184]}}});
   y=doc.lastAutoTable.finalY+4;
 
   // Schedule Impact
@@ -1219,6 +1304,6 @@ function openChangeOrderAIChat() {
 }
 </script>
 <script src="form-utils.js?v=114"></script>
-<script src="sw-register.js?v=183"></script>
+<script src="sw-register.js?v=184"></script>
 </body>
 </html>
