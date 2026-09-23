@@ -34,6 +34,9 @@
       --line:      rgba(216,220,226,0.20);  /* matte silver hairline */
       --line-2:    rgba(216,220,226,0.42);  /* stronger hairline */
       --nav-h:     60px;
+      --ice:       #8FD3FF;                 /* cooling */
+      --amb:       #F5A524;                 /* heating */
+      --t1: 55%; --t2: 100%;                /* temperature line stops (set per season) */
       --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
 
@@ -60,6 +63,7 @@
     }
     .header-top { max-width: 1080px; margin: 0 auto; height: 100%; display: flex; align-items: center; padding: 0 28px; gap: 6px; }
     .dash-header-left { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+    .tline { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, var(--ice) var(--t1), var(--amb) var(--t2)); }
     .dash-header-logo { height: 36px; width: auto; display: block; }
     .dash-header-wordmark { font-size: 12px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); line-height: 1.2; }
     .dash-header-wordmark span { display: block; font-weight: 400; letter-spacing: 0.22em; color: var(--ink-3); font-size: 10px; }
@@ -88,6 +92,8 @@
       display: grid; place-items: center; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; cursor: pointer; user-select: none;
     }
     .profile-circle:hover { background: var(--bg-3); }
+    .profile-circle.mgmt { border-color: var(--amb); }
+    .profile-circle.tech { border-color: var(--ice); }
     .profile-dropdown {
       display: none; position: absolute; top: calc(100% + 10px); right: 0; min-width: 240px;
       background: rgba(38,40,44,0.98); border: 1px solid var(--line); padding: 16px 18px; z-index: 300;
@@ -107,6 +113,7 @@
     .hero-greeting { padding: 88px 0 40px; }
     .hero-greeting h1 { margin: 0; font-size: 60px; font-weight: 300; letter-spacing: -0.025em; line-height: 1.02; color: var(--ink); }
     .hero-greeting p { margin: 18px 0 0; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-3); }
+    .season { color: var(--ice); } .season.heat { color: var(--amb); } .season.mid { color: var(--ink-2); } .season b { font-weight: 500; color: var(--ink-2); }
 
     /* ═══ MY JOBS (dispatch) ═══ */
     .section-title { display: flex; align-items: baseline; justify-content: space-between; padding: 26px 0 0; border-top: 1px solid var(--line-2); }
@@ -128,7 +135,8 @@
 
     /* ═══ FOLDERS ═══ */
     .folders { padding: 8px 0 72px; }
-    .folder { display: grid; grid-template-columns: 64px 1fr 1.35fr; gap: 24px 32px; align-items: start; padding: 38px 0 42px; border-top: 1px solid var(--line-2); }
+    .folder { position: relative; display: grid; grid-template-columns: 64px 1fr 1.35fr; gap: 24px 32px; align-items: start; padding: 38px 0 42px; border-top: 1px solid var(--line-2); }
+    .folder .stripe { position: absolute; left: -28px; top: 38px; bottom: 42px; width: 2px; }
     .folder:last-child { border-bottom: 1px solid var(--line-2); }
     .folder-num { font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3); padding-top: 14px; font-variant-numeric: tabular-nums; }
     .folder-head h2 { margin: 0; font-size: 40px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; color: var(--ink); }
@@ -144,6 +152,8 @@
       font-size: 11px; font-variant-numeric: tabular-nums; min-width: 22px; height: 22px; padding: 0 6px; display: grid; place-items: center;
       border: 1px solid var(--line-2); border-radius: 999px; color: var(--ink);
     }
+    .folder-links a .n.ice { border-color: var(--ice); color: var(--ice); }
+    .folder-links a .n.amb { border-color: var(--amb); color: var(--amb); }
     .folder-links a .ar { color: var(--ink-3); font-size: 15px; transition: transform .15s; }
     .folder-links a:hover .ar { transform: translateX(3px); color: var(--ink); }
 
@@ -173,6 +183,7 @@
     }
     @media (max-width: 560px) {
       .wrap, .header-top { padding: 0 18px; }
+      .folder .stripe { left: -18px; top: 26px; bottom: 30px; }
       .nav-menu { display: none; }
       .hero-greeting { padding: 48px 0 28px; }
       .hero-greeting h1 { font-size: 38px; }
@@ -211,6 +222,7 @@
         </div>
       </div>
     </div>
+    <div class="tline" aria-hidden="true"></div>
   </header>
 
   <main class="wrap">
@@ -365,6 +377,31 @@
   }
 
   // ===== HERO GREETING =====
+  // Season: May–Sep cooling, Nov–Mar heating, Apr/Oct shoulder. Sets the temperature line + the date suffix.
+  var _seasonHtml = '';
+  function season() {
+    var m = new Date().getMonth() + 1;
+    if (m >= 5 && m <= 9) return { key: 'cool', label: 'Cooling season', t1: '55%', t2: '100%', cls: '' };
+    if (m >= 11 || m <= 3) return { key: 'heat', label: 'Heating season', t1: '0%', t2: '45%', cls: 'heat' };
+    return { key: 'mid', label: 'Shoulder season', t1: '40%', t2: '60%', cls: 'mid' };
+  }
+  function initSeason() {
+    var sn = season();
+    document.documentElement.style.setProperty('--t1', sn.t1);
+    document.documentElement.style.setProperty('--t2', sn.t2);
+    _seasonHtml = ' &nbsp;\u00b7&nbsp; <span class="season ' + sn.cls + '">' + sn.label + '</span>';
+    // live outdoor temperature for NYC (Open-Meteo, no key); silently skipped when offline
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=40.71&longitude=-74.01&current=temperature_2m&temperature_unit=fahrenheit')
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        var t = j && j.current && Math.round(j.current.temperature_2m);
+        if (typeof t === 'number' && !isNaN(t)) {
+          _seasonHtml = ' &nbsp;\u00b7&nbsp; <span class="season ' + sn.cls + '">' + sn.label + ' <b>\u00b7 ' + t + '\u00b0F</b></span>';
+          renderHero();
+        }
+      }).catch(function() {});
+  }
+
   function renderHero() {
     var hour = new Date().getHours();
     var greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -378,7 +415,7 @@
     var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     var now = new Date();
-    document.getElementById('heroDate').textContent = days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate();
+    document.getElementById('heroDate').innerHTML = days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + _seasonHtml;
   }
 
 
@@ -490,26 +527,26 @@
   // ===== FOLDERS + NAV =====
   // Four folders. Each link: [title, href, draftType?, managementOnly?]
   var FOLDERS = [
-    { num: '01', title: 'Projects', desc: 'Docs, drawings, contracts, billing', links: [
+    { num: '01', title: 'Projects', desc: 'Docs, drawings, contracts, billing', stripe: '', links: [
       ['All Projects', 'projects.html'],
       ['Bid Board', 'bid-board.html', null, true],
       ['Prime Contracts', 'invoicing.html', null, true],
       ['Change Orders', 'change-order.html', 'change-order']
     ]},
-    { num: '02', title: 'Reports', desc: 'Field reports from the job', links: [
-      ['Service Call', 'history.html?type=service-call', 'service-call'],
-      ['Start-Up', 'history.html?type=startup', 'startup'],
+    { num: '02', title: 'Reports', desc: 'Field reports from the job', stripe: 'var(--ice)', links: [
+      ['Service Call', 'history.html?type=service-call', 'service-call', false, 'ice'],
+      ['Start-Up', 'history.html?type=startup', 'startup', false, 'amb'],
       ['Site Survey', 'history.html?type=site-survey', 'site-survey'],
       ['Maintenance', 'history.html?type=pm-checklist', 'pm-checklist'],
       ['Work Order', 'history.html?type=work-order', 'work-order']
     ]},
-    { num: '03', title: 'Tools', desc: 'Crews, materials, deliveries', links: [
+    { num: '03', title: 'Tools', desc: 'Crews, materials, deliveries', stripe: 'var(--amb)', links: [
       ['Schedule', 'schedule.html'],
       ['Field Orders', 'field-orders.html'],
       ['Delivery Schedule', 'driver-schedule.html'],
       ['Dispatch', 'dispatch.html']
     ]},
-    { num: '04', title: 'Office', desc: 'Customers, planning, oversight', links: [
+    { num: '04', title: 'Office', desc: 'Customers, planning, oversight', stripe: '', links: [
       ['Customers', 'customers.html'],
       ['Equipment', 'equipment.html'],
       ['Workload Planner', 'workload.html', null, true],
@@ -530,12 +567,13 @@
       var cells = '', dd = '';
       links.forEach(function(l) {
         var count = l[2] ? (draftCounts[l[2]] || 0) : 0;
-        var tail = count > 0 ? '<span class="n">' + count + '</span>' : '<span class="ar">\u2192</span>';
+        var tail = count > 0 ? '<span class="n ' + (l[4] || '') + '">' + count + '</span>' : '<span class="ar">\u2192</span>';
         cells += '<a href="' + l[1] + '" data-page="' + l[1].split('?')[0] + '"><span>' + l[0] + '</span>' + tail + '</a>';
         dd += '<a href="' + l[1] + '">' + l[0] + '</a>';
       });
       page +=
         '<section class="folder">' +
+          (f.stripe ? '<i class="stripe" style="background:' + f.stripe + '"></i>' : '') +
           '<div class="folder-num">' + f.num + '</div>' +
           '<div class="folder-head"><h2>' + f.title + '</h2><p>' + f.desc + '</p></div>' +
           '<div class="folder-links">' + cells + '</div>' +
@@ -629,6 +667,7 @@
   }
 
   // ===== INIT =====
+  initSeason();
   renderHero();
   renderReportGrid(false);
   renderDispatches();
@@ -636,6 +675,8 @@
   // Techs do not see management-only links (Bid Board, Prime Contracts, Workload, Management)
   getAuthProfile().then(function(profile) {
     if (profile && profile.role === 'tech') renderReportGrid(true);
+    var pc = document.getElementById('profileCircle');
+    if (pc && profile) pc.classList.add(profile.role === 'tech' ? 'tech' : 'mgmt');
   }).catch(function(){});
 
   // Update hero once profile loads (auth.js sets profileName async)
@@ -647,6 +688,6 @@
   setTimeout(checkiOSInstall, 1000);
 })();
 </script>
-<script src="sw-register.js?v=195"></script>
+<script src="sw-register.js?v=196"></script>
 </body>
 </html>
