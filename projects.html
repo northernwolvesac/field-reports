@@ -517,6 +517,7 @@
     <!-- Page title -->
     <div class="page-title-row">
       <h1>Projects</h1>
+      <a href="invoicing.html" class="btn-new-project" style="background:#fff;color:#0B3D66;border:1px solid #cbd5e1;text-decoration:none;margin-left:auto;margin-right:8px">💼 All Prime Contracts</a>
       <button class="btn-new-project" id="btnNewProject">+ New Project</button>
     </div>
 
@@ -557,10 +558,12 @@
     </div>
 
     <div class="detail-info" id="detailInfo"></div>
+    <div id="setupSteps" style="padding:0 16px 10px"></div>
 
     <!-- Main Tabs -->
     <div class="detail-tabs" id="detailTabs">
       <div class="detail-tab active" data-dtab="documents">Documents</div>
+      <div class="detail-tab" data-dtab="prime">💼 Prime Contract</div>
       <div class="detail-tab" data-dtab="reports">Reports</div>
       <div class="detail-tab" data-dtab="submittals">Submittals</div>
       <div class="detail-tab" data-dtab="change-orders">Change Orders</div>
@@ -642,6 +645,11 @@
           No submittal packages yet.<br>Tap <strong>AI Submittals Generator</strong> to create one.
         </div>
       </div>
+    </div>
+
+    <!-- PRIME CONTRACT TAB -->
+    <div class="detail-tab-content" id="tabPrime" data-dtab="prime">
+      <div id="primeBody" style="padding:14px 16px 24px"></div>
     </div>
 
     <!-- CHANGE ORDERS TAB -->
@@ -1241,6 +1249,85 @@ requireAuth().catch(function(){});
 
   // ─── Render project detail ───
 
+
+  // ─── PRIME CONTRACT (AIA billing lives under the project) ───
+  var _primeByProject = {};   // projectId -> aia_projects row (null = none)
+
+  function stepHtml(done, label, action) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:' + (done ? '#f0fdf4' : '#fff7ed') +
+      ';border:1px solid ' + (done ? '#bbf7d0' : '#fed7aa') + ';font-size:12.5px;flex:1;min-width:150px">' +
+      '<span style="font-size:15px">' + (done ? '✅' : '⬜') + '</span><span style="flex:1;font-weight:600;color:#334155">' + label + '</span>' +
+      (!done && action ? action : '') + '</div>';
+  }
+
+  async function loadPrimeContract(projectId) {
+    var body = document.getElementById('primeBody');
+    var steps = document.getElementById('setupSteps');
+    if (body) body.innerHTML = '<div style="color:var(--nw-muted);font-size:13px">Loading…</div>';
+    var c = null, cos = [], apps = [], pays = [], sov = [], contractDocs = 0;
+    try {
+      var r = await supabaseClient.from('aia_projects').select('*').eq('project_id', projectId).maybeSingle();
+      c = r.data || null;
+      if (c) {
+        var a = await supabaseClient.from('aia_change_orders').select('status, amount').eq('aia_project_id', c.id); cos = a.data || [];
+        var b = await supabaseClient.from('aia_applications').select('id, application_no, status').eq('aia_project_id', c.id); apps = b.data || [];
+        var d = await supabaseClient.from('aia_payments').select('amount').eq('aia_project_id', c.id); pays = d.data || [];
+        var e = await supabaseClient.from('aia_sov_items').select('id').eq('aia_project_id', c.id); sov = e.data || [];
+      }
+      var f = await supabaseClient.from('project_files').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('category', 'contracts');
+      contractDocs = f.count || 0;
+    } catch (err) { console.warn('[projects] prime contract load failed', err); }
+    if (currentProjectId !== projectId) return;
+    _primeByProject[projectId] = c;
+
+    var proj = getProjectById(projectId) || {};
+    var drawings = (proj.documents || []).filter(function(x) { return x.category === 'drawings'; }).length;
+    var newUrl = 'invoicing.html?new=1&project=' + encodeURIComponent(projectId);
+    var link = function(href, txt) { return '<a href="' + href + '" style="font-size:12px;font-weight:700;color:#f97316;text-decoration:none">' + txt + '</a>'; };
+    if (steps) steps.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+      stepHtml(true, '1. Project created') +
+      stepHtml(drawings > 0, '2. Drawings uploaded', '<a href="#" onclick="document.querySelector(\'#detailTabs .detail-tab[data-dtab=documents]\').click();return false" style="font-size:12px;font-weight:700;color:#f97316;text-decoration:none">Upload</a>') +
+      stepHtml(!!c, '3. Prime Contract', link(newUrl, 'Create')) +
+      stepHtml(sov.length > 0, '4. Schedule of Values', c ? link('invoicing.html?contract=' + c.id + '#sov', 'Add') : '') +
+      stepHtml(contractDocs > 0, '5. Contract / PO uploaded', c ? link('invoicing.html?contract=' + c.id + '#docs', 'Upload') : '') +
+    '</div>';
+
+    // New CO link only once a prime contract exists
+    var co = document.getElementById('btnNewCO');
+    if (co) {
+      if (c) { co.href = 'change-order.html?project=' + projectId; co.style.opacity = ''; co.title = ''; co.onclick = null; }
+      else { co.href = '#'; co.style.opacity = '0.45'; co.title = 'Create the Prime Contract first';
+             co.onclick = function(ev) { ev.preventDefault(); showToast('Create the Prime Contract first'); document.querySelector('#detailTabs .detail-tab[data-dtab="prime"]').click(); }; }
+    }
+
+    if (!body) return;
+    if (!c) {
+      body.innerHTML = '<div style="text-align:center;padding:26px 12px;border:2px dashed #fed7aa;border-radius:12px;background:#fff7ed">' +
+        '<div style="font-size:34px">💼</div><h3 style="margin:6px 0 4px;font-size:16px">No Prime Contract yet</h3>' +
+        '<p style="font-size:13px;color:#64748b;margin:0 0 14px">Won the job? Create the Prime Contract with the client info, Schedule of Values and the signed contract / PO.<br>Change orders and invoices become available once it exists.</p>' +
+        '<a href="' + newUrl + '" style="display:inline-block;background:#f97316;color:#fff;padding:11px 22px;border-radius:8px;font-weight:700;text-decoration:none">＋ Create Prime Contract</a></div>';
+      return;
+    }
+    var money = function(n) { var v = Number(n || 0); return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var approved = 0, pending = 0, draftN = 0;
+    cos.forEach(function(x) { if (x.status === 'approved') approved += Number(x.amount || 0); else if (x.status === 'draft' || x.status === 'pending') { pending += Number(x.amount || 0); draftN++; } });
+    var paid = pays.reduce(function(t, x) { return t + Number(x.amount || 0); }, 0);
+    var original = Number(c.original_contract_sum || 0), revised = original + approved;
+    var kv = function(k, v) { return '<div style="padding:8px 10px;background:#f8fafc;border-radius:8px"><div style="font-size:11px;color:#64748b;font-weight:700">' + k + '</div><div style="font-size:14px;font-weight:700;color:#0f172a">' + v + '</div></div>'; };
+    var base = 'invoicing.html?contract=' + c.id;
+    var btn = function(tab, label) { return '<a href="' + base + '&tab=' + tab + '" style="flex:1;min-width:130px;text-align:center;padding:10px;border:1px solid #cbd5e1;border-radius:8px;text-decoration:none;color:#0B3D66;font-weight:700;font-size:13px;background:#fff">' + label + '</a>'; };
+    body.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="flex:1"><div style="font-size:12px;color:#64748b">Prime Contract #' + escHtml(c.contract_number || c.project_no || '—') + '</div>' +
+      '<div style="font-size:16px;font-weight:800">' + escHtml(c.title || proj.name || '') + (c.client_name ? ' — ' + escHtml(c.client_name) : '') + '</div></div>' +
+      '<a href="' + base + '" style="background:#f97316;color:#fff;padding:9px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:13px">Open →</a></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px">' +
+        kv('Original Contract', money(original)) + kv('Approved COs', money(approved)) + kv('Revised Contract', money(revised)) +
+        kv('Pending / Draft COs', money(pending) + (draftN ? ' (' + draftN + ')' : '')) + kv('Invoices', apps.length) + kv('Payments Received', money(paid)) +
+        kv('% Paid', (revised ? (paid / revised * 100).toFixed(2) : '0.00') + '%') + kv('Remaining', money(revised - paid)) +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' + btn('general', 'General & SOV') + btn('change-orders', 'Change Orders') + btn('invoices', 'Invoices') + btn('payments', 'Payments Received') + '</div>';
+  }
+
   function renderProjectDetail(projectId) {
     var p = getProjectById(projectId);
     if (!p) return;
@@ -1266,6 +1353,7 @@ requireAuth().catch(function(){});
     loadProjectReports(projectId);
     loadChangeOrders(projectId);
     loadRFIs(projectId);
+    loadPrimeContract(projectId);
 
     // Show detail, hide list
     document.getElementById('listView').style.display = 'none';
@@ -1386,8 +1474,12 @@ requireAuth().catch(function(){});
         renderProjectDetail(currentProjectId);
       }
     } else {
-      createProject(data);
-      showToast('Project created');
+      var created = createProject(data);
+      showToast('Project created — next: upload drawings, then create the Prime Contract');
+      closeModal();
+      renderProjectsList();
+      if (created) setTimeout(function() { renderProjectDetail(created.id); openDetailTab('prime'); }, 150);
+      return;
     }
 
     closeModal();
@@ -1555,6 +1647,7 @@ requireAuth().catch(function(){});
 
       // Set new CO link
       document.getElementById('btnNewCO').href = 'change-order.html?project=' + projectId;
+      if (_primeByProject[projectId] === null) loadPrimeContract(projectId);
 
       renderCOList();
     } catch(e) {
@@ -1797,8 +1890,22 @@ requireAuth().catch(function(){});
     });
   }
 
+  function openDetailTab(name) {
+    var t = document.querySelector('#detailTabs .detail-tab[data-dtab="' + name + '"]');
+    if (t) t.click();
+  }
+
   function init() {
     renderProjectsList();
+    var _q = new URLSearchParams(location.search);
+    if (_q.get('open')) {
+      var _openId = _q.get('open'), _tab = _q.get('tab');
+      var _tryOpen = function(n) {
+        if (getProjectById(_openId)) { renderProjectDetail(_openId); if (_tab) setTimeout(function() { openDetailTab(_tab); }, 50); }
+        else if (n < 20) setTimeout(function() { _tryOpen(n + 1); }, 300);
+      };
+      setTimeout(function() { _tryOpen(0); }, 0);
+    }
     // Load cloud projects in background
     loadProjectsFromCloud();
     // Populate the Project Manager datalist (autocomplete in the modal)
@@ -1807,6 +1914,7 @@ requireAuth().catch(function(){});
     // Refresh COs and RFIs when navigating back (bfcache restore)
     window.addEventListener('pageshow', function(e) {
       if (e.persisted && currentProjectId) {
+        loadPrimeContract(currentProjectId);
         loadChangeOrders(currentProjectId);
         loadRFIs(currentProjectId);
       }
@@ -2054,6 +2162,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=52"></script>
+<script src="sw-register.js?v=186"></script>
 </body>
 </html>
