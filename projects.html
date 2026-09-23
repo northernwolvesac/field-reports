@@ -1273,7 +1273,7 @@ requireAuth().catch(function(){});
 
     var proj = getProjectById(projectId) || {};
     var drawings = cloudDrawings + (proj.documents || []).filter(function(x) { return x.category === 'drawings' && !x.storagePath; }).length;
-    var newUrl = 'invoicing.html?new=1&project=' + encodeURIComponent(projectId);
+    var newUrl = 'invoicing.html?new=1&project=' + encodeURIComponent(projectId) + '&t=' + Date.now();
     var link = function(href, txt) { return '<a href="' + href + '" style="font-size:12px;font-weight:700;color:#f97316;text-decoration:none">' + txt + '</a>'; };
     if (steps) steps.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
       stepHtml(true, '1. Project created') +
@@ -2155,6 +2155,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=187"></script>
+<script src="sw-register.js?v=188"></script>
 </body>
 </html>
