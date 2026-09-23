@@ -510,6 +510,23 @@ body {
   opacity: 1;
 }
 
+/* Pages add their own .toast{bottom:…}; combined with top:70px above the
+   toast stretched to fill the screen. One position everywhere: a compact
+   pill near the bottom (above form action bars), sized to its text. */
+.toast {
+  top: auto !important;
+  bottom: 88px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  width: max-content !important;
+  max-width: min(92vw, 560px) !important;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.4;
+  z-index: 10000 !important;
+  pointer-events: none;
+}
+
 /* ---------- Autosave Indicator ---------- */
 .autosave-indicator {
   position: fixed;
