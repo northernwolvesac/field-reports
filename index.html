@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="NW Field">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <meta name="theme-color" content="#202225">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
@@ -48,7 +49,7 @@
 
     /* ═══ WATERMARK ═══ */
     .wm { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 0; }
-    .wm img { width: min(64vh, 72vw); height: auto; opacity: 0.06; filter: grayscale(1); }
+    .wm img { width: min(64vh, 72vw); height: auto; opacity: 0.07; }
     .page { position: relative; z-index: 1; }
 
     /* ═══ NAV ═══ */
@@ -153,7 +154,7 @@
       border: 1px solid var(--line-2); padding: 12px 14px; z-index: 200; align-items: center; gap: 12px;
     }
     .install-banner.visible { display: flex; }
-    .install-banner-icon { width: 36px; height: 36px; flex-shrink: 0; filter: grayscale(1); }
+    .install-banner-icon { width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; }
     .install-banner-text { flex: 1; min-width: 0; }
     .install-banner-title { font-size: 14px; color: var(--ink); }
     .install-banner-desc { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
@@ -646,6 +647,6 @@
   setTimeout(checkiOSInstall, 1000);
 })();
 </script>
-<script src="sw-register.js?v=192"></script>
+<script src="sw-register.js?v=193"></script>
 </body>
 </html>

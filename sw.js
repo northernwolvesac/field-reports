@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nw-field-v192';
+const CACHE_NAME = 'nw-field-v193';
 const ASSETS = [
   './',
   './index.html',
@@ -22,6 +22,8 @@ const ASSETS = [
   './icon-512.png',
   './logo-header.png',
   './logo-wolf.png',
+  './logo-wolf-dark.png',
+  './favicon-32.png',
   './draft-utils.js',
   './email-utils.js',
   './auth.js',
