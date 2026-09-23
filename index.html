@@ -52,7 +52,7 @@
 
     /* ═══ WATERMARK ═══ */
     .wm { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 0; }
-    .wm img { width: min(64vh, 72vw); height: auto; opacity: 0.16; }
+    .wm img { width: min(43vh, 48vw); height: auto; opacity: 0.16; }
     .page { position: relative; z-index: 1; }
 
     /* ═══ NAV ═══ */
@@ -193,7 +193,7 @@
       .folder-links { grid-template-columns: 1fr; }
       .folder-links a { min-height: 52px; font-size: 15px; }
       .dash-footer { flex-direction: column; gap: 8px; }
-      .wm img { width: 90vw; }
+      .wm img { width: 60vw; }
     }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
@@ -688,6 +688,6 @@
   setTimeout(checkiOSInstall, 1000);
 })();
 </script>
-<script src="sw-register.js?v=196"></script>
+<script src="sw-register.js?v=197"></script>
 </body>
 </html>
