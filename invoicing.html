@@ -303,6 +303,7 @@
   .pc-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:0; }
   .pc-table th, .pc-table td { padding:9px 8px; border-bottom:1px solid var(--nw-border); white-space:normal; vertical-align:middle; overflow-wrap:anywhere; }
   .pc-table td.num, .pc-table td.ctr, .pc-table td .pc-pill { white-space:nowrap; }
+  .pc-table thead th { overflow-wrap:normal; word-break:normal; }
   .pc-table thead th { background:#f8fafc; font-weight:700; font-size:11px; color:#334155; text-align:left; position:sticky; top:0; z-index:2; }
   .pc-table th.num, .pc-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
   .pc-table td.ctr { text-align:center; }
@@ -2889,6 +2890,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=200"></script>
+<script src="sw-register.js?v=201"></script>
 </body>
 </html>
