@@ -573,10 +573,7 @@
         <label>Item #</label>
         <input type="text" id="lItemNo" placeholder="1">
       </div>
-      <div class="field">
-        <label>Budget code (optional)</label>
-        <input type="text" id="lBudgetCode" placeholder="e.g. 15020.E">
-      </div>
+      <input type="hidden" id="lBudgetCode">
     </div>
     <div class="field">
       <label>Description *</label>
@@ -1260,7 +1257,7 @@ requireAuth().catch(function(){});
     var rateStored = effRateStored(currentSetup, currentApp);
     var contractLines = currentLines.filter(function(l) { return !l.is_change_order; });
     var coLines       = currentLines.filter(function(l) { return  l.is_change_order; });
-    var cols = 11;
+    var cols = 10;
 
     var html = '<div class="li-panel">' +
       '<div class="inv-card-h"><h3>Line Items</h3>' +
@@ -1274,10 +1271,9 @@ requireAuth().catch(function(){});
       '</div>' +
       '<table class="li-table' + (linesEditMode ? ' editing' : '') + '">' +
       '<thead>' +
-        '<tr class="letters"><th>A</th><th colspan="2">B</th><th>C</th><th>D</th><th>E</th><th>F</th><th colspan="2">G</th><th>H</th><th>I</th></tr>' +
+        '<tr class="letters"><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th colspan="2">G</th><th>H</th><th>I</th></tr>' +
         '<tr>' +
         '<th style="width:60px">Item No</th>' +
-        '<th style="width:100px">Budget Code</th>' +
         '<th>Description of Work</th>' +
         '<th style="width:100px">Scheduled Value</th>' +
         '<th style="width:100px">From Previous Application (D+E)</th>' +
@@ -1308,7 +1304,6 @@ requireAuth().catch(function(){});
     var depth = (String(l.item_no).match(/\./g) || []).length;
     var cells = [
       '<td class="ctr">' + escHtml(l.item_no || '') + '</td>',
-      '<td class="ctr" style="font-size:10px">' + escHtml(l.budget_code || '') + '</td>',
       '<td class="desc" style="padding-left:' + (8 + depth * 14) + 'px">' + escHtml(l.description || '') +
         (!linesEditMode && canEdit && !l.is_parent ? ' <button class="pc-mini btn-secondary" data-lineedit="' + l.id + '" title="Edit description / value">✎</button>' : '') +
         (!linesEditMode && canEdit ? ' <button class="del-btn" data-linedel="' + l.id + '" title="Delete">✕</button>' : '') +
@@ -1349,7 +1344,7 @@ requireAuth().catch(function(){});
     });
     var g = d + e + f, pct = c ? g / c : 0;
     return '<tr class="' + cls + '">' +
-      '<td colspan="3" class="desc" style="text-align:right;font-weight:800">' + label + ':</td>' +
+      '<td colspan="2" class="desc" style="text-align:right;font-weight:800">' + label + ':</td>' +
       '<td class="num">' + fmtMoney(c) + '</td><td class="num">' + fmtMoney(d) + '</td><td class="num">' + fmtMoney(e) + '</td>' +
       '<td class="num">' + fmtMoney(f) + '</td><td class="num">' + fmtMoney(g) + '</td><td class="num">' + (pct * 100).toFixed(2) + '%</td>' +
       '<td class="num">' + fmtMoney(c - g) + '</td><td class="num">' + fmtMoney((d + e) * rate + f * rateStored) + '</td>' +
@@ -2249,7 +2244,6 @@ requireAuth().catch(function(){});
       var dis = (!canEdit || r.locked) ? ' disabled' : '';
       return '<tr data-i="' + idx + '"' + (r.locked ? ' class="locked"' : '') + '>' +
         '<td class="ctr">' + (rows.indexOf(r) + 1) + '</td>' +
-        '<td><input type="text" data-f="budget_code" value="' + escHtml(r.budget_code) + '" placeholder="—"' + dis + '></td>' +
         '<td><input type="text" data-f="description" value="' + escHtml(r.description) + '" placeholder="Description"' + dis + '></td>' +
         '<td><input type="number" step="0.01" data-f="amount" value="' + (r.amount || '') + '" placeholder="0.00" class="num"' + dis + '></td>' +
         '<td class="num muted">' + fmtMoney(r.billed) + '</td>' +
@@ -2258,10 +2252,10 @@ requireAuth().catch(function(){});
       '</tr>';
     }).join('');
     host.innerHTML =
-      '<table class="pc-table pc-sov"><thead><tr><th style="width:40px">#</th><th style="width:150px">Budget Code</th><th>Description</th>' +
+      '<table class="pc-table pc-sov"><thead><tr><th style="width:40px">#</th><th>Description</th>' +
       '<th class="num" style="width:140px">Amount</th><th class="num" style="width:140px">Billed to Date</th><th class="num" style="width:150px">Amount Remaining</th><th style="width:44px"></th></tr></thead>' +
-      '<tbody>' + (body || '<tr><td colspan="7" class="pc-empty">No lines yet — click <b>Add Line</b>.</td></tr>') + '</tbody>' +
-      '<tfoot><tr><td colspan="3">' + (canEdit ? '<button class="btn-create" id="sovAddLine">Add Line</button>' : '') + '<span style="margin-left:12px;font-weight:700">Total:</span></td>' +
+      '<tbody>' + (body || '<tr><td colspan="6" class="pc-empty">No lines yet — click <b>Add Line</b>.</td></tr>') + '</tbody>' +
+      '<tfoot><tr><td colspan="2">' + (canEdit ? '<button class="btn-create" id="sovAddLine">Add Line</button>' : '') + '<span style="margin-left:12px;font-weight:700">Total:</span></td>' +
       '<td class="num" id="sovTotAmt">' + fmtMoney(tot.amt) + '</td><td class="num">' + fmtMoney(tot.billed) + '</td><td class="num" id="sovTotRem">' + fmtMoney(tot.amt - tot.billed) + '</td><td></td></tr></tfoot></table>' +
       '<div class="pc-warn" id="sovWarn" style="display:none"></div>' +
       (Math.abs(tot.amt - Number(pc.setup.original_contract_sum || 0)) > 0.005 && rows.length
@@ -2755,10 +2749,10 @@ requireAuth().catch(function(){});
       var sub = [hdrCell('FROM PREVIOUS\nAPPLICATION\n(D + E)'), hdrCell('THIS PERIOD')];
       return [letters, titles, sub];
     }
-    var colsContract = { 0: { cellWidth: 27, halign: 'center' }, 1: { cellWidth: 90, halign: 'left' }, 2: { cellWidth: 131, halign: 'left' },
-                         3: { cellWidth: 65, halign: 'right' }, 4: { cellWidth: 65, halign: 'right' }, 5: { cellWidth: 64, halign: 'right' },
-                         6: { cellWidth: 65, halign: 'right' }, 7: { cellWidth: 65, halign: 'right' }, 8: { cellWidth: 44, halign: 'right' },
-                         9: { cellWidth: 64, halign: 'right' }, 10: { cellWidth: 64, halign: 'right' } };
+    var colsContract = { 0: { cellWidth: 35, halign: 'center' }, 1: { cellWidth: 213, halign: 'left' },
+                         2: { cellWidth: 65, halign: 'right' }, 3: { cellWidth: 65, halign: 'right' }, 4: { cellWidth: 64, halign: 'right' },
+                         5: { cellWidth: 65, halign: 'right' }, 6: { cellWidth: 65, halign: 'right' }, 7: { cellWidth: 44, halign: 'right' },
+                         8: { cellWidth: 64, halign: 'right' }, 9: { cellWidth: 64, halign: 'right' } };
     var colsCo = { 0: { cellWidth: 35, halign: 'left' }, 1: { cellWidth: 213, halign: 'left' },
                    2: { cellWidth: 65, halign: 'right' }, 3: { cellWidth: 65, halign: 'right' }, 4: { cellWidth: 64, halign: 'right' },
                    5: { cellWidth: 65, halign: 'right' }, 6: { cellWidth: 65, halign: 'right' }, 7: { cellWidth: 44, halign: 'right' },
@@ -2810,8 +2804,8 @@ requireAuth().catch(function(){});
     sectionLabel('Contract Lines', startY);
     doc.autoTable(Object.assign({}, tableCommon, {
       startY: startY + 4, columnStyles: colsContract,
-      head: headRows(true),
-      body: bodyRows(contractLines, true).concat([totalsRow('TOTALS:', sumLines(contractLines), 3)])
+      head: headRows(false),
+      body: bodyRows(contractLines, false).concat([totalsRow('TOTALS:', sumLines(contractLines), 2)])
     }));
     var yAfter = doc.lastAutoTable.finalY;
 
@@ -2892,6 +2886,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=198"></script>
+<script src="sw-register.js?v=199"></script>
 </body>
 </html>
