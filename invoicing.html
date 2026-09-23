@@ -1796,7 +1796,7 @@ requireAuth().catch(function(){});
       async function fetchAll(build) {
         var out = [], from = 0, page = 1000;
         while (true) {
-          var res = await build().range(from, from + page - 1);
+          var res = await build().order('id', { ascending: true }).range(from, from + page - 1);   // stable order, otherwise pages overlap
           if (res.error) { console.error(res.error); break; }
           out = out.concat(res.data || []);
           if (!res.data || res.data.length < page) break;
@@ -2907,6 +2907,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=202"></script>
+<script src="sw-register.js?v=203"></script>
 </body>
 </html>
