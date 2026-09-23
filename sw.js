@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nw-field-v187';
+const CACHE_NAME = 'nw-field-v188';
 const ASSETS = [
   './',
   './index.html',
@@ -80,7 +80,8 @@ function isCDN(url) {
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS))
+      // cache:'reload' bypasses the browser HTTP cache (GitHub Pages max-age=600)
+      .then(cache => cache.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });
@@ -162,8 +163,10 @@ self.addEventListener('fetch', event => {
   }
 
   // App files: network-first, cache fallback (for offline)
+  // cache:'no-cache' = always revalidate with the server so a new deploy
+  // shows up immediately instead of after the 10-minute HTTP cache window.
   event.respondWith(
-    fetch(request).then(response => {
+    fetch(request, { cache: 'no-cache' }).then(response => {
       if (response.ok) {
         var clone = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
