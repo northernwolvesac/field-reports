@@ -14,8 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supabase-config.js?v=181"></script>
-<script src="auth.js?v=181"></script>
+<script src="supabase-config.js?v=182"></script>
+<script src="auth.js?v=182"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: 1200px; margin: 0 auto; }
@@ -1112,7 +1112,7 @@ requireAuth().catch(function(){});
         '</div>' +
         '<div class="inv-actions">' +
           '<button class="btn-new" id="pdfBtn">📄 Export PDF</button>' +
-          (canEdit ? '<button class="btn-secondary" id="statusBtn">Change status</button>' : '') +
+          (canEdit ? '<button class="btn-secondary" id="statusBtn">Change status</button><button class="del-btn" id="invDelBtn" style="padding:7px 12px;font-size:12px">Delete</button>' : '') +
         '</div>' +
       '</div>';
 
@@ -1152,12 +1152,30 @@ requireAuth().catch(function(){});
       try { exportAiaPdf(); } catch (err) { console.error(err); showToast('PDF failed: ' + err.message, 'error'); }
     });
     var sb = document.getElementById('statusBtn'); if (sb) sb.addEventListener('click', changeStatus);
+    var db = document.getElementById('invDelBtn'); if (db) db.addEventListener('click', function() { deleteInvoice(currentApp.id); });
     var eb = document.getElementById('editHdrBtn'); if (eb) eb.addEventListener('click', editHeader);
     ['coPrevAdd','coPrevDed','coThisAdd','coThisDed'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', saveCoSummary);
     });
     if (invoiceSub === 'detail') bindLinesPanel();
+  }
+
+  async function deleteInvoice(appId) {
+    if (!canEdit) return;
+    var a = await supabaseClient.from('aia_applications').select('id, aia_project_id, application_no, invoice_no').eq('id', appId).maybeSingle();
+    if (!a.data) return;
+    var later = await supabaseClient.from('aia_applications').select('id', { count: 'exact', head: true })
+      .eq('aia_project_id', a.data.aia_project_id).gt('application_no', a.data.application_no);
+    var pays = await supabaseClient.from('aia_payments').select('id', { count: 'exact', head: true }).eq('application_id', appId);
+    var msg = 'Delete Invoice #' + (a.data.invoice_no || a.data.application_no) + ' and all its line items? This cannot be undone.';
+    if (later.count) msg += '\n\n⚠ ' + later.count + ' later invoice(s) exist - their From Previous amounts were carried from this one and will NOT change.';
+    if (pays.count) msg += '\n\n' + pays.count + ' payment(s) recorded against it will stay but become unlinked.';
+    if (!confirm(msg)) return;
+    var r = await supabaseClient.from('aia_applications').delete().eq('id', appId);
+    if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
+    showToast('Invoice deleted', 'success');
+    window.location.href = 'invoicing.html?contract=' + a.data.aia_project_id + '&tab=invoices';
   }
 
   function kvRow(k, v) { return '<div class="inv-kv"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>'; }
@@ -1991,6 +2009,7 @@ requireAuth().catch(function(){});
         '<td class="num">' + fmtMoney(t.L4) + '</td><td class="num">' + fmtMoney(t.L5t) + '</td><td class="num">' + fmtMoney(t.L6) + '</td>' +
         '<td class="num"><b>' + fmtMoney(t.L8) + '</b></td><td class="num">' + fmtMoney(t.L9) + '</td>' +
         '<td class="num">' + (pctC * 100).toFixed(2) + '%</td>' +
+        (canEdit ? '<td class="ctr"><button class="del-btn" data-inv-del="' + a.id + '" title="Delete invoice">✕</button></td>' : '') +
       '</tr>';
     }).join('');
     return '<div class="pc-section-h"><h2>Invoices (Payment Applications)</h2>' +
@@ -1999,7 +2018,7 @@ requireAuth().catch(function(){});
         '<th>Invoice Position</th><th>Invoice #</th><th>Billing Period</th><th>Billing Date</th><th>Status</th>' +
         '<th class="num">Original Contract Sum</th><th class="num">Net Change By Change Orders</th><th class="num">Revised Contract Sum</th>' +
         '<th class="num">Total Completed and Stored To Date</th><th class="num">Total Retainage</th><th class="num">Total Earned Less Retainage</th>' +
-        '<th class="num">Payment Due</th><th class="num">Balance To Finish</th><th class="num">% Complete</th></tr></thead>' +
+        '<th class="num">Payment Due</th><th class="num">Balance To Finish</th><th class="num">% Complete</th>' + (canEdit ? '<th></th>' : '') + '</tr></thead>' +
         '<tbody>' + (rows || '<tr><td colspan="14" class="pc-empty">No invoices yet.</td></tr>') + '</tbody></table></div>';
   }
 
@@ -2041,6 +2060,7 @@ requireAuth().catch(function(){});
     var coAdd = document.getElementById('coAdd'); if (coAdd) coAdd.addEventListener('click', function() { openCoModal(null); });
     main.querySelectorAll('[data-co-edit]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); openCoModal(a.getAttribute('data-co-edit')); }); });
     var invAdd = document.getElementById('invAdd'); if (invAdd) invAdd.addEventListener('click', function() { openNewAppModal(pc.setup.id); });
+    main.querySelectorAll('[data-inv-del]').forEach(function(bt) { bt.addEventListener('click', function(e) { e.stopPropagation(); deleteInvoice(bt.getAttribute('data-inv-del')); }); });
     var payAdd = document.getElementById('payAdd'); if (payAdd) payAdd.addEventListener('click', function() { openPayModal(null); });
     main.querySelectorAll('[data-pay-edit]').forEach(function(bt) { bt.addEventListener('click', function() { openPayModal(bt.getAttribute('data-pay-edit')); }); });
     main.querySelectorAll('[data-pay-del]').forEach(function(bt) { bt.addEventListener('click', function() { deletePayment(bt.getAttribute('data-pay-del')); }); });
@@ -2089,7 +2109,7 @@ requireAuth().catch(function(){});
         '<td><input type="text" data-f="description" value="' + escHtml(r.description) + '" placeholder="Description"' + dis + '></td>' +
         '<td><input type="number" step="0.01" data-f="amount" value="' + (r.amount || '') + '" placeholder="0.00" class="num"' + dis + '></td>' +
         '<td class="num muted">' + fmtMoney(r.billed) + '</td>' +
-        '<td class="num muted">' + fmtMoney(rem) + '</td>' +
+        '<td class="num muted" data-rem>' + fmtMoney(rem) + '</td>' +
         '<td class="ctr">' + (r.locked ? '<span title="Billed on an invoice — locked">🔒</span>' : (canEdit ? '<button class="del-btn" data-del="' + idx + '" title="Remove line">✕</button>' : '')) + '</td>' +
       '</tr>';
     }).join('');
@@ -2098,7 +2118,8 @@ requireAuth().catch(function(){});
       '<th class="num" style="width:140px">Amount</th><th class="num" style="width:140px">Billed to Date</th><th class="num" style="width:150px">Amount Remaining</th><th style="width:44px"></th></tr></thead>' +
       '<tbody>' + (body || '<tr><td colspan="7" class="pc-empty">No lines yet — click <b>Add Line</b>.</td></tr>') + '</tbody>' +
       '<tfoot><tr><td colspan="3">' + (canEdit ? '<button class="btn-create" id="sovAddLine">Add Line</button>' : '') + '<span style="margin-left:12px;font-weight:700">Total:</span></td>' +
-      '<td class="num">' + fmtMoney(tot.amt) + '</td><td class="num">' + fmtMoney(tot.billed) + '</td><td class="num">' + fmtMoney(tot.amt - tot.billed) + '</td><td></td></tr></tfoot></table>' +
+      '<td class="num" id="sovTotAmt">' + fmtMoney(tot.amt) + '</td><td class="num">' + fmtMoney(tot.billed) + '</td><td class="num" id="sovTotRem">' + fmtMoney(tot.amt - tot.billed) + '</td><td></td></tr></tfoot></table>' +
+      '<div class="pc-warn" id="sovWarn" style="display:none"></div>' +
       (Math.abs(tot.amt - Number(pc.setup.original_contract_sum || 0)) > 0.005 && rows.length
         ? '<div class="pc-warn">SOV total ' + fmtMoney(tot.amt) + ' ≠ Original Contract Amount ' + fmtMoney(pc.setup.original_contract_sum) + '</div>' : '') +
       (canEdit ? '<div class="sov-actions" id="sovActions" style="' + (sovDirty ? '' : 'display:none') + '">' +
@@ -2129,11 +2150,17 @@ requireAuth().catch(function(){});
     var cn = document.getElementById('sovCancelBtn'); if (cn) cn.addEventListener('click', function() { initSovGrid(); });
   }
   function refreshSovTotals() {
-    // cheap: re-render totals only by re-rendering the grid while preserving focus
-    var active = document.activeElement, tr = active && active.closest ? active.closest('tr') : null;
-    var i = tr ? tr.getAttribute('data-i') : null, f = active ? active.getAttribute('data-f') : null, pos = active && active.selectionStart;
-    renderSovGrid();
-    if (i != null && f) { var el = document.querySelector('#sovGrid tr[data-i="' + i + '"] input[data-f="' + f + '"]'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) {} } }
+    var amt = 0, billed = 0;
+    document.querySelectorAll('#sovGrid tbody tr[data-i]').forEach(function(tr) {
+      var r = sovDraft[Number(tr.getAttribute('data-i'))];
+      amt += Number(r.amount || 0); billed += r.billed;
+      var c = tr.querySelector('[data-rem]'); if (c) c.textContent = fmtMoney(Number(r.amount || 0) - r.billed);
+    });
+    var ta = document.getElementById('sovTotAmt'), tr2 = document.getElementById('sovTotRem');
+    if (ta) ta.textContent = fmtMoney(amt); if (tr2) tr2.textContent = fmtMoney(amt - billed);
+    var w = document.getElementById('sovWarn'), orig = Number(pc.setup.original_contract_sum || 0);
+    document.querySelectorAll('#sovGrid .pc-warn:not(#sovWarn)').forEach(function(x) { x.remove(); });
+    if (w) { var off = Math.abs(amt - orig) > 0.005; w.style.display = off ? '' : 'none'; w.textContent = 'SOV total ' + fmtMoney(amt) + ' ≠ Original Contract Amount ' + fmtMoney(orig); }
   }
   function markSovDirty() { sovDirty = true; var a = document.getElementById('sovActions'); if (a) a.style.display = ''; }
   function addSovLine() {
@@ -2714,6 +2741,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=181"></script>
+<script src="sw-register.js?v=182"></script>
 </body>
 </html>
