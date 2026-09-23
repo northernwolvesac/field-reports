@@ -1790,19 +1790,36 @@ requireAuth().catch(function(){});
 
     var apps = [], lines = [], cos = [], pays = [];
     if (ids.length) {
-      var a = await supabaseClient.from('aia_applications').select('*').in('aia_project_id', ids);
-      apps = a.data || [];
-      var appIds = apps.map(function(x) { return x.id; });
-      if (appIds.length) {
-        var l = await supabaseClient.from('aia_line_items')
-          .select('application_id, scheduled_value, prev_amount, this_amount, stored_amount, is_parent, is_change_order')
-          .in('application_id', appIds);
-        lines = l.data || [];
+      // Supabase returns at most 1000 rows per request — page through every query
+      // and only load line items for the latest invoice of each contract (that is
+      // the only one the list needs for the "Invoiced" roll-up).
+      async function fetchAll(build) {
+        var out = [], from = 0, page = 1000;
+        while (true) {
+          var res = await build().range(from, from + page - 1);
+          if (res.error) { console.error(res.error); break; }
+          out = out.concat(res.data || []);
+          if (!res.data || res.data.length < page) break;
+          from += page;
+        }
+        return out;
       }
-      var c = await supabaseClient.from('aia_change_orders').select('aia_project_id, status, amount').in('aia_project_id', ids);
-      cos = c.data || [];
-      var p = await supabaseClient.from('aia_payments').select('aia_project_id, amount').in('aia_project_id', ids);
-      pays = p.data || [];
+      apps = await fetchAll(function() { return supabaseClient.from('aia_applications').select('*').in('aia_project_id', ids); });
+      var latestByC = {};
+      apps.forEach(function(a) {
+        var cur = latestByC[a.aia_project_id];
+        if (!cur || a.application_no > cur.application_no) latestByC[a.aia_project_id] = a;
+      });
+      var appIds = Object.keys(latestByC).map(function(k) { return latestByC[k].id; });
+      if (appIds.length) {
+        lines = await fetchAll(function() {
+          return supabaseClient.from('aia_line_items')
+            .select('application_id, scheduled_value, prev_amount, this_amount, stored_amount, is_parent, is_change_order')
+            .in('application_id', appIds);
+        });
+      }
+      cos = await fetchAll(function() { return supabaseClient.from('aia_change_orders').select('aia_project_id, status, amount').in('aia_project_id', ids); });
+      pays = await fetchAll(function() { return supabaseClient.from('aia_payments').select('aia_project_id, amount').in('aia_project_id', ids); });
     }
     var appsByC = groupBy(apps, 'aia_project_id'), linesByApp = groupBy(lines, 'application_id');
     var cosByC = groupBy(cos, 'aia_project_id'), paysByC = groupBy(pays, 'aia_project_id');
@@ -2890,6 +2907,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=201"></script>
+<script src="sw-register.js?v=202"></script>
 </body>
 </html>
