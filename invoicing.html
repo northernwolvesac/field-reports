@@ -706,7 +706,7 @@ requireAuth().catch(function(){});
   // URL state
   var params = new URLSearchParams(window.location.search);
   var currentAppId    = params.get('app')     || null;
-  var currentAiaProjId = params.get('contract') || params.get('project') || null;
+  var currentAiaProjId = params.get('contract') || null;
   var currentTab      = params.get('tab') || 'general';
 
   var editingLineId = null;
@@ -734,7 +734,12 @@ requireAuth().catch(function(){});
       await renderContract(currentAiaProjId, currentTab);
     } else {
       await renderContracts();
-      if (params.get('new') && params.get('project') && canEdit) openSetupModal(null, params.get('project'));
+      if (params.get('new') && params.get('project')) {
+        var ex = await supabaseClient.from('aia_projects').select('id').eq('project_id', params.get('project')).maybeSingle();
+        if (ex.data) { window.location.replace('invoicing.html?contract=' + ex.data.id); return; }
+        if (canEdit) openSetupModal(null, params.get('project'));
+        else showToast('Only management can create prime contracts', 'error');
+      }
     }
   }
 

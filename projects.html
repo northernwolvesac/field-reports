@@ -979,37 +979,26 @@ requireAuth().catch(function(){});
   }
 
   // Load documents from Google Drive
+  // Project documents live in Supabase Storage (bucket 'project-files', table project_files).
+  // Older documents uploaded to Google Drive are kept in the list as-is.
   async function loadDriveFiles(projectId) {
-    var p = getProjectById(projectId);
-    if (!p) return;
     try {
-      var result = await driveListFiles(p.name, projectId);
-      if (!result.success) return;
-
-      // Replace local doc list with Drive files
-      p.documents = (result.files || []).map(function(f) {
-        return {
-          id: f.id,
-          driveId: f.id,
-          name: f.name,
-          category: f.category || 'other',
-          size: f.size || 0,
-          type: f.mimeType || '',
-          addedAt: f.createdAt,
-          driveUrl: f.viewUrl || f.url,
-          downloadUrl: f.downloadUrl
-        };
+      var r = await supabaseClient.from('project_files').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
+      if (r.error) { console.error('[projects] load files error:', r.error.message); return; }
+      var cloud = (r.data || []).map(function(f) {
+        return { id: f.id, storagePath: f.storage_path, name: f.filename, category: f.category || 'other',
+                 size: f.size_bytes || 0, type: f.content_type || '', addedAt: f.created_at };
       });
-
       var projects = getProjects();
       for (var i = 0; i < projects.length; i++) {
         if (projects[i].id === projectId) {
-          projects[i].documents = p.documents;
+          var legacy = (projects[i].documents || []).filter(function(d) { return d.driveId && !d.storagePath; });
+          projects[i].documents = cloud.concat(legacy);
           break;
         }
       }
       saveProjects(projects);
-      renderDocList();
+      if (currentProjectId === projectId) renderDocList();
     } catch(e) {
       console.error('[projects] loadDriveFiles exception:', e);
     }
@@ -1264,7 +1253,7 @@ requireAuth().catch(function(){});
     var body = document.getElementById('primeBody');
     var steps = document.getElementById('setupSteps');
     if (body) body.innerHTML = '<div style="color:var(--nw-muted);font-size:13px">Loading…</div>';
-    var c = null, cos = [], apps = [], pays = [], sov = [], contractDocs = 0;
+    var c = null, cos = [], apps = [], pays = [], sov = [], contractDocs = 0, cloudDrawings = 0;
     try {
       var r = await supabaseClient.from('aia_projects').select('*').eq('project_id', projectId).maybeSingle();
       c = r.data || null;
@@ -1276,12 +1265,14 @@ requireAuth().catch(function(){});
       }
       var f = await supabaseClient.from('project_files').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('category', 'contracts');
       contractDocs = f.count || 0;
+      var g = await supabaseClient.from('project_files').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('category', 'drawings');
+      cloudDrawings = g.count || 0;
     } catch (err) { console.warn('[projects] prime contract load failed', err); }
     if (currentProjectId !== projectId) return;
     _primeByProject[projectId] = c;
 
     var proj = getProjectById(projectId) || {};
-    var drawings = (proj.documents || []).filter(function(x) { return x.category === 'drawings'; }).length;
+    var drawings = cloudDrawings + (proj.documents || []).filter(function(x) { return x.category === 'drawings' && !x.storagePath; }).length;
     var newUrl = 'invoicing.html?new=1&project=' + encodeURIComponent(projectId);
     var link = function(href, txt) { return '<a href="' + href + '" style="font-size:12px;font-weight:700;color:#f97316;text-decoration:none">' + txt + '</a>'; };
     if (steps) steps.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
@@ -1382,7 +1373,7 @@ requireAuth().catch(function(){});
     emptyDocs.style.display = 'none';
     var html = '';
     docs.forEach(function(d) {
-      var urlAttr = d.driveUrl ? ' data-url="' + escHtml(d.driveUrl) + '"' : '';
+      var urlAttr = d.storagePath ? ' data-path="' + escHtml(d.storagePath) + '" style="cursor:pointer"' : (d.driveUrl ? ' data-url="' + escHtml(d.driveUrl) + '"' : '');
       html += '<div class="doc-item" data-doc-id="' + d.id + '"' + urlAttr + '>';
       html += '<div class="doc-icon">' + docIcon(d.name) + '</div>';
       html += '<div class="doc-info">';
@@ -1391,7 +1382,7 @@ requireAuth().catch(function(){});
       html += '<span class="doc-badge">' + escHtml(d.category || 'other') + '</span>';
       html += ' &middot; ' + fmtDate(d.addedAt);
       if (d.size) html += ' &middot; ' + fmtSize(d.size);
-      if (d.driveId) html += ' &middot; <span style="color:#0696D7">Google Drive</span>';
+      if (d.driveId && !d.storagePath) html += ' &middot; <span style="color:#0696D7">Google Drive</span>';
       html += '</div>';
       html += '</div>';
       html += '<button class="doc-remove" data-doc-id="' + d.id + '" title="Remove">&#10005;</button>';
@@ -2026,54 +2017,36 @@ requireAuth().catch(function(){});
       this.value = '';
     });
 
-    // Confirm upload — upload to Google Drive
-    document.getElementById('btnConfirmUpload').addEventListener('click', function() {
+    // Confirm upload — Supabase Storage
+    document.getElementById('btnConfirmUpload').addEventListener('click', async function() {
       if (!pendingFile || !currentProjectId) return;
       var cat = document.getElementById('uploadCategory').value;
-      var file = pendingFile;
-      var project = getProjectById(currentProjectId);
+      var file = pendingFile, projectId = currentProjectId;
       pendingFile = null;
       document.getElementById('uploadCategorySelect').classList.remove('active');
-      showToast('Uploading to Google Drive...');
-
-      var reader = new FileReader();
-      reader.onload = async function() {
-        try {
-          // Strip data URL prefix to get pure base64
-          var base64 = reader.result.split(',')[1];
-          var result = await driveUploadFile(
-            project ? project.name : 'Unknown',
-            currentProjectId,
-            file.name,
-            base64,
-            file.type || 'application/octet-stream',
-            cat
-          );
-
-          if (result.success && result.file) {
-            addDocumentLocal(currentProjectId, {
-              id: result.file.id,
-              driveId: result.file.id,
-              name: result.file.name,
-              category: result.file.category || cat,
-              size: result.file.size || file.size,
-              type: result.file.mimeType || file.type,
-              driveUrl: result.file.viewUrl || result.file.url,
-              downloadUrl: result.file.downloadUrl
-            });
-            renderDocList();
-            renderProjectsList();
-            showToast('Uploaded to Google Drive');
-          } else {
-            showToast('Upload failed: ' + (result.error || 'Unknown error'));
-            console.error('[projects] Drive upload failed:', result);
-          }
-        } catch(e) {
-          showToast('Upload error');
-          console.error('[projects] Upload exception:', e);
+      showToast('Uploading ' + file.name + '…');
+      try {
+        var path = 'proj-' + projectId + '/' + cat + '/' + Date.now() + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+        var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
+        if (up.error) { showToast('Upload failed: ' + up.error.message); console.error(up.error); return; }
+        var sess = await supabaseClient.auth.getSession();
+        var ins = await supabaseClient.from('project_files').insert({
+          project_id: projectId, filename: file.name, storage_path: path, category: cat,
+          size_bytes: file.size, content_type: file.type || null,
+          uploaded_by: sess.data && sess.data.session ? sess.data.session.user.id : null
+        });
+        if (ins.error) {
+          await supabaseClient.storage.from('project-files').remove([path]);
+          showToast('Upload failed: ' + ins.error.message); console.error(ins.error); return;
         }
-      };
-      reader.readAsDataURL(file);
+        await loadDriveFiles(projectId);
+        renderProjectsList();
+        if (typeof loadPrimeContract === 'function') loadPrimeContract(projectId);
+        showToast('✅ Uploaded');
+      } catch(e) {
+        showToast('Upload error: ' + (e.message || e));
+        console.error('[projects] Upload exception:', e);
+      }
     });
 
     // Cancel upload
@@ -2088,6 +2061,18 @@ requireAuth().catch(function(){});
       var btn = e.target.closest('.doc-remove');
       if (btn && currentProjectId) {
         var docId = btn.getAttribute('data-doc-id');
+        var pr = getProjectById(currentProjectId) || {};
+        var doc = (pr.documents || []).find(function(d) { return d.id === docId; });
+        if (doc && doc.storagePath) {
+          if (!confirm('Delete "' + doc.name + '"?')) return;
+          supabaseClient.storage.from('project-files').remove([doc.storagePath]).then(function() {
+            return supabaseClient.from('project_files').delete().eq('id', docId);
+          }).then(function(r) {
+            if (r && r.error) showToast('Delete failed: ' + r.error.message); else showToast('Deleted');
+            loadDriveFiles(currentProjectId); renderProjectsList();
+          });
+          return;
+        }
         if (!confirm('Remove this document from Google Drive?')) return;
         // Delete from Drive
         driveDeleteFile(docId).then(function(result) {
@@ -2103,6 +2088,14 @@ requireAuth().catch(function(){});
         return;
       }
       // Handle clicking doc item to open in Google Drive
+      var sItem = e.target.closest('.doc-item[data-path]');
+      if (sItem) {
+        supabaseClient.storage.from('project-files').createSignedUrl(sItem.getAttribute('data-path'), 3600).then(function(r) {
+          if (r.error) { showToast('Could not open: ' + r.error.message); return; }
+          window.open(r.data.signedUrl, '_blank');
+        });
+        return;
+      }
       var item = e.target.closest('.doc-item[data-url]');
       if (item) {
         var url = item.getAttribute('data-url');
@@ -2162,6 +2155,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=186"></script>
+<script src="sw-register.js?v=187"></script>
 </body>
 </html>
