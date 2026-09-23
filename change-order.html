@@ -10,12 +10,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=52"></script>
 <script src="auth.js?v=52"></script>
+<script src="labor-rates.js?v=183"></script>
 <script src="cloud-save.js?v=52"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
 <script src="draft-utils.js?v=52"></script>
 <script src="edit-utils.js?v=118"></script>
-<script src="project-utils.js?v=120"></script>
+<script src="project-utils.js?v=183"></script>
 <script src="customer-utils.js?v=52"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="email-utils.js?v=52"></script>
@@ -145,6 +146,12 @@ body{padding-bottom:100px}
       <div class="cost-row total"><span>TOTAL</span><span id="costTotal">$0.00</span></div>
     </div>
   </div>
+</div>
+
+<!-- LABOR RATES (reference) -->
+<div class="section">
+  <div class="section-header collapsed" onclick="toggleSection(this)"><span class="icon">🧾</span> Our Labor Rates<span class="collapse-arrow">▼</span></div>
+  <div class="section-body collapsed" id="laborRatesRef"></div>
 </div>
 
 <!-- SCHEDULE IMPACT -->
@@ -299,6 +306,109 @@ if (!_urlProjectId && !_urlEditId) {
 // Auto-select project if coming from project page
 if (_urlProjectId && typeof selectProjectById === 'function') {
   setTimeout(function() { selectProjectById(_urlProjectId); }, 300);
+}
+
+
+// ========== LABOR RATES: rate picker on each labor row ==========
+function laborTypeSelectHtml() {
+  var opts = (window.NW_LABOR_RATES ? window.NW_LABOR_RATES.options() : []);
+  return '<select class="labor-type" onchange="applyLaborType(this)" style="flex:1.3;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:13px;background:var(--nw-section)">' +
+    '<option value="">Rate…</option>' +
+    opts.map(function(o) { return '<option value="' + o.rate + '" data-label="' + o.label + '">' + o.label + ' ($' + o.rate + ')</option>'; }).join('') +
+    '<option value="custom">Custom rate</option></select>';
+}
+function applyLaborType(sel) {
+  var row = sel.closest('.labor-row'); if (!row) return;
+  if (sel.value && sel.value !== 'custom') {
+    row.querySelector('.labor-rate').value = sel.value;
+    var tech = row.querySelector('.labor-tech');
+    var lbl = sel.options[sel.selectedIndex].getAttribute('data-label') || '';
+    if (tech && (!tech.value || tech.getAttribute('data-auto') === '1')) { tech.value = lbl; tech.setAttribute('data-auto', '1'); }
+  }
+  calcCosts();
+}
+function enhanceLaborRows() {
+  document.querySelectorAll('#laborList .labor-row').forEach(function(row) {
+    if (row.querySelector('.labor-type')) return;
+    row.insertAdjacentHTML('afterbegin', laborTypeSelectHtml());
+    var rate = parseFloat((row.querySelector('.labor-rate') || {}).value);
+    if (rate) {
+      var sel = row.querySelector('.labor-type'); var tech = (row.querySelector('.labor-tech') || {}).value || '';
+      for (var i = 0; i < sel.options.length; i++) {
+        if (Number(sel.options[i].value) === rate && (sel.options[i].getAttribute('data-label') || '') === tech) { sel.selectedIndex = i; break; }
+      }
+    }
+  });
+}
+(function initLaborRates() {
+  var ref = document.getElementById('laborRatesRef');
+  if (ref && window.NW_LABOR_RATES) ref.innerHTML = window.NW_LABOR_RATES.tableHtml();
+  enhanceLaborRows();
+  var list = document.getElementById('laborList');
+  if (list && window.MutationObserver) new MutationObserver(enhanceLaborRows).observe(list, { childList: true });
+})();
+
+// ========== PRIME CONTRACT GATE + SYNC ==========
+var _primeContractByProject = {};   // project_id -> aia_projects.id
+(async function loadPrimeContracts() {
+  try {
+    var r = await supabaseClient.from('aia_projects').select('id, project_id');
+    (r.data || []).forEach(function(x) { _primeContractByProject[x.project_id] = x.id; });
+    window.NW_PICKER_ALLOWED_IDS = Object.keys(_primeContractByProject);
+    if (_urlProjectId && !_urlEditId && !_primeContractByProject[_urlProjectId]) {
+      document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;padding:24px;text-align:center;">' +
+        '<div style="font-size:40px;margin-bottom:16px;">📑</div><h2 style="font-size:18px;color:#1e293b;margin:0 0 8px;">Prime Contract Required</h2>' +
+        '<p style="color:#64748b;font-size:14px;margin:0 0 20px;max-width:420px">Change Orders can only be created for projects that have a Prime Contract.<br>Order: <b>Create project → Create prime contract → Create change order</b>.</p>' +
+        '<a href="invoicing.html" style="background:#f97316;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Go to Prime Contracts</a></div>';
+    }
+  } catch (e) { console.warn('[CO] prime contract lookup failed', e); }
+})();
+
+function _coMoney(txt) { return parseFloat(String(txt || '').replace(/[^0-9.\-]/g, '')) || 0; }
+
+async function syncCOToPrimeContract(projId) {
+  try {
+    if (!projId) return;
+    var contractId = _primeContractByProject[projId];
+    if (!contractId) {
+      var q = await supabaseClient.from('aia_projects').select('id').eq('project_id', projId).maybeSingle();
+      if (!q.data) return;
+      contractId = q.data.id;
+    }
+    var v = function(id) { return (document.getElementById(id) || {}).value || ''; };
+    var items = [];
+    var mat = _coMoney((document.getElementById('costMaterialsTotal') || {}).textContent);
+    if (mat > 0) items.push({ description: 'MATERIALS', amount: Math.round(mat * 100) / 100 });
+    document.querySelectorAll('#laborList .labor-row').forEach(function(r) {
+      var h = parseFloat((r.querySelector('.labor-hrs') || {}).value) || 0;
+      var rt = parseFloat((r.querySelector('.labor-rate') || {}).value) || 0;
+      if (!h || !rt) return;
+      var who = ((r.querySelector('.labor-tech') || {}).value || 'LABOR').trim();
+      items.push({ description: 'LABOR - ' + who + ' (' + h + ' M/HRS @ $' + rt.toFixed(2) + ' PER M/HR)', amount: Math.round(h * rt * 100) / 100 });
+    });
+    var amount = _coMoney((document.getElementById('costTotal') || {}).textContent);
+    var desc = (v('changeDesc') || '').split('\n')[0].trim();
+    var title = 'CO #' + (v('coNumber') || reportId) + (desc ? ' - ' + desc.slice(0, 90).toUpperCase() : '');
+    var days = parseInt(v('addDays'), 10);
+    var ex = await supabaseClient.from('aia_change_orders').select('id, status')
+      .eq('aia_project_id', contractId).eq('source_report_number', reportId).maybeSingle();
+    var patch = { title: title, amount: amount, line_items: items, change_reason: v('changeReason') || null,
+                  schedule_impact_days: isNaN(days) ? null : days, notes: v('changeDesc') || null };
+    if (ex.data) {
+      if (ex.data.status === 'approved' || ex.data.status === 'void') return;   // billing already acted — don't overwrite
+      await supabaseClient.from('aia_change_orders').update(patch).eq('id', ex.data.id);
+    } else {
+      var cnt = await supabaseClient.from('aia_change_orders').select('number').eq('aia_project_id', contractId);
+      var max = 0; (cnt.data || []).forEach(function(c) { var n = parseInt(c.number, 10); if (n > max) max = n; });
+      var no = String(max + 1).padStart(3, '0');
+      var sess = await supabaseClient.auth.getSession();
+      await supabaseClient.from('aia_change_orders').insert(Object.assign(patch, {
+        aia_project_id: contractId, number: no, pco_number: no, status: 'draft',
+        date_initiated: v('coDate') || new Date().toISOString().slice(0, 10), source_report_number: reportId,
+        created_by: sess.data && sess.data.session ? sess.data.session.user.id : null
+      }));
+    }
+  } catch (e) { console.warn('[CO] prime contract sync failed', e); }
 }
 
 // ========== EDIT MODE ==========
@@ -746,7 +856,8 @@ function saveDraftAndClose(){
   autoSave();
   saveDraftEntry('change-order','change-order.html');
   showToast('Draft saved!');
-  setTimeout(function(){if(window.history.length>1){history.back()}else{location.href='index.html'}},600);
+  syncCOToPrimeContract((typeof getSelectedProjectId === 'function' && getSelectedProjectId()) || _urlProjectId)
+    .finally(function(){ setTimeout(function(){if(window.history.length>1){history.back()}else{location.href='index.html'}},300); });
 }
 
 function collectData(){
@@ -968,6 +1079,7 @@ async function confirmSendEmail(){
         if (typeof showToast === 'function') showToast('⚠️ Cloud save failed — email still sent. Check console.');
       }
     }
+    await syncCOToPrimeContract(projId || _urlProjectId);
     const v=id=>(document.getElementById(id)||{}).value||'';
     const doc=generatePDF();
     const fn=`ChangeOrder_${v('custName').replace(/\s+/g,'_')||'CO'}_${v('coDate')}.pdf`;
@@ -1024,6 +1136,7 @@ async function saveAndGoBack() {
     showToast('Saving...');
     var d = collectData();
     await updateReportInCloud(_editCloudId, { form_data: d, status: _coStatus || d._coStatus || 'submitted' });
+    await syncCOToPrimeContract((typeof getSelectedProjectId === 'function' && getSelectedProjectId()) || _urlProjectId);
     showToast('Changes saved!');
     setTimeout(function() {
       if (window.history.length > 1) { history.back(); }
@@ -1106,6 +1219,6 @@ function openChangeOrderAIChat() {
 }
 </script>
 <script src="form-utils.js?v=114"></script>
-<script src="sw-register.js?v=52"></script>
+<script src="sw-register.js?v=183"></script>
 </body>
 </html>

@@ -252,6 +252,7 @@
     var hasResults = false;
     for (var i = 0; i < projects.length; i++) {
       var p = projects[i];
+      if (Array.isArray(window.NW_PICKER_ALLOWED_IDS) && window.NW_PICKER_ALLOWED_IDS.indexOf(p.id) === -1) continue;
       var searchable = ((p.name || '') + ' ' + (p.customer || '') + ' ' + (p.address || '')).toLowerCase();
       if (q && searchable.indexOf(q) === -1) continue;
       hasResults = true;
@@ -265,7 +266,11 @@
     }
 
     // "Quick Add" option always last
-    html += '<div class="project-option add-opt" data-action="quick-add">\uff0b Quick Add Project</div>';
+    if (Array.isArray(window.NW_PICKER_ALLOWED_IDS)) {
+      html += '<div class="project-option" style="color:#64748b;cursor:default;font-size:12px">Only projects with a Prime Contract are listed. Create the project, then its Prime Contract (Prime Contracts tile).</div>';
+    } else {
+      html += '<div class="project-option add-opt" data-action="quick-add">\uff0b Quick Add Project</div>';
+    }
 
     dropdown.innerHTML = html;
 

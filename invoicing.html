@@ -14,8 +14,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supabase-config.js?v=182"></script>
-<script src="auth.js?v=182"></script>
+<script src="supabase-config.js?v=183"></script>
+<script src="auth.js?v=183"></script>
+<script src="labor-rates.js?v=183"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: 1200px; margin: 0 auto; }
@@ -643,13 +644,14 @@
     <div class="row">
       <div class="field"><label>Amount * (negative = deduction)</label><input type="number" id="coAmount" step="0.01" placeholder="0.00"></div>
       <div class="field"><label>Change reason</label>
-        <select id="coReason"><option value="">--</option><option>Client Request</option><option>Design Development</option><option>Unforeseen Conditions</option><option>Owner Change</option><option>Allowance</option><option>Back Charge</option><option>Other</option></select>
+        <select id="coReason"><option value="">--</option><option>Client Request</option><option>Design Development</option><option>Unforeseen Conditions</option><option>Owner Change</option><option>Allowance</option><option>Back Charge</option><option>Design Change</option><option>Code Requirement</option><option>Scope Addition</option><option>Scope Reduction</option><option>Material Substitution</option><option>Other</option></select>
       </div>
       <div class="field" style="flex:0 0 140px"><label>Schedule impact (days)</label><input type="number" id="coImpact" step="1" placeholder="--"></div>
     </div>
     <div class="row">
       <div class="field"><label>Date initiated</label><input type="date" id="coInit"></div>
       <div class="field"><label>Due date</label><input type="date" id="coDue"></div>
+      <div class="field"><label>Approved date</label><input type="date" id="coApproved"></div>
       <div class="field"><label>Review date</label><input type="date" id="coReview"></div>
     </div>
     <div class="row">
@@ -752,6 +754,10 @@ requireAuth().catch(function(){});
     document.getElementById('payCancel').addEventListener('click', function() { closeModal('payModal'); });
     document.getElementById('paySave').addEventListener('click', savePayment);
     document.getElementById('payDelete').addEventListener('click', function() { if (editingPayId) deletePayment(editingPayId); });
+    document.getElementById('coStatus').addEventListener('change', function() {
+      var ad = document.getElementById('coApproved');
+      if (this.value === 'approved' && !ad.value) ad.value = ymd(new Date());
+    });
     document.getElementById('payApp').addEventListener('change', function() { if (!editingPayId) updatePayNumberHint(); });
     // Close on backdrop click
     ['setupModal','newAppModal','lineModal','coModal','payModal'].forEach(function(id) {
@@ -968,17 +974,7 @@ requireAuth().catch(function(){});
       }
     }
 
-    // Change Order Summary auto-fill from approved change orders (deductions stored negative)
     var coSum = { co_prev_additions: 0, co_prev_deductions: 0, co_this_additions: 0, co_this_deductions: 0 };
-    var coq = await supabaseClient.from('aia_change_orders').select('amount, date_initiated, status')
-      .eq('aia_project_id', newAppProjectId).eq('status', 'approved');
-    (coq.data || []).forEach(function(c) {
-      var amt = Number(c.amount || 0), d = c.date_initiated || '';
-      var isThis = d >= from && d <= to, isPrev = d < from;
-      if (!isThis && !isPrev) return;
-      var k = (isThis ? 'co_this_' : 'co_prev_') + (amt >= 0 ? 'additions' : 'deductions');
-      coSum[k] += amt;
-    });
 
     var insRes = await supabaseClient.from('aia_applications').insert({
       aia_project_id: newAppProjectId,
@@ -1036,32 +1032,64 @@ requireAuth().catch(function(){});
       if (seed.length) await supabaseClient.from('aia_line_items').insert(seed);
     }
 
-    // Approved change orders not yet on this invoice → PCCO#/PCO# groups (Procore layout)
-    var existing = await supabaseClient.from('aia_line_items').select('item_no, budget_code, sort_order').eq('application_id', newAppId);
-    var have = {}; var maxNo = 0; var maxSort = 0;
-    (existing.data || []).forEach(function(l) {
-      if (l.budget_code) have[l.budget_code.toUpperCase()] = true;
-      var n = parseInt(String(l.item_no), 10); if (n > maxNo) maxNo = n;
-      if (l.sort_order > maxSort) maxSort = l.sort_order;
-    });
-    var approvedCos = await supabaseClient.from('aia_change_orders').select('*').eq('aia_project_id', newAppProjectId)
-      .eq('status', 'approved').lte('date_initiated', to).order('number', { ascending: true });
-    var coRows = [];
-    (approvedCos.data || []).forEach(function(c) {
-      var pcco = 'PCCO#' + c.number;
-      if (have[pcco.toUpperCase()]) return;
-      maxNo += 1;
-      var n = String(maxNo), pco = 'PCO#' + (c.pco_number || c.number);
-      coRows.push({ application_id: newAppId, item_no: n,          budget_code: pcco, description: c.title, scheduled_value: 0, prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true, is_parent: true,  parent_item_no: null,      sort_order: ++maxSort });
-      coRows.push({ application_id: newAppId, item_no: n + '.1',   budget_code: pco,  description: c.title, scheduled_value: 0, prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true, is_parent: true,  parent_item_no: n,         sort_order: ++maxSort });
-      coRows.push({ application_id: newAppId, item_no: n + '.1.1', budget_code: null, description: c.title, scheduled_value: Number(c.amount || 0), prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true, is_parent: false, parent_item_no: n + '.1', sort_order: ++maxSort });
-    });
-    if (coRows.length) await supabaseClient.from('aia_line_items').insert(coRows);
+    await syncInvoiceChangeOrders(newAppId, newAppProjectId, from, to);
 
     btn.disabled = false; btn.textContent = 'Create';
     closeModal('newAppModal');
     showToast('✅ Invoice #' + appNo + ' created', 'success');
     window.location.href = 'invoicing.html?app=' + newAppId + '&sub=detail';
+  }
+
+  // ─── Approved change orders → invoice ───────────────────────────────
+  // A CO is billable on an invoice once status = approved and its approved
+  // date is on/before the invoice's period end. Approved in the period →
+  // "this month"; before the period → "previous months".
+  function coEffectiveDate(c) { return c.approved_date || c.review_date || c.date_initiated || ''; }
+
+  async function syncInvoiceChangeOrders(appId, contractId, from, to) {
+    var coq = await supabaseClient.from('aia_change_orders').select('*')
+      .eq('aia_project_id', contractId).eq('status', 'approved').order('number', { ascending: true });
+    var cos = (coq.data || []).filter(function(c) { var d = coEffectiveDate(c); return d && d <= to; });
+
+    var sum = { co_prev_additions: 0, co_prev_deductions: 0, co_this_additions: 0, co_this_deductions: 0 };
+    cos.forEach(function(c) {
+      var amt = Number(c.amount || 0), d = coEffectiveDate(c);
+      var k = (d >= from ? 'co_this_' : 'co_prev_') + (amt >= 0 ? 'additions' : 'deductions');
+      sum[k] += amt;
+    });
+    await supabaseClient.from('aia_applications').update(sum).eq('id', appId);
+
+    var existing = await supabaseClient.from('aia_line_items').select('item_no, budget_code, sort_order').eq('application_id', appId);
+    var have = {}, maxNo = 0, maxSort = 0;
+    (existing.data || []).forEach(function(l) {
+      if (l.budget_code) have[l.budget_code.toUpperCase()] = true;
+      var n = parseInt(String(l.item_no), 10); if (n > maxNo) maxNo = n;
+      if (l.sort_order > maxSort) maxSort = l.sort_order;
+    });
+    var rows = [];
+    cos.forEach(function(c) {
+      var pcco = 'PCCO#' + c.number;
+      if (have[pcco.toUpperCase()]) return;
+      maxNo += 1;
+      var n = String(maxNo), pco = 'PCO#' + (c.pco_number || c.number);
+      var base = { application_id: appId, prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true };
+      rows.push(Object.assign({}, base, { item_no: n, budget_code: pcco, description: c.title, scheduled_value: 0, is_parent: true, parent_item_no: null, sort_order: ++maxSort }));
+      rows.push(Object.assign({}, base, { item_no: n + '.1', budget_code: pco, description: c.title, scheduled_value: 0, is_parent: true, parent_item_no: n, sort_order: ++maxSort }));
+      var items = Array.isArray(c.line_items) && c.line_items.length ? c.line_items : [{ description: c.title, amount: c.amount }];
+      items.forEach(function(it, i) {
+        rows.push(Object.assign({}, base, { item_no: n + '.1.' + (i + 1), budget_code: null, description: String(it.description || '').toUpperCase(),
+          scheduled_value: Number(it.amount || 0), is_parent: false, parent_item_no: n + '.1', sort_order: ++maxSort }));
+      });
+    });
+    if (rows.length) await supabaseClient.from('aia_line_items').insert(rows);
+    return { added: rows.filter(function(r) { return r.item_no.split('.').length === 1; }).length, total: cos.length };
+  }
+
+  async function pullApprovedCOs() {
+    if (!canEdit) return;
+    var r = await syncInvoiceChangeOrders(currentApp.id, currentSetup.id, currentApp.period_from, currentApp.period_to);
+    showToast(r.added ? ('✅ Added ' + r.added + ' approved change order(s)') : 'No new approved change orders for this billing period', r.added ? 'success' : '');
+    renderApplication(currentApp.id);
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1209,7 +1237,8 @@ requireAuth().catch(function(){});
         (canEdit ? (linesEditMode
           ? '<span class="field-hint" style="margin-right:auto">Enter <b>This Period</b> and <b>Stored</b> amounts (or a % complete). Parent rows roll up automatically.</span>' +
             '<button class="btn-cancel" id="linesCancel">Cancel</button><button class="btn-create" id="linesSave">Save</button>'
-          : '<button class="btn-secondary" data-addline="contract">+ Contract Line</button>' +
+          : '<button class="btn-secondary" id="pullCOs" title="Add approved change orders whose approval date is within this billing period">↻ Pull approved COs</button>' +
+            '<button class="btn-secondary" data-addline="contract">+ Contract Line</button>' +
             '<button class="btn-secondary" data-addline="co">+ Change Order Line</button>' +
             '<button class="btn-create" id="linesEdit">Edit</button>') : '') +
       '</div>' +
@@ -1299,6 +1328,7 @@ requireAuth().catch(function(){});
 
   function bindLinesPanel() {
     var main = document.getElementById('mainView');
+    var pcb = document.getElementById('pullCOs'); if (pcb) pcb.addEventListener('click', pullApprovedCOs);
     var ed = document.getElementById('linesEdit');
     if (ed) ed.addEventListener('click', function() { linesEditMode = true; rerenderLines(); });
     var cn = document.getElementById('linesCancel');
@@ -1955,11 +1985,12 @@ requireAuth().catch(function(){});
     var pcco = b.cos.map(function(c) {
       return '<tr data-co="' + c.id + '">' +
         '<td><a href="#" class="pc-link" data-co-edit="' + c.id + '">' + escHtml(c.number) + '</a></td>' +
-        '<td>' + (c.revision || 0) + '</td><td class="pc-title-cell">' + escHtml(c.title) + '</td>' +
+        '<td>' + (c.revision || 0) + '</td><td class="pc-title-cell">' + escHtml(c.title) +
+          (c.source_report_number ? ' <span class="field-hint">(field CO ' + escHtml(c.source_report_number) + ')</span>' : '') + '</td>' +
         '<td>' + pill(CO_STATUS[c.status] || c.status, 'st-' + c.status) + '</td>' +
         '<td>' + (c.executed ? 'Yes' : 'No') + '</td>' +
         '<td class="num">' + fmtMoney(c.amount) + '</td>' +
-        '<td>' + mdyShort(c.date_initiated) + '</td><td>' + mdyShort(c.due_date) + '</td><td>' + mdyShort(c.review_date) + '</td>' +
+        '<td>' + mdyShort(c.date_initiated) + '</td><td><b>' + mdyShort(c.approved_date) + '</b></td><td>' + mdyShort(c.due_date) + '</td>' +
         '<td>' + escHtml(c.designated_reviewer || '--') + '</td>' +
         '<td>' + (c.pco_number ? 'PCO #' + escHtml(c.pco_number) : '--') + '</td>' +
       '</tr>';
@@ -1977,12 +2008,17 @@ requireAuth().catch(function(){});
       '</tr>';
     }).join('');
     var empty = '<tr><td colspan="11" class="pc-empty">No change orders yet.</td></tr>';
+    var drafts = b.cos.filter(function(c) { return c.status === 'draft' || c.status === 'pending'; }).length;
     return '<div class="pc-section-h"><h2>Change Orders</h2>' +
+        '<a class="btn-secondary" href="change-order.html?project=' + (b.setup.project_id || '') + '" style="text-decoration:none">＋ New Field CO</a>' +
         (canEdit ? '<button class="btn-create" id="coAdd">＋ Add Change Order</button>' : '') + '</div>' +
+      '<div class="pc-note" style="margin:0 16px 12px">Change orders arrive here as <b>Draft</b>. Set status to <b>Approved</b> and an <b>Approved Date</b> — ' +
+        'they are then added to invoices whose billing period ends on/after that date. Missed an older invoice? Change the approved date to that month and use <b>↻ Pull approved COs</b> on the invoice.' +
+        (drafts ? ' <b>' + drafts + ' awaiting approval.</b>' : '') + '</div>' +
       '<h3 class="pc-sub-h">Prime Contract Change Orders</h3>' +
       '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
         '<th>Number</th><th>Revision</th><th>Title</th><th>Status</th><th>Executed</th><th class="num">Amount</th>' +
-        '<th>Date Initiated</th><th>Due Date</th><th>Review Date</th><th>Designated Reviewer</th><th>PCO</th></tr></thead>' +
+        '<th>Date Initiated</th><th>Approved Date</th><th>Due Date</th><th>Designated Reviewer</th><th>PCO</th></tr></thead>' +
         '<tbody>' + (pcco || empty) + '</tbody>' +
         '<tfoot><tr><td colspan="5"><b>Total: ' + b.cos.length + ' PCCO' + (b.cos.length === 1 ? '' : 's') + ' (approved)</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="5"></td></tr></tfoot></table></div>' +
       '<h3 class="pc-sub-h" style="margin-top:22px">Potential Change Orders</h3>' +
@@ -1990,7 +2026,8 @@ requireAuth().catch(function(){});
         '<th>Number</th><th>Revision</th><th>Title</th><th>Status</th><th>Executed</th><th class="num">Amount</th>' +
         '<th>Schedule Impact</th><th>Date Initiated</th><th>Change Reason</th><th>PCCO</th></tr></thead>' +
         '<tbody>' + (pco || empty) + '</tbody>' +
-        '<tfoot><tr><td colspan="5"><b>Total: ' + b.cos.length + ' PCO' + (b.cos.length === 1 ? '' : 's') + '</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="4"></td></tr></tfoot></table></div>';
+        '<tfoot><tr><td colspan="5"><b>Total: ' + b.cos.length + ' PCO' + (b.cos.length === 1 ? '' : 's') + '</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="4"></td></tr></tfoot></table></div>' +
+      (window.NW_LABOR_RATES ? '<div class="pc-card" style="margin:18px 16px 0"><div class="pc-card-h"><h3>Northern Wolves Labor Rates</h3></div>' + window.NW_LABOR_RATES.tableHtml() + '</div>' : '');
   }
 
   // ─── INVOICES ───────────────────────────────────────────────────────
@@ -2226,6 +2263,7 @@ requireAuth().catch(function(){});
     document.getElementById('coInit').value     = c ? (c.date_initiated || '') : ymd(new Date());
     document.getElementById('coDue').value      = c ? (c.due_date || '') : '';
     document.getElementById('coReview').value   = c ? (c.review_date || '') : '';
+    document.getElementById('coApproved').value = c ? (c.approved_date || '') : '';
     document.getElementById('coReason').value   = c ? (c.change_reason || '') : '';
     document.getElementById('coImpact').value   = c && c.schedule_impact_days != null ? c.schedule_impact_days : '';
     document.getElementById('coReviewer').value = c ? (c.designated_reviewer || '') : '';
@@ -2247,12 +2285,18 @@ requireAuth().catch(function(){});
       date_initiated: document.getElementById('coInit').value || null,
       due_date: document.getElementById('coDue').value || null,
       review_date: document.getElementById('coReview').value || null,
+      approved_date: document.getElementById('coApproved').value || null,
       change_reason: document.getElementById('coReason').value || null,
       schedule_impact_days: document.getElementById('coImpact').value === '' ? null : parseInt(document.getElementById('coImpact').value, 10),
       designated_reviewer: document.getElementById('coReviewer').value.trim() || null,
       notes: document.getElementById('coNotes').value.trim() || null
     };
     if (!patch.number || !patch.title) { showToast('Number and title are required', 'error'); return; }
+    if (patch.status === 'approved' && !patch.approved_date) {
+      patch.approved_date = ymd(new Date());
+      document.getElementById('coApproved').value = patch.approved_date;
+    }
+    if (patch.status !== 'approved') patch.approved_date = null;
     var r;
     if (editingCoId) r = await supabaseClient.from('aia_change_orders').update(patch).eq('id', editingCoId);
     else { patch.created_by = currentUserId; r = await supabaseClient.from('aia_change_orders').insert(patch); }
@@ -2741,6 +2785,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=182"></script>
+<script src="sw-register.js?v=183"></script>
 </body>
 </html>
