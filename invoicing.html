@@ -982,7 +982,7 @@ requireAuth().catch(function(){});
     var priorLine6 = 0;
     if (carry) {
       var prior = await supabaseClient.from('aia_applications')
-        .select('id, application_no')
+        .select('id, application_no, retainage_rate, retainage_rate_stored')
         .eq('aia_project_id', newAppProjectId)
         .lt('application_no', appNo)
         .order('application_no', { ascending: false }).limit(1).maybeSingle();
@@ -990,7 +990,7 @@ requireAuth().catch(function(){});
         priorId = prior.data.id;
         // Compute Line 6 for prior app: G(prior) - Retainage(prior)
         var setupRes = await supabaseClient.from('aia_projects').select('retainage_rate').eq('id', newAppProjectId).maybeSingle();
-        var rate = (setupRes.data && setupRes.data.retainage_rate != null) ? Number(setupRes.data.retainage_rate) : 0.05;
+        var rate = effRate(setupRes.data || {}, prior.data);
         var priorLines = await supabaseClient.from('aia_line_items')
           .select('scheduled_value, prev_amount, this_amount, stored_amount, is_parent')
           .eq('application_id', priorId);
@@ -1182,6 +1182,7 @@ requireAuth().catch(function(){});
           kvRow('Period End:', mdy2(currentApp.period_to)) +
           kvRow('Billing Date:', mdy2(currentApp.application_date) || '--') +
           kvRow('Status:', INVOICE_STATUS[currentApp.status] || currentApp.status) +
+          kvRow('Retainage:', (effRate(currentSetup, currentApp) * 100).toFixed(2) + '%' + (currentApp.retainage_rate != null ? ' (this invoice)' : ' (contract default)')) +
           kvRow('Percent Complete:', (pctComplete * 100).toFixed(2) + '%') +
         '</div></div>';
       html += '<div class="inv-card"><div class="inv-card-h"><h3>Summary Preview</h3></div>' +
@@ -1255,8 +1256,8 @@ requireAuth().catch(function(){});
   }
 
   function renderLinesPanel() {
-    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
-    var rateStored = Number(currentSetup.retainage_rate_stored || 0);
+    var rate = effRate(currentSetup, currentApp);
+    var rateStored = effRateStored(currentSetup, currentApp);
     var contractLines = currentLines.filter(function(l) { return !l.is_change_order; });
     var coLines       = currentLines.filter(function(l) { return  l.is_change_order; });
     var cols = 11;
@@ -1401,8 +1402,8 @@ requireAuth().catch(function(){});
   }
   function refreshLineCalcs() {
     // Recompute calculated cells for every row + totals without losing input focus
-    var rate = currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate);
-    var rateStored = Number(currentSetup.retainage_rate_stored || 0);
+    var rate = effRate(currentSetup, currentApp);
+    var rateStored = effRateStored(currentSetup, currentApp);
     var main = document.getElementById('mainView');
     currentLines.forEach(function(l) {
       var tr = main.querySelector('tr[data-row="' + l.id + '"]'); if (!tr) return;
@@ -1440,6 +1441,16 @@ requireAuth().catch(function(){});
     renderApplication(currentApp.id);
   }
 
+  // Retainage: an invoice may override the contract rate (e.g. retainage released on the final invoice)
+  function effRate(setup, app) {
+    if (app && app.retainage_rate != null && app.retainage_rate !== '') return Number(app.retainage_rate);
+    return (setup && setup.retainage_rate != null) ? Number(setup.retainage_rate) : 0.05;
+  }
+  function effRateStored(setup, app) {
+    if (app && app.retainage_rate_stored != null && app.retainage_rate_stored !== '') return Number(app.retainage_rate_stored);
+    return Number((setup && setup.retainage_rate_stored) || 0);
+  }
+
   function computeTotalsFor(setup, app, lines) {
     // Sum non-parent lines
     var totalG = 0, totalCompleted = 0, totalStored = 0;
@@ -1457,8 +1468,8 @@ requireAuth().catch(function(){});
       }
     });
 
-    var rate = setup.retainage_rate == null ? 0.05 : Number(setup.retainage_rate);
-    var rateStored = Number(setup.retainage_rate_stored || 0);
+    var rate = effRate(setup, app);
+    var rateStored = effRateStored(setup, app);
     var grandG = totalG + totalCoG;
     var grandCompleted = totalCompleted + totalCoCompleted;
     var grandStored    = totalStored    + totalCoStored;
@@ -1500,8 +1511,8 @@ requireAuth().catch(function(){});
         row('3. Contract Sum to Date (Line 1 + 2)',                                 L.L3) +
         row('4. Total Completed & Stored to Date (from G703 Column G)',             L.L4) +
         row('5. Retainage:',                                                        '',   'lbl') +
-        row('   a. ' + (currentSetup.retainage_rate * 100).toFixed(2) + '% of Completed Work',  L.L5a, 'indent') +
-        row('   b. ' + (Number(currentSetup.retainage_rate_stored || 0) * 100).toFixed(2) + '% of Stored Material', L.L5b, 'indent') +
+        row('   a. ' + (effRate(currentSetup, currentApp) * 100).toFixed(2) + '% of Completed Work',  L.L5a, 'indent') +
+        row('   b. ' + (effRateStored(currentSetup, currentApp) * 100).toFixed(2) + '% of Stored Material', L.L5b, 'indent') +
         row('   Total Retainage (5a + 5b)',                                         L.L5t, 'indent') +
         row('6. Total Earned Less Retainage (Line 4 − 5)',                          L.L6) +
         row('7. Less Previous Certificates for Payment',                            L.L7) +
@@ -1598,8 +1609,13 @@ requireAuth().catch(function(){});
     if (adate === null) return;
     var inv = prompt('Invoice No:', currentApp.invoice_no || String(currentApp.application_no));
     if (inv === null) return;
+    var defRate = (currentSetup.retainage_rate == null ? 0.05 : Number(currentSetup.retainage_rate)) * 100;
+    var ret = prompt('Retainage % for THIS invoice (blank = contract default ' + defRate.toFixed(2) + '%; enter 0 to release retainage):',
+                     currentApp.retainage_rate == null ? '' : String(Number(currentApp.retainage_rate) * 100));
+    if (ret === null) return;
     var patch = { period_from: from, period_to: to, previous_certificates: Number(prev),
-                  application_date: adate || null, invoice_no: inv.trim() || null };
+                  application_date: adate || null, invoice_no: inv.trim() || null,
+                  retainage_rate: ret.trim() === '' ? null : Number(ret) / 100 };
     var r = await supabaseClient.from('aia_applications').update(patch).eq('id', currentApp.id);
     if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
     showToast('✅ Header updated', 'success');
@@ -2491,7 +2507,7 @@ requireAuth().catch(function(){});
     var W = 792, H = 612, ML = 24, MR = 24, CW = W - ML - MR;   // usable width 744
     var setup = currentSetup, app = currentApp, t = computeTotals(), L = t.lines;
     var isSub = (setup.form_variant === 'subcontractor');
-    var rate = Number(setup.retainage_rate || 0), rateStored = Number(setup.retainage_rate_stored || 0);
+    var rate = effRate(setup, app), rateStored = effRateStored(setup, app);
     var pageKinds = ['summary'];   // per-page header kind, filled as pages are added
 
     function F(size, style) { doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size); }
@@ -2876,6 +2892,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=186"></script>
+<script src="sw-register.js?v=198"></script>
 </body>
 </html>
