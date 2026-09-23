@@ -24,7 +24,7 @@
 <script src="ai-chat.js?v=1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="pdf-utils.js?v=110"></script>
+<script src="pdf-utils.js?v=185"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -244,7 +244,7 @@ body{padding-bottom:100px}
 
 <!-- Bottom bar: New CO mode -->
 <div class="bottom-bar" id="newModeBar">
-  <button class="btn btn-secondary" onclick="saveDraftAndClose()">💾 Draft</button>
+  <button class="btn btn-secondary" onclick="saveDraftAndClose()">💾 Save as Draft</button>
   <button class="btn btn-primary" onclick="generateAndDownload()">📄 PDF</button>
   <button class="btn btn-success" onclick="openEmailPreview()">📧 Send</button>
 </div>
@@ -421,6 +421,12 @@ async function syncCOToPrimeContract(projId) {
   } catch (e) { console.warn('[CO] prime contract sync failed', e); }
 }
 
+
+// ========== LIVE COST RECALC (qty, cost, hours, rate, subs) ==========
+['partsList','laborList','subsList'].forEach(function(id){
+  var el=document.getElementById(id);
+  if(el){el.addEventListener('input',calcCosts);el.addEventListener('change',calcCosts);}
+});
 
 // ========== SUBCONTRACTORS ==========
 function addSub(data){
@@ -1304,6 +1310,6 @@ function openChangeOrderAIChat() {
 }
 </script>
 <script src="form-utils.js?v=114"></script>
-<script src="sw-register.js?v=184"></script>
+<script src="sw-register.js?v=185"></script>
 </body>
 </html>

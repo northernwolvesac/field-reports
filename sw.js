@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nw-field-v184';
+const CACHE_NAME = 'nw-field-v185';
 const ASSETS = [
   './',
   './index.html',

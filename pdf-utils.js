@@ -81,27 +81,23 @@
 
     if (jsPDFCtor.API.__nwSanitized) return;   // already patched
 
-    var origText = jsPDFCtor.API.text;
-    jsPDFCtor.API.text = function (text) {
-      var args = Array.prototype.slice.call(arguments);
-      if (typeof args[0] === 'string') {
-        args[0] = sanitizePdfText(args[0]);
-      } else if (Array.isArray(args[0])) {
-        args[0] = args[0].map(function (s) {
-          return typeof s === 'string' ? sanitizePdfText(s) : s;
-        });
-      }
-      return origText.apply(this, args);
-    };
-
-    var origSplit = jsPDFCtor.API.splitTextToSize;
-    jsPDFCtor.API.splitTextToSize = function (text) {
-      var args = Array.prototype.slice.call(arguments);
-      if (typeof args[0] === 'string') {
-        args[0] = sanitizePdfText(args[0]);
-      }
-      return origSplit.apply(this, args);
-    };
+    // jsPDF 2.x defines text() per instance (API.text is undefined), so wrap
+    // each document right after construction via the 'initialized' event.
+    function sanitizeArgs(args) {
+      if (typeof args[0] === 'string') args[0] = sanitizePdfText(args[0]);
+      else if (Array.isArray(args[0])) args[0] = args[0].map(function (s) { return typeof s === 'string' ? sanitizePdfText(s) : s; });
+      return args;
+    }
+    function wrapInstance(doc) {
+      if (!doc || doc.__nwSanitized) return;
+      var t = doc.text, sp = doc.splitTextToSize;
+      if (typeof t === 'function') doc.text = function () { return t.apply(this, sanitizeArgs(Array.prototype.slice.call(arguments))); };
+      if (typeof sp === 'function') doc.splitTextToSize = function () { return sp.apply(this, sanitizeArgs(Array.prototype.slice.call(arguments))); };
+      doc.__nwSanitized = true;
+    }
+    if (jsPDFCtor.API.events && jsPDFCtor.API.events.push) {
+      jsPDFCtor.API.events.push(['initialized', function () { wrapInstance(this); }]);
+    }
 
     jsPDFCtor.API.__nwSanitized = true;
     console.log('[pdf-utils] jsPDF text sanitizer installed');
