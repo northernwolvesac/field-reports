@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NW Field">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <meta name="theme-color" content="#0696D7">
+  <meta name="theme-color" content="#202225">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="supabase-config.js?v=52"></script>
@@ -19,243 +19,186 @@
   <style>
     /* ═══════════════════════════════════════════════════════════════
        Northern Wolves — Home
-       Apple.com-inspired: quiet neutral canvas, one type family,
-       generous air, hairline dividers, restrained accent.
+       Architectural minimalism: charcoal graphite canvas (70%),
+       platinum white type (20%), matte-silver hairlines (10%).
+       One type family, light weights, numbered sections, no cards.
        ═══════════════════════════════════════════════════════════════ */
     :root {
-      --bg:        #f5f5f7;   /* canvas */
-      --surface:   #ffffff;   /* cards, nav */
-      --ink:       #1d1d1f;   /* primary text */
-      --ink-2:     #6e6e73;   /* secondary text */
-      --ink-3:     #86868b;   /* tertiary text */
-      --hair:      rgba(0,0,0,0.08);
-      --accent:    #0071e3;   /* links / primary action */
-      --accent-ink:#0066cc;
-      --brand:     #0696D7;   /* Northern Wolves blue — used sparingly */
-      --radius:    18px;
-      --nav-h:     52px;
-      --shadow-1:  0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
-      --shadow-2:  0 10px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+      --bg:        #202225;                 /* charcoal graphite */
+      --bg-2:      #26282c;                 /* nav, panels */
+      --bg-3:      #2c2f34;                 /* hover cells */
+      --ink:       #f4f5f7;                 /* platinum white */
+      --ink-2:     #b9bec6;                 /* silver text */
+      --ink-3:     #7c828b;                 /* muted */
+      --line:      rgba(216,220,226,0.20);  /* matte silver hairline */
+      --line-2:    rgba(216,220,226,0.42);  /* stronger hairline */
+      --nav-h:     60px;
       --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
 
     * { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; }
+    html { -webkit-text-size-adjust: 100%; background: var(--bg); }
     body {
-      background: var(--bg) !important;
-      font-family: var(--font) !important;
-      margin: 0 !important;
-      min-height: 100vh !important;
-      color: var(--ink) !important;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      letter-spacing: -0.01em;
+      background: var(--bg) !important; color: var(--ink) !important;
+      font-family: var(--font) !important; margin: 0 !important; min-height: 100vh !important;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; letter-spacing: -0.005em;
     }
-    a { color: var(--accent-ink); }
+    a { color: inherit; text-decoration: none; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
 
-    /* ═══ NAV BAR (slim, translucent) ═══ */
+    /* ═══ WATERMARK ═══ */
+    .wm { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 0; }
+    .wm img { width: min(64vh, 72vw); height: auto; opacity: 0.06; filter: grayscale(1); }
+    .page { position: relative; z-index: 1; }
+
+    /* ═══ NAV ═══ */
     .dash-header {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(255,255,255,0.72);
-      -webkit-backdrop-filter: saturate(180%) blur(20px);
-      backdrop-filter: saturate(180%) blur(20px);
-      border-bottom: 1px solid var(--hair);
+      position: sticky; top: 0; z-index: 100; height: var(--nav-h);
+      background: rgba(32,34,37,0.86); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line);
     }
-    .header-top {
-      height: var(--nav-h);
-      max-width: 980px; margin: 0 auto; padding: 0 22px;
-      display: flex; align-items: center; justify-content: space-between;
+    .header-top { max-width: 1080px; margin: 0 auto; height: 100%; display: flex; align-items: center; padding: 0 28px; gap: 6px; }
+    .dash-header-left { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+    .dash-header-logo { height: 36px; width: auto; display: block; }
+    .dash-header-wordmark { font-size: 12px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); line-height: 1.2; }
+    .dash-header-wordmark span { display: block; font-weight: 400; letter-spacing: 0.22em; color: var(--ink-3); font-size: 10px; }
+
+    .nav-menu { display: flex; margin: 0; padding: 0; list-style: none; }
+    .nav-menu > li { position: relative; }
+    .nav-menu > li > a { display: block; padding: 0 16px; line-height: var(--nav-h); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); transition: color .2s; }
+    .nav-menu > li:hover > a, .nav-menu > li:focus-within > a { color: var(--ink); }
+    .nav-dd {
+      position: absolute; top: 100%; left: 50%; transform: translateX(-50%) translateY(-4px);
+      min-width: 240px; background: rgba(38,40,44,0.96); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+      border: 1px solid var(--line); border-top: 0; padding: 14px 0 8px;
+      opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .16s ease;
     }
-    .dash-header-left { display: flex; align-items: center; gap: 10px; }
-    .dash-header-logo { height: 30px; width: auto; display: block; }
-    .dash-header-wordmark {
-      font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em;
-    }
-    .dash-header-wordmark span { color: var(--ink-3); font-weight: 400; }
+    .nav-menu > li:hover .nav-dd, .nav-menu > li:focus-within .nav-dd { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+    .nav-dd small { display: block; padding: 0 22px 8px; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-3); }
+    .nav-dd a { display: block; padding: 9px 22px; font-size: 15px; color: var(--ink); border-top: 1px solid var(--line); }
+    .nav-dd a:hover { background: var(--bg-3); }
+    .nav-ic { width: 38px; height: 38px; display: grid; place-items: center; color: var(--ink-2); }
+    .nav-ic:hover { color: var(--ink); }
+    .nav-ic svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 
     .profile-circle {
-      width: 34px; height: 34px; border-radius: 50%;
-      background: var(--ink); color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;
-      transition: transform .15s ease, opacity .15s ease; user-select: none;
+      width: 34px; height: 34px; border-radius: 50%; margin-left: 6px;
+      border: 1px solid var(--line-2); background: transparent; color: var(--ink);
+      display: grid; place-items: center; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; cursor: pointer; user-select: none;
     }
-    .profile-circle:hover { opacity: .85; }
-    .profile-circle:active { transform: scale(.94); }
-    .profile-circle.empty { background: #e8e8ed; }
-    .profile-circle.empty svg { width: 16px; height: 16px; fill: var(--ink-2); }
-
+    .profile-circle:hover { background: var(--bg-3); }
     .profile-dropdown {
-      display: none; position: absolute; right: 0; top: 44px; min-width: 240px;
-      background: var(--surface); border: 1px solid var(--hair); border-radius: 14px;
-      box-shadow: var(--shadow-2); padding: 14px 16px; z-index: 300;
+      display: none; position: absolute; top: calc(100% + 10px); right: 0; min-width: 240px;
+      background: rgba(38,40,44,0.98); border: 1px solid var(--line); padding: 16px 18px; z-index: 300;
     }
     .profile-dropdown.show { display: block; }
-    .profile-dd-name  { font-size: 15px; font-weight: 600; color: var(--ink); }
-    .profile-dd-role  { font-size: 12px; color: var(--ink-3); text-transform: capitalize; margin-top: 2px; }
+    .profile-dd-name  { font-size: 15px; font-weight: 500; color: var(--ink); }
+    .profile-dd-role  { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); margin-top: 4px; }
     .profile-dd-email { font-size: 12px; color: var(--ink-2); margin-top: 6px; word-break: break-all; }
-    .profile-dd-divider { height: 1px; background: var(--hair); margin: 12px 0; }
+    .profile-dd-divider { height: 1px; background: var(--line); margin: 14px 0 10px; }
     .profile-dd-logout {
-      width: 100%; padding: 9px 12px; border: 1px solid var(--hair); background: #fff;
-      color: #c0392b; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+      width: 100%; text-align: left; padding: 8px 0; background: none; border: none; cursor: pointer;
+      font: inherit; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2);
     }
-    .profile-dd-logout:hover { background: #fff5f5; }
+    .profile-dd-logout:hover { color: var(--ink); }
 
-    /* ═══ HERO ═══ */
-    .hero-greeting {
-      max-width: 980px; margin: 0 auto; padding: 56px 22px 28px;
-    }
-    .hero-greeting h1 {
-      font-size: clamp(32px, 4.6vw, 48px); line-height: 1.08; font-weight: 600;
-      letter-spacing: -0.028em; color: var(--ink); margin: 0 0 8px;
-    }
-    .hero-greeting p {
-      font-size: 17px; line-height: 1.4; color: var(--ink-2); margin: 0; font-weight: 400;
-    }
+    /* ═══ GREETING ═══ */
+    .hero-greeting { padding: 88px 0 40px; }
+    .hero-greeting h1 { margin: 0; font-size: 60px; font-weight: 300; letter-spacing: -0.025em; line-height: 1.02; color: var(--ink); }
+    .hero-greeting p { margin: 18px 0 0; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-3); }
 
-    /* ═══ SECTIONS ═══ */
-    .grid-container, .activity-feed, .section-title { max-width: 980px; margin-left: auto; margin-right: auto; }
-    .grid-container { padding: 0 22px 40px; }
-    .grid-label, .section-title h2 {
-      font-size: 21px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink);
-      text-transform: none; margin: 0;
-    }
-    .grid-label { margin: 36px 0 14px; padding-top: 22px; border-top: 1px solid var(--hair); }
-    .grid-label:first-child { margin-top: 8px; padding-top: 0; border-top: none; }
-    .section-title {
-      display: flex; align-items: baseline; justify-content: space-between;
-      padding: 0 22px; margin-top: 8px; margin-bottom: 14px;
-    }
-    .section-title a { font-size: 14px; font-weight: 500; color: var(--accent-ink); text-decoration: none; }
-    .section-title a:hover { text-decoration: underline; }
-
-    /* ═══ CARD GRID ═══ */
-    .report-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
-    }
-    @media (max-width: 860px) { .report-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 440px) { .report-grid { grid-template-columns: 1fr; } }
-
-    .report-card {
-      position: relative; display: flex; align-items: center; gap: 14px;
-      background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius);
-      padding: 18px 18px 18px 16px; text-decoration: none; color: inherit;
-      box-shadow: var(--shadow-1);
-      transition: transform .22s cubic-bezier(.2,.7,.2,1), box-shadow .22s ease, border-color .22s ease;
-      animation: card .45s cubic-bezier(.2,.7,.2,1) both;
-    }
-    .report-card:active { transform: scale(.985); }
-    @media (hover: hover) {
-      .report-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: rgba(0,0,0,0.12); }
-      .report-card:hover .report-card-arrow { color: var(--ink); transform: translateX(2px); }
-    }
-    .report-card-icon {
-      width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center; font-size: 22px;
-      background: var(--icon-bg, #f5f5f7);
-    }
-    .report-card-info { flex: 1; min-width: 0; }
-    .report-card-title { font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -0.012em; line-height: 1.25; }
-    .report-card-desc  { font-size: 13px; color: var(--ink-2); margin-top: 3px; line-height: 1.35; }
-    .report-card-arrow { color: var(--ink-3); font-size: 22px; line-height: 1; transition: transform .2s ease, color .2s ease; }
-    .report-card-badge {
-      position: absolute; top: 12px; right: 40px; min-width: 20px; height: 20px; padding: 0 6px;
-      border-radius: 10px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-    }
-    @keyframes card { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-    .report-card:nth-child(1) { animation-delay: .02s; } .report-card:nth-child(2) { animation-delay: .05s; }
-    .report-card:nth-child(3) { animation-delay: .08s; } .report-card:nth-child(4) { animation-delay: .11s; }
-    .report-card:nth-child(5) { animation-delay: .14s; } .report-card:nth-child(6) { animation-delay: .17s; }
-    .report-card:nth-child(7) { animation-delay: .20s; } .report-card:nth-child(8) { animation-delay: .23s; }
-    .report-card:nth-child(9) { animation-delay: .26s; } .report-card:nth-child(10){ animation-delay: .29s; }
-    .report-card:nth-child(11){ animation-delay: .32s; } .report-card:nth-child(12){ animation-delay: .35s; }
-
-    /* ═══ FEATURED (AI Support) ═══ */
-    .support-card-wrap { margin-top: 36px; }
-    .support-card {
-      display: flex; align-items: center; gap: 18px;
-      background: var(--ink); color: #fff; border-radius: var(--radius);
-      padding: 22px 24px; text-decoration: none;
-      transition: transform .22s cubic-bezier(.2,.7,.2,1), box-shadow .22s ease;
-    }
-    @media (hover: hover) { .support-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); } }
-    .support-card-icon { font-size: 30px; width: 54px; height: 54px; border-radius: 14px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .support-card-info { flex: 1; min-width: 0; }
-    .support-card-title { font-size: 19px; font-weight: 600; letter-spacing: -0.015em; }
-    .support-card-desc  { font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 3px; }
-    .support-card-arrow { color: rgba(255,255,255,0.6); font-size: 24px; }
-
-    /* ═══ ACTIVITY / MY JOBS ═══ */
-    .activity-feed { padding: 0 22px; }
-    .activity-item-wrap { position: relative; }
-    .activity-item {
-      display: flex; align-items: center; gap: 14px;
-      background: var(--surface); border: 1px solid var(--hair); border-radius: 16px;
-      padding: 14px 16px; margin-bottom: 10px; text-decoration: none; color: inherit;
-      box-shadow: var(--shadow-1); transition: transform .2s ease, box-shadow .2s ease;
-    }
-    .activity-item:active { transform: scale(.985); }
-    @media (hover: hover) { .activity-item:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); } }
-    .activity-icon { width: 42px; height: 42px; border-radius: 12px; background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    /* ═══ MY JOBS (dispatch) ═══ */
+    .section-title { display: flex; align-items: baseline; justify-content: space-between; padding: 26px 0 0; border-top: 1px solid var(--line-2); }
+    .section-title h2 { margin: 0; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 500; color: var(--ink-3); }
+    .section-title a { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
+    .section-title a:hover { color: var(--ink); }
+    .activity-feed { margin: 12px 0 40px; }
+    .activity-feed:empty { display: none; }
+    .activity-item { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); color: var(--ink); }
+    .activity-item:last-child { border-bottom: 1px solid var(--line); }
+    .activity-item:hover { background: linear-gradient(90deg, var(--bg-3), transparent); }
+    .activity-icon { width: 22px; text-align: center; font-size: 12px; flex-shrink: 0; filter: grayscale(1); opacity: .8; }
     .activity-info { flex: 1; min-width: 0; }
-    .activity-title { font-size: 15px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .activity-customer { font-size: 13px; color: var(--ink-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-title { font-size: 16px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-customer { font-size: 13px; color: var(--ink-3); margin-top: 2px; }
     .activity-meta { text-align: right; flex-shrink: 0; }
-    .activity-time { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
-    .activity-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; margin-top: 4px; letter-spacing: 0; }
-    .activity-badge.draft { background: #fff4e0; color: #9a5b00; }
-    .activity-badge.completed { background: #e6f6ea; color: #1d7a3a; }
-    .delete-draft-btn {
-      position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border: none;
-      background: #f2f2f4; color: var(--ink-2); border-radius: 50%; font-size: 15px; line-height: 1;
-      cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2;
+    .activity-time { font-size: 12px; color: var(--ink-3); }
+    .activity-badge { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-2); margin-top: 4px; }
+
+    /* ═══ FOLDERS ═══ */
+    .folders { padding: 8px 0 72px; }
+    .folder { display: grid; grid-template-columns: 64px 1fr 1.35fr; gap: 24px 32px; align-items: start; padding: 38px 0 42px; border-top: 1px solid var(--line-2); }
+    .folder:last-child { border-bottom: 1px solid var(--line-2); }
+    .folder-num { font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3); padding-top: 14px; font-variant-numeric: tabular-nums; }
+    .folder-head h2 { margin: 0; font-size: 40px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; color: var(--ink); }
+    .folder-head p { margin: 10px 0 0; font-size: 14px; color: var(--ink-3); font-weight: 300; }
+    .folder-links { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .folder-links a {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 58px; padding: 14px 18px;
+      border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+      font-size: 16px; font-weight: 400; color: var(--ink-2); transition: color .15s, background .15s;
     }
-    .delete-draft-btn:hover { background: #fde8e8; color: #c0392b; }
-    .activity-empty {
-      text-align: center; padding: 36px 16px; color: var(--ink-3); font-size: 14px;
-      background: var(--surface); border-radius: 16px; border: 1px solid var(--hair);
+    .folder-links a:hover { color: var(--ink); background: var(--bg-3); }
+    .folder-links a .n {
+      font-size: 11px; font-variant-numeric: tabular-nums; min-width: 22px; height: 22px; padding: 0 6px; display: grid; place-items: center;
+      border: 1px solid var(--line-2); border-radius: 999px; color: var(--ink);
     }
-    .activity-empty-icon { font-size: 30px; margin-bottom: 8px; }
+    .folder-links a .ar { color: var(--ink-3); font-size: 15px; transition: transform .15s; }
+    .folder-links a:hover .ar { transform: translateX(3px); color: var(--ink); }
 
     /* ═══ INSTALL BANNER ═══ */
     .install-banner {
-      display: none; position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-      width: min(96vw, 720px);
-      background: rgba(255,255,255,0.9); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-      border: 1px solid var(--hair); border-radius: 16px; box-shadow: var(--shadow-2);
-      padding: 12px 14px; z-index: 200; align-items: center; gap: 12px;
+      display: none; position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(560px, calc(100% - 32px));
+      background: rgba(38,40,44,0.96); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+      border: 1px solid var(--line-2); padding: 12px 14px; z-index: 200; align-items: center; gap: 12px;
     }
     .install-banner.visible { display: flex; }
-    .install-banner-icon { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; }
+    .install-banner-icon { width: 36px; height: 36px; flex-shrink: 0; filter: grayscale(1); }
     .install-banner-text { flex: 1; min-width: 0; }
-    .install-banner-title { font-size: 14px; font-weight: 600; color: var(--ink); }
-    .install-banner-desc { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
-    .install-banner .btn-install {
-      background: var(--accent); color: #fff; border: none; border-radius: 999px;
-      padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0;
-    }
-    .install-banner .btn-install:hover { background: var(--accent-ink); }
-    .install-banner .btn-dismiss { background: none; border: none; color: var(--ink-3); font-size: 20px; cursor: pointer; padding: 4px; line-height: 1; flex-shrink: 0; }
+    .install-banner-title { font-size: 14px; color: var(--ink); }
+    .install-banner-desc { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+    .install-banner .btn-install { background: var(--ink); color: var(--bg); border: none; padding: 9px 16px; font: inherit; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+    .install-banner .btn-dismiss { background: none; border: none; color: var(--ink-3); font-size: 20px; cursor: pointer; padding: 4px; line-height: 1; }
 
     /* ═══ FOOTER ═══ */
-    .dash-footer {
-      max-width: 980px; margin: 0 auto; padding: 24px 22px 40px;
-      border-top: 1px solid var(--hair); font-size: 12px; color: var(--ink-3);
-    }
+    .dash-footer { padding: 26px 0 48px; display: flex; justify-content: space-between; gap: 16px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
+    .dash-footer a:hover { color: var(--ink); }
 
-    @media (prefers-reduced-motion: reduce) { .report-card, .support-card, .activity-item { animation: none; transition: none; } }
+    @media (max-width: 900px) {
+      .hero-greeting h1 { font-size: 46px; }
+      .folder { grid-template-columns: 44px 1fr; }
+      .folder-links { grid-column: 1 / -1; }
+      .folder-head h2 { font-size: 32px; }
+    }
+    @media (max-width: 560px) {
+      .wrap, .header-top { padding: 0 18px; }
+      .nav-menu { display: none; }
+      .hero-greeting { padding: 48px 0 28px; }
+      .hero-greeting h1 { font-size: 38px; }
+      .folder { grid-template-columns: 1fr; gap: 16px; padding: 26px 0 30px; }
+      .folder-num { padding-top: 0; }
+      .folder-head h2 { font-size: 28px; }
+      .folder-links { grid-template-columns: 1fr; }
+      .folder-links a { min-height: 52px; font-size: 15px; }
+      .dash-footer { flex-direction: column; gap: 8px; }
+      .wm img { width: 90vw; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
 </head>
 <body>
+  <div class="wm"><img src="logo-wolf.png" alt=""></div>
+  <div class="page">
 
-  <!-- Header with Hero -->
+  <!-- Nav -->
   <header class="dash-header">
     <div class="header-top">
-      <div class="dash-header-left">
-        <img class="dash-header-logo" src="logo-header.png" alt="Northern Wolves AC">
+      <a class="dash-header-left" href="index.html">
+        <img class="dash-header-logo" src="logo-wolf.png" alt="Northern Wolves AC">
         <div class="dash-header-wordmark">Northern Wolves <span>Field</span></div>
-      </div>
+      </a>
+      <ul class="nav-menu" id="navMenu"></ul>
+      <a class="nav-ic" href="support.html" title="AI Support" aria-label="AI Support"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-9 9c0 1.6.4 3.1 1.2 4.4L3 21l4.7-1.2A9 9 0 1 0 12 3z"/><path d="M9 12h.01M12 12h.01M15 12h.01"/></svg></a>
       <div style="position:relative">
         <div class="profile-circle" id="profileCircle" title="Profile" onclick="document.getElementById('profileDropdown').classList.toggle('show')">?</div>
         <div class="profile-dropdown" id="profileDropdown">
@@ -269,42 +212,40 @@
     </div>
   </header>
 
-  <section class="hero-greeting">
-    <h1 id="heroGreeting">Good morning</h1>
-    <p id="heroDate"></p>
-  </section>
+  <main class="wrap">
+    <section class="hero-greeting">
+      <h1 id="heroGreeting">Good morning</h1>
+      <p id="heroDate"></p>
+    </section>
+
+    <!-- My Dispatches -->
+    <div class="section-title" id="dispatchSection" style="display:none">
+      <h2>My Jobs</h2>
+      <a href="dispatch.html">View All &rarr;</a>
+    </div>
+    <div class="activity-feed" id="dispatchFeed"></div>
+
+    <!-- Folders -->
+    <section class="folders" id="folders"></section>
+
+    <footer class="dash-footer">
+      <span>Northern Wolves Air Conditioning &mdash; NY &amp; NJ</span>
+      <span><a href="support.html">AI Support</a></span>
+    </footer>
+  </main>
 
   <!-- Install Banner -->
   <div class="install-banner" id="installBanner">
     <img class="install-banner-icon" src="icon-192.png" alt="NW">
     <div class="install-banner-text">
-      <div class="install-banner-title">Install Northern Wolves Field Reports</div>
+      <div class="install-banner-title">Install Northern Wolves Field</div>
       <div class="install-banner-desc">Quick access from your home screen</div>
     </div>
     <button class="btn-install" id="installBtn">Install</button>
     <button class="btn-dismiss" id="dismissInstall" aria-label="Dismiss">&times;</button>
   </div>
 
-  <!-- My Dispatches -->
-  <div class="section-title" id="dispatchSection" style="display:none">
-    <h2>My Jobs</h2>
-    <a href="dispatch.html">View All &rarr;</a>
-  </div>
-  <div class="activity-feed" id="dispatchFeed"></div>
-
-  <!-- Card Grids -->
-  <div class="grid-container">
-    <div class="grid-label">Reports</div>
-    <div class="report-grid" id="reportGrid"></div>
-
-    <div class="grid-label">Tools</div>
-    <div class="report-grid" id="toolsGrid"></div>
-
-    <div class="support-card-wrap" id="supportWrap"></div>
-  </div>
-
-  <!-- Footer -->
-  <div class="dash-footer">Northern Wolves Air Conditioning &mdash; NY &amp; NJ</div>
+  </div><!-- /.page -->
 
 <script>
 (async function() {
@@ -445,6 +386,7 @@
     var drafts = getDrafts();
     var history = getHistory();
     var container = document.getElementById('activityFeed');
+    if (!container) return;
 
     var items = [];
     drafts.forEach(function(d) {
@@ -544,76 +486,63 @@
     localStorage.removeItem('nw_draft_' + draftId);
   }
 
-  // ===== REPORT GRID =====
-  function renderReportGrid() {
+  // ===== FOLDERS + NAV =====
+  // Four folders. Each link: [title, href, draftType?, managementOnly?]
+  var FOLDERS = [
+    { num: '01', title: 'Projects', desc: 'Docs, drawings, contracts, billing', links: [
+      ['All Projects', 'projects.html'],
+      ['Bid Board', 'bid-board.html', null, true],
+      ['Prime Contracts', 'invoicing.html', null, true],
+      ['Change Orders', 'change-order.html', 'change-order']
+    ]},
+    { num: '02', title: 'Reports', desc: 'Field reports from the job', links: [
+      ['Service Call', 'history.html?type=service-call', 'service-call'],
+      ['Start-Up', 'history.html?type=startup', 'startup'],
+      ['Site Survey', 'history.html?type=site-survey', 'site-survey'],
+      ['Maintenance', 'history.html?type=pm-checklist', 'pm-checklist'],
+      ['Work Order', 'history.html?type=work-order', 'work-order']
+    ]},
+    { num: '03', title: 'Tools', desc: 'Crews, materials, deliveries', links: [
+      ['Schedule', 'schedule.html'],
+      ['Field Orders', 'field-orders.html'],
+      ['Delivery Schedule', 'driver-schedule.html'],
+      ['Dispatch', 'dispatch.html']
+    ]},
+    { num: '04', title: 'Office', desc: 'Customers, planning, oversight', links: [
+      ['Customers', 'customers.html'],
+      ['Equipment', 'equipment.html'],
+      ['Workload Planner', 'workload.html', null, true],
+      ['Management', 'management.html', null, true],
+      ['Activity', 'history.html'],
+      ['AI Support', 'support.html']
+    ]}
+  ];
+
+  function renderReportGrid(isTech) {
     var drafts = getDrafts();
-
-    // Report forms — each card opens a list view (history.html?type=X)
-    // with a big "+ New" button at the top and project folder grouping.
-    var reportTypes = [
-      { type: 'service-call', icon: '\uD83D\uDD27', title: 'Service Call', desc: 'Diagnosis, readings, parts, labor', page: 'history.html?type=service-call', accent: '#0696D7', iconBg: '#e0f2fe' },
-      { type: 'startup', icon: '\uD83D\uDE80', title: 'Start-Up', desc: 'Cooling & heating commissioning', page: 'history.html?type=startup', accent: '#8b5cf6', iconBg: '#ede9fe' },
-      { type: 'site-survey', icon: '\uD83D\uDCCB', title: 'Site Survey', desc: 'Equipment inventory & conditions', page: 'history.html?type=site-survey', accent: '#10b981', iconBg: '#d1fae5' },
-      { type: 'pm-checklist', icon: '\u2705', title: 'Maintenance', desc: 'PM checklist by equipment type', page: 'history.html?type=pm-checklist', accent: '#f59e0b', iconBg: '#fef3c7' },
-      { type: 'work-order', icon: '\uD83D\uDCDD', title: 'Work Order', desc: 'Parts, labor, cost tracking', page: 'history.html?type=work-order', accent: '#0696D7', iconBg: '#e0f2fe' }
-    ];
-
-    // Tool / management cards
-    var toolTypes = [
-      { type: 'schedule', icon: '\uD83D\uDCC5', title: 'Schedule', desc: '2-3 week look-ahead, all crews', page: 'schedule.html', accent: '#0696D7', iconBg: '#e0f2fe' },
-      { type: 'field-orders', icon: '\uD83D\uDCE6', title: 'Field Orders', desc: 'Request materials from the field', page: 'field-orders.html', accent: '#0696D7', iconBg: '#e0f2fe' },
-      { type: 'driver-schedule', icon: '\uD83D\uDE90', title: 'Delivery Schedule', desc: 'NW drivers + vendor deliveries', page: 'driver-schedule.html', accent: '#10b981', iconBg: '#d1fae5' },
-      { type: 'dispatch', icon: '\uD83D\uDCE8', title: 'Dispatch', desc: 'Single-job emergency tickets', page: 'dispatch.html', accent: '#ef4444', iconBg: '#fee2e2' },
-      { type: 'customers', icon: '\uD83C\uDFE2', title: 'Customers', desc: 'Shared customer database', page: 'customers.html', accent: '#0696D7', iconBg: '#e0f2fe' },
-      { type: 'equipment', icon: '\u2699\uFE0F', title: 'Equipment', desc: 'Track units, warranties, service', page: 'equipment.html', accent: '#64748b', iconBg: '#f1f5f9' },
-      { type: 'projects', icon: '\uD83D\uDCC1', title: 'Projects', desc: 'Shared docs & drawings', page: 'projects.html', accent: '#f59e0b', iconBg: '#fef3c7' },
-      { type: 'workload', icon: '\uD83D\uDCC8', title: 'Workload Planner', desc: 'Capacity, timeline, staffing', page: 'workload.html', accent: '#8b5cf6', iconBg: '#ede9fe' },
-      { type: 'estimating', icon: '\uD83D\uDCD0', title: 'Bid Board', desc: 'Invitations \u2192 Estimating \u2192 Submitted \u2192 Won', page: 'bid-board.html', accent: '#059669', iconBg: '#d1fae5' },
-      { type: 'management', icon: '\uD83D\uDCCA', title: 'Management', desc: 'All reports & status', page: 'management.html', accent: '#8b5cf6', iconBg: '#ede9fe' },
-      { type: 'history', icon: '\uD83D\uDCC3', title: 'Activity', desc: 'Drafts & completed reports', page: 'history.html', accent: '#10b981', iconBg: '#d1fae5' }
-    ];
-
     var draftCounts = {};
-    drafts.forEach(function(d) {
-      if (d.type) {
-        draftCounts[d.type] = (draftCounts[d.type] || 0) + 1;
-      }
-    });
+    drafts.forEach(function(d) { if (d.type) draftCounts[d.type] = (draftCounts[d.type] || 0) + 1; });
 
-    function buildCards(items) {
-      var html = '';
-      items.forEach(function(r) {
-        var count = draftCounts[r.type] || 0;
-        var badgeHtml = count > 0
-          ? '<div class="report-card-badge">' + count + '</div>'
-          : '';
-        html +=
-          '<a class="report-card" href="' + r.page + '" style="--card-accent:' + r.accent + ';--icon-bg:' + r.iconBg + '">' +
-            badgeHtml +
-            '<div class="report-card-icon">' + r.icon + '</div>' +
-            '<div class="report-card-info">' +
-              '<div class="report-card-title">' + r.title + '</div>' +
-              '<div class="report-card-desc">' + r.desc + '</div>' +
-            '</div>' +
-            '<span class="report-card-arrow">\u203A</span>' +
-          '</a>';
+    var page = '', nav = '';
+    FOLDERS.forEach(function(f) {
+      var links = f.links.filter(function(l) { return !(isTech && l[3]); });
+      var cells = '', dd = '';
+      links.forEach(function(l) {
+        var count = l[2] ? (draftCounts[l[2]] || 0) : 0;
+        var tail = count > 0 ? '<span class="n">' + count + '</span>' : '<span class="ar">\u2192</span>';
+        cells += '<a href="' + l[1] + '" data-page="' + l[1].split('?')[0] + '"><span>' + l[0] + '</span>' + tail + '</a>';
+        dd += '<a href="' + l[1] + '">' + l[0] + '</a>';
       });
-      return html;
-    }
-
-    document.getElementById('reportGrid').innerHTML = buildCards(reportTypes);
-    document.getElementById('toolsGrid').innerHTML = buildCards(toolTypes);
-
-    // Support card (featured)
-    document.getElementById('supportWrap').innerHTML =
-      '<a class="support-card" href="support.html">' +
-        '<div class="support-card-icon">\uD83E\uDD16</div>' +
-        '<div class="support-card-info">' +
-          '<div class="support-card-title">AI Support</div>' +
-          '<div class="support-card-desc">HVAC troubleshooting & app help \u2014 available 24/7</div>' +
-        '</div>' +
-        '<span class="support-card-arrow">\u203A</span>' +
-      '</a>';
+      page +=
+        '<section class="folder">' +
+          '<div class="folder-num">' + f.num + '</div>' +
+          '<div class="folder-head"><h2>' + f.title + '</h2><p>' + f.desc + '</p></div>' +
+          '<div class="folder-links">' + cells + '</div>' +
+        '</section>';
+      nav += '<li><a href="' + links[0][1] + '">' + f.title + '</a><div class="nav-dd"><small>' + f.title + '</small>' + dd + '</div></li>';
+    });
+    document.getElementById('folders').innerHTML = page;
+    document.getElementById('navMenu').innerHTML = nav;
   }
 
   // ===== PROFILE (handled by auth.js) =====
@@ -700,17 +629,12 @@
 
   // ===== INIT =====
   renderHero();
-  renderReportGrid();
+  renderReportGrid(false);
   renderDispatches();
 
-  // Hide management + workload + invoicing + estimating cards for techs
+  // Techs do not see management-only links (Bid Board, Prime Contracts, Workload, Management)
   getAuthProfile().then(function(profile) {
-    if (profile && profile.role === 'tech') {
-      ['management.html', 'workload.html', 'invoicing.html', 'estimating.html'].forEach(function(page) {
-        var link = document.querySelector('a[href="' + page + '"]');
-        if (link) link.style.display = 'none';
-      });
-    }
+    if (profile && profile.role === 'tech') renderReportGrid(true);
   }).catch(function(){});
 
   // Update hero once profile loads (auth.js sets profileName async)
@@ -722,6 +646,6 @@
   setTimeout(checkiOSInstall, 1000);
 })();
 </script>
-<script src="sw-register.js?v=186"></script>
+<script src="sw-register.js?v=192"></script>
 </body>
 </html>
