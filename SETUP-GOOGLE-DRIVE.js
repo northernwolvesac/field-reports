@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.1)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.3)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -59,14 +59,20 @@ function listChildren(parentIds) {
   var out = [];
   for (var i = 0; i < parentIds.length; i += 30) {
     var chunk = parentIds.slice(i, i + 30);
-    var q = '(' + chunk.map(function(id) { return "'" + id + "' in parents"; }).join(' or ') + ') and trashed = false';
-    var token = '';
-    do {
-      var r = driveApi('files', { q: q, pageSize: 1000, fields: ITEM_FIELDS, pageToken: token, supportsAllDrives: true, includeItemsFromAllDrives: true });
-      out = out.concat(r.files || []);
-      token = r.nextPageToken || '';
-    } while (token);
+    var got = queryChildren(chunk);
+    // shared drives ignore multi-parent OR queries: fall back to one query per folder
+    if (!got.length && chunk.length > 1) chunk.forEach(function(id) { got = got.concat(queryChildren([id])); });
+    out = out.concat(got);
   }
+  return out;
+}
+function queryChildren(ids) {
+  var q = '(' + ids.map(function(id) { return "'" + id + "' in parents"; }).join(' or ') + ') and trashed = false', out = [], token = '';
+  do {
+    var r = driveApi('files', { q: q, pageSize: 1000, fields: ITEM_FIELDS, pageToken: token, supportsAllDrives: true, includeItemsFromAllDrives: true, corpora: 'allDrives' });
+    out = out.concat(r.files || []);
+    token = r.nextPageToken || '';
+  } while (token);
   return out;
 }
 function isFolderItem(it) { return it.mimeType === 'application/vnd.google-apps.folder'; }
@@ -150,7 +156,10 @@ function fileInfo(file, category, subfolder) {
 function listTree(projectName, projectId, maxDepth) {
   var pf = findProjectFolder(projectId, projectName);
   if (!pf) return { success: true, folderId: null, folderUrl: null, items: [] };
-  var rootId = pf.getId(), items = [], level = [rootId], depth = 0;
+  return treeOf(pf.getId(), maxDepth, pf.getUrl(), pf.getName());
+}
+function treeOf(rootId, maxDepth, url, name) {
+  var items = [], level = [rootId], depth = 0;
   while (level.length && depth < (maxDepth || 6)) {
     var kids = listChildren(level), next = [];
     kids.forEach(function(k) {
@@ -160,7 +169,7 @@ function listTree(projectName, projectId, maxDepth) {
     });
     level = next; depth++;
   }
-  return { success: true, folderId: rootId, folderUrl: pf.getUrl(), folderName: pf.getName(), items: items };
+  return { success: true, folderId: rootId, folderUrl: url || '', folderName: name || '', items: items };
 }
 
 // flat list (kept for older pages): category folders + one level of subfolders + loose files
@@ -302,9 +311,42 @@ function moveItems(ids, targetFolderId) {
 }
 function forgetProject(projectId) { try { CacheService.getScriptCache().remove('pf:' + projectId); } catch (e) {} return { success: true }; }
 
+
+// ---------- copy a folder tree (read-only source, e.g. a shared drive) into a target folder, merging by folder name ----------
+// nameMap: { normalizedSourceFolderName: 'Target Folder Name' } renames category folders while copying. Idempotent: a file whose
+// name and size already exist in the destination folder is skipped.
+function copyTree(sourceFolderId, targetFolderId, nameMap, opts) {
+  var t0 = Date.now(), deadline = t0 + 270000, stats = { copied: 0, skipped: 0, bytes: 0, partial: false, errors: [] };
+  var src = DriveApp.getFolderById(sourceFolderId), dest = DriveApp.getFolderById(targetFolderId);
+  copyInto(src, dest, nameMap || {}, stats, deadline, true);
+  stats.success = true; stats.seconds = Math.round((Date.now() - t0) / 1000); return stats;
+}
+function existingFiles(folder) {
+  var m = {}, it = folder.getFiles();
+  while (it.hasNext()) { var f = it.next(); m[f.getName().toLowerCase() + '|' + f.getSize()] = true; }
+  return m;
+}
+function copyInto(src, dest, nameMap, stats, deadline, top) {
+  var have = existingFiles(dest), files = src.getFiles();
+  while (files.hasNext()) {
+    if (Date.now() > deadline) { stats.partial = true; return; }
+    var f = files.next(), key = f.getName().toLowerCase() + '|' + f.getSize();
+    if (have[key]) { stats.skipped++; continue; }
+    try { f.makeCopy(f.getName(), dest); stats.copied++; stats.bytes += f.getSize(); }
+    catch (e) { stats.errors.push(f.getName() + ': ' + e.message); }
+  }
+  var subs = src.getFolders();
+  while (subs.hasNext()) {
+    if (Date.now() > deadline) { stats.partial = true; return; }
+    var s = subs.next(), nm = normName(s.getName()), destName = (top && nameMap[nm]) ? nameMap[nm] : s.getName().trim();
+    copyInto(s, getOrCreateChild(dest, destName), nameMap, stats, deadline, false);
+    if (stats.partial) return;
+  }
+}
+
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.1' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.3' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -313,7 +355,7 @@ function doPost(e) {
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
     switch (body.action) {
-      case 'ping':            result = { success: true, version: '3.1', root: FJOBS_FOLDER_ID }; break;
+      case 'ping':            result = { success: true, version: '3.3', root: FJOBS_FOLDER_ID }; break;
       case 'list_tree':       result = listTree(body.projectName, body.projectId, body.maxDepth); break;
       case 'list_files':      result = listProjectFiles(body.projectName, body.projectId); break;
       case 'list_projects':   result = { success: true, projects: listProjectFolders(body.legacy ? getLegacyRoot().getId() : FJOBS_FOLDER_ID) }; break;
@@ -328,6 +370,8 @@ function doPost(e) {
       case 'create_project':  var folder = getProjectFolder(body.projectName, body.projectId); result = { success: true, folderId: folder.getId(), url: folder.getUrl() }; break;
       case 'link_project':    result = linkProject(body.folderId, body.projectId); break;
       case 'move_items':      result = moveItems(body.ids, body.targetFolderId); break;
+      case 'tree':            result = treeOf(body.folderId, body.maxDepth); break;
+      case 'copy_tree':       result = copyTree(body.sourceFolderId, body.targetFolderId, body.nameMap, body); break;
       case 'forget':          result = forgetProject(body.projectId); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };
