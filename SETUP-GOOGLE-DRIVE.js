@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.0)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.1)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -285,9 +285,26 @@ function isUnder(folder, ancestorId) {
   return false;
 }
 
+
+// move files/folders (by id) into a target folder; a folder whose name already exists in the target is merged into it
+function moveItems(ids, targetFolderId) {
+  var target = DriveApp.getFolderById(targetFolderId), stats = { moved: 0, emptyTrashed: 0, partial: false }, deadline = Date.now() + 270000;
+  for (var i = 0; i < (ids || []).length; i++) {
+    var id = ids[i], f = null;
+    try { f = DriveApp.getFolderById(id); } catch (e) { f = null; }
+    if (f) {
+      var same = target.getFoldersByName(f.getName());
+      if (same.hasNext()) { mergeInto(f, same.next(), stats, deadline); if (!folderHasContent(f)) f.setTrashed(true); }
+      else { f.moveTo(target); stats.moved++; }
+    } else { DriveApp.getFileById(id).moveTo(target); stats.moved++; }
+  }
+  stats.success = true; return stats;
+}
+function forgetProject(projectId) { try { CacheService.getScriptCache().remove('pf:' + projectId); } catch (e) {} return { success: true }; }
+
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.0' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.1' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -296,7 +313,7 @@ function doPost(e) {
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
     switch (body.action) {
-      case 'ping':            result = { success: true, version: '3.0', root: FJOBS_FOLDER_ID }; break;
+      case 'ping':            result = { success: true, version: '3.1', root: FJOBS_FOLDER_ID }; break;
       case 'list_tree':       result = listTree(body.projectName, body.projectId, body.maxDepth); break;
       case 'list_files':      result = listProjectFiles(body.projectName, body.projectId); break;
       case 'list_projects':   result = { success: true, projects: listProjectFolders(body.legacy ? getLegacyRoot().getId() : FJOBS_FOLDER_ID) }; break;
@@ -310,6 +327,8 @@ function doPost(e) {
       case 'delete_project':  result = deleteProjectFolder(body.projectId); break;
       case 'create_project':  var folder = getProjectFolder(body.projectName, body.projectId); result = { success: true, folderId: folder.getId(), url: folder.getUrl() }; break;
       case 'link_project':    result = linkProject(body.folderId, body.projectId); break;
+      case 'move_items':      result = moveItems(body.ids, body.targetFolderId); break;
+      case 'forget':          result = forgetProject(body.projectId); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };
     }
