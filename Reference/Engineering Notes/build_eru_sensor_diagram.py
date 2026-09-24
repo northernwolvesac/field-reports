@@ -268,7 +268,7 @@ HX = EAx + DW_ + 14
 wire([(590, ROOF + 60), (596, ROOF + 60), (596, ROOF + 10), (HX, ROOF + 10), (HX, CEIL + 6), (HX + 30, CEIL + 6)], BLUE, 1.2, [4, 3])
 c.setFillColor(BLUE); c.circle(HX + 30, CEIL + 6, 2.2, fill=1, stroke=0)
 text(HX + 36, CEIL + 4, "space static pickup: Dwyer A-489 plate in the space (one 1/2 in hole),", 5.6, True, BLUE)
-text(HX + 36, CEIL - 8, "or open tube end in the closet / utility room the shaft passes through", 5.2, color=GRAY)
+text(HX + 36, CEIL - 8, "or open tube end in the closet / utility room at the shaft", 5.2, color=GRAY)
 text(HX + 4, 250, "HI tubing", 5.2, color=BLUE)
 
 # legend / notes
