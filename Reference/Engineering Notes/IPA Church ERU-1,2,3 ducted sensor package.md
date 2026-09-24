@@ -70,8 +70,12 @@ Not in the pack:
   Do not put them in the EA duct on the roof or inside the curb: outdoor temperature swings and no access.
 - Pressure transducer (#3): inside the unit control center or in a NEMA 3R box on the curb next to the control entry. Two 1/4 in tubing runs:
   low/reference port to the A-306 probe on the roof (bracket at least 3 ft above the roof, away from the unit exhaust and the hood, tubing sloped so water
-  cannot trap); high port down the shaft to the space. Space pickup: a static pressure port in the ceiling plenum next to the riser is good enough if the
-  ceiling is lay-in; with a hard ceiling use one 1/4 in static pickup plate (Dwyer A-489 / Mamac A-303) near an exhaust grille, a single 1/2 in hole.
+  cannot trap); high port down the shaft to the space. Space pickup (exhaust is hard ducted and ceilings are hard, so the ceiling plenum is not a reference):
+  a Dwyer A-489 pickup plate in the served space (one 1/2 in hole), or the open tube end in the closet / utility room the shaft passes through
+  (interior room with a door undercut sits at building pressure). Never inside the EA duct (already -0.02 to -0.05 in wg at the grille), in the
+  shaft, or in toilets / rooms with their own exhaust. Setpoint +0.02 to +0.05 in wg.
+- A-306 outdoor probe: on a 3/4 in EMT or strut post clamped to the curb rail, or on the unit side wall in the wheel/blower section on the side
+  away from the EA louver and the condenser end, top third of the casing on a 6-12 in standoff bracket. Not on the curb (turbulence, snow).
 - Wiring route from the unit to the riser: through the unit base control-wiring knockout into the curb and down the shaft alongside the ducts. No roof
   penetration and no finished walls. Same route as the pressure tubing.
 

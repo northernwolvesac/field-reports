@@ -105,7 +105,7 @@ box(DX, 232, DW, 64, "High static cutoff   (by others per Greenheck sequence p.2
 sN1 = (TDX, 262); sN2 = (TDX, 248)
 term(*sN1, "N.C. contact   from R"); term(*sN2, "N.C. contact   to G   (opens ~2.0 in wg, stops unit)")
 
-box(DX, 160, DW, 48, "SPACE  static pickup in ceiling plenum beside the EA riser", "hard ceiling: Dwyer A-489 pickup plate near an exhaust grille")
+box(DX, 160, DW, 48, "SPACE  static pickup: Dwyer A-489 plate in the served space", "or open tube end in the closet / utility room the shaft passes through")
 sPort = (TDX, 170); term(*sPort, "tube end, open to the space")
 text(DX, 148, "Duct smoke detectors: already installed and wired by the E.C.", 5.8, color=GRAY)
 text(DX, 141, "If their contacts are to stop the unit, E.C. lands them on R-70 (fire input S6).", 5.8, color=GRAY)
@@ -267,8 +267,8 @@ text(602, ROOF + 70, "LO ref. tubing", 5.2, color=BLUE)
 HX = EAx + DW_ + 14
 wire([(590, ROOF + 60), (596, ROOF + 60), (596, ROOF + 10), (HX, ROOF + 10), (HX, CEIL + 6), (HX + 30, CEIL + 6)], BLUE, 1.2, [4, 3])
 c.setFillColor(BLUE); c.circle(HX + 30, CEIL + 6, 2.2, fill=1, stroke=0)
-text(HX + 36, CEIL + 4, "space static pickup: open tube end in the ceiling plenum", 5.6, True, BLUE)
-text(HX + 36, CEIL - 8, "hard ceiling: A-489 pickup plate by the grille", 5.2, color=GRAY)
+text(HX + 36, CEIL + 4, "space static pickup: Dwyer A-489 plate in the space (one 1/2 in hole),", 5.6, True, BLUE)
+text(HX + 36, CEIL - 8, "or open tube end in the closet / utility room the shaft passes through", 5.2, color=GRAY)
 text(HX + 4, 250, "HI tubing", 5.2, color=BLUE)
 
 # legend / notes
@@ -278,7 +278,8 @@ for i, n in enumerate([
     "1. Temp/RH and CO2 sensors on the exhaust riser, first straight section reachable from inside the building: ERU-3 at the 2nd floor ceiling (grid 8.7-9.2), ERU-1 / ERU-2 at the top of the shaft under the roof deck.",
     "2. Probes across the duct centerline through a gasketed hole; sensor housings outside the insulation; 12x12 access door within 2 ft. Nothing inside the curb or on the roof section of the duct.",
     "3. High static cutoff on the supply riser 3-4 ft below the deck, static tip only (no low port). Manual reset, wired in series with the start circuit R-G (remove the S1 jumper).",
-    "4. PR-274 stays inside the control center. Two 1/4 in FR poly tubes: LO to the A-306 on the roof (sloped, no traps), HI down beside the riser to the ceiling plenum. Both tubes and the 18/4 cables leave the unit through the base knockout into the curb.",
+    "4. PR-274 stays inside the control center. Two 1/4 in FR poly tubes: LO to the A-306 (on a post or the unit side, not the curb, away from EA louver and condenser), HI down the shaft to the space pickup. Both tubes and the 18/4 cables leave the unit through the base knockout.",
+    "   Space pickup: A-489 plate in the served space, or the closet / utility room the shaft passes through (door undercut = building pressure). Not in the EA duct, the shaft, toilets or rooms with their own exhaust.",
     "5. Smoke detectors already installed and wired by the E.C. Remote display: mount in the utility room / closet at the shaft, using Greenheck's own 150 ft cable, if the engineer does not accept the web UI.",
 ]):
     text(nx, ny - 10 - 9.5 * i, n, 6.0)
