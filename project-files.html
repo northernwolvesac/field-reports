@@ -13,7 +13,8 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=175"></script>
-<script src="nw-drive.js?v=206"></script>
+<script src="nw-drive.js?v=208"></script>
+<script src="nw-drive-browser.js?v=208"></script>
 <script src="auth.js?v=175"></script>
 <style>
   body { padding-bottom: 24px; }
@@ -212,6 +213,13 @@ requireAuth().catch(function(){});
 
     bindEvents();
     await loadProject();
+    if (projectId && window.NWDriveBrowser) {
+      // Project documents live in Google Drive (F.JOBS/<project>): show the folder tree exactly as in Drive
+      document.querySelector('.pf-toolbar').style.display = 'none';
+      var legacy = await supabaseClient.from('project_files').select('*').eq('project_id', projectId).is('drive_id', null).not('storage_path', 'is', null).order('created_at', { ascending: false });
+      NWDriveBrowser.mount(document.getElementById('mainView'), { projectId: projectId, projectName: (project && project.project_name) || projectId, canEdit: true, userId: currentUserId, legacyRows: legacy.data || [] });
+      return;
+    }
     await loadFiles();
   }
 
@@ -438,6 +446,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=206"></script>
+<script src="sw-register.js?v=208"></script>
 </body>
 </html>

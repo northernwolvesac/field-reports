@@ -9,7 +9,8 @@
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=132"></script>
-<script src="nw-drive.js?v=207"></script>
+<script src="nw-drive.js?v=208"></script>
+<script src="nw-drive-browser.js?v=208"></script>
 <script src="auth.js?v=132"></script>
 <script src="cloud-save.js?v=132"></script>
 <script src="schedule-utils.js?v=137"></script>
@@ -573,7 +574,9 @@
 
     <!-- DOCUMENTS TAB -->
     <div class="detail-tab-content active" id="tabDocuments" data-dtab="documents">
-      <div class="doc-tabs" id="docTabs">
+      <!-- Google Drive folder browser: same folders as F.JOBS/<project> in Google Drive -->
+      <div id="driveBrowser"></div>
+      <div class="doc-tabs" id="docTabs" style="display:none">
         <div class="tab active" data-cat="all">All</div>
         <div class="tab" data-cat="drawings">Drawings</div>
         <div class="tab" data-cat="submittals">Submittals</div>
@@ -582,7 +585,7 @@
         <div class="tab" data-cat="reports">Reports</div>
         <div class="tab" data-cat="other">Other</div>
       </div>
-      <div class="doc-upload-row">
+      <div class="doc-upload-row" style="display:none">
         <button class="btn-upload" id="btnUploadDoc">+ Add Document</button>
         <input type="file" id="fileInput" style="display:none;" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.zip,.csv,.txt,.ppt,.pptx">
         <span class="cloud-note">Saved to Google Drive</span>
@@ -602,7 +605,7 @@
           <button class="btn btn-secondary" id="btnCancelUpload" style="flex:1;">Cancel</button>
         </div>
       </div>
-      <div class="doc-list" id="docList"></div>
+      <div class="doc-list" id="docList" style="display:none"></div>
       <div class="empty-state" id="emptyDocs" style="display:none;">
         <div class="icon" style="font-size:32px;margin-bottom:8px;">&#128196;</div>
         <p>No documents yet.<br>Tap <strong>+ Add Document</strong> to upload.</p>
@@ -979,9 +982,18 @@ requireAuth().catch(function(){});
     }
   }
 
-  // Load documents from Google Drive
-  // Project documents live in Supabase Storage (bucket 'project-files', table project_files).
-  // Older documents uploaded to Google Drive are kept in the list as-is.
+  // Google Drive folder browser (F.JOBS/<project>): folders + files exactly as in Drive
+  async function mountDriveBrowser(projectId, p) {
+    var host = document.getElementById('driveBrowser');
+    if (!host || !window.NWDriveBrowser) return;
+    var uid = null;
+    try { var sess = await supabaseClient.auth.getSession(); uid = sess.data && sess.data.session ? sess.data.session.user.id : null; } catch (e) {}
+    if (currentProjectId !== projectId) return;
+    NWDriveBrowser.mount(host, { projectId: projectId, projectName: p.name || p.project_name || '', canEdit: canEdit, userId: uid,
+      onChange: function() { loadDriveFiles(projectId); renderProjectsList(); if (typeof loadPrimeContract === 'function') loadPrimeContract(projectId); } });
+  }
+
+  // Load documents (project_files rows) — used for counts / setup steps; the Documents tab itself shows the live Drive folder tree
   async function loadDriveFiles(projectId) {
     try {
       var r = await supabaseClient.from('project_files').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
@@ -1000,6 +1012,11 @@ requireAuth().catch(function(){});
       }
       saveProjects(projects);
       if (currentProjectId === projectId) renderDocList();
+      var host = document.getElementById('driveBrowser');
+      if (host && host.__nwdb && host.__nwdb.projectId === projectId) {
+        host.__nwdb.opts.legacyRows = (r.data || []).filter(function(f) { return f.storage_path && !f.drive_id; });
+        if (host.__nwdb.tree) host.__nwdb.render();
+      }
     } catch(e) {
       console.error('[projects] loadDriveFiles exception:', e);
     }
@@ -1342,6 +1359,7 @@ requireAuth().catch(function(){});
 
     renderDocList();
     loadDriveFiles(projectId);
+    mountDriveBrowser(projectId, p);
     loadProjectReports(projectId);
     loadChangeOrders(projectId);
     loadRFIs(projectId);
@@ -2166,6 +2184,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=207"></script>
+<script src="sw-register.js?v=208"></script>
 </body>
 </html>
