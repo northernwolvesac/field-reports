@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=175"></script>
+<script src="nw-drive.js?v=206"></script>
 <script src="auth.js?v=175"></script>
 <style>
   body { padding-bottom: 24px; }
@@ -322,7 +323,7 @@ requireAuth().catch(function(){});
         html += '<div class="file-row">' +
           '<span style="font-size:18px">' + fileIcon(f.filename) + '</span>' +
           '<span class="fname" data-open="' + f.id + '">' + escHtml(f.filename) + (f.notes ? ' <span class="meta">— ' + escHtml(f.notes) + '</span>' : '') + '</span>' +
-          '<span class="size">' + fmtSize(f.size_bytes) + '</span>' +
+          '<span class="size">' + fmtSize(f.size_bytes) + (f.drive_id ? ' <span class="meta" style="color:#0696D7">Drive</span>' : '') + '</span>' +
           '<span class="meta">' + escHtml((f.uploader && f.uploader.full_name) || '') + '</span>' +
           '<span class="meta">' + whenStr + '</span>' +
           '<button class="btn-danger" data-del="' + f.id + '" data-path="' + escHtml(f.storage_path) + '">Delete</button>' +
@@ -362,19 +363,22 @@ requireAuth().catch(function(){});
       var pathPrefix = (estimateId ? 'est-' : 'proj-') + ownerId;
       var path = pathPrefix + '/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
       btn.textContent = 'Uploading ' + (i + 1) + ' of ' + pendingFiles.length + '…';
-      var up = await supabaseClient.storage.from('project-files').upload(path, file, {
-        cacheControl: '3600', upsert: false, contentType: file.type || null
-      });
-      if (up.error) { showToast('Upload failed for ' + file.name + ': ' + up.error.message, 'error'); continue; }
-      var payload = {
-        filename:     file.name,
-        storage_path: path,
-        category:     category,
-        size_bytes:   file.size,
-        content_type: file.type || null,
-        notes:        notes,
-        uploaded_by:  currentUserId
-      };
+      var payload = null;
+      if (!estimateId && project) {
+        // Google Drive is the main store for project documents
+        try {
+          var df = await NWDrive.uploadFile(project.project_name || projectId, projectId, file, category);
+          payload = NWDrive.rowFor(file, df);
+        } catch (de) { console.warn('Drive upload failed, falling back to storage:', de); showToast('Drive: ' + de.message + ' — saved to app storage instead', 'error'); }
+      }
+      if (!payload) {
+        var up = await supabaseClient.storage.from('project-files').upload(path, file, {
+          cacheControl: '3600', upsert: false, contentType: file.type || null
+        });
+        if (up.error) { showToast('Upload failed for ' + file.name + ': ' + up.error.message, 'error'); continue; }
+        payload = { filename: file.name, storage_path: path, size_bytes: file.size, content_type: file.type || null };
+      }
+      payload.category = category; payload.notes = notes; payload.uploaded_by = currentUserId;
       payload[ownerCol] = ownerId;
       var ins = await supabaseClient.from('project_files').insert(payload);
       if (ins.error) { showToast('Row insert failed for ' + file.name + ': ' + ins.error.message, 'error'); continue; }
@@ -392,17 +396,13 @@ requireAuth().catch(function(){});
   async function openFile(id) {
     var f = files.find(function(x) { return x.id === id; });
     if (!f) return;
-    var signed = await supabaseClient.storage.from('project-files').createSignedUrl(f.storage_path, 3600);
-    if (signed.error) { showToast('Could not open: ' + signed.error.message, 'error'); return; }
-    window.open(signed.data.signedUrl, '_blank');
+    try { await NWDrive.open(f); } catch (e) { showToast('Could not open: ' + e.message, 'error'); }
   }
 
   async function deleteFile(id, path) {
     if (!confirm('Delete this file permanently?')) return;
-    try {
-      var d1 = await supabaseClient.storage.from('project-files').remove([path]);
-      if (d1.error) console.warn('storage remove:', d1.error);
-    } catch(e) { console.warn(e); }
+    var f = files.find(function(x) { return x.id === id; }) || { storage_path: path };
+    await NWDrive.removeObject(f);
     var d2 = await supabaseClient.from('project_files').delete().eq('id', id);
     if (d2.error) { showToast('Delete failed: ' + d2.error.message, 'error'); return; }
     showToast('Deleted', 'success');
@@ -438,6 +438,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=175"></script>
+<script src="sw-register.js?v=206"></script>
 </body>
 </html>

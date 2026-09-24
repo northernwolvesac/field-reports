@@ -1,279 +1,191 @@
 // =====================================================
-// GOOGLE APPS SCRIPT — Google Drive Integration
+// GOOGLE APPS SCRIPT — Google Drive Integration  (v2.0)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
 // SETUP STEPS:
-// 1. Go to https://script.google.com → New Project
-// 2. Name it "NW Drive Proxy"
-// 3. Paste ALL the code below into Code.gs (replace everything)
-// 4. Click Deploy → New deployment
-// 5. Type: Web app
-// 6. Execute as: Me
-// 7. Who has access: Anyone
-// 8. Click Deploy → Copy the Web App URL
-// 9. Give the URL to Claude to put into the app
+// 1. Go to https://script.google.com → open the "NW Drive Proxy" project
+//    (or New Project and name it "NW Drive Proxy")
+// 2. Paste ALL the code below into Code.gs (replace everything)
+// 3. Deploy → Manage deployments → ✎ (edit) → Version: "New version" → Deploy
+//    (this keeps the same Web App URL the app already uses)
+//    — or Deploy → New deployment → Web app, Execute as: Me,
+//      Who has access: Anyone → copy the new URL and give it to Claude.
 //
-// FIRST TIME: The script will auto-create a root folder
-// called "Northern Wolves Projects" in your Google Drive.
-// All project folders and files go inside it.
+// FIRST TIME: the script auto-creates a root folder
+// "Northern Wolves Projects" in Google Drive. Every project gets its own
+// folder (folder description = the app's project id) with category
+// subfolders. All project documents live there.
+//
+// v2.0 changes: documents are private by default (only photos/reports are
+// link-viewable so the app can preview them), files can be placed in a
+// subfolder inside a category (e.g. Change Orders / 001), the script can
+// fetch a file from a URL server-side (upload_from_url), and list_files
+// also returns files from those subfolders.
 // =====================================================
 
-// ─── Root folder name ───
 var ROOT_FOLDER_NAME = 'Northern Wolves Projects';
+var CATEGORIES = ['Contracts', 'Change Orders', 'Submittals', 'Drawings', 'Invoices', 'Photos', 'Reports', 'Other'];
+// categories whose files stay link-viewable (the app shows inline previews of photos)
+var SHARED_CATEGORIES = ['photos', 'reports'];
 
-// ─── Category subfolder names ───
-var CATEGORIES = ['Drawings', 'Submittals', 'Manuals', 'Warranties', 'Reports', 'Other'];
-
-// ─── Get or create root folder ───
 function getRootFolder() {
   var folders = DriveApp.getFoldersByName(ROOT_FOLDER_NAME);
-  if (folders.hasNext()) {
-    return folders.next();
-  }
+  if (folders.hasNext()) return folders.next();
   return DriveApp.createFolder(ROOT_FOLDER_NAME);
 }
 
-// ─── Get or create a project folder with category subfolders ───
-function getProjectFolder(projectName, projectId) {
+function findProjectFolder(projectId) {
   var root = getRootFolder();
-  // Use projectId as folder identifier to avoid duplicates
-  var folderName = projectName;
-
-  // Search by description containing projectId
   var folders = root.getFolders();
   while (folders.hasNext()) {
     var f = folders.next();
-    if (f.getDescription() === projectId) {
-      return f;
-    }
+    if (f.getDescription() === projectId) return f;
   }
+  return null;
+}
 
-  // Create new project folder
-  var projectFolder = root.createFolder(folderName);
+function getProjectFolder(projectName, projectId) {
+  var existing = findProjectFolder(projectId);
+  if (existing) return existing;
+  var root = getRootFolder();
+  var projectFolder = root.createFolder(projectName || projectId);
   projectFolder.setDescription(projectId);
-
-  // Create category subfolders
-  for (var i = 0; i < CATEGORIES.length; i++) {
-    projectFolder.createFolder(CATEGORIES[i]);
-  }
-
+  for (var i = 0; i < CATEGORIES.length; i++) projectFolder.createFolder(CATEGORIES[i]);
   return projectFolder;
 }
 
-// ─── Get category subfolder ───
-function getCategoryFolder(projectFolder, category) {
-  var catName = capitalize(category);
-  var folders = projectFolder.getFoldersByName(catName);
-  if (folders.hasNext()) {
-    return folders.next();
-  }
-  // Create if missing
-  return projectFolder.createFolder(catName);
+function categoryFolderName(category) {
+  var c = (category || 'other').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ');
+  var map = { 'change orders': 'Change Orders', 'contracts': 'Contracts', 'submittals': 'Submittals', 'drawings': 'Drawings',
+              'invoices': 'Invoices', 'photos': 'Photos', 'reports': 'Reports', 'other': 'Other' };
+  if (map[c]) return map[c];
+  return c.charAt(0).toUpperCase() + c.slice(1);
 }
 
-function capitalize(str) {
-  if (!str) return 'Other';
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+function getOrCreateChild(parent, name) {
+  var it = parent.getFoldersByName(name);
+  if (it.hasNext()) return it.next();
+  return parent.createFolder(name);
 }
 
-// ─── List all files in a project folder (all categories) ───
-function listProjectFiles(projectName, projectId) {
-  var root = getRootFolder();
-  var projectFolder = null;
-
-  var folders = root.getFolders();
-  while (folders.hasNext()) {
-    var f = folders.next();
-    if (f.getDescription() === projectId) {
-      projectFolder = f;
-      break;
-    }
-  }
-
-  if (!projectFolder) {
-    return { success: true, files: [] };
-  }
-
-  var allFiles = [];
-
-  // Get files from each category subfolder
-  var subFolders = projectFolder.getFolders();
-  while (subFolders.hasNext()) {
-    var sub = subFolders.next();
-    var catName = sub.getName().toLowerCase();
-    var files = sub.getFiles();
-    while (files.hasNext()) {
-      var file = files.next();
-      allFiles.push({
-        id: file.getId(),
-        name: file.getName(),
-        category: catName,
-        size: file.getSize(),
-        mimeType: file.getMimeType(),
-        createdAt: file.getDateCreated().toISOString(),
-        url: file.getUrl(),
-        downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
-        viewUrl: file.getUrl()
-      });
-    }
-  }
-
-  // Also get files directly in project folder (uncategorized)
-  var directFiles = projectFolder.getFiles();
-  while (directFiles.hasNext()) {
-    var file = directFiles.next();
-    allFiles.push({
-      id: file.getId(),
-      name: file.getName(),
-      category: 'other',
-      size: file.getSize(),
-      mimeType: file.getMimeType(),
-      createdAt: file.getDateCreated().toISOString(),
-      url: file.getUrl(),
-      downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
-      viewUrl: file.getUrl()
-    });
-  }
-
-  // Sort by date descending
-  allFiles.sort(function(a, b) {
-    return new Date(b.createdAt) - new Date(a.createdAt);
-  });
-
-  return { success: true, files: allFiles };
+function getCategoryFolder(projectFolder, category, subfolder) {
+  var folder = getOrCreateChild(projectFolder, categoryFolderName(category));
+  if (subfolder) folder = getOrCreateChild(folder, String(subfolder).replace(/[\/\\]/g, '-'));
+  return folder;
 }
 
-// ─── Upload a file (base64) to a project's category folder ───
-function uploadFile(projectName, projectId, fileName, base64Data, mimeType, category) {
-  var projectFolder = getProjectFolder(projectName, projectId);
-  var catFolder = getCategoryFolder(projectFolder, category || 'other');
-
-  // Decode base64
-  var decoded = Utilities.base64Decode(base64Data);
-  var blob = Utilities.newBlob(decoded, mimeType || 'application/octet-stream', fileName);
-
-  var file = catFolder.createFile(blob);
-
-  // Make file viewable by anyone with link (needed for photo previews in the app)
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
+function fileInfo(file, category, subfolder) {
   return {
-    success: true,
-    file: {
-      id: file.getId(),
-      name: file.getName(),
-      category: (category || 'other').toLowerCase(),
-      size: file.getSize(),
-      mimeType: file.getMimeType(),
-      createdAt: file.getDateCreated().toISOString(),
-      url: file.getUrl(),
-      downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
-      viewUrl: file.getUrl(),
-      directUrl: 'https://lh3.googleusercontent.com/d/' + file.getId()
-    }
+    id: file.getId(),
+    name: file.getName(),
+    category: (category || 'other').toLowerCase(),
+    subfolder: subfolder || '',
+    size: file.getSize(),
+    mimeType: file.getMimeType(),
+    createdAt: file.getDateCreated().toISOString(),
+    url: file.getUrl(),
+    downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
+    viewUrl: file.getUrl(),
+    directUrl: 'https://lh3.googleusercontent.com/d/' + file.getId()
   };
 }
 
-// ─── Delete a file by ID ───
+// ─── List files of a project: category folders + one level of subfolders + loose files ───
+function listProjectFiles(projectName, projectId) {
+  var projectFolder = findProjectFolder(projectId);
+  if (!projectFolder) return { success: true, files: [] };
+  var all = [];
+  var subs = projectFolder.getFolders();
+  while (subs.hasNext()) {
+    var cat = subs.next(); var catName = cat.getName().toLowerCase();
+    var files = cat.getFiles();
+    while (files.hasNext()) all.push(fileInfo(files.next(), catName, ''));
+    var deeper = cat.getFolders();
+    while (deeper.hasNext()) {
+      var d = deeper.next(); var df = d.getFiles();
+      while (df.hasNext()) all.push(fileInfo(df.next(), catName, d.getName()));
+    }
+  }
+  var loose = projectFolder.getFiles();
+  while (loose.hasNext()) all.push(fileInfo(loose.next(), 'other', ''));
+  all.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  return { success: true, files: all };
+}
+
+function storeBlob(projectName, projectId, blob, category, subfolder, share) {
+  var projectFolder = getProjectFolder(projectName, projectId);
+  var folder = getCategoryFolder(projectFolder, category, subfolder);
+  var file = folder.createFile(blob);
+  var cat = (category || 'other').toLowerCase();
+  var makeShared = (share === true) || (share === undefined && SHARED_CATEGORIES.indexOf(cat) >= 0);
+  if (makeShared) file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return { success: true, file: fileInfo(file, cat, subfolder), folderId: folder.getId() };
+}
+
+// ─── Upload a base64 file ───
+function uploadFile(projectName, projectId, fileName, base64Data, mimeType, category, subfolder, share) {
+  var decoded = Utilities.base64Decode(base64Data);
+  var blob = Utilities.newBlob(decoded, mimeType || 'application/octet-stream', fileName);
+  return storeBlob(projectName, projectId, blob, category, subfolder, share);
+}
+
+// ─── Fetch a file from a URL server-side and store it (URL must be reachable without login) ───
+function uploadFromUrl(projectName, projectId, fileName, url, mimeType, category, subfolder, share) {
+  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  if (resp.getResponseCode() !== 200) return { success: false, error: 'fetch ' + resp.getResponseCode() };
+  var blob = resp.getBlob();
+  if (mimeType) blob.setContentType(mimeType);
+  blob.setName(fileName);
+  return storeBlob(projectName, projectId, blob, category, subfolder, share);
+}
+
 function deleteFile(fileId) {
-  try {
-    var file = DriveApp.getFileById(fileId);
-    file.setTrashed(true);
-    return { success: true };
-  } catch(e) {
-    return { success: false, error: e.message };
-  }
+  try { DriveApp.getFileById(fileId).setTrashed(true); return { success: true }; }
+  catch (e) { return { success: false, error: e.message }; }
 }
 
-// ─── Rename project folder ───
+function getFile(fileId) {
+  try { var f = DriveApp.getFileById(fileId); return { success: true, file: fileInfo(f, '', '') }; }
+  catch (e) { return { success: false, error: e.message }; }
+}
+
 function renameProjectFolder(projectId, newName) {
-  var root = getRootFolder();
-  var folders = root.getFolders();
-  while (folders.hasNext()) {
-    var f = folders.next();
-    if (f.getDescription() === projectId) {
-      f.setName(newName);
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'Project folder not found' };
+  var f = findProjectFolder(projectId);
+  if (!f) return { success: false, error: 'Project folder not found' };
+  f.setName(newName); return { success: true };
 }
 
-// ─── Delete project folder ───
 function deleteProjectFolder(projectId) {
-  var root = getRootFolder();
-  var folders = root.getFolders();
-  while (folders.hasNext()) {
-    var f = folders.next();
-    if (f.getDescription() === projectId) {
-      f.setTrashed(true);
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'Project folder not found' };
+  var f = findProjectFolder(projectId);
+  if (!f) return { success: false, error: 'Project folder not found' };
+  f.setTrashed(true); return { success: true };
 }
 
 // ─── Web App entry points ───
-
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: 'ok',
-    service: 'NW Drive Proxy',
-    version: '1.0'
-  })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '2.0' }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
-    var action = body.action;
     var result;
-
-    switch (action) {
-      case 'list_files':
-        result = listProjectFiles(body.projectName, body.projectId);
-        break;
-
-      case 'upload_file':
-        result = uploadFile(
-          body.projectName,
-          body.projectId,
-          body.fileName,
-          body.fileData,
-          body.mimeType,
-          body.category
-        );
-        break;
-
-      case 'delete_file':
-        result = deleteFile(body.fileId);
-        break;
-
-      case 'rename_project':
-        result = renameProjectFolder(body.projectId, body.newName);
-        break;
-
-      case 'delete_project':
-        result = deleteProjectFolder(body.projectId);
-        break;
-
-      case 'create_project':
-        var folder = getProjectFolder(body.projectName, body.projectId);
-        result = { success: true, folderId: folder.getId() };
-        break;
-
-      default:
-        result = { success: false, error: 'Unknown action: ' + action };
+    switch (body.action) {
+      case 'ping':           result = { success: true, version: '2.0' }; break;
+      case 'list_files':     result = listProjectFiles(body.projectName, body.projectId); break;
+      case 'upload_file':    result = uploadFile(body.projectName, body.projectId, body.fileName, body.fileData, body.mimeType, body.category, body.subfolder, body.share); break;
+      case 'upload_from_url':result = uploadFromUrl(body.projectName, body.projectId, body.fileName, body.url, body.mimeType, body.category, body.subfolder, body.share); break;
+      case 'delete_file':    result = deleteFile(body.fileId); break;
+      case 'get_file':       result = getFile(body.fileId); break;
+      case 'rename_project': result = renameProjectFolder(body.projectId, body.newName); break;
+      case 'delete_project': result = deleteProjectFolder(body.projectId); break;
+      case 'create_project': var folder = getProjectFolder(body.projectName, body.projectId); result = { success: true, folderId: folder.getId() }; break;
+      default:               result = { success: false, error: 'Unknown action: ' + body.action };
     }
-
-    return ContentService.createTextOutput(JSON.stringify(result))
-      .setMimeType(ContentService.MimeType.JSON);
-
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: err.message
-    })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.message })).setMimeType(ContentService.MimeType.JSON);
   }
 }

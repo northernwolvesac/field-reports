@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="supabase-config.js?v=186"></script>
+<script src="nw-drive.js?v=206"></script>
 <script src="auth.js?v=186"></script>
 <script src="labor-rates.js?v=186"></script>
 <style>
@@ -2194,16 +2195,14 @@ requireAuth().catch(function(){});
       a.addEventListener('click', async function(e) {
         e.preventDefault();
         var f = files.find(function(x) { return x.id === a.getAttribute('data-doc-open'); });
-        var su = await supabaseClient.storage.from('project-files').createSignedUrl(f.storage_path, 3600);
-        if (su.error) { showToast('Could not open: ' + su.error.message, 'error'); return; }
-        window.open(su.data.signedUrl, '_blank');
+        try { await NWDrive.open(f); } catch (e) { showToast('Could not open: ' + e.message, 'error'); }
       });
     });
     host.querySelectorAll('[data-doc-del]').forEach(function(b) {
       b.addEventListener('click', async function() {
         if (!confirm('Delete this document?')) return;
         var f = files.find(function(x) { return x.id === b.getAttribute('data-doc-del'); });
-        try { await supabaseClient.storage.from('project-files').remove([f.storage_path]); } catch (e) {}
+        await NWDrive.removeObject(f);
         await supabaseClient.from('project_files').delete().eq('id', f.id);
         loadContractDocs();
       });
@@ -2213,11 +2212,17 @@ requireAuth().catch(function(){});
     var pid = pc.setup.project_id, ok = 0;
     for (var i = 0; i < fileList.length; i++) {
       var file = fileList[i];
-      var path = 'proj-' + pid + '/contracts/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
-      var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
-      if (up.error) { showToast('Upload failed: ' + up.error.message, 'error'); continue; }
-      var ins = await supabaseClient.from('project_files').insert({ project_id: pid, filename: file.name, storage_path: path, category: 'contracts',
-        size_bytes: file.size, content_type: file.type || null, notes: 'Prime contract / PO', uploaded_by: currentUserId });
+      var row = null;
+      try { var df = await NWDrive.uploadFile((pc.setup.project && pc.setup.project.project_name) || contractTitle(pc.setup), pid, file, 'contracts'); row = NWDrive.rowFor(file, df); }
+      catch (de) { console.warn('Drive upload failed, falling back to storage:', de); showToast('Drive: ' + de.message + ' — saved to app storage instead', 'error'); }
+      if (!row) {
+        var path = 'proj-' + pid + '/contracts/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+        var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
+        if (up.error) { showToast('Upload failed: ' + up.error.message, 'error'); continue; }
+        row = { filename: file.name, storage_path: path, size_bytes: file.size, content_type: file.type || null };
+      }
+      row.project_id = pid; row.category = 'contracts'; row.notes = 'Prime contract / PO'; row.uploaded_by = currentUserId;
+      var ins = await supabaseClient.from('project_files').insert(row);
       if (ins.error) { showToast('Save failed: ' + ins.error.message, 'error'); continue; }
       ok++;
     }
@@ -2247,23 +2252,21 @@ requireAuth().catch(function(){});
       var sz = f.size_bytes ? ' · ' + (f.size_bytes > 1048576 ? (f.size_bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size_bytes / 1024)) + ' KB') : '';
       return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:13px;color:#0f172a">' +
         '<span>' + (/\.(png|jpe?g|gif|webp)$/i.test(f.filename) ? '🖼️' : '📄') + '</span><a href="#" class="pc-link" data-cof-open="' + f.id + '" style="flex:1">' + escHtml(f.filename) + '</a>' +
-        '<span style="color:#94a3b8;font-size:11px">' + mdyShort((f.created_at || '').slice(0, 10)) + sz + (f.procore_file_id ? ' · from Procore' : '') + '</span>' +
+        '<span style="color:#94a3b8;font-size:11px">' + mdyShort((f.created_at || '').slice(0, 10)) + sz + (f.procore_file_id ? ' · from Procore' : '') + (f.drive_id ? ' · Drive' : '') + '</span>' +
         (canEdit ? '<button class="del-btn" data-cof-del="' + f.id + '">✕</button>' : '') + '</div>';
     }).join('');
     host.querySelectorAll('[data-cof-open]').forEach(function(a) {
       a.addEventListener('click', async function(e) {
         e.preventDefault();
         var f = files.find(function(x) { return x.id === a.getAttribute('data-cof-open'); });
-        var su = await supabaseClient.storage.from('project-files').createSignedUrl(f.storage_path, 3600);
-        if (su.error) { showToast('Could not open: ' + su.error.message, 'error'); return; }
-        window.open(su.data.signedUrl, '_blank');
+        try { await NWDrive.open(f); } catch (e) { showToast('Could not open: ' + e.message, 'error'); }
       });
     });
     host.querySelectorAll('[data-cof-del]').forEach(function(b) {
       b.addEventListener('click', async function() {
         if (!confirm('Delete this file?')) return;
         var f = files.find(function(x) { return x.id === b.getAttribute('data-cof-del'); });
-        try { await supabaseClient.storage.from('project-files').remove([f.storage_path]); } catch (e) {}
+        await NWDrive.removeObject(f);
         await supabaseClient.from('project_files').delete().eq('id', f.id);
         loadCoFiles();
       });
@@ -2273,11 +2276,18 @@ requireAuth().catch(function(){});
     var pid = pc.setup.project_id, ok = 0;
     for (var i = 0; i < fileList.length; i++) {
       var file = fileList[i];
-      var path = 'proj-' + pid + '/change-orders/' + coFilesCoId + '/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
-      var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
-      if (up.error) { showToast('Upload failed: ' + up.error.message, 'error'); continue; }
-      var ins = await supabaseClient.from('project_files').insert({ project_id: pid, change_order_id: coFilesCoId, filename: file.name, storage_path: path, category: 'change-orders',
-        size_bytes: file.size, content_type: file.type || null, notes: 'Change order attachment', uploaded_by: currentUserId });
+      var co = pc.cos.find(function(x) { return x.id === coFilesCoId; }) || {};
+      var row = null;
+      try { var df = await NWDrive.uploadFile((pc.setup.project && pc.setup.project.project_name) || contractTitle(pc.setup), pid, file, 'change-orders', 'CO ' + (co.number || '')); row = NWDrive.rowFor(file, df); }
+      catch (de) { console.warn('Drive upload failed, falling back to storage:', de); showToast('Drive: ' + de.message + ' — saved to app storage instead', 'error'); }
+      if (!row) {
+        var path = 'proj-' + pid + '/change-orders/' + coFilesCoId + '/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+        var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
+        if (up.error) { showToast('Upload failed: ' + up.error.message, 'error'); continue; }
+        row = { filename: file.name, storage_path: path, size_bytes: file.size, content_type: file.type || null };
+      }
+      row.project_id = pid; row.change_order_id = coFilesCoId; row.category = 'change-orders'; row.notes = 'Change order attachment'; row.uploaded_by = currentUserId;
+      var ins = await supabaseClient.from('project_files').insert(row);
       if (ins.error) { showToast('Save failed: ' + ins.error.message, 'error'); continue; }
       ok++;
     }
@@ -2989,6 +2999,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=205"></script>
+<script src="sw-register.js?v=206"></script>
 </body>
 </html>

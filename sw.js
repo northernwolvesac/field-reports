@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nw-field-v205';
+const CACHE_NAME = 'nw-field-v206';
 const ASSETS = [
   './',
   './index.html',
@@ -28,6 +28,7 @@ const ASSETS = [
   './email-utils.js',
   './auth.js',
   './supabase-config.js',
+  './nw-drive.js',
   './project-utils.js',
   './equipment-utils.js',
   './cloud-save.js',
