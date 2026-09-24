@@ -669,6 +669,16 @@
 </div>
 
 <!-- Payment modal -->
+<div class="modal-overlay" id="coFilesModal">
+  <div class="modal-card" style="max-width:640px">
+    <h2 id="coFilesTitle">Change Order Files</h2>
+    <div id="coFilesList" style="min-height:40px;font-size:13px;color:#64748b">Loading…</div>
+    <div class="modal-actions" style="margin-top:14px;display:flex;gap:10px;align-items:center;justify-content:flex-end">
+      <label class="btn-secondary" id="coFilesUploadLbl" style="cursor:pointer">＋ Upload files<input type="file" id="coFilesUpload" multiple style="display:none"></label>
+      <button type="button" class="btn-secondary" id="coFilesClose">Close</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="payModal">
   <div class="modal-card" style="max-width:560px">
     <h2 id="payTitleH">Add Payment</h2>
@@ -767,7 +777,7 @@ requireAuth().catch(function(){});
     });
     document.getElementById('payApp').addEventListener('change', function() { if (!editingPayId) updatePayNumberHint(); });
     // Close on backdrop click
-    ['setupModal','newAppModal','lineModal','coModal','payModal'].forEach(function(id) {
+    ['setupModal','newAppModal','lineModal','coModal','payModal','coFilesModal'].forEach(function(id) {
       document.getElementById(id).addEventListener('click', function(e) {
         if (e.target === this) closeModal(id);
       });
@@ -1911,8 +1921,10 @@ requireAuth().catch(function(){});
     var cos = await supabaseClient.from('aia_change_orders').select('*').eq('aia_project_id', id).order('number', { ascending: true });
     var pays = await supabaseClient.from('aia_payments').select('*').eq('aia_project_id', id).order('date_paid', { ascending: true });
     var sov = await supabaseClient.from('aia_sov_items').select('*').eq('aia_project_id', id).order('sort_order', { ascending: true });
+    var coFiles = { data: [] };
+    if (s.data.project_id) coFiles = await supabaseClient.from('project_files').select('*').eq('project_id', s.data.project_id).eq('category', 'change-orders').order('created_at', { ascending: true });
     var b = { setup: s.data, apps: appRows, linesByApp: groupBy(lines.data || [], 'application_id'),
-              cos: cos.data || [], pays: pays.data || [], sov: sov.data || [] };
+              cos: cos.data || [], pays: pays.data || [], sov: sov.data || [], coFilesByCo: groupBy(coFiles.data || [], 'change_order_id') };
     b.rollup = contractRollup(b.setup, b.apps, b.linesByApp, b.cos, b.pays);
     return b;
   }
@@ -2054,6 +2066,10 @@ requireAuth().catch(function(){});
     var approved = b.cos.filter(function(c) { return c.status === 'approved'; });
     var total = approved.reduce(function(a, c) { return a + Number(c.amount || 0); }, 0);
     var pcoTotal = b.cos.reduce(function(a, c) { return a + Number(c.amount || 0); }, 0);
+    function filesCell(c) {
+      var n = ((b.coFilesByCo || {})[c.id] || []).length;
+      return '<td class="ctr"><a href="#" class="pc-link" data-co-files="' + c.id + '" title="Attachments">📎' + (n ? ' ' + n : '') + '</a></td>';
+    }
     var pcco = approved.map(function(c) {
       return '<tr data-co="' + c.id + '">' +
         '<td><a href="#" class="pc-link" data-co-edit="' + c.id + '">' + escHtml(c.number) + '</a></td>' +
@@ -2064,7 +2080,7 @@ requireAuth().catch(function(){});
         '<td class="num">' + fmtMoney(c.amount) + '</td>' +
         '<td>' + mdyShort(c.date_initiated) + '</td><td><b>' + mdyShort(c.approved_date) + '</b></td><td>' + mdyShort(c.due_date) + '</td>' +
         '<td>' + escHtml(c.designated_reviewer || '--') + '</td>' +
-        '<td>' + (c.pco_number ? 'PCO #' + escHtml(c.pco_number) : '--') + '</td>' +
+        '<td>' + (c.pco_number ? 'PCO #' + escHtml(c.pco_number) : '--') + '</td>' + filesCell(c) +
       '</tr>';
     }).join('');
     var pco = b.cos.map(function(c) {
@@ -2076,10 +2092,10 @@ requireAuth().catch(function(){});
         '<td class="num">' + fmtMoney(c.amount) + '</td>' +
         '<td>' + (c.schedule_impact_days != null ? c.schedule_impact_days + ' days' : '--') + '</td>' +
         '<td>' + mdyShort(c.date_initiated) + '</td><td>' + escHtml(c.change_reason || '--') + '</td>' +
-        '<td>' + (c.status === 'approved' ? 'PCCO #' + escHtml(c.number) : '--') + '</td>' +
+        '<td>' + (c.status === 'approved' ? 'PCCO #' + escHtml(c.number) : '--') + '</td>' + filesCell(c) +
       '</tr>';
     }).join('');
-    var empty = '<tr><td colspan="11" class="pc-empty">No change orders yet.</td></tr>';
+    var empty = '<tr><td colspan="12" class="pc-empty">No change orders yet.</td></tr>';
     var drafts = b.cos.filter(function(c) { return c.status === 'draft' || c.status === 'pending'; }).length;
     return '<div class="pc-section-h"><h2>Change Orders</h2>' +
         '<a class="btn-secondary" href="change-order.html?project=' + (b.setup.project_id || '') + '" style="text-decoration:none">＋ New Field CO</a>' +
@@ -2090,15 +2106,15 @@ requireAuth().catch(function(){});
       '<h3 class="pc-sub-h">Prime Contract Change Orders</h3>' +
       '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
         '<th>Number</th><th>Revision</th><th>Title</th><th>Status</th><th>Executed</th><th class="num">Amount</th>' +
-        '<th>Date Initiated</th><th>Approved Date</th><th>Due Date</th><th>Designated Reviewer</th><th>PCO</th></tr></thead>' +
+        '<th>Date Initiated</th><th>Approved Date</th><th>Due Date</th><th>Designated Reviewer</th><th>PCO</th><th class="ctr">Files</th></tr></thead>' +
         '<tbody>' + (pcco || empty) + '</tbody>' +
-        '<tfoot><tr><td colspan="5"><b>Total: ' + approved.length + ' PCCO' + (approved.length === 1 ? '' : 's') + ' (approved)</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="5"></td></tr></tfoot></table></div>' +
+        '<tfoot><tr><td colspan="5"><b>Total: ' + approved.length + ' PCCO' + (approved.length === 1 ? '' : 's') + ' (approved)</b></td><td class="num"><b>' + fmtMoney(total) + '</b></td><td colspan="6"></td></tr></tfoot></table></div>' +
       '<h3 class="pc-sub-h" style="margin-top:22px">Potential Change Orders</h3>' +
       '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
         '<th>Number</th><th>Revision</th><th>Title</th><th>Status</th><th>Executed</th><th class="num">Amount</th>' +
-        '<th>Schedule Impact</th><th>Date Initiated</th><th>Change Reason</th><th>PCCO</th></tr></thead>' +
+        '<th>Schedule Impact</th><th>Date Initiated</th><th>Change Reason</th><th>PCCO</th><th class="ctr">Files</th></tr></thead>' +
         '<tbody>' + (pco || empty) + '</tbody>' +
-        '<tfoot><tr><td colspan="5"><b>Total: ' + b.cos.length + ' PCO' + (b.cos.length === 1 ? '' : 's') + ' (' + approved.length + ' approved)</b></td><td class="num"><b>' + fmtMoney(pcoTotal) + '</b></td><td colspan="4"></td></tr></tfoot></table></div>' +
+        '<tfoot><tr><td colspan="5"><b>Total: ' + b.cos.length + ' PCO' + (b.cos.length === 1 ? '' : 's') + ' (' + approved.length + ' approved)</b></td><td class="num"><b>' + fmtMoney(pcoTotal) + '</b></td><td colspan="5"></td></tr></tfoot></table></div>' +
       (window.NW_LABOR_RATES ? '<div class="pc-card" style="margin:18px 16px 0"><div class="pc-card-h"><h3>Northern Wolves Labor Rates</h3></div>' + window.NW_LABOR_RATES.tableHtml() + '</div>' : '');
   }
 
@@ -2209,6 +2225,68 @@ requireAuth().catch(function(){});
     loadContractDocs();
   }
 
+  // ─── Change Order attachments (project_files, category 'change-orders', change_order_id) ───
+  var coFilesCoId = null;
+  function openCoFilesModal(coId) {
+    coFilesCoId = coId;
+    var c = pc.cos.find(function(x) { return x.id === coId; }) || {};
+    document.getElementById('coFilesTitle').textContent = 'Files — CO #' + (c.number || '') + (c.title ? ' · ' + c.title : '');
+    document.getElementById('coFilesUploadLbl').style.display = canEdit ? '' : 'none';
+    document.getElementById('coFilesList').textContent = 'Loading…';
+    openModal('coFilesModal');
+    loadCoFiles();
+  }
+  async function loadCoFiles() {
+    var host = document.getElementById('coFilesList'); if (!host || !pc || !coFilesCoId) return;
+    var r = await supabaseClient.from('project_files').select('*').eq('change_order_id', coFilesCoId).order('created_at', { ascending: true });
+    var files = r.data || [];
+    pc.coFilesByCo = pc.coFilesByCo || {}; pc.coFilesByCo[coFilesCoId] = files;
+    document.querySelectorAll('[data-co-files="' + coFilesCoId + '"]').forEach(function(a) { a.textContent = '📎' + (files.length ? ' ' + files.length : ''); });
+    if (!files.length) { host.innerHTML = 'No files attached to this change order yet.'; return; }
+    host.innerHTML = files.map(function(f) {
+      var sz = f.size_bytes ? ' · ' + (f.size_bytes > 1048576 ? (f.size_bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size_bytes / 1024)) + ' KB') : '';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:13px;color:#0f172a">' +
+        '<span>' + (/\.(png|jpe?g|gif|webp)$/i.test(f.filename) ? '🖼️' : '📄') + '</span><a href="#" class="pc-link" data-cof-open="' + f.id + '" style="flex:1">' + escHtml(f.filename) + '</a>' +
+        '<span style="color:#94a3b8;font-size:11px">' + mdyShort((f.created_at || '').slice(0, 10)) + sz + (f.procore_file_id ? ' · from Procore' : '') + '</span>' +
+        (canEdit ? '<button class="del-btn" data-cof-del="' + f.id + '">✕</button>' : '') + '</div>';
+    }).join('');
+    host.querySelectorAll('[data-cof-open]').forEach(function(a) {
+      a.addEventListener('click', async function(e) {
+        e.preventDefault();
+        var f = files.find(function(x) { return x.id === a.getAttribute('data-cof-open'); });
+        var su = await supabaseClient.storage.from('project-files').createSignedUrl(f.storage_path, 3600);
+        if (su.error) { showToast('Could not open: ' + su.error.message, 'error'); return; }
+        window.open(su.data.signedUrl, '_blank');
+      });
+    });
+    host.querySelectorAll('[data-cof-del]').forEach(function(b) {
+      b.addEventListener('click', async function() {
+        if (!confirm('Delete this file?')) return;
+        var f = files.find(function(x) { return x.id === b.getAttribute('data-cof-del'); });
+        try { await supabaseClient.storage.from('project-files').remove([f.storage_path]); } catch (e) {}
+        await supabaseClient.from('project_files').delete().eq('id', f.id);
+        loadCoFiles();
+      });
+    });
+  }
+  async function uploadCoFiles(fileList) {
+    var pid = pc.setup.project_id, ok = 0;
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      var path = 'proj-' + pid + '/change-orders/' + coFilesCoId + '/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+      var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
+      if (up.error) { showToast('Upload failed: ' + up.error.message, 'error'); continue; }
+      var ins = await supabaseClient.from('project_files').insert({ project_id: pid, change_order_id: coFilesCoId, filename: file.name, storage_path: path, category: 'change-orders',
+        size_bytes: file.size, content_type: file.type || null, notes: 'Change order attachment', uploaded_by: currentUserId });
+      if (ins.error) { showToast('Save failed: ' + ins.error.message, 'error'); continue; }
+      ok++;
+    }
+    if (ok) showToast('✅ Uploaded ' + ok + ' file' + (ok === 1 ? '' : 's'), 'success');
+    loadCoFiles();
+  }
+  document.getElementById('coFilesClose').addEventListener('click', function() { closeModal('coFilesModal'); });
+  document.getElementById('coFilesUpload').addEventListener('change', function() { var u = this; if (u.files.length) uploadCoFiles(u.files); u.value = ''; });
+
   // ─── TAB EVENT BINDING ──────────────────────────────────────────────
   function bindTab(tab) {
     var main = document.getElementById('mainView');
@@ -2222,6 +2300,7 @@ requireAuth().catch(function(){});
     }
     var coAdd = document.getElementById('coAdd'); if (coAdd) coAdd.addEventListener('click', function() { openCoModal(null); });
     main.querySelectorAll('[data-co-edit]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); openCoModal(a.getAttribute('data-co-edit')); }); });
+    main.querySelectorAll('[data-co-files]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); openCoFilesModal(a.getAttribute('data-co-files')); }); });
     var invAdd = document.getElementById('invAdd'); if (invAdd) invAdd.addEventListener('click', function() { openNewAppModal(pc.setup.id); });
     main.querySelectorAll('[data-inv-del]').forEach(function(bt) { bt.addEventListener('click', function(e) { e.stopPropagation(); deleteInvoice(bt.getAttribute('data-inv-del')); }); });
     var payAdd = document.getElementById('payAdd'); if (payAdd) payAdd.addEventListener('click', function() { openPayModal(null); });
@@ -2910,6 +2989,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=204"></script>
+<script src="sw-register.js?v=205"></script>
 </body>
 </html>
