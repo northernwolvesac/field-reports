@@ -943,6 +943,12 @@ requireAuth().catch(function(){});
 
       var cloudIds = {};
       result.data.forEach(function(row) { cloudIds[row.id] = row; });
+      // Supabase is the source of truth: drop local copies of projects that were deleted in the cloud
+      if (result.data.length) {
+        var before = localProjects.length;
+        localProjects = localProjects.filter(function(lp) { return !!cloudIds[lp.id]; });
+        if (localProjects.length !== before) changed = true;
+      }
 
       for (var i = 0; i < localProjects.length; i++) {
         var lp = localProjects[i];
@@ -2184,6 +2190,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=209"></script>
+<script src="sw-register.js?v=210"></script>
 </body>
 </html>
