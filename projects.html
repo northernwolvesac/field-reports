@@ -9,8 +9,8 @@
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=132"></script>
-<script src="nw-drive.js?v=208"></script>
-<script src="nw-drive-browser.js?v=208"></script>
+<script src="nw-drive.js?v=209"></script>
+<script src="nw-drive-browser.js?v=209"></script>
 <script src="auth.js?v=132"></script>
 <script src="cloud-save.js?v=132"></script>
 <script src="schedule-utils.js?v=137"></script>
@@ -989,7 +989,7 @@ requireAuth().catch(function(){});
     var uid = null;
     try { var sess = await supabaseClient.auth.getSession(); uid = sess.data && sess.data.session ? sess.data.session.user.id : null; } catch (e) {}
     if (currentProjectId !== projectId) return;
-    NWDriveBrowser.mount(host, { projectId: projectId, projectName: p.name || p.project_name || '', canEdit: canEdit, userId: uid,
+    NWDriveBrowser.mount(host, { projectId: projectId, projectName: p.name || p.project_name || '', canEdit: true, userId: uid,
       onChange: function() { loadDriveFiles(projectId); renderProjectsList(); if (typeof loadPrimeContract === 'function') loadPrimeContract(projectId); } });
   }
 
@@ -2184,6 +2184,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=208"></script>
+<script src="sw-register.js?v=209"></script>
 </body>
 </html>
