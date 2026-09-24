@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=132"></script>
+<script src="nw-drive.js?v=207"></script>
 <script src="auth.js?v=132"></script>
 <script src="cloud-save.js?v=132"></script>
 <script src="schedule-utils.js?v=137"></script>
@@ -986,8 +987,8 @@ requireAuth().catch(function(){});
       var r = await supabaseClient.from('project_files').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
       if (r.error) { console.error('[projects] load files error:', r.error.message); return; }
       var cloud = (r.data || []).map(function(f) {
-        return { id: f.id, storagePath: f.storage_path, name: f.filename, category: f.category || 'other',
-                 size: f.size_bytes || 0, type: f.content_type || '', addedAt: f.created_at };
+        return { id: f.id, storagePath: f.storage_path, driveId: f.drive_id || null, driveUrl: f.drive_url || null, name: f.filename, category: f.category || 'other',
+                 size: f.size_bytes || 0, type: f.content_type || '', addedAt: f.created_at, cloud: true };
       });
       var projects = getProjects();
       for (var i = 0; i < projects.length; i++) {
@@ -1373,7 +1374,8 @@ requireAuth().catch(function(){});
     emptyDocs.style.display = 'none';
     var html = '';
     docs.forEach(function(d) {
-      var urlAttr = d.storagePath ? ' data-path="' + escHtml(d.storagePath) + '" style="cursor:pointer"' : (d.driveUrl ? ' data-url="' + escHtml(d.driveUrl) + '"' : '');
+      var driveHref = d.driveUrl || (d.driveId ? 'https://drive.google.com/file/d/' + d.driveId + '/view' : '');
+      var urlAttr = driveHref ? ' data-url="' + escHtml(driveHref) + '" style="cursor:pointer"' : (d.storagePath ? ' data-path="' + escHtml(d.storagePath) + '" style="cursor:pointer"' : '');
       html += '<div class="doc-item" data-doc-id="' + d.id + '"' + urlAttr + '>';
       html += '<div class="doc-icon">' + docIcon(d.name) + '</div>';
       html += '<div class="doc-info">';
@@ -1382,7 +1384,7 @@ requireAuth().catch(function(){});
       html += '<span class="doc-badge">' + escHtml(d.category || 'other') + '</span>';
       html += ' &middot; ' + fmtDate(d.addedAt);
       if (d.size) html += ' &middot; ' + fmtSize(d.size);
-      if (d.driveId && !d.storagePath) html += ' &middot; <span style="color:#0696D7">Google Drive</span>';
+      if (d.driveId) html += ' &middot; <span style="color:#0696D7">Google Drive</span>';
       html += '</div>';
       html += '</div>';
       html += '<button class="doc-remove" data-doc-id="' + d.id + '" title="Remove">&#10005;</button>';
@@ -2026,17 +2028,24 @@ requireAuth().catch(function(){});
       document.getElementById('uploadCategorySelect').classList.remove('active');
       showToast('Uploading ' + file.name + '…');
       try {
-        var path = 'proj-' + projectId + '/' + cat + '/' + Date.now() + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
-        var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
-        if (up.error) { showToast('Upload failed: ' + up.error.message); console.error(up.error); return; }
         var sess = await supabaseClient.auth.getSession();
-        var ins = await supabaseClient.from('project_files').insert({
-          project_id: projectId, filename: file.name, storage_path: path, category: cat,
-          size_bytes: file.size, content_type: file.type || null,
-          uploaded_by: sess.data && sess.data.session ? sess.data.session.user.id : null
-        });
+        var row = null, path = null;
+        try {
+          var pr0 = getProjectById(projectId) || {};
+          var df = await NWDrive.uploadFile(pr0.name || pr0.project_name || projectId, projectId, file, cat);
+          row = NWDrive.rowFor(file, df);
+        } catch (de) { console.warn('Drive upload failed, falling back to storage:', de); showToast('Drive: ' + de.message + ' — saving to app storage'); }
+        if (!row) {
+          path = 'proj-' + projectId + '/' + cat + '/' + Date.now() + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+          var up = await supabaseClient.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type || null });
+          if (up.error) { showToast('Upload failed: ' + up.error.message); console.error(up.error); return; }
+          row = { filename: file.name, storage_path: path, size_bytes: file.size, content_type: file.type || null };
+        }
+        row.project_id = projectId; row.category = cat; row.uploaded_by = sess.data && sess.data.session ? sess.data.session.user.id : null;
+        var ins = await supabaseClient.from('project_files').insert(row);
         if (ins.error) {
-          await supabaseClient.storage.from('project-files').remove([path]);
+          if (path) await supabaseClient.storage.from('project-files').remove([path]);
+          if (row.drive_id) { try { await NWDrive.deleteFile(row.drive_id); } catch (e2) {} }
           showToast('Upload failed: ' + ins.error.message); console.error(ins.error); return;
         }
         await loadDriveFiles(projectId);
@@ -2063,9 +2072,9 @@ requireAuth().catch(function(){});
         var docId = btn.getAttribute('data-doc-id');
         var pr = getProjectById(currentProjectId) || {};
         var doc = (pr.documents || []).find(function(d) { return d.id === docId; });
-        if (doc && doc.storagePath) {
+        if (doc && (doc.storagePath || doc.cloud)) {
           if (!confirm('Delete "' + doc.name + '"?')) return;
-          supabaseClient.storage.from('project-files').remove([doc.storagePath]).then(function() {
+          NWDrive.removeObject({ drive_id: doc.driveId, storage_path: doc.storagePath }).then(function() {
             return supabaseClient.from('project_files').delete().eq('id', docId);
           }).then(function(r) {
             if (r && r.error) showToast('Delete failed: ' + r.error.message); else showToast('Deleted');
@@ -2087,7 +2096,9 @@ requireAuth().catch(function(){});
         renderProjectsList();
         return;
       }
-      // Handle clicking doc item to open in Google Drive
+      // Handle clicking doc item: Google Drive link first, then app storage
+      var dItem = e.target.closest('.doc-item[data-url]');
+      if (dItem && dItem.getAttribute('data-url')) { window.open(dItem.getAttribute('data-url'), '_blank'); return; }
       var sItem = e.target.closest('.doc-item[data-path]');
       if (sItem) {
         supabaseClient.storage.from('project-files').createSignedUrl(sItem.getAttribute('data-path'), 3600).then(function(r) {
@@ -2155,6 +2166,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=188"></script>
+<script src="sw-register.js?v=207"></script>
 </body>
 </html>
