@@ -39,6 +39,7 @@
     '@media(max-width:860px){body.nwk .section{margin:12px}}',
     'body.nwk .section-header{border-left:0;color:#4b5563;font-size:13px;letter-spacing:.06em;padding:14px 16px;background:#fff}',
     'body.nwk .section-body{padding:4px 16px 16px}',
+    'body.nwk .ai-chat-banner{max-width:832px;margin:12px auto 0;background:#fff;border:1px solid #e5e7eb;border-radius:12px}',
     'body.nwk .field label{color:#6b7280;font-weight:700;font-size:11px;letter-spacing:.04em}',
     'body.nwk .field input,body.nwk .field select,body.nwk .field textarea{border:1px solid #d1d5db;border-radius:8px;padding:9px 11px;font-size:14px;background:#fff;color:#111318}',
     'body.nwk .field input:focus,body.nwk .field select:focus,body.nwk .field textarea:focus{border-color:#0696D7;outline:none;box-shadow:0 0 0 3px rgba(6,150,215,.12)}',
@@ -76,6 +77,7 @@
     b.classList.toggle('show', !!on);
   }
   function curReportId() {
+    try { if (K.editNumber && typeof isEditMode === 'function' && isEditMode()) return String(K.editNumber); } catch (e) {}
     try { if (typeof reportId !== 'undefined' && reportId) return String(reportId); } catch (e) {}
     var el = document.getElementById('reportId'); return el ? el.textContent.trim() : '';
   }
@@ -355,6 +357,12 @@
     try {
       var r = await getReportById(id), fd = r && r.data && r.data.form_data;
       if (!fd) return;
+      // the page generated a fresh number on load; an opened report keeps its own number (PDF, Drive name, revisions)
+      K.editNumber = r.data.report_number || fd.reportId || null;
+      if (K.editNumber) {
+        try { reportId = K.editNumber; } catch (e) {}
+        var rid = document.getElementById('reportId'); if (rid) rid.textContent = K.editNumber;
+      }
       K.driveId = fd._driveId || null; K.driveUrl = fd._driveUrl || null;
       K.files = (fd._attachments || []).map(function(a) { return { name: a.name, size: a.size, pages: a.pages, driveId: a.driveId }; });
       renderFiles();
