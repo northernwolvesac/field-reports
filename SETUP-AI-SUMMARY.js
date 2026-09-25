@@ -23,7 +23,7 @@
  */
 
 var CLAUDE_API_KEY = 'YOUR_CLAUDE_API_KEY_HERE';
-var CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+var CLAUDE_MODEL = 'claude-sonnet-5';
 
 function doPost(e) {
   try {
