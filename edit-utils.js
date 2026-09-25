@@ -539,11 +539,15 @@ function _restoreAISummary(fd) {
 function _restoreProject(reportRow) {
   var fd = reportRow.form_data;
   var projectId = fd._projectId;
-  if (projectId && typeof selectProject === 'function') {
-    try { selectProject(projectId); } catch(e) {
-      console.log('[edit-utils] Could not restore project:', e);
-    }
-  }
+  // project-utils exports its picker as selectProjectById; the project list may still be loading, so retry briefly
+  var pick = typeof selectProject === 'function' ? selectProject : window.selectProjectById;
+  if (!projectId || typeof pick !== 'function') return;
+  var tries = 0;
+  (function attempt() {
+    try { pick(projectId); } catch(e) { console.log('[edit-utils] Could not restore project:', e); }
+    var hidden = document.getElementById('selectedProjectId');
+    if (hidden && !hidden.value && ++tries < 12) setTimeout(attempt, 500);
+  })();
 }
 
 // ========== EDIT MODE UI ==========

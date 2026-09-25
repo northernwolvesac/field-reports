@@ -81,7 +81,13 @@
     try { if (typeof reportId !== 'undefined' && reportId) return String(reportId); } catch (e) {}
     var el = document.getElementById('reportId'); return el ? el.textContent.trim() : '';
   }
-  function projectId() { return typeof getSelectedProjectId === 'function' ? getSelectedProjectId() : null; }
+  function projectId() {
+    var id = typeof getSelectedProjectId === 'function' ? getSelectedProjectId() : null;
+    if (!id && K.editProjectId && typeof window.selectProjectById === 'function') {   // reopened report: put its project back in the picker
+      try { window.selectProjectById(K.editProjectId); id = getSelectedProjectId() || K.editProjectId; } catch (e) { id = K.editProjectId; }
+    }
+    return id;
+  }
   async function projectName(pid) {
     try { var p = typeof getSelectedProject === 'function' ? getSelectedProject() : null; if (p && (p.name || p.project_name)) return p.name || p.project_name; } catch (e) {}
     try { var r = await supabaseClient.from('projects').select('project_name').eq('id', pid).maybeSingle(); if (r.data) return r.data.project_name; } catch (e) {}
@@ -231,6 +237,7 @@
 
   // ---------------------------------------------------------------- Save (cloud + project folder, no email)
   K.save = async function() {
+    projectId();
     if (typeof requireProject === 'function' && !requireProject()) return;
     if (typeof collectData !== 'function') { alert('This form cannot be saved from here.'); return; }
     var editing = false; try { editing = typeof isEditMode === 'function' && isEditMode(); } catch (e) {}
@@ -364,6 +371,7 @@
         var rid = document.getElementById('reportId'); if (rid) rid.textContent = K.editNumber;
       }
       K.driveId = fd._driveId || null; K.driveUrl = fd._driveUrl || null;
+      K.editProjectId = fd._projectId || null;
       K.files = (fd._attachments || []).map(function(a) { return { name: a.name, size: a.size, pages: a.pages, driveId: a.driveId }; });
       renderFiles();
       var b = document.getElementById('nwkBanner');
