@@ -12,12 +12,12 @@
 <title>Submittal — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=216"></script>
-<script src="auth.js?v=216"></script>
-<script src="nw-drive.js?v=216"></script>
+<script src="supabase-config.js?v=217"></script>
+<script src="auth.js?v=217"></script>
+<script src="nw-drive.js?v=217"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="pdf-utils.js?v=216"></script>
+<script src="pdf-utils.js?v=217"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 110px; }
   .sb-wrap { max-width: 860px; margin: 0 auto; padding: 0 14px; }
@@ -198,6 +198,7 @@ requireAuth().catch(function(){});
   function pad(n) { n = parseInt(n, 10) || 0; return n < 100 ? ('00' + n).slice(-3) : String(n); }
   function mb(b) { return (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB'; }
   function fmtDate(d) { if (!d) return ''; var p = d.split('-'); return p.length === 3 ? p[1] + '/' + p[2] + '/' + p[0] : d; }
+  function oneLine(s) { return String(s || '').split(/\s*[\r\n]+\s*/).filter(Boolean).join(', '); }
   function today() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
 
   $('backBtn').addEventListener('click', function(e) {
@@ -232,7 +233,7 @@ requireAuth().catch(function(){});
     $('fArchitect').value = (prime && prime.architect_name) || '';
     $('fPM').value = project.pm_name || '';
     $('fToCompany').value = (prime && prime.client_name) || customer || '';
-    $('fToAddress').value = (prime && prime.client_address) || '';
+    $('fToAddress').value = oneLine(prime && prime.client_address);
     $('fFromName').value = profile.full_name || '';
     $('fFromEmail').value = profile.email || userEmail;
     $('fFromPhone').value = profile.phone || '';
@@ -263,7 +264,7 @@ requireAuth().catch(function(){});
       showSaved();
     }
 
-    loadFolders();
+    loadFolders(fromId && src ? src.drive_folder : null);
     bind();
     $('formWrap').style.display = ''; $('bar').style.display = '';
   }
@@ -285,19 +286,34 @@ requireAuth().catch(function(){});
     if (r.due_date) $('fDue').value = r.due_date;
   }
 
-  // Submittals sub-folders that already exist in Drive (BOILER, ERV, RTU…)
-  async function loadFolders() {
+  // Submittals sub-folders that already exist in Drive. The office numbers them "1 Air Outlets", "2 Dampers"…,
+  // so a new submittal continues that numbering and gets its own "<No> <Title>" sub-folder by default.
+  var autoFolder = false;
+  function autoFolderName() { return (parseInt(val('fNumber'), 10) || '') + ' ' + val('fTitle').replace(/[\\/]+/g, '-'); }
+  function addOption(sel, value, text) { var o = document.createElement('option'); o.value = value; o.textContent = text; sel.appendChild(o); }
+  async function loadFolders(srcFolder) {
+    var sel = $('fFolder');
     try {
       var t = await NWDrive.request({ action: 'list_tree', projectName: project.project_name, projectId: projectId, maxDepth: 2 });
-      var items = t.items || [], sel = $('fFolder');
+      var items = t.items || [];
       var sub = items.filter(function(i) { return i.folder && i.parent === t.folderId && /^submittals$/i.test(i.name); })[0];
-      if (sub) {
-        items.filter(function(i) { return i.folder && i.parent === sub.id; }).sort(function(a, b) { return a.name.localeCompare(b.name); })
-          .forEach(function(f) { var o = document.createElement('option'); o.value = 'Submittals/' + f.name; o.textContent = 'Submittals / ' + f.name; sel.appendChild(o); });
+      var subs = sub ? items.filter(function(i) { return i.folder && i.parent === sub.id; }) : [];
+      subs.sort(function(a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); })
+        .forEach(function(f) { addOption(sel, 'Submittals/' + f.name, 'Submittals / ' + f.name); });
+      if (!editId && !fromId) {
+        var maxFolder = subs.reduce(function(m, f) { var n = parseInt((f.name.match(/^\s*(\d+)[\s._-]/) || [])[1], 10); return n > m ? n : m; }, 0);
+        if (maxFolder + 1 > (parseInt(val('fNumber'), 10) || 0)) $('fNumber').value = pad(maxFolder + 1);
       }
-      var o2 = document.createElement('option'); o2.value = '__new'; o2.textContent = '+ New sub-folder…'; sel.appendChild(o2);
-      if (saved && saved.drive_folder) { if (![].some.call(sel.options, function(o) { return o.value === saved.drive_folder; })) { var o3 = document.createElement('option'); o3.value = o3.textContent = saved.drive_folder; sel.appendChild(o3); } sel.value = saved.drive_folder; }
     } catch (e) { console.warn('[submittal] folders', e); }
+    addOption(sel, '__new', '+ New sub-folder…');
+    var want = (saved && saved.drive_folder) || srcFolder;
+    if (want) {
+      if (![].some.call(sel.options, function(o) { return o.value === want; })) addOption(sel, want, want.replace('/', ' / '));
+      sel.value = want;
+    } else if (!editId) {
+      sel.value = '__new'; autoFolder = true; $('fNewFolder').value = autoFolderName(); $('newFolderFld').style.display = '';
+    }
+    $('folderPreview').textContent = targetFolder().replace('/', ' / ');
   }
   function targetFolder() {
     var v = $('fFolder').value;
@@ -314,8 +330,15 @@ requireAuth().catch(function(){});
       drop.addEventListener('drop', function(e) { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
       fileIn.addEventListener('change', function() { addFiles(fileIn.files).then(function() { fileIn.value = ''; }); });
     }
-    $('fFolder').addEventListener('change', function() { $('newFolderFld').style.display = this.value === '__new' ? '' : 'none'; $('folderPreview').textContent = targetFolder().replace('/', ' / '); });
-    $('fNewFolder').addEventListener('input', function() { $('folderPreview').textContent = targetFolder().replace('/', ' / '); });
+    $('fFolder').addEventListener('change', function() {
+      $('newFolderFld').style.display = this.value === '__new' ? '' : 'none';
+      if (this.value === '__new' && !val('fNewFolder')) { autoFolder = true; $('fNewFolder').value = autoFolderName(); }
+      $('folderPreview').textContent = targetFolder().replace('/', ' / ');
+    });
+    $('fNewFolder').addEventListener('input', function() { autoFolder = false; $('folderPreview').textContent = targetFolder().replace('/', ' / '); });
+    ['fTitle', 'fNumber'].forEach(function(id) { $(id).addEventListener('input', function() {
+      if (autoFolder && $('fFolder').value === '__new') { $('fNewFolder').value = autoFolderName(); $('folderPreview').textContent = targetFolder().replace('/', ' / '); }
+    }); });
     document.querySelectorAll('#formWrap input, #formWrap select, #formWrap textarea').forEach(function(el) { el.addEventListener('input', function() { dirty = true; }); el.addEventListener('change', function() { dirty = true; }); });
     $('btnSave').addEventListener('click', function() { save().catch(fail); });
     $('btnDownload').addEventListener('click', function() { download().catch(fail); });
@@ -564,6 +587,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=216"></script>
+<script src="sw-register.js?v=217"></script>
 </body>
 </html>
