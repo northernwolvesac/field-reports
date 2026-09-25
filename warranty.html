@@ -237,7 +237,7 @@ requireAuth().catch(function(){});
     $('fToCompany').value = (prime && prime.client_name) || customer || '';
     $('fToAddress').value = (prime && prime.client_address) || '';
     $('fSubject').value = (project.project_name + (project.city ? ', ' + project.city : '')).toUpperCase();
-    $('fAgreement').value = prime && prime.contract_date ? 'Master Agreement of ' + fmtDate(prime.contract_date) : (prime && prime.contract_number ? 'Contract # ' + prime.contract_number : '');
+    $('fAgreement').value = prime && prime.contract_date ? 'Master Agreement of ' + fmtDate(prime.contract_date) : '';
     $('fProjAddress').value = [project.address, cityLine].filter(Boolean).join('\n');
     $('fTerms').value = STANDARD_TERMS;
     $('fClosing').value = STANDARD_CLOSING;
@@ -444,7 +444,7 @@ requireAuth().catch(function(){});
     });
     y += 14;
     para(val('fClosing'), 10, 'normal', 14);
-    if (y > 650) { doc.addPage(); y = 60; }
+    if (y > 692) { doc.addPage(); y = 60; }
     para('Sincerely,', 10, 'normal', 4);
     var sig = signatureImage();
     if (sig) {
@@ -551,6 +551,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=223"></script>
+<script src="sw-register.js?v=224"></script>
 </body>
 </html>
