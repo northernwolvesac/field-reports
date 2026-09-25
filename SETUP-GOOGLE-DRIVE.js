@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.8)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.9)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -85,6 +85,7 @@ function filterFieldItems(t) {
   t.items = (t.items || []).filter(function(i) { var top = topOf(i); return top && top.folder && isFieldTop(top.name); });
   return t;
 }
+function dropPathOk(category, path) { return isDropTop(path ? String(path).split('/')[0] : categoryFolderName(category)); }
 function fieldPathOk(category, subfolder, path) {
   var top = path ? String(path).split('/')[0] : categoryFolderName(category);
   return isFieldTop(top);
@@ -219,6 +220,42 @@ function fileInfo(file, category, subfolder) {
     url: file.getUrl(), downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
     viewUrl: file.getUrl(), directUrl: 'https://lh3.googleusercontent.com/d/' + file.getId()
   };
+}
+
+// ---------- v3.9: forms file their PDFs into the project folder ----------
+// Technicians may DROP a PDF into RFI / Change Orders (write-only: they still can't list those folders),
+// re-saving a form replaces the same Drive file (same link), and attached backup PDFs can be read back for editing.
+var DROP_FOLDERS = ['RFI', 'Change Orders'];
+function isDropTop(name) { var n = normName(name); return DROP_FOLDERS.some(function(f) { return normName(f) === n; }); }
+// name of the top-level folder (Drawings, RFI, Reports…) that holds this file inside its project folder
+function topFolderOfFile(fileId) {
+  var f = DriveApp.getFileById(fileId), parents = f.getParents();
+  if (!parents.hasNext()) return null;
+  var cur = parents.next(), prev = null;
+  for (var i = 0; i < 12 && cur; i++) {
+    var ps = cur.getParents(); if (!ps.hasNext()) return null;
+    var up = ps.next(), id = up.getId();
+    if (id === FJOBS_FOLDER_ID || id === OLD_ROOT_ID) return prev ? prev.getName() : null;   // cur = project folder
+    prev = cur; cur = up;
+  }
+  return null;
+}
+function techMayTouch(fileId) { var top = topFolderOfFile(fileId); return !!top && (isFieldTop(top) || isDropTop(top)); }
+// overwrite a file's content in place (same id / link), optionally renaming it
+function replaceFile(fileId, base64Data, mimeType, fileName) {
+  var bytes = Utilities.base64Decode(base64Data);
+  var r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media&supportsAllDrives=true', {
+    method: 'patch', contentType: mimeType || 'application/pdf', payload: bytes,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (r.getResponseCode() >= 300) return { success: false, error: 'Drive update ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200) };
+  var f = DriveApp.getFileById(fileId);
+  if (fileName && f.getName() !== fileName) f.setName(fileName);
+  return { success: true, file: fileInfo(f, '', '') };
+}
+function fileData(fileId) {
+  var f = DriveApp.getFileById(fileId);
+  if (f.getSize() > 30 * 1024 * 1024) return { success: false, error: 'File too large to load (' + Math.round(f.getSize() / 1048576) + ' MB)' };
+  return { success: true, name: f.getName(), mimeType: f.getMimeType(), size: f.getSize(), data: Utilities.base64Encode(f.getBlob().getBytes()) };
 }
 
 // ---------- send_email (v3.8): office users send Drive files (e.g. a submittal package) to outside recipients ----------
@@ -478,7 +515,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.8' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.9' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -486,15 +523,17 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
-    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.8', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.9', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
     var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
     if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
     if (!caller.full) {
       // technicians: field folders only
-      var techActions = ['list_tree', 'list_files', 'upload_file', 'get_file', 'create_folder'];
+      var techActions = ['list_tree', 'list_files', 'upload_file', 'get_file', 'create_folder', 'replace_file', 'file_data'];
       if (techActions.indexOf(body.action) < 0) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not allowed for your role', auth: true })).setMimeType(ContentService.MimeType.JSON);
-      if ((body.action === 'upload_file' || body.action === 'create_folder') && !fieldPathOk(body.category, body.subfolder, body.folder))
+      if ((body.action === 'upload_file' || body.action === 'create_folder') && !fieldPathOk(body.category, body.subfolder, body.folder) && !dropPathOk(body.category, body.folder))
         return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Technicians can only add files to field folders', auth: true })).setMimeType(ContentService.MimeType.JSON);
+      if ((body.action === 'replace_file' || body.action === 'file_data') && !techMayTouch(body.fileId))
+        return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not allowed for your role', auth: true })).setMimeType(ContentService.MimeType.JSON);
       if (body.action === 'list_tree') { result = filterFieldItems(listTree(body.projectName, body.projectId, body.maxDepth)); return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON); }
       if (body.action === 'list_files') { var lf = listProjectFiles(body.projectName, body.projectId); lf.files = lf.files.filter(function(f) { return isFieldTop(f.category); }); return ContentService.createTextOutput(JSON.stringify(lf)).setMimeType(ContentService.MimeType.JSON); }
     }
@@ -521,6 +560,8 @@ function doPost(e) {
       case 'revoke_access':   result = revokeAccess(body.fileId, body.emails); break;
       case 'list_access':     result = listAccess(body.fileId); break;
       case 'send_email':      result = sendEmailWithFiles(body, caller); break;
+      case 'replace_file':    result = replaceFile(body.fileId, body.fileData, body.mimeType, body.fileName); break;
+      case 'file_data':       result = fileData(body.fileId); break;
       case 'forget':          result = forgetProject(body.projectId); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };

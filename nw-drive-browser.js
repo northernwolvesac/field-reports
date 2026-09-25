@@ -77,7 +77,7 @@
     this.tree = null; this.cur = null; this.query = '';
     ensureCss();
     host.classList.add('nwdb');
-    host.innerHTML = '<div class="nwdb-empty">Loading folders…</div>';
+    host.innerHTML = '<div class="nwdb-empty">Loading folders…<br><span style="font-size:11px">Google Drive can take up to 20 seconds the first time</span></div>';
     this.load(false);
   }
   Browser.prototype.load = async function(force) {
@@ -85,7 +85,10 @@
     var cached = force ? null : readCache(this.projectId);
     if (cached) { this.setTree(cached); return; }
     try {
-      var r = await NWDrive.request({ action: 'list_tree', projectName: this.projectName, projectId: this.projectId });
+      var r = await Promise.race([
+        NWDrive.request({ action: 'list_tree', projectName: this.projectName, projectId: this.projectId }),
+        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('Google Drive did not answer in 45 seconds')); }, 45000); })
+      ]);
       writeCache(this.projectId, r);
       this.setTree(r);
     } catch (e) {

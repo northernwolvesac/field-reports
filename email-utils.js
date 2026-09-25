@@ -187,8 +187,10 @@ function cancelEmailPreview() {
  */
 async function uploadToGoogleDrive(pdfDoc, filename) {
   // Get raw base64 from jsPDF (strip the data URI prefix)
-  const dataUri = pdfDoc.output('datauristring');
-  const base64 = dataUri.split('base64,')[1];
+  // forms with PDF attachments (nw-form-kit.js) upload the merged PDF
+  const base64 = (window.NWFormKit && window.NWFormKit.files && window.NWFormKit.files.length)
+    ? await window.NWFormKit.pdfBase64(pdfDoc)
+    : pdfDoc.output('datauristring').split('base64,')[1];
 
   console.log('Uploading PDF to Google Drive...', filename);
 

@@ -9,8 +9,8 @@
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=132"></script>
-<script src="nw-drive.js?v=216"></script>
-<script src="nw-drive-browser.js?v=216"></script>
+<script src="nw-drive.js?v=221"></script>
+<script src="nw-drive-browser.js?v=221"></script>
 <script src="auth.js?v=132"></script>
 <script src="cloud-save.js?v=132"></script>
 <script src="schedule-utils.js?v=137"></script>
@@ -568,6 +568,8 @@
       <div class="detail-tab" data-dtab="prime">💼 Prime Contract</div>
       <div class="detail-tab" data-dtab="reports">Reports</div>
       <div class="detail-tab" data-dtab="submittals">Submittals</div>
+      <div class="detail-tab" data-dtab="iom">IOM</div>
+      <div class="detail-tab" data-dtab="warranty">Warranty</div>
       <div class="detail-tab" data-dtab="change-orders">Change Orders</div>
       <div class="detail-tab" data-dtab="rfis">RFIs</div>
     </div>
@@ -658,6 +660,48 @@
         <div id="submittalsEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">
           No submittals yet.<br>Tap <strong>Create new submittal</strong> to make the first one.
         </div>
+      </div>
+    </div>
+
+    <!-- IOM TAB -->
+    <div class="detail-tab-content" id="tabIOM" data-dtab="iom">
+      <div style="padding:16px;">
+        <div id="iomActions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:16px">
+          <a id="btnNewIOM" href="#" onclick="event.preventDefault(); openCloseoutDoc('iom');" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid #d1d5db;border-radius:12px;text-decoration:none;color:inherit;">
+            <div style="width:42px;height:42px;border-radius:12px;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📘</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:14px;color:#111318;">Create O&amp;M / IOM manual</div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px;">Same steps as a submittal: cover letter with the project info + manufacturer IOM PDFs → Save to Drive, Send or Download</div>
+            </div>
+            <div style="color:#111318;font-size:20px;font-weight:700;">›</div>
+          </a>
+        </div>
+        <div id="iomLog" style="display:none;">
+          <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">IOM log</div>
+          <div id="iomLogList"></div>
+        </div>
+        <div id="iomEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">No O&amp;M / IOM manuals yet.</div>
+      </div>
+    </div>
+
+    <!-- WARRANTY TAB -->
+    <div class="detail-tab-content" id="tabWarranty" data-dtab="warranty">
+      <div style="padding:16px;">
+        <div id="warrantyActions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:16px">
+          <a id="btnNewWarranty" href="#" onclick="event.preventDefault(); openCloseoutDoc('warranty');" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid #d1d5db;border-radius:12px;text-decoration:none;color:inherit;">
+            <div style="width:42px;height:42px;border-radius:12px;background:#5D822C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🛡️</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:14px;color:#111318;">Create warranty letter</div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px;">Our subcontractor's warranty letter (NWAC template) with the project, GC and dates filled in + manufacturer warranties → Save, Send or Download</div>
+            </div>
+            <div style="color:#111318;font-size:20px;font-weight:700;">›</div>
+          </a>
+        </div>
+        <div id="warrantyLog" style="display:none;">
+          <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Warranty letters</div>
+          <div id="warrantyLogList"></div>
+        </div>
+        <div id="warrantyEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">No warranty letters yet.</div>
       </div>
     </div>
 
@@ -1006,7 +1050,7 @@ requireAuth().catch(function(){});
     try { var prof = await getAuthProfile(); isTechUser = !!(prof && prof.role === 'tech'); } catch (e) { isTechUser = true; }
     if (isTechUser) {
       document.querySelectorAll('#detailTabs .detail-tab[data-dtab="prime"], #detailTabs .detail-tab[data-dtab="change-orders"]').forEach(function(t) { t.style.display = 'none'; });
-      ['tabPrime', 'tabChangeOrders', 'setupSteps', 'submittalActions'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      ['tabPrime', 'tabChangeOrders', 'setupSteps', 'submittalActions', 'iomActions', 'warrantyActions'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
       document.querySelectorAll('a[href="invoicing.html"]').forEach(function(a) { a.style.display = 'none'; });
     }
     return isTechUser;
@@ -1608,6 +1652,15 @@ requireAuth().catch(function(){});
     }
   }
 
+  // chips on saved forms: open the PDF filed in the project folder, start a revision
+  function docChips(fd, formUrl, withRevision) {
+    var h = '';
+    if (fd && fd._driveUrl) h += '<a href="' + escHtml(fd._driveUrl) + '" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;font-weight:700;color:#0696D7;text-decoration:none;padding:3px 8px;border:1px solid #bae6fd;border-radius:6px;background:#fff">PDF ↗</a>';
+    if (withRevision && formUrl) h += '<a href="' + formUrl + '&revise=1" onclick="event.stopPropagation()" style="font-size:11px;font-weight:700;color:#111318;text-decoration:none;padding:3px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff">Revision</a>';
+    if (fd && fd._attachments && fd._attachments.length) h += '<span style="font-size:11px;color:#64748b">📎 ' + fd._attachments.length + '</span>';
+    return h ? '<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">' + h + '</span>' : '';
+  }
+
   function renderProjectReportsList() {
     var countEl = document.getElementById('reportsCount');
     var listEl = document.getElementById('projectReportsList');
@@ -1665,6 +1718,7 @@ requireAuth().catch(function(){});
               '<div style="font-weight:600;font-size:14px;">' + escHtml(num) + '</div>' +
               '<div style="font-size:12px;color:var(--nw-muted);margin-top:2px;">' + escHtml(dateStr) + ' · ' + escHtml(tech) + '</div>' +
             '</div>' +
+            docChips(r.form_data, editUrl, true) +
             '<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--nw-section);color:var(--nw-muted);white-space:nowrap;">' + statusBadge + '</span>' +
             '<span style="color:var(--nw-primary);font-size:18px;font-weight:700;">›</span>' +
           '</a>';
@@ -1749,6 +1803,7 @@ requireAuth().catch(function(){});
       html += '<span>' + date + '</span>';
       html += '<span style="font-weight:600;">' + escHtml(total) + '</span>';
       html += '</div>';
+      html += '<div style="margin-top:8px">' + docChips(fd, null, false) + '</div>';
       html += '</div>';
     });
     container.innerHTML = html;
@@ -1820,19 +1875,26 @@ requireAuth().catch(function(){});
   // Submittal log (submittals table): number, revision, status; the PDFs live in Drive / Submittals
   var SUBMITTAL_STATUS = [['saved', 'Saved'], ['sent', 'Sent'], ['approved', 'Approved'], ['approved-as-noted', 'Approved as noted'], ['revise-resubmit', 'Revise & resubmit'], ['rejected', 'Rejected']];
   var SUBMITTAL_COLOR = { saved: '#6b7280', sent: '#0696D7', approved: '#15803d', 'approved-as-noted': '#65a30d', 'revise-resubmit': '#d97706', rejected: '#dc2626' };
-  async function loadSubmittals(projectId) {
-    var list = document.getElementById('submittalLogList'), wrap = document.getElementById('submittalLog'), empty = document.getElementById('submittalsEmpty');
+  var DOC_KINDS = {
+    submittal: { list: 'submittalLogList', wrap: 'submittalLog', empty: 'submittalsEmpty', prefix: 'SUB', page: 'submittal.html?', again: 'Resubmit' },
+    iom:       { list: 'iomLogList',       wrap: 'iomLog',       empty: 'iomEmpty',        prefix: 'IOM', page: 'submittal.html?kind=iom&', again: 'Resubmit' },
+    warranty:  { list: 'warrantyLogList',  wrap: 'warrantyLog',  empty: 'warrantyEmpty',   prefix: 'W',   page: 'warranty.html?', again: 'Revise' }
+  };
+  async function loadSubmittals(projectId) { ['submittal', 'iom', 'warranty'].forEach(function(k) { loadDocLog(projectId, k); }); }
+  async function loadDocLog(projectId, kind) {
+    var K = DOC_KINDS[kind];
+    var list = document.getElementById(K.list), wrap = document.getElementById(K.wrap), empty = document.getElementById(K.empty);
     if (!list) return;
-    var r = await supabaseClient.from('submittals').select('*').eq('project_id', projectId).order('number', { ascending: false }).order('revision', { ascending: false });
+    var r = await supabaseClient.from('submittals').select('*').eq('project_id', projectId).eq('kind', kind).order('number', { ascending: false }).order('revision', { ascending: false });
     var tech = await techCheck();
     if (currentProjectId !== projectId) return;
     var rows = r.data || [];
     wrap.style.display = rows.length ? '' : 'none';
     empty.style.display = rows.length ? 'none' : '';
-    if (tech) empty.innerHTML = 'No submittals yet.';
+    if (tech && kind === 'submittal') empty.innerHTML = 'No submittals yet.';
     var pad = function(n) { return n < 100 ? ('00' + n).slice(-3) : String(n); };
     list.innerHTML = rows.map(function(s) {
-      var no = 'SUB-' + pad(s.number) + (s.revision ? ' R' + s.revision : '');
+      var no = K.prefix + '-' + pad(s.number) + (s.revision ? ' R' + s.revision : '');
       var st = s.status || 'saved', col = SUBMITTAL_COLOR[st] || '#6b7280';
       var stLabel = (SUBMITTAL_STATUS.filter(function(x) { return x[0] === st; })[0] || [st, st])[1];
       var sel = tech ? '<span style="font-size:11px;font-weight:700;color:' + col + '">' + escHtml(stLabel) + '</span>' :
@@ -1843,8 +1905,8 @@ requireAuth().catch(function(){});
         '<div style="flex:1;min-width:180px"><div style="font-weight:700;font-size:14px;color:#111318">' + escHtml(no) + ' — ' + escHtml(s.title) + '</div>' +
         '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escHtml(meta) + '</div></div>' + sel +
         (s.drive_url ? '<a href="' + escHtml(s.drive_url) + '" target="_blank" style="font-size:12px;font-weight:700;color:#0696D7;text-decoration:none">Open ↗</a>' : '') +
-        (tech ? '' : '<a href="submittal.html?project=' + encodeURIComponent(projectId) + '&id=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">Send</a>' +
-          '<a href="submittal.html?project=' + encodeURIComponent(projectId) + '&from=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">Resubmit</a>') +
+        (tech ? '' : '<a href="' + K.page + 'project=' + encodeURIComponent(projectId) + '&id=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">' + (kind === 'warranty' ? 'Open / Send' : 'Send') + '</a>' +
+          '<a href="' + K.page + 'project=' + encodeURIComponent(projectId) + '&from=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">' + K.again + '</a>') +
         '</div>';
     }).join('');
     list.querySelectorAll('[data-sub-status]').forEach(function(el) {
@@ -1917,6 +1979,7 @@ requireAuth().catch(function(){});
       html += '<span>' + date + '</span>';
       html += '<span style="font-weight:600;">' + escHtml(fd.fromName || '') + '</span>';
       html += '</div>';
+      html += '<div style="margin-top:8px">' + docChips(fd, 'rfi.html?edit=' + r.id, true) + '</div>';
       html += '</div>';
     });
     container.innerHTML = html;
@@ -2014,6 +2077,12 @@ requireAuth().catch(function(){});
       var content = document.querySelector('.detail-tab-content[data-dtab="' + tabName + '"]');
       if (content) content.classList.add('active');
     });
+
+    // O&M / IOM manual (submittal.html?kind=iom) and warranty letter (warranty.html)
+    window.openCloseoutDoc = function(kind) {
+      if (!currentProjectId) return;
+      window.location.href = (kind === 'warranty' ? 'warranty.html?' : 'submittal.html?kind=iom&') + 'project=' + encodeURIComponent(currentProjectId);
+    };
 
     // Create a submittal (cover letter + vendor PDF) for the open project
     window.openNewSubmittal = function() {
@@ -2259,6 +2328,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=218"></script>
+<script src="sw-register.js?v=221"></script>
 </body>
 </html>

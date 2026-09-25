@@ -235,7 +235,7 @@ requireAuth().catch(function(){});
 const draftId = initializeDraftForm('startup', 'startup-report.html');
 const SAVE_KEY_DRAFT = 'nw_draft_' + draftId;
 
-const reportId='SUP-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.random().toString(36).substr(2,4).toUpperCase();
+let reportId ='SUP-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.random().toString(36).substr(2,4).toUpperCase();
 document.getElementById('reportId').textContent=reportId;
 document.getElementById('suDate').value=new Date().toISOString().slice(0,10);
 
@@ -881,6 +881,8 @@ function openStartupAIChat() {
 }
 </script>
 <script src="form-utils.js?v=114"></script>
-<script src="sw-register.js?v=218"></script>
+<script src="nw-drive.js?v=221"></script>
+<script src="nw-form-kit.js?v=221"></script>
+<script src="sw-register.js?v=221"></script>
 </body>
 </html>

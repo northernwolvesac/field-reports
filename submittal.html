@@ -12,12 +12,12 @@
 <title>Submittal — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=217"></script>
-<script src="auth.js?v=217"></script>
-<script src="nw-drive.js?v=217"></script>
+<script src="supabase-config.js?v=221"></script>
+<script src="auth.js?v=221"></script>
+<script src="nw-drive.js?v=221"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="pdf-utils.js?v=217"></script>
+<script src="pdf-utils.js?v=221"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 110px; }
   .sb-wrap { max-width: 860px; margin: 0 auto; padding: 0 14px; }
@@ -185,6 +185,21 @@ requireAuth().catch(function(){});
   var projectId = params.get('project');
   var editId = params.get('id');          // open a saved submittal (view / send again)
   var fromId = params.get('from');        // resubmit: copy a submittal as its next revision
+
+  // One page, two kinds of transmittal: submittal.html?kind=iom = O&M / IOM manual (same sequence, IOM & WARRANTY folder)
+  var KINDS = {
+    submittal: { prefix: 'SUB', noun: 'Submittal', heading: 'SUBMITTAL', base: 'Submittals', category: 'submittals', tab: 'Submittals',
+      types: ['Product Data', 'Shop Drawings', 'Samples', 'IOM / O&M Manual', 'Warranty', 'Test / TAB Report', 'Certificates', 'Other'],
+      cert: 'Northern Wolves Air Conditioning has reviewed this submittal and certifies that it complies with the contract documents, except as noted above.',
+      attTitle: 'Submittal PDF(s) from the vendor', titlePh: 'e.g. AC Units RTU-1 to RTU-3' },
+    iom: { prefix: 'IOM', noun: 'O&M / IOM Manual', heading: 'O&M / IOM MANUAL', base: 'IOM & WARRANTY', category: 'manuals', tab: 'IOM',
+      types: ['IOM / O&M Manual', 'Warranty certificates', 'Start-up / test reports', 'Parts list', 'Maintenance schedule', 'Other'],
+      cert: 'Northern Wolves Air Conditioning submits the operation & maintenance (IOM) documentation listed above for the equipment furnished and installed on this project.',
+      attTitle: 'IOM / O&M PDF(s) from the manufacturer', titlePh: 'e.g. RTU-1 to RTU-3 — Carrier 48FC IOM' }
+  };
+  var KIND = KINDS[(params.get('kind') || '').toLowerCase()] ? (params.get('kind') || '').toLowerCase() : 'submittal';
+  var KD = KINDS[KIND];
+  var BASE_RE = new RegExp('^' + KD.base.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&') + '$', 'i');
   var project = null, prime = null, profile = null, userId = null, userEmail = '';
   var attachments = [];                   // [{file, name, size, pages}]
   var saved = null;                       // submittals row once saved
@@ -209,13 +224,22 @@ requireAuth().catch(function(){});
   init().catch(function(e) { console.error(e); block('Could not load: ' + (e.message || e)); });
 
   async function init() {
-    if (!projectId) { block('Open this page from a project (Projects → Submittals → Create new submittal).'); return; }
+    document.title = KD.noun + ' — Northern Wolves AC';
+    $('pageTitle').textContent = 'New ' + KD.noun;
+    document.querySelector('#formWrap .sb-card:nth-child(2) h3').textContent = KD.noun;
+    document.querySelector('label[for=fNumber], #fNumber').previousElementSibling.textContent = KD.prefix + ' No.';
+    $('fType').innerHTML = KD.types.map(function(t) { return '<option>' + esc(t) + '</option>'; }).join('');
+    $('attCard').querySelector('h3').textContent = KD.attTitle;
+    $('fTitle').placeholder = KD.titlePh;
+    $('fFolder').innerHTML = '<option value="' + esc(KD.base) + '">' + esc(KD.base) + '</option>';
+    $('folderPreview').textContent = KD.base;
+    if (!projectId) { block('Open this page from a project (Projects → ' + KD.tab + ').'); return; }
     try {
       var u = await supabaseClient.auth.getUser();
       if (u && u.data && u.data.user) { userId = u.data.user.id; userEmail = u.data.user.email || ''; }
       profile = await getAuthProfile();
     } catch (e) {}
-    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { block('Submittals are prepared by the office (project managers). Ask your PM if you need one.'); return; }
+    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { block(KD.noun + 's are prepared by the office (project managers). Ask your PM if you need one.'); return; }
 
     var pr = await supabaseClient.from('projects').select('*').eq('id', projectId).maybeSingle();
     project = pr.data;
@@ -239,7 +263,7 @@ requireAuth().catch(function(){});
     $('fFromPhone').value = profile.phone || '';
     $('fDate').value = today();
 
-    var all = await supabaseClient.from('submittals').select('*').eq('project_id', projectId).order('number', { ascending: false });
+    var all = await supabaseClient.from('submittals').select('*').eq('project_id', projectId).eq('kind', KIND).order('number', { ascending: false });
     var rows = all.data || [];
     $('fNumber').value = pad((rows[0] ? rows[0].number : 0) + 1);
 
@@ -254,9 +278,9 @@ requireAuth().catch(function(){});
     }
     if (editId && src) {
       saved = src; dirty = false;
-      $('pageTitle').textContent = 'Submittal ' + pad(src.number) + (src.revision ? ' Rev ' + src.revision : '');
-      $('attCard').querySelector('h3').textContent = 'Submittal PDF';
-      $('drop').innerHTML = 'The saved package is in Google Drive (below). To change it, use <b>Resubmit</b> in the project\'s Submittals tab.';
+      $('pageTitle').textContent = KD.noun + ' ' + pad(src.number) + (src.revision ? ' Rev ' + src.revision : '');
+      $('attCard').querySelector('h3').textContent = KD.noun + ' PDF';
+      $('drop').innerHTML = 'The saved package is in Google Drive (below). To change it, use <b>Resubmit</b> in the project\'s ' + esc(KD.tab) + ' tab.';
       $('drop').style.cursor = 'default';
       document.querySelectorAll('#formWrap input, #formWrap select, #formWrap textarea').forEach(function(el) { el.disabled = true; });
       $('btnSave').style.display = 'none';
@@ -296,10 +320,10 @@ requireAuth().catch(function(){});
     try {
       var t = await NWDrive.request({ action: 'list_tree', projectName: project.project_name, projectId: projectId, maxDepth: 2 });
       var items = t.items || [];
-      var sub = items.filter(function(i) { return i.folder && i.parent === t.folderId && /^submittals$/i.test(i.name); })[0];
+      var sub = items.filter(function(i) { return i.folder && i.parent === t.folderId && BASE_RE.test(i.name); })[0];
       var subs = sub ? items.filter(function(i) { return i.folder && i.parent === sub.id; }) : [];
       subs.sort(function(a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); })
-        .forEach(function(f) { addOption(sel, 'Submittals/' + f.name, 'Submittals / ' + f.name); });
+        .forEach(function(f) { addOption(sel, KD.base + '/' + f.name, KD.base + ' / ' + f.name); });
       if (!editId && !fromId) {
         var maxFolder = subs.reduce(function(m, f) { var n = parseInt((f.name.match(/^\s*(\d+)[\s._-]/) || [])[1], 10); return n > m ? n : m; }, 0);
         if (maxFolder + 1 > (parseInt(val('fNumber'), 10) || 0)) $('fNumber').value = pad(maxFolder + 1);
@@ -317,8 +341,8 @@ requireAuth().catch(function(){});
   }
   function targetFolder() {
     var v = $('fFolder').value;
-    if (v === '__new') { var n = val('fNewFolder').replace(/[\\/]+/g, '-'); return n ? 'Submittals/' + n : 'Submittals'; }
-    return v || 'Submittals';
+    if (v === '__new') { var n = val('fNewFolder').replace(/[\\/]+/g, '-'); return n ? KD.base + '/' + n : KD.base; }
+    return v || KD.base;
   }
 
   function bind() {
@@ -369,8 +393,8 @@ requireAuth().catch(function(){});
     $('attList').querySelectorAll('[data-up]').forEach(function(b) { b.onclick = function() { var i = +b.dataset.up, x = attachments[i]; attachments[i] = attachments[i - 1]; attachments[i - 1] = x; dirty = true; renderAtt(); }; });
   }
 
-  function subNo() { var r = parseInt(val('fRevision'), 10) || 0; return 'SUB-' + pad(val('fNumber')) + (r ? ' R' + r : ''); }
-  function fileName() { return (subNo() + ' - ' + (val('fTitle') || 'Submittal')).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120) + '.pdf'; }
+  function subNo() { var r = parseInt(val('fRevision'), 10) || 0; return KD.prefix + '-' + pad(val('fNumber')) + (r ? ' R' + r : ''); }
+  function fileName() { return (subNo() + ' - ' + (val('fTitle') || KD.noun)).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120) + '.pdf'; }
 
   function validate() {
     if (!val('fTitle')) { toast('Enter the submittal title'); $('fTitle').focus(); return false; }
@@ -399,7 +423,7 @@ requireAuth().catch(function(){});
     var logo = await loadLogo();
     if (logo.data) doc.addImage(logo.data, 'JPEG', M, y - 6, 120, 120 * logo.ratio);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor.apply(doc, ink);
-    doc.text('SUBMITTAL', R, y + 14, { align: 'right' });
+    doc.text(KD.heading, R, y + 14, { align: 'right' });
     doc.setFontSize(10); doc.setTextColor.apply(doc, blue); doc.text('TRANSMITTAL / COVER LETTER', R, y + 30, { align: 'right' });
     doc.setFont('helvetica', 'normal'); doc.setTextColor.apply(doc, ink); doc.setFontSize(10);
     doc.text('No. ' + pad(val('fNumber')) + '    Rev. ' + (parseInt(val('fRevision'), 10) || 0) + '    Date ' + fmtDate(val('fDate')), R, y + 46, { align: 'right' });
@@ -435,7 +459,7 @@ requireAuth().catch(function(){});
     var frBlock = [val('fFromCompany'), val('fFromName'), val('fFromAddress'), [val('fFromEmail'), val('fFromPhone')].filter(Boolean).join('  ·  ')].filter(Boolean).join('\n');
     pair([['Submitted to', toBlock], ['Submitted by', frBlock]], 2);
 
-    section('Submittal');
+    section(KD.noun);
     pair([['Title / Equipment', val('fTitle')], ['Spec section', val('fSpec')], ['Type', val('fType')]], 3);
     pair([['Manufacturer', val('fMfr')], ['Model / Tags', val('fModel')], ['Action requested', val('fAction')]], 3);
     if (val('fDue')) pair([['Response needed by', fmtDate(val('fDue'))]], 3);
@@ -453,7 +477,7 @@ requireAuth().catch(function(){});
     // contractor certification + reviewer stamp area
     if (y > 600) { doc.addPage(); y = 50; }
     doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, mute);
-    var cert = doc.splitTextToSize('Northern Wolves Air Conditioning has reviewed this submittal and certifies that it complies with the contract documents, except as noted above.', R - M);
+    var cert = doc.splitTextToSize(KD.cert, R - M);
     doc.text(cert, M, y); y += cert.length * 11 + 10;
     var boxH = 118, half = (R - M) / 2;
     doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.8); doc.rect(M, y, R - M, boxH); doc.line(M + half, y, M + half, y + boxH);
@@ -523,16 +547,16 @@ requireAuth().catch(function(){});
     busy(true, 'Saving to Google Drive…');
     var name = fileName(), folder = targetFolder();
     var up = await NWDrive.request({ action: 'upload_file', projectName: project.project_name, projectId: projectId, fileName: name,
-      fileData: await NWDrive.toBase64(blob), mimeType: 'application/pdf', category: 'submittals', folder: folder });
+      fileData: await NWDrive.toBase64(blob), mimeType: 'application/pdf', category: KD.category, folder: folder });
     var df = up.file;
     var row = Object.assign(rowData(), { drive_id: df.id, drive_url: df.viewUrl || df.url, file_name: name, drive_folder: folder, updated_at: new Date().toISOString() });
     var res;
     if (saved && saved.id) res = await supabaseClient.from('submittals').update(row).eq('id', saved.id).select().single();
-    else res = await supabaseClient.from('submittals').insert(Object.assign(row, { status: 'saved', created_by: userId, created_by_name: profile.full_name || null })).select().single();
+    else res = await supabaseClient.from('submittals').insert(Object.assign(row, { kind: KIND, status: 'saved', created_by: userId, created_by_name: profile.full_name || null })).select().single();
     if (res.error) {
       busy(false);
       try { await NWDrive.deleteFile(df.id); } catch (e) {}
-      if (/duplicate|unique/i.test(res.error.message)) { toast('Submittal ' + pad(row.number) + ' Rev ' + row.revision + ' already exists — change the number or revision'); return null; }
+      if (/duplicate|unique/i.test(res.error.message)) { toast(KD.noun + ' ' + pad(row.number) + ' Rev ' + row.revision + ' already exists — change the number or revision'); return null; }
       throw new Error(res.error.message);
     }
     var prevDrive = saved && saved.drive_id !== df.id ? saved.drive_id : null;
@@ -541,7 +565,7 @@ requireAuth().catch(function(){});
       try { await NWDrive.deleteFile(prevDrive); await supabaseClient.from('project_files').delete().eq('drive_id', prevDrive); } catch (e) {}
     }
     try {
-      await supabaseClient.from('project_files').insert({ project_id: projectId, category: 'submittals', filename: name, storage_path: null,
+      await supabaseClient.from('project_files').insert({ project_id: projectId, category: KD.category, filename: name, storage_path: null,
         drive_id: df.id, drive_url: row.drive_url, size_bytes: blob.size, content_type: 'application/pdf', uploaded_by: userId });
     } catch (e) { console.warn('[submittal] project_files', e); }
     try { Object.keys(sessionStorage).forEach(function(k) { if (k.indexOf(projectId) >= 0) sessionStorage.removeItem(k); }); } catch (e) {}
@@ -552,7 +576,7 @@ requireAuth().catch(function(){});
   function showSaved() {
     if (!saved) return;
     var b = $('savedBox');
-    b.innerHTML = '✅ <b>' + esc(saved.file_name || 'Submittal') + '</b> is saved in Drive (' + esc((saved.drive_folder || 'Submittals').replace('/', ' / ')) + ').  <a href="' + esc(saved.drive_url) + '" target="_blank">Open ↗</a>' +
+    b.innerHTML = '✅ <b>' + esc(saved.file_name || KD.noun) + '</b> is saved in Drive (' + esc((saved.drive_folder || KD.base).replace('/', ' / ')) + ').  <a href="' + esc(saved.drive_url) + '" target="_blank">Open ↗</a>' +
       (saved.sent_at ? '<br>Sent to ' + esc(saved.sent_to || '') + ' on ' + new Date(saved.sent_at).toLocaleDateString() : '');
     b.style.display = 'block';
   }
@@ -562,9 +586,10 @@ requireAuth().catch(function(){});
     var no = subNo(), title = val('fTitle');
     $('mTo').value = val('fToEmail');
     $('mCc').value = '';
-    $('mSubject').value = val('fProject') + ' - Submittal ' + no + ' - ' + title;
+    $('mSubject').value = val('fProject') + ' - ' + KD.noun + ' ' + no + ' - ' + title;
+    document.querySelector('#sendModal h3').textContent = 'Send ' + KD.noun;
     $('mBody').value = 'Hello' + (val('fToAttn') ? ' ' + val('fToAttn').split(' ')[0] : '') + ',\n\n' +
-      'Please find attached Submittal ' + no + ' - ' + title + (val('fSpec') ? ' (Spec Section ' + val('fSpec') + ')' : '') + ' for ' + val('fProject') + ', ' + val('fAction').toLowerCase() + '.' +
+      'Please find attached ' + KD.noun + ' ' + no + ' - ' + title + (val('fSpec') ? ' (Spec Section ' + val('fSpec') + ')' : '') + ' for ' + val('fProject') + ', ' + val('fAction').toLowerCase() + '.' +
       (val('fDue') ? '\nWe kindly ask for your response by ' + fmtDate(val('fDue')) + '.' : '') +
       '\n\nPlease let us know if you have any questions.\n\nThank you,\n' + val('fFromName') + '\n' + val('fFromCompany') + (val('fFromPhone') ? '\n' + val('fFromPhone') : '') + (val('fFromEmail') ? '\n' + val('fFromEmail') : '');
     $('sendModal').classList.add('show');
@@ -587,6 +612,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=218"></script>
+<script src="sw-register.js?v=221"></script>
 </body>
 </html>

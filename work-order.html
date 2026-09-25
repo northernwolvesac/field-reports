@@ -216,7 +216,7 @@ requireAuth().catch(function(){});
 const draftId = initializeDraftForm('work-order', 'work-order.html');
 const SAVE_KEY_DRAFT = 'nw_draft_' + draftId;
 
-const reportId='WO-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.random().toString(36).substr(2,4).toUpperCase();
+let reportId ='WO-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.random().toString(36).substr(2,4).toUpperCase();
 document.getElementById('reportId').textContent=reportId;
 document.getElementById('woDate').value=new Date().toISOString().slice(0,10);
 
@@ -747,6 +747,8 @@ function openWorkOrderAIChat() {
 }
 </script>
 <script src="form-utils.js?v=114"></script>
-<script src="sw-register.js?v=218"></script>
+<script src="nw-drive.js?v=221"></script>
+<script src="nw-form-kit.js?v=221"></script>
+<script src="sw-register.js?v=221"></script>
 </body>
 </html>

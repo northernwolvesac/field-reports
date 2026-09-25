@@ -167,7 +167,7 @@ const draftId = initializeDraftForm('rfi', 'rfi.html');
 const SAVE_KEY_DRAFT = 'nw_draft_' + draftId;
 // If URL has ?edit=CLOUD_ID, restore from Supabase after DOM is fully set up
 if (typeof initEditMode === 'function') { setTimeout(function(){ initEditMode('rfi'); }, 300); }
-const reportId='RFI-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.random().toString(36).substr(2,4).toUpperCase();
+let reportId ='RFI-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.random().toString(36).substr(2,4).toUpperCase();
 document.getElementById('reportId').textContent=reportId;
 document.getElementById('rfiDate').value=new Date().toISOString().slice(0,10);
 document.getElementById('fromCompany').value='Northern Wolves Inc';
@@ -395,6 +395,8 @@ function openRfiAIChat() {
 }
 </script>
 <script src="form-utils.js?v=114"></script>
-<script src="sw-register.js?v=218"></script>
+<script src="nw-drive.js?v=221"></script>
+<script src="nw-form-kit.js?v=221"></script>
+<script src="sw-register.js?v=221"></script>
 </body>
 </html>

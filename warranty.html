@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>Warranty Letter — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=221"></script>
+<script src="auth.js?v=221"></script>
+<script src="nw-drive.js?v=221"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="pdf-utils.js?v=221"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 110px; }
+  .sb-wrap { max-width: 860px; margin: 0 auto; padding: 0 14px; }
+  .sb-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .sb-top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .sb-top .ttl { flex: 1; min-width: 0; }
+  .sb-top .ttl b { display: block; font-size: 16px; color: #111318; }
+  .sb-top .ttl span { font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .sb-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; margin: 14px 0; padding: 14px 16px; }
+  .sb-card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: #4b5563; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .full { grid-column: 1 / -1; }
+  .fld label { display: block; font-size: 11px; font-weight: 700; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .fld input, .fld select, .fld textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111318; font-family: inherit; }
+  .fld textarea { min-height: 80px; resize: vertical; }
+  .fld input:disabled, .fld select:disabled, .fld textarea:disabled { background: #f3f4f6; color: #4b5563; }
+  .req::after { content: ' *'; color: #dc2626; }
+  .auto { font-size: 11px; color: #0696D7; font-weight: 600; margin-left: 6px; text-transform: none; letter-spacing: 0; }
+  .drop { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 22px 12px; text-align: center; color: #6b7280; font-size: 14px; cursor: pointer; background: #fafafa; }
+  .drop.over { border-color: #0696D7; background: #eff8fd; }
+  .drop b { color: #0696D7; }
+  .att { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 8px; font-size: 13px; }
+  .att .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .att .meta { color: #6b7280; font-size: 12px; white-space: nowrap; }
+  .att button { border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 13px; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e5e7eb; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); z-index: 30; }
+  .bar .in { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; }
+  .bar button { flex: 1; padding: 13px 8px; font-size: 15px; font-weight: 700; border-radius: 10px; cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #111318; }
+  .bar button.save { background: #111318; color: #fff; border-color: #111318; }
+  .bar button.send { background: #0696D7; color: #fff; border-color: #0696D7; }
+  .note { font-size: 12px; color: #6b7280; margin-top: 6px; }
+  .saved-box { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-top: 14px; display: none; }
+  .saved-box a { color: #065f46; font-weight: 700; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(17,19,24,.45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; padding: 18px; box-sizing: border-box; }
+  .modal h3 { margin: 0 0 12px; font-size: 17px; }
+  .modal .acts { display: flex; gap: 10px; margin-top: 14px; }
+  .modal .acts button { flex: 1; padding: 12px; font-size: 15px; font-weight: 700; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
+  .modal .acts button.go { background: #0696D7; border-color: #0696D7; color: #fff; }
+  .busy { position: fixed; inset: 0; background: rgba(255,255,255,.8); display: none; align-items: center; justify-content: center; z-index: 60; flex-direction: column; gap: 12px; font-size: 14px; color: #111318; font-weight: 600; }
+  .busy.show { display: flex; }
+  .spin { width: 34px; height: 34px; border: 3px solid #e5e7eb; border-top-color: #0696D7; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .blocked { text-align: center; padding: 60px 20px; color: #4b5563; }
+  @media (max-width: 640px) { .grid, .grid.three { grid-template-columns: 1fr; } .bar button { font-size: 14px; padding: 12px 4px; } }
+  .mini { border: 1px solid #d1d5db; background: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .sig-box { margin-top: 8px; min-height: 30px; }
+</style>
+
+</head>
+<body>
+<div class="sb-top">
+  <a href="#" class="back" id="backBtn">←</a>
+  <div class="ttl"><b id="pageTitle">New Warranty Letter</b><span id="projLine">Loading project…</span></div>
+  <img src="logo-header.png" alt="Northern Wolves AC" style="height:34px;width:auto">
+</div>
+
+<div class="sb-wrap" id="formWrap" style="display:none">
+
+  <div class="sb-card">
+    <h3>Letter <span class="auto">auto-filled from the project and its Prime Contract</span></h3>
+    <div class="grid three">
+      <div class="fld"><label>Warranty No.</label><input id="fNumber" inputmode="numeric"></div>
+      <div class="fld"><label>Revision</label><input id="fRevision" inputmode="numeric" value="0"></div>
+      <div class="fld"><label>Letter date</label><input id="fDate" type="date"></div>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <div class="fld"><label>To (company)</label><input id="fToCompany"></div>
+      <div class="fld"><label>Attention</label><input id="fToAttn" placeholder="optional"></div>
+      <div class="fld full"><label>To address</label><textarea id="fToAddress" style="min-height:56px" placeholder="228 N. Jackson Street&#10;Media, PA 19063"></textarea></div>
+      <div class="fld full"><label>Re</label><input id="fRe" value="PROJECT SUBCONTRACTOR'S WARRANTY"></div>
+      <div class="fld"><label>Subject (project)</label><input id="fSubject" placeholder="K9 RESORT, BROOKLYN"></div>
+      <div class="fld"><label>Agreement</label><input id="fAgreement" placeholder="Master Agreement of 04/20/2026"></div>
+      <div class="fld full"><label>Project address</label><textarea id="fProjAddress" style="min-height:56px"></textarea></div>
+      <div class="fld full"><label>Scope (after "furnish and install the …")</label><input id="fScope" value="HVAC Systems"></div>
+    </div>
+  </div>
+
+  <div class="sb-card">
+    <h3>Warranty period</h3>
+    <div class="grid three">
+      <div class="fld"><label>Years</label><select id="fYears"><option>1</option><option>2</option><option>3</option><option>5</option></select></div>
+      <div class="fld"><label>Coverage</label><select id="fCoverage"><option>Labor</option><option>Parts &amp; Labor</option><option>Parts</option></select></div>
+      <div class="fld"><label class="req">Start-up &amp; testing date</label><input id="fStart" type="date"></div>
+    </div>
+    <div class="note" id="periodNote">The warranty expires one year after the start-up date.</div>
+  </div>
+
+  <div class="sb-card">
+    <h3>General warranty terms</h3>
+    <div class="fld"><label>One term per line — wrap a line in **double stars** to print it bold; a line starting with "DISCLAIMER." prints as the fine-print disclaimer</label>
+      <textarea id="fTerms" style="min-height:260px;font-size:13px;line-height:1.45"></textarea></div>
+    <div style="margin-top:6px"><button type="button" class="mini" id="btnResetTerms">Reset to our standard terms</button></div>
+    <div class="fld" style="margin-top:12px"><label>Closing paragraph</label><textarea id="fClosing" style="min-height:70px"></textarea></div>
+  </div>
+
+  <div class="sb-card">
+    <h3>Signed by</h3>
+    <div class="grid">
+      <div class="fld"><label>Name - title</label><input id="fSigner" value="Leonid Leonidov - General Manager"></div>
+      <div class="fld"><label>Company</label><input id="fSignerCompany" value="Northern Wolves, Inc."></div>
+      <div class="fld full"><label>Signature</label>
+        <select id="fSigMode">
+          <option value="saved">Leonid Leonidov — saved signature</option>
+          <option value="draw">Sign on screen</option>
+          <option value="none">No signature (sign by hand)</option>
+        </select></div>
+    </div>
+    <div id="sigSavedBox" class="sig-box"><img id="sigSavedImg" alt="" style="max-height:48px;display:none"><span id="sigSavedMsg" class="note"></span></div>
+    <div id="sigDrawBox" style="display:none;margin-top:8px">
+      <canvas id="sigPad" width="600" height="150" style="width:100%;max-width:520px;height:130px;border:1px solid #d1d5db;border-radius:8px;background:#fff;touch-action:none"></canvas>
+      <div><button type="button" class="mini" id="btnSigClear">Clear</button></div>
+    </div>
+  </div>
+
+  <div class="sb-card" id="attCard">
+    <h3>Attachments (manufacturer warranties, start-up reports…)</h3>
+    <div class="drop" id="drop">📎 <b>Attach PDF</b> or drop files here<br><span style="font-size:12px">Added after the warranty letter, in this order</span></div>
+    <input type="file" id="fileIn" accept="application/pdf,.pdf" multiple style="display:none">
+    <div id="attList"></div>
+  </div>
+
+  <div class="sb-card">
+    <h3>Save to Google Drive</h3>
+    <div class="grid">
+      <div class="fld"><label>Folder</label><select id="fFolder"><option value="IOM & WARRANTY">IOM &amp; WARRANTY</option></select></div>
+      <div class="fld" id="newFolderFld" style="display:none"><label>New sub-folder name</label><input id="fNewFolder" placeholder="e.g. Warranty"></div>
+    </div>
+    <div class="note">Saved as one PDF (letter + attachments) in NW Projects / <span id="projFolderName">project</span> / <span id="folderPreview">IOM &amp; WARRANTY</span></div>
+    <div class="saved-box" id="savedBox"></div>
+  </div>
+</div>
+
+<div class="blocked" id="blocked" style="display:none"></div>
+
+<div class="bar" id="bar" style="display:none"><div class="in">
+  <button class="save" id="btnSave">💾 Save</button>
+  <button class="send" id="btnSend">✉️ Send</button>
+  <button id="btnDownload">⬇ Download</button>
+</div></div>
+
+<div class="modal-bg" id="sendModal"><div class="modal">
+  <h3>Send warranty letter</h3>
+  <div class="fld"><label class="req">To</label><input id="mTo" placeholder="name@company.com, other@company.com"></div>
+  <div class="fld" style="margin-top:10px"><label>CC</label><input id="mCc" placeholder="optional"></div>
+  <div class="fld" style="margin-top:10px"><label>Subject</label><input id="mSubject"></div>
+  <div class="fld" style="margin-top:10px"><label>Message</label><textarea id="mBody" style="min-height:150px"></textarea></div>
+  <div class="note">The warranty PDF is attached (over 20 MB it goes as a Google Drive link). You are CC'd and replies come to your email.</div>
+  <div class="acts"><button id="mCancel">Cancel</button><button class="go" id="mSend">Send</button></div>
+</div></div>
+
+<div class="busy" id="busy"><div class="spin"></div><div id="busyText">Working…</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+(function() {
+  'use strict';
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var MAX_TOTAL = 35 * 1024 * 1024;
+  var BASE = 'IOM & WARRANTY';
+  var SIG_KEY = 'signature:leonid-leonidov';
+  var STANDARD_TERMS = [
+    'Should any defect of workmanship develop during the warranty period, Northern Wolves, Inc will be responsible for repair or replacement (at our discretion) of any defective workmanship.',
+    'The Owner shall give prompt written notice of the defective work and Northern Wolves, Inc. shall have a reasonable period of time to address. During the warranty period, if Owner fails to notify Northern Wolves, Inc. and to give Northern Wolves, Inc. an opportunity to make the corrections, Owner waives the rights to require corrections by Northern Wolves, Inc. and to make a claim for breach of warranty.',
+    'It is our policy, when possible, to perform Warranty work during regular working hours. Unless the issue is an emergency, availability of personnel will be on a first call first response basis.',
+    'Northern Wolves, Inc is not responsible for warranty coverage on any equipment repaired by others, abused, altered, misused, damaged by fire, flood, or act of God, or which has not been reasonably and properly maintained, or is due to normal wear and tear.',
+    'Owner is responsible for preventive maintenance, inspections, calibration, and other general maintenance tasks.',
+    'Non-Warranty service calls are considered billable to the Owner. If the problem has been determined to be outside the scope of warranty coverage, our Service Technician will provide you with a written description of the problem encountered and with your approval, the corrective work will be performed. Other items not covered by Warranty include: any system upgrades, system parameter adjustments, problems with equipment other than that provided by Northern Wolves, Inc, etc.',
+    'This is non-revolving warranty, in that work repaired during the warranty period does not extend coverage beyond the original time period.',
+    '**All existing Landlord’s equipment is NOT included in NWAC’s warranty.**',
+    'DISCLAIMER. This is the sole warranty given by Northern Wolves, Inc. It is in lieu of all other warranties, expressed or implied, including the warranties of merchantability and fitness for a particular purpose and all warranties arising from course of dealing or usage of trade.'
+  ].join('\n');
+  var STANDARD_CLOSING = 'Let us take this opportunity to thank you again for selecting Northern Wolves, Inc for your project. Should you have any questions or concerns regarding your new system please do not hesitate to call us.';
+  var YEAR_WORDS = { 1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five' };
+
+  var params = new URLSearchParams(location.search);
+  var projectId = params.get('project'), editId = params.get('id'), fromId = params.get('from');
+  var project = null, prime = null, profile = null, userId = null, userEmail = '';
+  var attachments = [], saved = null, dirty = true, savedSig = null, padDirty = false;
+  var $ = function(id) { return document.getElementById(id); };
+  var val = function(id) { return ($(id).value || '').trim(); };
+
+  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3500); }
+  function busy(on, txt) { $('busy').classList.toggle('show', !!on); if (txt) $('busyText').textContent = txt; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function pad(n) { n = parseInt(n, 10) || 0; return n < 100 ? ('00' + n).slice(-3) : String(n); }
+  function mb(b) { return (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB'; }
+  function fmtDate(d) { if (!d) return ''; var p = d.split('-'); return p.length === 3 ? p[1] + '/' + p[2] + '/' + p[0] : d; }
+  function today() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function addYears(iso, n) { if (!iso) return ''; var p = iso.split('-').map(Number); var d = new Date(p[0] + n, p[1] - 1, p[2]); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+
+  $('backBtn').addEventListener('click', function(e) { e.preventDefault(); if (history.length > 1) history.back(); else location.href = 'projects.html'; });
+
+  init().catch(function(e) { console.error(e); block('Could not load: ' + (e.message || e)); });
+
+  async function init() {
+    if (!projectId) { block('Open this page from a project (Projects → Warranty).'); return; }
+    try {
+      var u = await supabaseClient.auth.getUser();
+      if (u && u.data && u.data.user) { userId = u.data.user.id; userEmail = u.data.user.email || ''; }
+      profile = await getAuthProfile();
+    } catch (e) {}
+    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { block('Warranty letters are prepared by the office.'); return; }
+    var pr = await supabaseClient.from('projects').select('*').eq('id', projectId).maybeSingle();
+    project = pr.data;
+    if (!project) { block('Project not found.'); return; }
+    try { var ap = await supabaseClient.from('aia_projects').select('*').eq('project_id', projectId).maybeSingle(); prime = ap.data || null; } catch (e) {}
+
+    var customer = ((project.notes || '').match(/^Customer: (.+)$/m) || [])[1] || '';
+    var cityLine = [project.city, [project.state, project.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    $('projLine').textContent = project.project_name + (project.address ? ' — ' + project.address : '');
+    $('projFolderName').textContent = project.project_name;
+    $('fDate').value = today();
+    $('fToCompany').value = (prime && prime.client_name) || customer || '';
+    $('fToAddress').value = (prime && prime.client_address) || '';
+    $('fSubject').value = (project.project_name + (project.city ? ', ' + project.city : '')).toUpperCase();
+    $('fAgreement').value = prime && prime.contract_date ? 'Master Agreement of ' + fmtDate(prime.contract_date) : (prime && prime.contract_number ? 'Contract # ' + prime.contract_number : '');
+    $('fProjAddress').value = [project.address, cityLine].filter(Boolean).join('\n');
+    $('fTerms').value = STANDARD_TERMS;
+    $('fClosing').value = STANDARD_CLOSING;
+
+    var all = await supabaseClient.from('submittals').select('*').eq('project_id', projectId).eq('kind', 'warranty').order('number', { ascending: false });
+    var rows = all.data || [];
+    $('fNumber').value = pad((rows[0] ? rows[0].number : 0) + 1);
+    var src = (editId || fromId) ? rows.filter(function(r) { return r.id === (editId || fromId); })[0] : null;
+    if (src) fillFrom(src);
+    if (fromId && src) {
+      var revs = rows.filter(function(r) { return r.number === src.number; }).map(function(r) { return r.revision; });
+      $('fRevision').value = Math.max.apply(null, revs) + 1; $('fDate').value = today();
+      $('pageTitle').textContent = 'Revise warranty ' + pad(src.number);
+    }
+    if (editId && src) { saved = src; dirty = false; $('pageTitle').textContent = 'Warranty ' + pad(src.number) + (src.revision ? ' Rev ' + src.revision : ''); showSaved(); }
+
+    loadSignature();
+    loadFolders(src ? src.drive_folder : null);
+    bind(); updatePeriodNote();
+    $('formWrap').style.display = ''; $('bar').style.display = '';
+  }
+  function block(msg) { $('blocked').textContent = msg; $('blocked').style.display = ''; $('projLine').textContent = ''; }
+
+  var FIELDS = ['fDate', 'fToCompany', 'fToAttn', 'fToAddress', 'fRe', 'fSubject', 'fAgreement', 'fProjAddress', 'fScope', 'fYears', 'fCoverage', 'fStart', 'fTerms', 'fClosing', 'fSigner', 'fSignerCompany', 'fSigMode'];
+  function fillFrom(r) {
+    $('fNumber').value = pad(r.number); $('fRevision').value = r.revision || 0;
+    var d = r.data || {};
+    FIELDS.forEach(function(id) { if (d[id] != null && $(id)) $(id).value = d[id]; });
+  }
+  function formData() { var d = {}; FIELDS.forEach(function(id) { d[id] = $(id).value; }); return d; }
+
+  async function loadSignature() {
+    try {
+      var r = await supabaseClient.from('app_assets').select('data,mime').eq('key', SIG_KEY).maybeSingle();
+      if (r.data && r.data.data) { savedSig = 'data:' + (r.data.mime || 'image/png') + ';base64,' + r.data.data; $('sigSavedImg').src = savedSig; $('sigSavedImg').style.display = ''; $('sigSavedMsg').textContent = ''; }
+      else $('sigSavedMsg').textContent = 'No saved signature yet — choose "Sign on screen".';
+    } catch (e) { $('sigSavedMsg').textContent = 'Saved signature not available.'; }
+    sigModeChanged();
+  }
+  function sigModeChanged() { var m = $('fSigMode').value; $('sigSavedBox').style.display = m === 'saved' ? '' : 'none'; $('sigDrawBox').style.display = m === 'draw' ? '' : 'none'; }
+
+  async function loadFolders(want) {
+    var sel = $('fFolder');
+    try {
+      var t = await NWDrive.request({ action: 'list_tree', projectName: project.project_name, projectId: projectId, maxDepth: 2 });
+      var items = t.items || [];
+      var top = items.filter(function(i) { return i.folder && i.parent === t.folderId && /^iom\s*&\s*warranty$/i.test(i.name); })[0];
+      (top ? items.filter(function(i) { return i.folder && i.parent === top.id; }) : []).sort(function(a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); })
+        .forEach(function(f) { var o = document.createElement('option'); o.value = BASE + '/' + f.name; o.textContent = BASE + ' / ' + f.name; sel.appendChild(o); });
+    } catch (e) { console.warn('[warranty] folders', e); }
+    var o2 = document.createElement('option'); o2.value = '__new'; o2.textContent = '+ New sub-folder…'; sel.appendChild(o2);
+    if (want) { if (![].some.call(sel.options, function(o) { return o.value === want; })) { var o3 = document.createElement('option'); o3.value = want; o3.textContent = want.replace('/', ' / '); sel.appendChild(o3); } sel.value = want; }
+    $('folderPreview').textContent = targetFolder().replace('/', ' / ');
+  }
+  function targetFolder() {
+    var v = $('fFolder').value;
+    if (v === '__new') { var n = val('fNewFolder').replace(/[\\/]+/g, '-'); return n ? BASE + '/' + n : BASE; }
+    return v || BASE;
+  }
+
+  function updatePeriodNote() {
+    var y = parseInt(val('fYears'), 10) || 1, s = val('fStart');
+    $('periodNote').textContent = s ? 'Warranty: ' + fmtDate(s) + ' → ' + fmtDate(addYears(s, y)) + ' (' + (YEAR_WORDS[y] || y) + '-Year ' + val('fCoverage') + ').'
+      : 'Enter the date of final system start-up and testing — the warranty ends ' + (YEAR_WORDS[y] || y).toLowerCase() + ' year' + (y > 1 ? 's' : '') + ' later.';
+  }
+
+  // ---------- signature pad ----------
+  function setupPad() {
+    var c = $('sigPad'), g = c.getContext('2d'), drawing = false, last = null;
+    g.lineWidth = 2.2; g.lineCap = 'round'; g.strokeStyle = '#111318';
+    function pos(e) { var r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; }
+    c.addEventListener('pointerdown', function(e) { drawing = true; last = pos(e); c.setPointerCapture(e.pointerId); });
+    c.addEventListener('pointermove', function(e) { if (!drawing) return; var p = pos(e); g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(p.x, p.y); g.stroke(); last = p; padDirty = true; dirty = true; });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function(ev) { c.addEventListener(ev, function() { drawing = false; }); });
+    $('btnSigClear').addEventListener('click', function() { g.clearRect(0, 0, c.width, c.height); padDirty = false; });
+  }
+
+  function bind() {
+    var drop = $('drop'), fileIn = $('fileIn');
+    drop.addEventListener('click', function() { fileIn.click(); });
+    drop.addEventListener('dragover', function(e) { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', function() { drop.classList.remove('over'); });
+    drop.addEventListener('drop', function(e) { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+    fileIn.addEventListener('change', function() { addFiles(fileIn.files).then(function() { fileIn.value = ''; }); });
+    $('fFolder').addEventListener('change', function() { $('newFolderFld').style.display = this.value === '__new' ? '' : 'none'; $('folderPreview').textContent = targetFolder().replace('/', ' / '); });
+    $('fNewFolder').addEventListener('input', function() { $('folderPreview').textContent = targetFolder().replace('/', ' / '); });
+    ['fYears', 'fCoverage', 'fStart'].forEach(function(id) { $(id).addEventListener('change', updatePeriodNote); $(id).addEventListener('input', updatePeriodNote); });
+    $('fSigMode').addEventListener('change', sigModeChanged);
+    $('btnResetTerms').addEventListener('click', function() { if (confirm('Replace the terms with our standard 9 terms?')) { $('fTerms').value = STANDARD_TERMS; dirty = true; } });
+    document.querySelectorAll('#formWrap input, #formWrap select, #formWrap textarea').forEach(function(el) { el.addEventListener('input', function() { dirty = true; }); el.addEventListener('change', function() { dirty = true; }); });
+    setupPad();
+    $('btnSave').addEventListener('click', function() { save().catch(fail); });
+    $('btnDownload').addEventListener('click', function() { download().catch(fail); });
+    $('btnSend').addEventListener('click', openSend);
+    $('mCancel').addEventListener('click', function() { $('sendModal').classList.remove('show'); });
+    $('mSend').addEventListener('click', function() { send().catch(fail); });
+  }
+  function fail(e) { busy(false); console.error('[warranty]', e); alert('Error: ' + (e && e.message ? e.message : e)); }
+
+  async function addFiles(list) {
+    var files = [].slice.call(list || []);
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { toast('Only PDF files: ' + f.name); continue; }
+      var a = { file: f, name: f.name, size: f.size, pages: null };
+      attachments.push(a);
+      try { var d = await PDFLib.PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true }); a.pages = d.getPageCount(); } catch (e) { a.pages = -1; }
+    }
+    dirty = true; renderAtt();
+  }
+  function renderAtt() {
+    $('attList').innerHTML = attachments.map(function(a, i) {
+      return '<div class="att"><span>📄</span><span class="nm">' + esc(a.name) + '</span><span class="meta">' +
+        (a.pages === -1 ? '<span style="color:#dc2626">can\'t read · </span>' : (a.pages ? a.pages + ' pg · ' : '')) + mb(a.size) + '</span>' +
+        (i > 0 ? '<button data-up="' + i + '">↑</button>' : '') + '<button data-rm="' + i + '">✕</button></div>';
+    }).join('');
+    $('attList').querySelectorAll('[data-rm]').forEach(function(b) { b.onclick = function() { attachments.splice(+b.dataset.rm, 1); dirty = true; renderAtt(); }; });
+    $('attList').querySelectorAll('[data-up]').forEach(function(b) { b.onclick = function() { var i = +b.dataset.up, x = attachments[i]; attachments[i] = attachments[i - 1]; attachments[i - 1] = x; dirty = true; renderAtt(); }; });
+  }
+
+  function warNo() { var r = parseInt(val('fRevision'), 10) || 0; return 'W-' + pad(val('fNumber')) + (r ? ' R' + r : ''); }
+  function fileName() { return (warNo() + ' - Warranty Letter - ' + (project.project_name || '')).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120) + '.pdf'; }
+  function validate() {
+    if (!val('fStart')) { toast('Enter the start-up & testing date'); $('fStart').focus(); return false; }
+    if (!val('fToCompany')) { toast('Enter who the letter goes to'); $('fToCompany').focus(); return false; }
+    if (attachments.some(function(a) { return a.pages === -1; })) { toast('One of the PDFs can\'t be read — remove it'); return false; }
+    return true;
+  }
+
+  // ---------- PDF (letterhead like the NWAC warranty template) ----------
+  var logoData = null;
+  async function loadLogo() {
+    if (logoData) return logoData;
+    try {
+      var img = new Image(); img.src = 'logo-full.png';
+      await new Promise(function(res, rej) { img.onload = res; img.onerror = rej; });
+      var c = document.createElement('canvas'); c.width = 700; c.height = Math.round(700 * img.height / img.width);
+      var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      logoData = { data: c.toDataURL('image/jpeg', 0.92), ratio: c.height / c.width };
+    } catch (e) { logoData = { data: null, ratio: 0.55 }; }
+    return logoData;
+  }
+  function signatureImage() {
+    var m = val('fSigMode');
+    if (m === 'saved') return savedSig;
+    if (m === 'draw' && padDirty) return $('sigPad').toDataURL('image/png');
+    return null;
+  }
+  function imgSize(dataUrl) { return new Promise(function(res) { var i = new Image(); i.onload = function() { res({ w: i.naturalWidth, h: i.naturalHeight }); }; i.onerror = function() { res(null); }; i.src = dataUrl; }); }
+
+  async function letterPdf() {
+    var jsPDF = window.jspdf.jsPDF, doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    var M = 72, R = 612 - 60, ink = [17, 19, 24];
+    doc.setTextColor.apply(doc, ink);
+    var logo = await loadLogo();
+    if (logo.data) doc.addImage(logo.data, 'JPEG', 42, 32, 180, 180 * logo.ratio);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+    ['Northern Wolves Inc', '(347) 463-9248', '55 9th street, Unit 55A-2,', 'Brooklyn, NY  11215', 'United States'].forEach(function(l, i) { doc.text(l, R, 60 + i * 14, { align: 'right' }); });
+    var y = 172, colR = 352;
+    doc.setFontSize(9.5); doc.text(fmtDate(val('fDate')), M, y);
+    // recipient (left)
+    var ly = y + 26;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.text(val('fToCompany').toUpperCase(), M, ly); ly += 14;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    if (val('fToAttn')) { doc.text('Attn: ' + val('fToAttn'), M, ly); ly += 14; }
+    val('fToAddress').split(/\n+/).filter(Boolean).forEach(function(l) { doc.splitTextToSize(l, colR - M - 12).forEach(function(s) { doc.text(s, M, ly); ly += 14; }); });
+    // Re: block (right)
+    var ry = y + 8;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Re:', colR, ry);
+    doc.setFontSize(9.5); var reLines = doc.splitTextToSize(val('fRe'), R - colR - 26);
+    reLines.forEach(function(s, i) { doc.text(s, colR + 24, ry + i * 12); }); ry += (reLines.length - 1) * 12;
+    ry += 15; doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    var right = ['Subject: ' + val('fSubject')].concat(val('fAgreement') ? [val('fAgreement')] : []).concat(val('fProjAddress').split(/\n+/).filter(Boolean));
+    right.forEach(function(l) { doc.splitTextToSize(l, R - colR).forEach(function(s) { doc.text(s, colR, ry); ry += 13; }); });
+    y = Math.max(ly, ry) + 22;
+
+    function para(text, size, style, gap) {
+      doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size || 10);
+      doc.splitTextToSize(text, R - M).forEach(function(s) { if (y > 740) { doc.addPage(); y = 60; } doc.text(s, M, y); y += (size || 10) * 1.3; });
+      y += gap == null ? 8 : gap;
+    }
+    var yrs = parseInt(val('fYears'), 10) || 1, start = val('fStart'), end = addYears(start, yrs);
+    para('Thank you for the opportunity to furnish and install the ' + (val('fScope') || 'HVAC Systems') + ' at ' + project.project_name + ' Project.');
+    para('Our ' + (YEAR_WORDS[yrs] || yrs) + '-Year ' + val('fCoverage') + ' warranty period began at the date of final system start-up and testing on ' + fmtDate(start) +
+      ' and will expire ' + (yrs === 1 ? 'one year' : (YEAR_WORDS[yrs] || yrs).toLowerCase() + ' years') + ' from that date on ' + fmtDate(end) + ' (at 12 AM EST).', 10, 'normal', 10);
+    para('General Warranty Terms:', 10, 'normal', 2);
+    var terms = val('fTerms').split(/\n+/).map(function(t) { return t.trim(); }).filter(Boolean);
+    var numX = M + 30, txtX = M + 64, w = R - txtX;
+    terms.forEach(function(t, i) {
+      if (y > 720) { doc.addPage(); y = 60; }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text((i + 1) + '.', numX, y);
+      var disc = /^disclaimer\.?\s*/i.exec(t);
+      if (disc) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text('DISCLAIMER.', txtX, y);
+        doc.setLineWidth(0.6); doc.line(txtX, y + 1.5, txtX + doc.getTextWidth('DISCLAIMER'), y + 1.5); y += 11;
+        doc.setFontSize(6.6);
+        doc.splitTextToSize(t.slice(disc[0].length).toUpperCase(), w).forEach(function(s) { doc.text(s, txtX, y); y += 8.4; });
+        y += 4; return;
+      }
+      var bold = /^\*\*(.*)\*\*$/.exec(t);
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.splitTextToSize(bold ? bold[1] : t, w).forEach(function(s) { if (y > 740) { doc.addPage(); y = 60; } doc.text(s, txtX, y); y += 12.6; });
+      y += 1.5;
+    });
+    y += 14;
+    para(val('fClosing'), 10, 'normal', 14);
+    if (y > 650) { doc.addPage(); y = 60; }
+    para('Sincerely,', 10, 'normal', 4);
+    var sig = signatureImage();
+    if (sig) {
+      var sz = await imgSize(sig), h = 34, wS = sz ? Math.min(170, h * sz.w / sz.h) : 150;
+      try { doc.addImage(sig, 'PNG', M, y, wS, sz ? wS * sz.h / sz.w : h); } catch (e) { console.warn(e); }
+      y += 40;
+    } else y += 34;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.text(val('fSigner'), M, y); y += 13; doc.text(val('fSignerCompany'), M, y);
+    return doc.output('arraybuffer');
+  }
+
+  async function buildPackage() {
+    var out = await PDFLib.PDFDocument.load(await letterPdf());
+    for (var i = 0; i < attachments.length; i++) {
+      busy(true, 'Adding ' + attachments[i].name + '…');
+      var src = await PDFLib.PDFDocument.load(await attachments[i].file.arrayBuffer(), { ignoreEncryption: true });
+      (await out.copyPages(src, src.getPageIndices())).forEach(function(p) { out.addPage(p); });
+    }
+    out.setTitle(warNo() + ' - Warranty Letter - ' + project.project_name); out.setAuthor('Northern Wolves Air Conditioning');
+    return new Blob([await out.save()], { type: 'application/pdf' });
+  }
+
+  async function download() {
+    if (!validate()) return;
+    busy(true, 'Building PDF…');
+    var blob = await buildPackage(); busy(false);
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName();
+    document.body.appendChild(a); a.click(); setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+    toast('Downloaded ' + fileName());
+  }
+
+  // Save = PDF into Drive (IOM & WARRANTY) + log row (kind 'warranty', all letter fields in data) + project_files row
+  async function save() {
+    if (!validate()) return null;
+    var total = attachments.reduce(function(s, a) { return s + a.size; }, 0);
+    if (total > MAX_TOTAL) { toast('Attachments are ' + mb(total) + ' — the limit is 35 MB.'); return null; }
+    busy(true, 'Building PDF…');
+    var blob = await buildPackage();
+    busy(true, 'Saving to Google Drive…');
+    var name = fileName(), folder = targetFolder(), b64 = await NWDrive.toBase64(blob), df, isNew = false;
+    if (saved && saved.drive_id && (saved.drive_folder || BASE) === folder) {
+      try { df = (await NWDrive.request({ action: 'replace_file', fileId: saved.drive_id, fileData: b64, mimeType: 'application/pdf', fileName: name })).file; } catch (e) { df = null; }
+    }
+    if (!df) {
+      df = (await NWDrive.request({ action: 'upload_file', projectName: project.project_name, projectId: projectId, fileName: name, fileData: b64, mimeType: 'application/pdf', category: 'warranties', folder: folder })).file;
+      isNew = true;
+    }
+    var row = { project_id: projectId, kind: 'warranty', number: parseInt(val('fNumber'), 10), revision: parseInt(val('fRevision'), 10) || 0,
+      title: 'Warranty Letter - ' + val('fSubject'), submittal_type: (YEAR_WORDS[parseInt(val('fYears'), 10)] || val('fYears')) + '-Year ' + val('fCoverage'),
+      to_company: val('fToCompany') || null, to_attention: val('fToAttn') || null, to_address: val('fToAddress') || null, due_date: addYears(val('fStart'), parseInt(val('fYears'), 10) || 1) || null,
+      data: formData(), drive_id: df.id, drive_url: df.viewUrl || df.url, file_name: name, drive_folder: folder, updated_at: new Date().toISOString() };
+    var res;
+    if (saved && saved.id) res = await supabaseClient.from('submittals').update(row).eq('id', saved.id).select().single();
+    else res = await supabaseClient.from('submittals').insert(Object.assign(row, { status: 'saved', created_by: userId, created_by_name: profile.full_name || null })).select().single();
+    if (res.error) {
+      busy(false);
+      if (isNew) { try { await NWDrive.deleteFile(df.id); } catch (e) {} }
+      if (/duplicate|unique/i.test(res.error.message)) { toast('Warranty ' + pad(row.number) + ' Rev ' + row.revision + ' already exists — change the number or revision'); return null; }
+      throw new Error(res.error.message);
+    }
+    var prev = saved && saved.drive_id && saved.drive_id !== df.id ? saved.drive_id : null;
+    saved = res.data;
+    if (prev) { try { await NWDrive.deleteFile(prev); await supabaseClient.from('project_files').delete().eq('drive_id', prev); } catch (e) {} }
+    if (isNew) {
+      try { await supabaseClient.from('project_files').insert({ project_id: projectId, category: 'warranties', filename: name, storage_path: null, drive_id: df.id, drive_url: row.drive_url, size_bytes: blob.size, content_type: 'application/pdf', uploaded_by: userId }); } catch (e) {}
+    }
+    try { Object.keys(sessionStorage).forEach(function(k) { if (k.indexOf(projectId) >= 0) sessionStorage.removeItem(k); }); } catch (e) {}
+    dirty = false; busy(false); showSaved(); toast('✅ Saved to Google Drive');
+    return saved;
+  }
+  function showSaved() {
+    if (!saved) return;
+    var b = $('savedBox');
+    b.innerHTML = '✅ <b>' + esc(saved.file_name || 'Warranty') + '</b> is saved in Drive (' + esc((saved.drive_folder || BASE).replace('/', ' / ')) + ').  <a href="' + esc(saved.drive_url) + '" target="_blank">Open ↗</a>' +
+      (saved.sent_at ? '<br>Sent to ' + esc(saved.sent_to || '') + ' on ' + new Date(saved.sent_at).toLocaleDateString() : '') +
+      (editId ? '<br><span style="font-size:12px">Changes you make here update this letter (same PDF in Drive). Attachments must be added again when you re-save.</span>' : '');
+    b.style.display = 'block';
+  }
+
+  function openSend() {
+    if (!validate()) return;
+    $('mTo').value = (saved && saved.to_email) || '';
+    $('mCc').value = '';
+    $('mSubject').value = val('fSubject') + ' - Project Subcontractor\'s Warranty - Northern Wolves AC';
+    $('mBody').value = 'Hello' + (val('fToAttn') ? ' ' + val('fToAttn').split(' ')[0] : '') + ',\n\n' +
+      'Please find attached our warranty letter for ' + project.project_name + '. The ' + (YEAR_WORDS[parseInt(val('fYears'), 10)] || val('fYears')).toLowerCase() + '-year ' + val('fCoverage').toLowerCase() +
+      ' warranty runs from ' + fmtDate(val('fStart')) + ' to ' + fmtDate(addYears(val('fStart'), parseInt(val('fYears'), 10) || 1)) + '.\n\n' +
+      'Please let us know if you have any questions.\n\nThank you,\n' + (profile.full_name || '') + '\nNorthern Wolves Air Conditioning';
+    $('sendModal').classList.add('show');
+  }
+  async function send() {
+    var to = val('mTo');
+    if (!/@/.test(to)) { toast('Enter the recipient email'); $('mTo').focus(); return; }
+    $('sendModal').classList.remove('show');
+    if (!saved || dirty) { if (!(await save())) return; }
+    busy(true, 'Sending…');
+    var r = await NWDrive.request({ action: 'send_email', to: to, cc: val('mCc'), subject: val('mSubject'), body: $('mBody').value, fileIds: [saved.drive_id],
+      fromName: (profile.full_name ? profile.full_name + ' - ' : '') + 'Northern Wolves AC' });
+    var res = await supabaseClient.from('submittals').update({ status: 'sent', sent_to: (r.to || [to]).join(', '), sent_at: new Date().toISOString(), to_email: saved.to_email || to }).eq('id', saved.id).select().single();
+    if (!res.error) saved = res.data;
+    busy(false); showSaved();
+    toast(r.linked ? '✅ Sent (large file — sent as a Drive link)' : '✅ Sent to ' + (r.to || [to]).join(', '));
+  }
+})();
+</script>
+<script src="sw-register.js?v=221"></script>
+</body>
+</html>
