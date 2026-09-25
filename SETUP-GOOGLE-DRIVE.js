@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.3)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.4)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -18,7 +18,8 @@
 // (list_tree) so sub-folders look exactly like in Google Drive.
 // =====================================================
 
-var FJOBS_FOLDER_ID = '1ZT-eAsLR8-Sml95DnFRccfPksoab6kIW';   // 'NW Projects' folder in Google Drive (office root; was F.JOBS until 2026-09-24)
+var FJOBS_FOLDER_ID = '16x8aJ_3Lbv3RSoljlLYkiH1VVr7q2-vY';   // 'NW Projects' folder in Google Drive (root, owned by Ruslan since 2026-09-25)
+var OLD_ROOT_ID = '1ZT-eAsLR8-Sml95DnFRccfPksoab6kIW';       // Fatima's F.JOBS (source of the 2026-09-25 copy; read-only fallback until deleted)
 var LEGACY_ROOT_NAME = 'Northern Wolves Projects';           // old app root (v1/v2), read-only fallback
 var TEMPLATE = ['Application for Payment', 'Change Orders', 'COI', 'Contract', 'Drawings', 'Insurance Requirements',
                 'IOM & WARRANTY', 'Photos', 'Proposal', 'Purchase Orders', 'Quotes', 'Reports', 'RFI', 'Schedule',
@@ -101,6 +102,12 @@ function findProjectFolder(projectId, projectName) {
     if (projectId) { try { if (!f.getDescription()) f.setDescription(projectId); } catch (e) {} }
     return remember(projectId, list[i].id);
   }
+  // read-only fallback: Fatima's F.JOBS (until the copy into NW Projects is complete and F.JOBS is deleted)
+  try {
+    var ol = listProjectFolders(OLD_ROOT_ID);
+    for (i = 0; i < ol.length; i++) if (projectId && ol[i].description === projectId) return DriveApp.getFolderById(ol[i].id);
+    if (n) for (i = 0; i < ol.length; i++) if (normName(ol[i].name) === n) return DriveApp.getFolderById(ol[i].id);
+  } catch (e) {}
   var legacy = getLegacyRoot();
   if (legacy && projectId) {
     var ll = listProjectFolders(legacy.getId());
@@ -323,16 +330,17 @@ function copyTree(sourceFolderId, targetFolderId, nameMap, opts) {
 }
 function existingFiles(folder) {
   var m = {}, it = folder.getFiles();
-  while (it.hasNext()) { var f = it.next(); m[f.getName().toLowerCase() + '|' + f.getSize()] = true; }
+  while (it.hasNext()) { var f = it.next(); m[f.getName().toLowerCase() + '|' + f.getSize()] = f.getId(); }
   return m;
 }
 function copyInto(src, dest, nameMap, stats, deadline, top) {
   var have = existingFiles(dest), files = src.getFiles();
+  if (!stats.pairs) stats.pairs = [];
   while (files.hasNext()) {
     if (Date.now() > deadline) { stats.partial = true; return; }
     var f = files.next(), key = f.getName().toLowerCase() + '|' + f.getSize();
-    if (have[key]) { stats.skipped++; continue; }
-    try { f.makeCopy(f.getName(), dest); stats.copied++; stats.bytes += f.getSize(); }
+    if (have[key]) { stats.skipped++; stats.pairs.push([f.getId(), have[key]]); continue; }
+    try { var nf = f.makeCopy(f.getName(), dest); stats.copied++; stats.bytes += f.getSize(); stats.pairs.push([f.getId(), nf.getId()]); have[key] = nf.getId(); }
     catch (e) { stats.errors.push(f.getName() + ': ' + e.message); }
   }
   var subs = src.getFolders();
@@ -344,9 +352,24 @@ function copyInto(src, dest, nameMap, stats, deadline, top) {
   }
 }
 
+
+// copy one project folder (e.g. from F.JOBS) into the root as a project folder with the same name and description (app project id)
+function copyProject(sourceFolderId) {
+  var t0 = Date.now(), deadline = t0 + 270000, stats = { copied: 0, skipped: 0, bytes: 0, partial: false, errors: [], pairs: [] };
+  var src = DriveApp.getFolderById(sourceFolderId), name = src.getName(), desc = src.getDescription() || '';
+  var target = null, list = listProjectFolders(FJOBS_FOLDER_ID), i;
+  if (desc) for (i = 0; i < list.length; i++) if (list[i].description === desc) { target = DriveApp.getFolderById(list[i].id); break; }
+  if (!target) for (i = 0; i < list.length; i++) if (normName(list[i].name) === normName(name)) { target = DriveApp.getFolderById(list[i].id); break; }
+  if (!target) { target = getRootFolder().createFolder(name); stats.created = true; }
+  if (desc) { try { if (target.getDescription() !== desc) target.setDescription(desc); } catch (e) { stats.descError = e.message; } remember(desc, target.getId()); }
+  copyInto(src, target, {}, stats, deadline, false);
+  stats.success = true; stats.target = target.getId(); stats.targetName = target.getName(); stats.seconds = Math.round((Date.now() - t0) / 1000);
+  return stats;
+}
+
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.3' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.4' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -355,7 +378,7 @@ function doPost(e) {
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
     switch (body.action) {
-      case 'ping':            result = { success: true, version: '3.3', root: FJOBS_FOLDER_ID }; break;
+      case 'ping':            result = { success: true, version: '3.4', root: FJOBS_FOLDER_ID }; break;
       case 'list_tree':       result = listTree(body.projectName, body.projectId, body.maxDepth); break;
       case 'list_files':      result = listProjectFiles(body.projectName, body.projectId); break;
       case 'list_projects':   result = { success: true, projects: listProjectFolders(body.legacy ? getLegacyRoot().getId() : FJOBS_FOLDER_ID) }; break;
@@ -372,6 +395,7 @@ function doPost(e) {
       case 'move_items':      result = moveItems(body.ids, body.targetFolderId); break;
       case 'tree':            result = treeOf(body.folderId, body.maxDepth); break;
       case 'copy_tree':       result = copyTree(body.sourceFolderId, body.targetFolderId, body.nameMap, body); break;
+      case 'copy_project':    result = copyProject(body.sourceFolderId); break;
       case 'forget':          result = forgetProject(body.projectId); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };
