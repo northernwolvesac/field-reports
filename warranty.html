@@ -396,7 +396,7 @@ requireAuth().catch(function(){});
     if (logo.data) doc.addImage(logo.data, 'JPEG', 42, 32, 180, 180 * logo.ratio);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
     ['Northern Wolves Inc', '(347) 463-9248', '55 9th street, Unit 55A-2,', 'Brooklyn, NY  11215', 'United States'].forEach(function(l, i) { doc.text(l, R, 60 + i * 14, { align: 'right' }); });
-    var y = 172, colR = 352;
+    var y = 162, colR = 352;
     doc.setFontSize(9.5); doc.text(fmtDate(val('fDate')), M, y);
     // recipient (left)
     var ly = y + 26;
@@ -416,7 +416,7 @@ requireAuth().catch(function(){});
 
     function para(text, size, style, gap) {
       doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size || 10);
-      doc.splitTextToSize(text, R - M).forEach(function(s) { if (y > 740) { doc.addPage(); y = 60; } doc.text(s, M, y); y += (size || 10) * 1.3; });
+      doc.splitTextToSize(text, R - M).forEach(function(s) { if (y > 740) { doc.addPage(); y = 60; } doc.text(s, M, y); y += (size || 10) * 1.2; });
       y += gap == null ? 8 : gap;
     }
     var yrs = parseInt(val('fYears'), 10) || 1, start = val('fStart'), end = addYears(start, yrs);
@@ -428,7 +428,7 @@ requireAuth().catch(function(){});
     var numX = M + 30, txtX = M + 64, w = R - txtX;
     terms.forEach(function(t, i) {
       if (y > 720) { doc.addPage(); y = 60; }
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text((i + 1) + '.', numX, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.6); doc.text((i + 1) + '.', numX, y);
       var disc = /^disclaimer\.?\s*/i.exec(t);
       if (disc) {
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text('DISCLAIMER.', txtX, y);
@@ -439,12 +439,12 @@ requireAuth().catch(function(){});
       }
       var bold = /^\*\*(.*)\*\*$/.exec(t);
       doc.setFont('helvetica', bold ? 'bold' : 'normal');
-      doc.splitTextToSize(bold ? bold[1] : t, w).forEach(function(s) { if (y > 740) { doc.addPage(); y = 60; } doc.text(s, txtX, y); y += 12.6; });
-      y += 1.5;
+      doc.splitTextToSize(bold ? bold[1] : t, w).forEach(function(s) { if (y > 740) { doc.addPage(); y = 60; } doc.text(s, txtX, y); y += 11.4; });
+      y += 1;
     });
-    y += 14;
-    para(val('fClosing'), 10, 'normal', 14);
-    if (y > 692) { doc.addPage(); y = 60; }
+    y += 10;
+    para(val('fClosing'), 10, 'normal', 12);
+    if (y > 680) { doc.addPage(); y = 60; }
     para('Sincerely,', 10, 'normal', 4);
     var sig = signatureImage();
     if (sig) {
@@ -551,6 +551,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=224"></script>
+<script src="sw-register.js?v=225"></script>
 </body>
 </html>
