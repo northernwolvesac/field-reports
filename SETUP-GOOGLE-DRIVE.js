@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.5)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.6)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -52,12 +52,30 @@ var CATEGORY_MAP = {
 var SHARED_CATEGORIES = ['photos', 'reports'];
 
 // ---------- Drive API v3 (one HTTP call lists a whole level of folders) ----------
-function driveApi(path, params) {
+function driveApi(path, params, method, payload) {
   var qs = Object.keys(params).map(function(k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
-  var resp = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/' + path + '?' + qs,
-    { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
-  if (resp.getResponseCode() !== 200) throw new Error('Drive API ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 300));
-  return JSON.parse(resp.getContentText());
+  var opts = { method: method || 'get', headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true };
+  if (payload) { opts.contentType = 'application/json'; opts.payload = JSON.stringify(payload); }
+  var resp = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/' + path + '?' + qs, opts);
+  if (resp.getResponseCode() >= 300) throw new Error('Drive API ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 300));
+  var txt = resp.getContentText(); return txt ? JSON.parse(txt) : {};
+}
+// permissions on one file/folder (direct, not inherited): [{emailAddress, role, id}]
+function listPermissions(fileId) {
+  var r = driveApi('files/' + fileId + '/permissions', { fields: 'permissions(id,emailAddress,role,type)', supportsAllDrives: true });
+  return r.permissions || [];
+}
+function addPermission(fileId, email, role) {
+  return driveApi('files/' + fileId + '/permissions', { supportsAllDrives: true, sendNotificationEmail: false }, 'post', { role: role, type: 'user', emailAddress: email });
+}
+function removePermissions(fileId, emails) {
+  var lower = emails.map(function(e) { return e.toLowerCase(); }), removed = [];
+  listPermissions(fileId).forEach(function(p) {
+    if (p.emailAddress && lower.indexOf(p.emailAddress.toLowerCase()) >= 0 && p.role !== 'owner') {
+      try { driveApi('files/' + fileId + '/permissions/' + p.id, { supportsAllDrives: true }, 'delete'); removed.push(p.emailAddress); } catch (e) {}
+    }
+  });
+  return removed;
 }
 var ITEM_FIELDS = 'nextPageToken,files(id,name,mimeType,size,modifiedTime,createdTime,parents,webViewLink,description)';
 function listChildren(parentIds) {
@@ -382,33 +400,20 @@ function applyFieldAccess(projectFolderId) {
     else { var all = pf.getFolders(), n = normName(FIELD_FOLDERS[i]); while (all.hasNext()) { var c = all.next(); if (normName(c.getName()) === n) { f = c; break; } } }
     if (!f) { f = pf.createFolder(FIELD_FOLDERS[i]); stats.created++; }
     var have = {};
-    try { f.getViewers().forEach(function(u) { have[u.getEmail().toLowerCase()] = true; }); f.getEditors().forEach(function(u) { have[u.getEmail().toLowerCase()] = true; }); } catch (e) {}
+    try { listPermissions(f.getId()).forEach(function(p) { if (p.emailAddress) have[p.emailAddress.toLowerCase()] = p.role; }); } catch (e) {}
     for (var j = 0; j < FIELD_VIEWERS.length; j++) {
       if (have[FIELD_VIEWERS[j].toLowerCase()]) { stats.already++; continue; }
-      try { f.addCommenter(FIELD_VIEWERS[j]); stats.added++; } catch (e) { stats.errors.push(f.getName() + ' ' + FIELD_VIEWERS[j] + ': ' + e.message); }
+      try { addPermission(f.getId(), FIELD_VIEWERS[j], 'commenter'); stats.added++; } catch (e) { stats.errors.push(f.getName() + ' ' + FIELD_VIEWERS[j] + ': ' + e.message); }
     }
   }
   stats.success = true; return stats;
 }
-function revokeAccess(fileId, emails) {
-  var f; try { f = DriveApp.getFolderById(fileId); } catch (e) { f = DriveApp.getFileById(fileId); }
-  var out = [];
-  for (var i = 0; i < (emails || []).length; i++) {
-    try { f.removeViewer(emails[i]); } catch (e) {}
-    try { f.removeCommenter(emails[i]); } catch (e) {}
-    try { f.removeEditor(emails[i]); } catch (e) {}
-    out.push(emails[i]);
-  }
-  return { success: true, removed: out };
-}
-function listAccess(fileId) {
-  var f; try { f = DriveApp.getFolderById(fileId); } catch (e) { f = DriveApp.getFileById(fileId); }
-  return { success: true, editors: f.getEditors().map(function(u) { return u.getEmail(); }), viewers: f.getViewers().map(function(u) { return u.getEmail(); }) };
-}
+function revokeAccess(fileId, emails) { return { success: true, removed: removePermissions(fileId, emails || []) }; }
+function listAccess(fileId) { return { success: true, permissions: listPermissions(fileId) }; }
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.5' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.6' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -417,7 +422,7 @@ function doPost(e) {
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
     switch (body.action) {
-      case 'ping':            result = { success: true, version: '3.5', root: FJOBS_FOLDER_ID }; break;
+      case 'ping':            result = { success: true, version: '3.6', root: FJOBS_FOLDER_ID }; break;
       case 'list_tree':       result = listTree(body.projectName, body.projectId, body.maxDepth); break;
       case 'list_files':      result = listProjectFiles(body.projectName, body.projectId); break;
       case 'list_projects':   result = { success: true, projects: listProjectFolders(body.legacy ? getLegacyRoot().getId() : FJOBS_FOLDER_ID) }; break;
