@@ -172,6 +172,10 @@
       'Only include fields you have real info for. Write values in professional past tense ("Technician found..."). Keep textareas to 2-5 sentences.';
   }
 
+  async function nwAiToken() {   // the AI proxy only answers signed-in app users
+    try { var s = await supabaseClient.auth.getSession(); return s.data && s.data.session ? s.data.session.access_token : null; } catch (e) { return null; }
+  }
+
   async function callClaude(messages) {
     // Stitch history into a single prompt the existing proxy supports
     var sys = buildSystemPrompt();
@@ -182,7 +186,8 @@
 
     var res = await fetch(AI_PROXY_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'generate_summary', prompt: prompt }),
+      // anon: the sign-in help chat on the login page still works without a login (short answers only)
+      body: JSON.stringify({ action: 'generate_summary', prompt: prompt, token: await nwAiToken(), anon: true }),
       headers: { 'Content-Type': 'text/plain' }
     });
     var text = await res.text();

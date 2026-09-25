@@ -1584,10 +1584,11 @@ function getCleanText() {
 }
 
 async function sendToProxy(prompt) {
+  var sess = null; try { sess = (await supabaseClient.auth.getSession()).data.session; } catch (e) {}
   var response = await fetch(AI_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'generate_summary', prompt: prompt })
+    body: JSON.stringify({ action: 'generate_summary', prompt: prompt, token: sess ? sess.access_token : null })   // signed-in users only
   });
   var responseText = await response.text();
   window._lastProxyResponse = responseText;
@@ -3149,6 +3150,6 @@ function toggleSection(header) {
 }
 </script>
 
-<script src="sw-register.js?v=228"></script>
+<script src="sw-register.js?v=229"></script>
 </body>
 </html>

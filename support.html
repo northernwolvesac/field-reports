@@ -291,11 +291,13 @@ async function sendMessage() {
   showTyping();
 
   try {
+    var sess = null; try { sess = (await supabaseClient.auth.getSession()).data.session; } catch (e) {}
     var response = await fetch(AI_PROXY_URL, {
       method: 'POST',
       body: JSON.stringify({
         action: 'support_chat',
-        prompt: fullPrompt
+        prompt: fullPrompt,
+        token: sess ? sess.access_token : null   // the AI proxy only answers signed-in app users
       }),
       headers: { 'Content-Type': 'text/plain' }
     });
@@ -329,6 +331,6 @@ document.getElementById('chatInput').addEventListener('keydown', function(e) {
   }
 });
 </script>
-<script src="sw-register.js?v=228"></script>
+<script src="sw-register.js?v=229"></script>
 </body>
 </html>

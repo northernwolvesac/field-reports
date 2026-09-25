@@ -96,11 +96,14 @@
 
     console.log('[ai-summary] Requesting summary for', reportType);
 
+    var token = null;
+    try { var s = await supabaseClient.auth.getSession(); token = s.data && s.data.session ? s.data.session.access_token : null; } catch (e) {}
     var response = await fetch(AI_PROXY_URL, {
       method: 'POST',
       body: JSON.stringify({
         action: 'generate_summary',
-        prompt: prompt
+        prompt: prompt,
+        token: token   // the AI proxy only answers signed-in app users
       }),
       headers: { 'Content-Type': 'text/plain' }
     });
