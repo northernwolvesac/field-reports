@@ -267,8 +267,8 @@ text(602, ROOF + 70, "LO ref. tubing", 5.2, color=BLUE)
 HX = EAx + DW_ + 14
 wire([(590, ROOF + 60), (596, ROOF + 60), (596, ROOF + 10), (HX, ROOF + 10), (HX, CEIL + 6), (HX + 30, CEIL + 6)], BLUE, 1.2, [4, 3])
 c.setFillColor(BLUE); c.circle(HX + 30, CEIL + 6, 2.2, fill=1, stroke=0)
-text(HX + 36, CEIL + 4, "space static pickup: Dwyer A-489 plate in the space (one 1/2 in hole),", 5.6, True, BLUE)
-text(HX + 36, CEIL - 8, "or open tube end in the closet / utility room at the shaft", 5.2, color=GRAY)
+text(HX + 36, CEIL + 4, "building static pickup: A-489 plate in a central corridor / foyer (one per unit)", 5.6, True, BLUE)
+text(HX + 36, CEIL - 8, "alternative per RFI: exhaust fan tracks supply at 90%, no pressure sensor", 5.2, color=GRAY)
 text(HX + 4, 250, "HI tubing", 5.2, color=BLUE)
 
 # legend / notes
@@ -279,7 +279,8 @@ for i, n in enumerate([
     "2. Probes across the duct centerline through a gasketed hole; sensor housings outside the insulation; 12x12 access door within 2 ft. Nothing inside the curb or on the roof section of the duct.",
     "3. High static cutoff on the supply riser 3-4 ft below the deck, static tip only (no low port). Manual reset, wired in series with the start circuit R-G (remove the S1 jumper).",
     "4. PR-274 stays inside the control center. Two 1/4 in FR poly tubes: LO to the A-306 (on a post or the unit side, not the curb, away from EA louver and condenser), HI down the shaft to the space pickup. Both tubes and the 18/4 cables leave the unit through the base knockout.",
-    "   Space pickup: A-489 plate in the served space, or the closet / utility room the shaft passes through (door undercut = building pressure). Not in the EA duct, the shaft, toilets or rooms with their own exhaust.",
+    "   Pickup = building pressure, one point per unit in a central corridor / foyer (ERU-3: foyer 102 or fellowship hall 113; ERU-1/2: corridor 015). Not in the EA duct (fan suction), vestibules, toilets, kitchen.",
+    "   Preferred alternative (RFI to DMG): exhaust VFD tracks the supply VFD at 90% (schedule ratio 4,800/5,375 and 5,775/6,370); no transducer, tubing or roof probe, and the three units cannot fight over one building pressure.",
     "5. Smoke detectors already installed and wired by the E.C. Remote display: mount in the utility room / closet at the shaft, using Greenheck's own 150 ft cable, if the engineer does not accept the web UI.",
 ]):
     text(nx, ny - 10 - 9.5 * i, n, 6.0)

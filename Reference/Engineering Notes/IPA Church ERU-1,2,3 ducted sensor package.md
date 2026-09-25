@@ -70,10 +70,15 @@ Not in the pack:
   Do not put them in the EA duct on the roof or inside the curb: outdoor temperature swings and no access.
 - Pressure transducer (#3): inside the unit control center or in a NEMA 3R box on the curb next to the control entry. Two 1/4 in tubing runs:
   low/reference port to the A-306 probe on the roof (bracket at least 3 ft above the roof, away from the unit exhaust and the hood, tubing sloped so water
-  cannot trap); high port down the shaft to the space. Space pickup (exhaust is hard ducted and ceilings are hard, so the ceiling plenum is not a reference):
-  a Dwyer A-489 pickup plate in the served space (one 1/2 in hole), or the open tube end in the closet / utility room the shaft passes through
-  (interior room with a door undercut sits at building pressure). Never inside the EA duct (already -0.02 to -0.05 in wg at the grille), in the
-  shaft, or in toilets / rooms with their own exhaust. Setpoint +0.02 to +0.05 in wg.
+  cannot trap); high port down the shaft to the building pickup. The signal is building-to-outdoor pressure, not a room: all interior rooms with open or
+  undercut doors sit within thousandths of an inch of each other, so one Dwyer A-489 plate per unit in a central circulation space is the standard
+  answer (ERU-3: foyer 102 or fellowship hall 113; ERU-1/2: corridor 015 or multi-purpose 012). Never inside the EA duct: near the unit it is fan
+  suction (-0.5 to -1.0 in wg, moving with VFD speed and filter loading), and even at a grille neck the entry loss (-0.02 to -0.05) equals the
+  setpoint. Not in vestibules, toilets or the kitchen. Setpoint +0.02 to +0.05 in wg.
+- Preferred alternative, put to DMG in the RFI: delete building pressure control and run the exhaust VFD tracking the supply VFD at 90%. The schedule
+  already sets exhaust at 90% of supply (4,800/5,375 for ERU-1/2, 5,775/6,370 for ERU-3), so tracking reproduces the design balance at every
+  CO2-driven supply speed, needs no transducer, tubing or roof probe, and avoids three independent pressure loops fighting over one building.
+  Ask ADE to confirm the controller program has supply-fan tracking for the exhaust fan (standard Greenheck RV/RVE option).
 - A-306 outdoor probe: on a 3/4 in EMT or strut post clamped to the curb rail, or on the unit side wall in the wheel/blower section on the side
   away from the EA louver and the condenser end, top third of the casing on a 6-12 in standoff bracket. Not on the curb (turbulence, snow).
 - Wiring route from the unit to the riser: through the unit base control-wiring knockout into the curb and down the shaft alongside the ducts. No roof
