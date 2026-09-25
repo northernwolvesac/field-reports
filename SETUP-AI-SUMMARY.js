@@ -7,7 +7,7 @@
  * SETUP INSTRUCTIONS:
  * 1. Go to https://script.google.com
  * 2. Create a new project (click "+ New project")
- * 3. Name it "NW AI Summary Proxy"
+ * 3. Name it "NW AI Proxy" (owned by ruslan@northernwolvesac.com since 2026-09-25)
  * 4. Delete the default code and paste EVERYTHING below this comment block
  * 5. Replace 'YOUR_CLAUDE_API_KEY_HERE' with your Anthropic API key
  *    (Get one at https://console.anthropic.com/settings/keys)

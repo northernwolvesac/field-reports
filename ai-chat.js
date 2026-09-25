@@ -18,7 +18,7 @@
 (function() {
   'use strict';
 
-  var AI_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyliO2PnVCaDfFYsA3hZZOwQYP3ElniEx7YHhM7ZkMXcMo0Fly3R-IQjLQXXbpuM6Rv9w/exec';
+  var AI_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyeU93xaAefJ034p8Ix2USh2uuKbeiL-4mIVqhLM9CVMsVpFkLRCZzDzPiADHraKjQ/exec';
 
   var REPORT_CONTEXT = {
     'service-call':  'HVAC service call — diagnose and repair.',
