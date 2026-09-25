@@ -105,8 +105,8 @@ box(DX, 232, DW, 64, "High static cutoff   (by others per Greenheck sequence p.2
 sN1 = (TDX, 262); sN2 = (TDX, 248)
 term(*sN1, "N.C. contact   from R"); term(*sN2, "N.C. contact   to G   (opens ~2.0 in wg, stops unit)")
 
-box(DX, 160, DW, 48, "SPACE  static pickup: Dwyer A-489 plate in the served space", "or open tube end in the closet / utility room the shaft passes through")
-sPort = (TDX, 170); term(*sPort, "tube end, open to the space")
+box(DX, 160, DW, 48, "BUILDING static pickup: Dwyer A-489 plate, central corridor / foyer", "one per unit; not in vestibules, toilets, kitchen. Alt: exhaust tracking, no sensor")
+sPort = (TDX, 170); term(*sPort, "tube to the A-489 plate")
 text(DX, 148, "Duct smoke detectors: already installed and wired by the E.C.", 5.8, color=GRAY)
 text(DX, 141, "If their contacts are to stop the unit, E.C. lands them on R-70 (fire input S6).", 5.8, color=GRAY)
 
@@ -268,7 +268,7 @@ HX = EAx + DW_ + 14
 wire([(590, ROOF + 60), (596, ROOF + 60), (596, ROOF + 10), (HX, ROOF + 10), (HX, CEIL + 6), (HX + 30, CEIL + 6)], BLUE, 1.2, [4, 3])
 c.setFillColor(BLUE); c.circle(HX + 30, CEIL + 6, 2.2, fill=1, stroke=0)
 text(HX + 36, CEIL + 4, "building static pickup: A-489 plate in a central corridor / foyer (one per unit)", 5.6, True, BLUE)
-text(HX + 36, CEIL - 8, "alternative per RFI: exhaust fan tracks supply at 90%, no pressure sensor", 5.2, color=GRAY)
+text(HX + 36, CEIL - 8, "alt. per RFI: exhaust tracks supply at 90%, no sensor", 5.2, color=GRAY)
 text(HX + 4, 250, "HI tubing", 5.2, color=BLUE)
 
 # legend / notes
