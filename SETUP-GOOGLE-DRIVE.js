@@ -56,21 +56,21 @@ var SHARED_CATEGORIES = ['photos', 'reports'];
 // Every request from the app carries the user's Supabase access token (body.token). The proxy verifies it with Supabase and reads
 // the profile role: admin/manager => full access; tech => field folders only (FIELD_FOLDERS); no/invalid token => refused.
 // Maintenance scripts run by Ruslan pass body.adminKey instead.
-var SUPABASE_URL = 'https://vrscvnebznmomkdlhooi.supabase.co';
-var SUPABASE_ANON_KEY = 'sb_publishable_7F9lDes97zMPVVrgdG2ggw_vdc6H3QE';
+var SB_API_URL = 'https://vrscvnebznmomkdlhooi.supabase.co';
+var SB_ANON_KEY = 'sb_publishable_7F9lDes97zMPVVrgdG2ggw_vdc6H3QE';
 var ADMIN_KEY = 'SET-IN-APPS-SCRIPT-ONLY';   // real value lives only in the deployed Apps Script project
 var FULL_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
 function callerFromToken(token) {
   if (!token) return null;
   var cache = CacheService.getScriptCache(), ck = 'tok:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token)).slice(0, 40);
   var hit = cache.get(ck); if (hit) return JSON.parse(hit);
-  var h = { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + token };
-  var r = UrlFetchApp.fetch(SUPABASE_URL + '/auth/v1/user', { headers: h, muteHttpExceptions: true });
+  var h = { apikey: SB_ANON_KEY, Authorization: 'Bearer ' + token };
+  var r = UrlFetchApp.fetch(SB_API_URL + '/auth/v1/user', { headers: h, muteHttpExceptions: true });
   if (r.getResponseCode() !== 200) return null;
   var u = JSON.parse(r.getContentText()); if (!u || !u.id) return null;
   var role = 'tech';
   try {
-    var p = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + u.id + '&select=role', { headers: h, muteHttpExceptions: true });
+    var p = UrlFetchApp.fetch(SB_API_URL + '/rest/v1/profiles?id=eq.' + u.id + '&select=role', { headers: h, muteHttpExceptions: true });
     if (p.getResponseCode() === 200) { var rows = JSON.parse(p.getContentText()); if (rows[0] && rows[0].role) role = rows[0].role; }
   } catch (e) {}
   var caller = { id: u.id, email: u.email, role: role, full: FULL_ROLES.indexOf(role) >= 0 };
