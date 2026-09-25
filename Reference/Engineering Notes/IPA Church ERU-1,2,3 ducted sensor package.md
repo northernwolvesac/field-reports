@@ -141,3 +141,17 @@ The PR-274 "R2A" vs "R2" suffix: same transducer and ranges; the enclosed R2-VDC
 insists on the exact code, buy the Greenheck part.
 
 Do not order until DMG answers the RFI; the RFI turnaround is a week, the parts are stock at Kele / Midwest / SupplyHouse.
+
+## Status log
+
+- 2026-09-14: Andrei asked ADE for a controls replacement quote. Ryan Adams (ADE): full loose-controls replacement $17,650 + tax.
+- 2026-09-09: ADE first start-up visit; no gas, sensors not wired; second day cancelled. Reports sent 9/10. Final start-up visit still owed under our PO
+  (includes programming), next tech availability was quoted as 9/24 or later.
+- 2026-09-24: Ryan: units need the discharge air temp sensor at a minimum; other sensors are the engineer's call; reduced package (duct CO2,
+  duct temp/RH, space pressure) $10,500 + tax; remote panels about $1,400 each. Smoke detectors already installed by the E.C.
+- 2026-09-25: Discharge air temp sensors confirmed to be in the units (need relocating into the supply riser). Ruslan sent Ryan the 7-point
+  technical questions email with `ERU-ducted-sensor-wiring.pdf` attached (issued for ADE / Greenheck review). We buy the sensors ourselves.
+- Waiting on ADE: SAT location, HU-226 input assignment (U2*/U6*), C7232B on U9, exhaust tracking availability, PR-274 R2 vs R2A, web UI /
+  remote access requirements instead of remote panels, high static switch setpoint, I/O map.
+- Next: on ADE's answer, send the RFI to DMG (Rob DuBoice, copy CCC) with the duct-sensor option and the exhaust tracking alternative, then
+  order the sensors, then schedule the final start-up with ADE.
