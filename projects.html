@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=132"></script>
 <script src="nw-drive.js?v=209"></script>
-<script src="nw-drive-browser.js?v=211"></script>
+<script src="nw-drive-browser.js?v=212"></script>
 <script src="auth.js?v=132"></script>
 <script src="cloud-save.js?v=132"></script>
 <script src="schedule-utils.js?v=137"></script>
@@ -989,13 +989,23 @@ requireAuth().catch(function(){});
   }
 
   // Google Drive folder browser (F.JOBS/<project>): folders + files exactly as in Drive
+  var isTechUser = null;   // true = technician: field folders only, no Prime Contract / Change Orders (financial)
+  async function techCheck() {
+    if (isTechUser !== null) return isTechUser;
+    try { var prof = await getAuthProfile(); isTechUser = !!(prof && prof.role === 'tech'); } catch (e) { isTechUser = true; }
+    if (isTechUser) {
+      document.querySelectorAll('#detailTabs .detail-tab[data-dtab="prime"], #detailTabs .detail-tab[data-dtab="change-orders"]').forEach(function(t) { t.style.display = 'none'; });
+      document.querySelectorAll('a[href="invoicing.html"]').forEach(function(a) { a.style.display = 'none'; });
+    }
+    return isTechUser;
+  }
   async function mountDriveBrowser(projectId, p) {
     var host = document.getElementById('driveBrowser');
     if (!host || !window.NWDriveBrowser) return;
-    var uid = null;
+    var uid = null, tech = await techCheck();
     try { var sess = await supabaseClient.auth.getSession(); uid = sess.data && sess.data.session ? sess.data.session.user.id : null; } catch (e) {}
     if (currentProjectId !== projectId) return;
-    NWDriveBrowser.mount(host, { projectId: projectId, projectName: p.name || p.project_name || '', canEdit: true, userId: uid,
+    NWDriveBrowser.mount(host, { projectId: projectId, projectName: p.name || p.project_name || '', canEdit: true, fieldOnly: tech, userId: uid,
       onChange: function() { loadDriveFiles(projectId); renderProjectsList(); if (typeof loadPrimeContract === 'function') loadPrimeContract(projectId); } });
   }
 
@@ -1367,9 +1377,8 @@ requireAuth().catch(function(){});
     loadDriveFiles(projectId);
     mountDriveBrowser(projectId, p);
     loadProjectReports(projectId);
-    loadChangeOrders(projectId);
     loadRFIs(projectId);
-    loadPrimeContract(projectId);
+    techCheck().then(function(tech) { if (!tech) { loadChangeOrders(projectId); loadPrimeContract(projectId); } });
 
     // Show detail, hide list
     document.getElementById('listView').style.display = 'none';
@@ -2190,6 +2199,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=211"></script>
+<script src="sw-register.js?v=212"></script>
 </body>
 </html>

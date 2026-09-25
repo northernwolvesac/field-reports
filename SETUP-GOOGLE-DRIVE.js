@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.4)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.5)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -21,9 +21,13 @@
 var FJOBS_FOLDER_ID = '16x8aJ_3Lbv3RSoljlLYkiH1VVr7q2-vY';   // 'NW Projects' folder in Google Drive (root, owned by Ruslan since 2026-09-25)
 var OLD_ROOT_ID = '1ZT-eAsLR8-Sml95DnFRccfPksoab6kIW';       // Fatima's F.JOBS (source of the 2026-09-25 copy; read-only fallback until deleted)
 var LEGACY_ROOT_NAME = 'Northern Wolves Projects';           // old app root (v1/v2), read-only fallback
-var TEMPLATE = ['Application for Payment', 'Change Orders', 'COI', 'Contract', 'Drawings', 'Insurance Requirements',
+var TEMPLATE = ['Application for Payment', 'As Builts', 'Change Orders', 'COI', 'Contract', 'Drawings', 'Insurance Requirements',
                 'IOM & WARRANTY', 'Photos', 'Proposal', 'Purchase Orders', 'Quotes', 'Reports', 'RFI', 'Schedule',
-                'SHOP DRAWINGS', 'Submittals', 'Tax Exempt Certs'];
+                'SHOP DRAWINGS', 'Specs', 'Submittals', 'TAB Report', 'Tax Exempt Certs'];
+// Field access: technicians (FIELD_VIEWERS) get Commenter on these project sub-folders only - never on the project root
+// (everything financial stays invisible to them). Applied when a project folder is created and by 'apply_field_access'.
+var FIELD_FOLDERS = ['Drawings', 'Submittals', 'IOM & WARRANTY', 'SHOP DRAWINGS', 'Reports', 'TAB Report', 'As Builts', 'Specs', 'Photos'];
+var FIELD_VIEWERS = ['juan@northernwolvesac.com', 'kastriot@northernwolvesac.com', 'sergei.l@northernwolvesac.com', 'seva@northernwolvesac.com'];
 // app category keys -> F.JOBS folder names
 var CATEGORY_MAP = {
   'contract': 'Contract', 'contracts': 'Contract',
@@ -125,6 +129,7 @@ function getProjectFolder(projectName, projectId) {
   var projectFolder = getRootFolder().createFolder(projectName || projectId);
   if (projectId) projectFolder.setDescription(projectId);
   for (var i = 0; i < TEMPLATE.length; i++) projectFolder.createFolder(TEMPLATE[i]);
+  try { applyFieldAccess(projectFolder.getId()); } catch (e) {}
   return remember(projectId, projectFolder.getId());
 }
 
@@ -367,9 +372,43 @@ function copyProject(sourceFolderId) {
   return stats;
 }
 
+
+// ---------- field access (techs see only field folders) ----------
+function applyFieldAccess(projectFolderId) {
+  var pf = DriveApp.getFolderById(projectFolderId), stats = { added: 0, already: 0, created: 0, errors: [] };
+  for (var i = 0; i < FIELD_FOLDERS.length; i++) {
+    var it = pf.getFoldersByName(FIELD_FOLDERS[i]), f = null;
+    if (it.hasNext()) f = it.next();
+    else { var all = pf.getFolders(), n = normName(FIELD_FOLDERS[i]); while (all.hasNext()) { var c = all.next(); if (normName(c.getName()) === n) { f = c; break; } } }
+    if (!f) { f = pf.createFolder(FIELD_FOLDERS[i]); stats.created++; }
+    var have = {};
+    try { f.getViewers().forEach(function(u) { have[u.getEmail().toLowerCase()] = true; }); f.getEditors().forEach(function(u) { have[u.getEmail().toLowerCase()] = true; }); } catch (e) {}
+    for (var j = 0; j < FIELD_VIEWERS.length; j++) {
+      if (have[FIELD_VIEWERS[j].toLowerCase()]) { stats.already++; continue; }
+      try { f.addCommenter(FIELD_VIEWERS[j]); stats.added++; } catch (e) { stats.errors.push(f.getName() + ' ' + FIELD_VIEWERS[j] + ': ' + e.message); }
+    }
+  }
+  stats.success = true; return stats;
+}
+function revokeAccess(fileId, emails) {
+  var f; try { f = DriveApp.getFolderById(fileId); } catch (e) { f = DriveApp.getFileById(fileId); }
+  var out = [];
+  for (var i = 0; i < (emails || []).length; i++) {
+    try { f.removeViewer(emails[i]); } catch (e) {}
+    try { f.removeCommenter(emails[i]); } catch (e) {}
+    try { f.removeEditor(emails[i]); } catch (e) {}
+    out.push(emails[i]);
+  }
+  return { success: true, removed: out };
+}
+function listAccess(fileId) {
+  var f; try { f = DriveApp.getFolderById(fileId); } catch (e) { f = DriveApp.getFileById(fileId); }
+  return { success: true, editors: f.getEditors().map(function(u) { return u.getEmail(); }), viewers: f.getViewers().map(function(u) { return u.getEmail(); }) };
+}
+
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.4' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.5' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -378,7 +417,7 @@ function doPost(e) {
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
     switch (body.action) {
-      case 'ping':            result = { success: true, version: '3.4', root: FJOBS_FOLDER_ID }; break;
+      case 'ping':            result = { success: true, version: '3.5', root: FJOBS_FOLDER_ID }; break;
       case 'list_tree':       result = listTree(body.projectName, body.projectId, body.maxDepth); break;
       case 'list_files':      result = listProjectFiles(body.projectName, body.projectId); break;
       case 'list_projects':   result = { success: true, projects: listProjectFolders(body.legacy ? getLegacyRoot().getId() : FJOBS_FOLDER_ID) }; break;
@@ -396,6 +435,9 @@ function doPost(e) {
       case 'tree':            result = treeOf(body.folderId, body.maxDepth); break;
       case 'copy_tree':       result = copyTree(body.sourceFolderId, body.targetFolderId, body.nameMap, body); break;
       case 'copy_project':    result = copyProject(body.sourceFolderId); break;
+      case 'apply_field_access': result = applyFieldAccess(body.folderId || getProjectFolder(body.projectName, body.projectId).getId()); break;
+      case 'revoke_access':   result = revokeAccess(body.fileId, body.emails); break;
+      case 'list_access':     result = listAccess(body.fileId); break;
       case 'forget':          result = forgetProject(body.projectId); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };

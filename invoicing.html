@@ -736,6 +736,8 @@ requireAuth().catch(function(){});
         currentUserRole = prof.data.role;
         canEdit = MGMT_ROLES.indexOf(currentUserRole) >= 0;
       }
+      // Prime Contracts, invoices and change orders are financial: technicians are sent back to the home page
+      if (!canEdit) { window.location.replace('index.html'); return; }
     } catch (e) { console.warn(e); }
 
     bindGlobalEvents();

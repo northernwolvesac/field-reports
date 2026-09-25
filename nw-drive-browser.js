@@ -64,10 +64,16 @@
   }
   function writeCache(pid, data) { try { sessionStorage.setItem(cacheKey(pid), JSON.stringify({ ts: Date.now(), data: data })); } catch (e) {} }
 
+  // Field-only folders for technicians (everything financial stays hidden). Matches the proxy's FIELD_FOLDERS.
+  var FIELD_FOLDERS = ['drawings', 'submittals', 'iom & warranty', 'shop drawings', 'reports', 'tab report', 'as builts', 'specs', 'photos'];
+  function normName(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+  var FIELD_SET = {}; FIELD_FOLDERS.forEach(function(n) { FIELD_SET[normName(n)] = true; });
+
   function Browser(host, opts) {
     this.host = host; this.opts = opts || {};
     this.projectId = opts.projectId; this.projectName = opts.projectName || '';
     this.canEdit = !!opts.canEdit;
+    this.fieldOnly = !!opts.fieldOnly;
     this.tree = null; this.cur = null; this.query = '';
     ensureCss();
     host.classList.add('nwdb');
@@ -100,6 +106,14 @@
     return parts;
   };
   Browser.prototype.relPath = function(id) { return this.pathOf(id).map(function(p) { return p.name; }).join('/'); };
+  // top-level folder of an item (or the item itself when it sits at the project root)
+  Browser.prototype.topOf = function(id) { var p = this.pathOf(id); return p.length ? p[0] : null; };
+  Browser.prototype.allowed = function(it) {
+    if (!this.fieldOnly) return true;
+    var top = it.folder && it.parent === this.tree.folderId ? it : this.topOf(it.parent === this.tree.folderId ? it.id : it.parent);
+    if (!top) return false;                       // loose files at the project root are hidden for technicians
+    return !!FIELD_SET[normName(top.name)];
+  };
   Browser.prototype.countIn = function(id) {
     var n = 0, self = this;
     (this.kids[id] || []).forEach(function(k) { n += k.folder ? self.countIn(k.id) : 1; });
@@ -109,7 +123,7 @@
     var self = this, t = this.tree, h = '';
     if (!t.folderId) {
       this.host.innerHTML = '<div class="nwdb-empty">No Google Drive folder for this project yet.' +
-        (this.canEdit ? '<br><br><button class="nwdb-btn primary" data-create>Create folder in NW Projects</button>' : '') + '</div>';
+        (this.canEdit && !this.fieldOnly ? '<br><br><button class="nwdb-btn primary" data-create>Create folder in NW Projects</button>' : '') + '</div>';
       var cb = this.host.querySelector('[data-create]');
       if (cb) cb.addEventListener('click', async function() { cb.disabled = true; try { await NWDrive.request({ action: 'create_project', projectName: self.projectName, projectId: self.projectId }); await self.load(true); } catch (e) { alert('Drive: ' + e.message); cb.disabled = false; } });
       return;
@@ -125,26 +139,27 @@
     var curUrl = this.cur === t.folderId ? t.folderUrl : (this.byId[this.cur] && this.byId[this.cur].url);
     h += '<a class="nwdb-btn" href="' + esc(curUrl || t.folderUrl) + '" target="_blank" rel="noopener" title="Open this folder in Google Drive">Drive ↗</a>';
     h += '<button class="nwdb-btn" data-refresh title="Refresh">⟳</button>';
-    if (this.canEdit) h += '<button class="nwdb-btn" data-newfolder>+ Folder</button><button class="nwdb-btn primary" data-upload>⬆ Upload</button><input type="file" multiple style="display:none" data-file>';
+    var canWriteHere = this.canEdit && (!this.fieldOnly || (this.cur !== t.folderId && this.allowed(this.byId[this.cur])));
+    if (canWriteHere) h += '<button class="nwdb-btn" data-newfolder>+ Folder</button><button class="nwdb-btn primary" data-upload>⬆ Upload</button><input type="file" multiple style="display:none" data-file>';
     h += '</div></div>';
     h += '<div class="nwdb-search"><input type="search" placeholder="🔍 Search files in this project…" value="' + esc(this.query) + '" data-q></div>';
     h += '<div class="nwdb-prog" data-prog style="display:none"></div>';
     h += '<div class="nwdb-list">';
     if (this.query) {
       var q = this.query.toLowerCase();
-      var hits = (t.items || []).filter(function(it) { return it.name.toLowerCase().indexOf(q) >= 0; });
+      var hits = (t.items || []).filter(function(it) { return it.name.toLowerCase().indexOf(q) >= 0 && self.allowed(it); });
       hits.sort(function(a, b) { return (b.folder - a.folder) || a.name.localeCompare(b.name); });
       if (!hits.length) h += '<div class="nwdb-empty">Nothing found for “' + esc(this.query) + '”.</div>';
       hits.slice(0, 200).forEach(function(it) { h += self.rowHtml(it, self.relPath(it.parent)); });
     } else {
-      var items = (this.kids[this.cur] || []).slice();
+      var items = (this.kids[this.cur] || []).filter(function(it) { return self.allowed(it); });
       var folders = items.filter(function(i) { return i.folder; }).sort(function(a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }); });
       var files = items.filter(function(i) { return !i.folder; }).sort(function(a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }); });
       if (!folders.length && !files.length) h += '<div class="nwdb-empty">This folder is empty.' + (this.canEdit ? '<br>Tap <b>⬆ Upload</b> to add files here.' : '') + '</div>';
       folders.forEach(function(f) { h += self.rowHtml(f); });
       if (folders.length && files.length) h += '<div class="nwdb-sec">Files</div>';
       files.forEach(function(f) { h += self.rowHtml(f); });
-      if (this.cur === t.folderId && this.opts.legacyRows && this.opts.legacyRows.length) {
+      if (this.cur === t.folderId && !this.fieldOnly && this.opts.legacyRows && this.opts.legacyRows.length) {
         h += '<div class="nwdb-sec">In app storage (not in Drive)</div>';
         this.opts.legacyRows.forEach(function(r) {
           h += '<div class="nwdb-row" data-legacy="' + esc(r.id) + '"><div class="nwdb-ico">' + icon(r.filename) + '</div><div class="nwdb-info"><div class="nwdb-name">' + esc(r.filename) + '</div><div class="nwdb-meta">' + esc(r.category || '') + ' · ' + fmtDate(r.created_at) + (r.size_bytes ? ' · ' + fmtSize(r.size_bytes) : '') + '</div></div></div>';
@@ -161,11 +176,12 @@
       return '<div class="nwdb-row folder" data-open-folder="' + it.id + '"><div class="nwdb-ico">📁</div><div class="nwdb-info"><div class="nwdb-name">' + esc(it.name) + '</div><div class="nwdb-meta">' + (subtitle ? esc(subtitle) + ' · ' : '') + (n ? n + ' file' + (n === 1 ? '' : 's') : 'empty') + '</div></div><span class="nwdb-chev">›</span></div>';
     }
     return '<div class="nwdb-row" data-open-file="' + it.id + '"><div class="nwdb-ico">' + icon(it.name, it.mimeType) + '</div><div class="nwdb-info"><div class="nwdb-name">' + esc(it.name) + '</div><div class="nwdb-meta">' + (subtitle ? esc(subtitle) + ' · ' : '') + fmtDate(it.modifiedTime) + (it.size ? ' · ' + fmtSize(it.size) : '') + '</div></div>' +
-      (this.canEdit ? '<button class="nwdb-x" data-del="' + it.id + '" title="Delete">✕</button>' : '') + '</div>';
+      (this.canEdit && !this.fieldOnly ? '<button class="nwdb-x" data-del="' + it.id + '" title="Delete">✕</button>' : '') + '</div>';
   };
   Browser.prototype.bind = function() {
     var self = this, host = this.host;
     host.querySelectorAll('[data-go]').forEach(function(b) { b.addEventListener('click', function() { self.cur = b.getAttribute('data-go'); self.query = ''; self.render(); }); });
+    if (this.fieldOnly && this.cur !== this.tree.folderId && !this.allowed(this.byId[this.cur])) { this.cur = this.tree.folderId; this.render(); return; }
     host.querySelectorAll('[data-open-folder]').forEach(function(r) { r.addEventListener('click', function() { self.cur = r.getAttribute('data-open-folder'); self.query = ''; self.render(); }); });
     host.querySelectorAll('[data-open-file]').forEach(function(r) {
       r.addEventListener('click', function(e) {
