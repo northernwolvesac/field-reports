@@ -9,7 +9,7 @@
 // 3. Deploy -> Manage deployments -> edit (pencil) -> Version: "New version" -> Deploy
 //    (this keeps the same Web App URL the app already uses)
 //
-// v3.0: the office folder "F.JOBS" is the root. Every project is a folder in
+// v3.0: the office folder "NW Projects" (formerly F.JOBS) is the root. Every project is a folder in
 // F.JOBS (folder description = the app's project id, or matched by name) with
 // the F.JOBS template sub-folders (Application for Payment, COI, Contract,
 // Drawings, Insurance Requirements, IOM & WARRANTY, Proposal, Purchase Orders,
@@ -18,7 +18,7 @@
 // (list_tree) so sub-folders look exactly like in Google Drive.
 // =====================================================
 
-var FJOBS_FOLDER_ID = '1ZT-eAsLR8-Sml95DnFRccfPksoab6kIW';   // F.JOBS in Google Drive (office root)
+var FJOBS_FOLDER_ID = '1ZT-eAsLR8-Sml95DnFRccfPksoab6kIW';   // 'NW Projects' folder in Google Drive (office root; was F.JOBS until 2026-09-24)
 var LEGACY_ROOT_NAME = 'Northern Wolves Projects';           // old app root (v1/v2), read-only fallback
 var TEMPLATE = ['Application for Payment', 'Change Orders', 'COI', 'Contract', 'Drawings', 'Insurance Requirements',
                 'IOM & WARRANTY', 'Photos', 'Proposal', 'Purchase Orders', 'Quotes', 'Reports', 'RFI', 'Schedule',

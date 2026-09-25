@@ -1,4 +1,4 @@
-/* nw-drive-browser.js — folder browser for a project's Google Drive folder (F.JOBS/<project>)
+/* nw-drive-browser.js — folder browser for a project's Google Drive folder (NW Projects/<project>)
    Shows the live folder tree exactly as it is in Google Drive: sub-folders first, then files.
    Requires nw-drive.js (NWDrive) and, optionally, supabaseClient (project_files rows are kept in sync on upload/delete). */
 (function() {
@@ -109,7 +109,7 @@
     var self = this, t = this.tree, h = '';
     if (!t.folderId) {
       this.host.innerHTML = '<div class="nwdb-empty">No Google Drive folder for this project yet.' +
-        (this.canEdit ? '<br><br><button class="nwdb-btn primary" data-create>Create folder in F.JOBS</button>' : '') + '</div>';
+        (this.canEdit ? '<br><br><button class="nwdb-btn primary" data-create>Create folder in NW Projects</button>' : '') + '</div>';
       var cb = this.host.querySelector('[data-create]');
       if (cb) cb.addEventListener('click', async function() { cb.disabled = true; try { await NWDrive.request({ action: 'create_project', projectName: self.projectName, projectId: self.projectId }); await self.load(true); } catch (e) { alert('Drive: ' + e.message); cb.disabled = false; } });
       return;
