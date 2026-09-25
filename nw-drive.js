@@ -2,7 +2,12 @@
    Files are registered in project_files with drive_id / drive_url; storage_path stays NULL for Drive files. */
 var NW_DRIVE_URL = 'https://script.google.com/macros/s/AKfycbxPvr8QooEcdcxt937V49-Y_o9lz5-qQUQqjnaGr5mcabxOr9iZbkP3yxN9O2T09NoW/exec';
 window.NWDrive = {
+  // the signed-in user's Supabase access token: the proxy checks it and applies the user's role (technicians see field folders only)
+  token: async function() {
+    try { var s = await supabaseClient.auth.getSession(); return s.data && s.data.session ? s.data.session.access_token : null; } catch (e) { return null; }
+  },
   request: async function(body) {
+    body = Object.assign({}, body, { token: await NWDrive.token() });
     var resp = await fetch(NW_DRIVE_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
     var j = await resp.json();
     if (j && j.success === false) throw new Error(j.error || 'Drive error');

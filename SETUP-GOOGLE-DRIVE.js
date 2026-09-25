@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.6)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.7)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -50,6 +50,45 @@ var CATEGORY_MAP = {
 };
 // categories whose files stay link-viewable (the app shows inline previews of photos)
 var SHARED_CATEGORIES = ['photos', 'reports'];
+
+
+// ---------- who is calling? (v3.7) ----------
+// Every request from the app carries the user's Supabase access token (body.token). The proxy verifies it with Supabase and reads
+// the profile role: admin/manager => full access; tech => field folders only (FIELD_FOLDERS); no/invalid token => refused.
+// Maintenance scripts run by Ruslan pass body.adminKey instead.
+var SUPABASE_URL = 'https://vrscvnebznmomkdlhooi.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_7F9lDes97zMPVVrgdG2ggw_vdc6H3QE';
+var ADMIN_KEY = 'SET-IN-APPS-SCRIPT-ONLY';   // real value lives only in the deployed Apps Script project
+var FULL_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+function callerFromToken(token) {
+  if (!token) return null;
+  var cache = CacheService.getScriptCache(), ck = 'tok:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token)).slice(0, 40);
+  var hit = cache.get(ck); if (hit) return JSON.parse(hit);
+  var h = { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + token };
+  var r = UrlFetchApp.fetch(SUPABASE_URL + '/auth/v1/user', { headers: h, muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) return null;
+  var u = JSON.parse(r.getContentText()); if (!u || !u.id) return null;
+  var role = 'tech';
+  try {
+    var p = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + u.id + '&select=role', { headers: h, muteHttpExceptions: true });
+    if (p.getResponseCode() === 200) { var rows = JSON.parse(p.getContentText()); if (rows[0] && rows[0].role) role = rows[0].role; }
+  } catch (e) {}
+  var caller = { id: u.id, email: u.email, role: role, full: FULL_ROLES.indexOf(role) >= 0 };
+  try { cache.put(ck, JSON.stringify(caller), 300); } catch (e) {}
+  return caller;
+}
+function isFieldTop(name) { var n = normName(name); return FIELD_FOLDERS.some(function(f) { return normName(f) === n; }); }
+// keep only items whose top-level folder is a field folder (for technicians)
+function filterFieldItems(t) {
+  var by = {}; (t.items || []).forEach(function(i) { by[i.id] = i; });
+  function topOf(i) { var x = i; while (x && x.parent && x.parent !== t.folderId) x = by[x.parent]; return x; }
+  t.items = (t.items || []).filter(function(i) { var top = topOf(i); return top && top.folder && isFieldTop(top.name); });
+  return t;
+}
+function fieldPathOk(category, subfolder, path) {
+  var top = path ? String(path).split('/')[0] : categoryFolderName(category);
+  return isFieldTop(top);
+}
 
 // ---------- Drive API v3 (one HTTP call lists a whole level of folders) ----------
 function driveApi(path, params, method, payload) {
@@ -413,7 +452,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.6' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.7' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -421,8 +460,20 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.7', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
+    if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
+    if (!caller.full) {
+      // technicians: field folders only
+      var techActions = ['list_tree', 'list_files', 'upload_file', 'get_file', 'create_folder'];
+      if (techActions.indexOf(body.action) < 0) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not allowed for your role', auth: true })).setMimeType(ContentService.MimeType.JSON);
+      if ((body.action === 'upload_file' || body.action === 'create_folder') && !fieldPathOk(body.category, body.subfolder, body.folder))
+        return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Technicians can only add files to field folders', auth: true })).setMimeType(ContentService.MimeType.JSON);
+      if (body.action === 'list_tree') { result = filterFieldItems(listTree(body.projectName, body.projectId, body.maxDepth)); return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON); }
+      if (body.action === 'list_files') { var lf = listProjectFiles(body.projectName, body.projectId); lf.files = lf.files.filter(function(f) { return isFieldTop(f.category); }); return ContentService.createTextOutput(JSON.stringify(lf)).setMimeType(ContentService.MimeType.JSON); }
+    }
     switch (body.action) {
-      case 'ping':            result = { success: true, version: '3.6', root: FJOBS_FOLDER_ID }; break;
+
       case 'list_tree':       result = listTree(body.projectName, body.projectId, body.maxDepth); break;
       case 'list_files':      result = listProjectFiles(body.projectName, body.projectId); break;
       case 'list_projects':   result = { success: true, projects: listProjectFolders(body.legacy ? getLegacyRoot().getId() : FJOBS_FOLDER_ID) }; break;

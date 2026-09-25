@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=132"></script>
-<script src="nw-drive.js?v=209"></script>
+<script src="nw-drive.js?v=213"></script>
 <script src="nw-drive-browser.js?v=212"></script>
 <script src="auth.js?v=132"></script>
 <script src="cloud-save.js?v=132"></script>
@@ -809,6 +809,7 @@ requireAuth().catch(function(){});
 
   async function driveRequest(body) {
     try {
+      if (window.NWDrive) body = Object.assign({}, body, { token: await NWDrive.token() });
       var resp = await fetch(DRIVE_PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -2199,6 +2200,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=212"></script>
+<script src="sw-register.js?v=213"></script>
 </body>
 </html>
