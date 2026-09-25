@@ -4,6 +4,10 @@
 # Mechanical Engineering reference library — shouldn't be in the PWA repo
 Northern Wolves Mechanical Engineer/
 
+# Project job folders (contracts, POs, billing) — business docs, not app code
+Camelot Staten Island/
+AIA-Billing-Example.xlsx
+
 # OS
 Thumbs.db
 .DS_Store

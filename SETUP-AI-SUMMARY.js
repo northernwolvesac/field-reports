@@ -58,7 +58,7 @@ function callClaude(prompt) {
 
   var payload = {
     model: CLAUDE_MODEL,
-    max_tokens: 500,
+    max_tokens: 4000,
     messages: [
       {
         role: 'user',
