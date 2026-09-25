@@ -9,8 +9,8 @@
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=132"></script>
-<script src="nw-drive.js?v=213"></script>
-<script src="nw-drive-browser.js?v=212"></script>
+<script src="nw-drive.js?v=216"></script>
+<script src="nw-drive-browser.js?v=216"></script>
 <script src="auth.js?v=132"></script>
 <script src="cloud-save.js?v=132"></script>
 <script src="schedule-utils.js?v=137"></script>
@@ -633,20 +633,30 @@
     <!-- SUBMITTALS TAB -->
     <div class="detail-tab-content" id="tabSubmittals" data-dtab="submittals">
       <div style="padding:16px;">
-        <a id="btnAISubmittals" href="#" onclick="event.preventDefault(); openSubmittalsGenerator();" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:linear-gradient(135deg,#eff6ff,#ecfccb);border:1px solid #bae6fd;border-radius:12px;text-decoration:none;color:inherit;margin-bottom:14px;">
-          <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#0696D7,#5D822C);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">✨</div>
-          <div style="flex:1;">
-            <div style="font-weight:700;font-size:14px;color:#1a2332;">AI Submittals Generator</div>
-            <div style="font-size:12px;color:#64748b;margin-top:2px;">Upload drawings → AI reads specs → generates full submittal package</div>
-          </div>
-          <div style="color:#0696D7;font-size:20px;font-weight:700;">›</div>
-        </a>
-        <div id="submittalPackages" style="display:none;">
-          <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Previous Packages</div>
-          <div id="submittalPackagesList"></div>
+        <div id="submittalActions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:16px">
+          <a id="btnNewSubmittal" href="#" onclick="event.preventDefault(); openNewSubmittal();" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid #d1d5db;border-radius:12px;text-decoration:none;color:inherit;">
+            <div style="width:42px;height:42px;border-radius:12px;background:#111318;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📝</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:14px;color:#111318;">Create new submittal</div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px;">Cover letter with the project info + vendor PDF → Save to Drive, Send or Download</div>
+            </div>
+            <div style="color:#111318;font-size:20px;font-weight:700;">›</div>
+          </a>
+          <a id="btnAISubmittals" href="#" onclick="event.preventDefault(); openSubmittalsGenerator();" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:linear-gradient(135deg,#eff6ff,#ecfccb);border:1px solid #bae6fd;border-radius:12px;text-decoration:none;color:inherit;">
+            <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#0696D7,#5D822C);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">✨</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:14px;color:#1a2332;">AI Submittal Generator <span style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;color:#b45309;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:1px 7px;vertical-align:middle;margin-left:4px">TRIAL</span></div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px;">Trial version — still being tested, may not work yet. Upload drawings → AI reads specs → submittal list</div>
+            </div>
+            <div style="color:#0696D7;font-size:20px;font-weight:700;">›</div>
+          </a>
+        </div>
+        <div id="submittalLog" style="display:none;">
+          <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Submittal log</div>
+          <div id="submittalLogList"></div>
         </div>
         <div id="submittalsEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">
-          No submittal packages yet.<br>Tap <strong>AI Submittals Generator</strong> to create one.
+          No submittals yet.<br>Tap <strong>Create new submittal</strong> to make the first one.
         </div>
       </div>
     </div>
@@ -996,6 +1006,7 @@ requireAuth().catch(function(){});
     try { var prof = await getAuthProfile(); isTechUser = !!(prof && prof.role === 'tech'); } catch (e) { isTechUser = true; }
     if (isTechUser) {
       document.querySelectorAll('#detailTabs .detail-tab[data-dtab="prime"], #detailTabs .detail-tab[data-dtab="change-orders"]').forEach(function(t) { t.style.display = 'none'; });
+      ['tabPrime', 'tabChangeOrders', 'setupSteps', 'submittalActions'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
       document.querySelectorAll('a[href="invoicing.html"]').forEach(function(a) { a.style.display = 'none'; });
     }
     return isTechUser;
@@ -1287,6 +1298,8 @@ requireAuth().catch(function(){});
   async function loadPrimeContract(projectId) {
     var body = document.getElementById('primeBody');
     var steps = document.getElementById('setupSteps');
+    // Prime Contracts are financial: technicians never load them (the database refuses them too)
+    if (await techCheck()) { if (body) body.innerHTML = ''; if (steps) steps.innerHTML = ''; return; }
     if (body) body.innerHTML = '<div style="color:var(--nw-muted);font-size:13px">Loading…</div>';
     var c = null, cos = [], apps = [], pays = [], sov = [], contractDocs = 0, cloudDrawings = 0;
     try {
@@ -1379,6 +1392,7 @@ requireAuth().catch(function(){});
     mountDriveBrowser(projectId, p);
     loadProjectReports(projectId);
     loadRFIs(projectId);
+    loadSubmittals(projectId);
     techCheck().then(function(tech) { if (!tech) { loadChangeOrders(projectId); loadPrimeContract(projectId); } });
 
     // Show detail, hide list
@@ -1803,6 +1817,45 @@ requireAuth().catch(function(){});
   var _allRFIs = [];
   var _activeRFIFilter = 'all';
 
+  // Submittal log (submittals table): number, revision, status; the PDFs live in Drive / Submittals
+  var SUBMITTAL_STATUS = [['saved', 'Saved'], ['sent', 'Sent'], ['approved', 'Approved'], ['approved-as-noted', 'Approved as noted'], ['revise-resubmit', 'Revise & resubmit'], ['rejected', 'Rejected']];
+  var SUBMITTAL_COLOR = { saved: '#6b7280', sent: '#0696D7', approved: '#15803d', 'approved-as-noted': '#65a30d', 'revise-resubmit': '#d97706', rejected: '#dc2626' };
+  async function loadSubmittals(projectId) {
+    var list = document.getElementById('submittalLogList'), wrap = document.getElementById('submittalLog'), empty = document.getElementById('submittalsEmpty');
+    if (!list) return;
+    var r = await supabaseClient.from('submittals').select('*').eq('project_id', projectId).order('number', { ascending: false }).order('revision', { ascending: false });
+    var tech = await techCheck();
+    if (currentProjectId !== projectId) return;
+    var rows = r.data || [];
+    wrap.style.display = rows.length ? '' : 'none';
+    empty.style.display = rows.length ? 'none' : '';
+    if (tech) empty.innerHTML = 'No submittals yet.';
+    var pad = function(n) { return n < 100 ? ('00' + n).slice(-3) : String(n); };
+    list.innerHTML = rows.map(function(s) {
+      var no = 'SUB-' + pad(s.number) + (s.revision ? ' R' + s.revision : '');
+      var st = s.status || 'saved', col = SUBMITTAL_COLOR[st] || '#6b7280';
+      var stLabel = (SUBMITTAL_STATUS.filter(function(x) { return x[0] === st; })[0] || [st, st])[1];
+      var sel = tech ? '<span style="font-size:11px;font-weight:700;color:' + col + '">' + escHtml(stLabel) + '</span>' :
+        '<select data-sub-status="' + s.id + '" style="font-size:12px;font-weight:700;color:' + col + ';border:1px solid #e5e7eb;border-radius:6px;padding:3px 4px;background:#fff">' +
+        SUBMITTAL_STATUS.map(function(x) { return '<option value="' + x[0] + '"' + (x[0] === st ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>';
+      var meta = [s.spec_section ? 'Spec ' + s.spec_section : '', s.to_company || '', s.sent_at ? 'sent ' + new Date(s.sent_at).toLocaleDateString() : 'created ' + new Date(s.created_at).toLocaleDateString()].filter(Boolean).join(' · ');
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;background:#fff;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:180px"><div style="font-weight:700;font-size:14px;color:#111318">' + escHtml(no) + ' — ' + escHtml(s.title) + '</div>' +
+        '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escHtml(meta) + '</div></div>' + sel +
+        (s.drive_url ? '<a href="' + escHtml(s.drive_url) + '" target="_blank" style="font-size:12px;font-weight:700;color:#0696D7;text-decoration:none">Open ↗</a>' : '') +
+        (tech ? '' : '<a href="submittal.html?project=' + encodeURIComponent(projectId) + '&id=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">Send</a>' +
+          '<a href="submittal.html?project=' + encodeURIComponent(projectId) + '&from=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">Resubmit</a>') +
+        '</div>';
+    }).join('');
+    list.querySelectorAll('[data-sub-status]').forEach(function(el) {
+      el.addEventListener('change', async function() {
+        var u = await supabaseClient.from('submittals').update({ status: el.value, updated_at: new Date().toISOString() }).eq('id', el.getAttribute('data-sub-status'));
+        if (u.error) { showToast('Could not update: ' + u.error.message); return; }
+        el.style.color = SUBMITTAL_COLOR[el.value] || '#6b7280'; showToast('Status updated');
+      });
+    });
+  }
+
   async function loadRFIs(projectId) {
     if (typeof getProjectRFIs !== 'function') return;
     try {
@@ -1941,6 +1994,7 @@ requireAuth().catch(function(){});
     // Refresh COs and RFIs when navigating back (bfcache restore)
     window.addEventListener('pageshow', function(e) {
       if (e.persisted && currentProjectId) {
+        loadSubmittals(currentProjectId);
         loadPrimeContract(currentProjectId);
         loadChangeOrders(currentProjectId);
         loadRFIs(currentProjectId);
@@ -1961,7 +2015,12 @@ requireAuth().catch(function(){});
       if (content) content.classList.add('active');
     });
 
-    // Open submittals generator
+    // Create a submittal (cover letter + vendor PDF) for the open project
+    window.openNewSubmittal = function() {
+      if (currentProjectId) window.location.href = 'submittal.html?project=' + encodeURIComponent(currentProjectId);
+    };
+
+    // Open submittals generator (AI, trial)
     window.openSubmittalsGenerator = function() {
       if (currentProjectId) {
         window.location.href = 'submittals-generator.html?project=' + currentProjectId;
@@ -2200,6 +2259,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=213"></script>
+<script src="sw-register.js?v=216"></script>
 </body>
 </html>

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>Submittal — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=216"></script>
+<script src="auth.js?v=216"></script>
+<script src="nw-drive.js?v=216"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="pdf-utils.js?v=216"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 110px; }
+  .sb-wrap { max-width: 860px; margin: 0 auto; padding: 0 14px; }
+  .sb-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .sb-top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .sb-top .ttl { flex: 1; min-width: 0; }
+  .sb-top .ttl b { display: block; font-size: 16px; color: #111318; }
+  .sb-top .ttl span { font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .sb-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; margin: 14px 0; padding: 14px 16px; }
+  .sb-card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: #4b5563; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .full { grid-column: 1 / -1; }
+  .fld label { display: block; font-size: 11px; font-weight: 700; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .fld input, .fld select, .fld textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111318; font-family: inherit; }
+  .fld textarea { min-height: 80px; resize: vertical; }
+  .fld input:disabled, .fld select:disabled, .fld textarea:disabled { background: #f3f4f6; color: #4b5563; }
+  .req::after { content: ' *'; color: #dc2626; }
+  .auto { font-size: 11px; color: #0696D7; font-weight: 600; margin-left: 6px; text-transform: none; letter-spacing: 0; }
+  .drop { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 22px 12px; text-align: center; color: #6b7280; font-size: 14px; cursor: pointer; background: #fafafa; }
+  .drop.over { border-color: #0696D7; background: #eff8fd; }
+  .drop b { color: #0696D7; }
+  .att { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 8px; font-size: 13px; }
+  .att .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .att .meta { color: #6b7280; font-size: 12px; white-space: nowrap; }
+  .att button { border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 13px; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e5e7eb; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); z-index: 30; }
+  .bar .in { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; }
+  .bar button { flex: 1; padding: 13px 8px; font-size: 15px; font-weight: 700; border-radius: 10px; cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #111318; }
+  .bar button.save { background: #111318; color: #fff; border-color: #111318; }
+  .bar button.send { background: #0696D7; color: #fff; border-color: #0696D7; }
+  .note { font-size: 12px; color: #6b7280; margin-top: 6px; }
+  .saved-box { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-top: 14px; display: none; }
+  .saved-box a { color: #065f46; font-weight: 700; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(17,19,24,.45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; padding: 18px; box-sizing: border-box; }
+  .modal h3 { margin: 0 0 12px; font-size: 17px; }
+  .modal .acts { display: flex; gap: 10px; margin-top: 14px; }
+  .modal .acts button { flex: 1; padding: 12px; font-size: 15px; font-weight: 700; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
+  .modal .acts button.go { background: #0696D7; border-color: #0696D7; color: #fff; }
+  .busy { position: fixed; inset: 0; background: rgba(255,255,255,.8); display: none; align-items: center; justify-content: center; z-index: 60; flex-direction: column; gap: 12px; font-size: 14px; color: #111318; font-weight: 600; }
+  .busy.show { display: flex; }
+  .spin { width: 34px; height: 34px; border: 3px solid #e5e7eb; border-top-color: #0696D7; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .blocked { text-align: center; padding: 60px 20px; color: #4b5563; }
+  @media (max-width: 640px) { .grid, .grid.three { grid-template-columns: 1fr; } .bar button { font-size: 14px; padding: 12px 4px; } }
+</style>
+</head>
+<body>
+<div class="sb-top">
+  <a href="#" class="back" id="backBtn">←</a>
+  <div class="ttl"><b id="pageTitle">New Submittal</b><span id="projLine">Loading project…</span></div>
+  <img src="logo-header.png" alt="Northern Wolves AC" style="height:34px;width:auto">
+</div>
+
+<div class="sb-wrap" id="formWrap" style="display:none">
+
+  <div class="sb-card">
+    <h3>Project <span class="auto">auto-filled from the project</span></h3>
+    <div class="grid">
+      <div class="fld full"><label>Project</label><input id="fProject"></div>
+      <div class="fld full"><label>Project address</label><input id="fAddress"></div>
+      <div class="fld"><label>Project / Contract No.</label><input id="fProjectNo"></div>
+      <div class="fld"><label>Owner / Customer</label><input id="fOwner"></div>
+      <div class="fld"><label>Architect / Engineer</label><input id="fArchitect"></div>
+      <div class="fld"><label>Project Manager</label><input id="fPM"></div>
+    </div>
+  </div>
+
+  <div class="sb-card">
+    <h3>Submittal</h3>
+    <div class="grid three">
+      <div class="fld"><label>Submittal No.</label><input id="fNumber" inputmode="numeric"></div>
+      <div class="fld"><label>Revision</label><input id="fRevision" inputmode="numeric" value="0"></div>
+      <div class="fld"><label>Date</label><input id="fDate" type="date"></div>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <div class="fld full"><label class="req">Title / Equipment</label><input id="fTitle" placeholder="e.g. AC Units RTU-1 to RTU-3"></div>
+      <div class="fld"><label>Spec section</label><input id="fSpec" placeholder="e.g. 23 81 26"></div>
+      <div class="fld"><label>Type</label>
+        <select id="fType">
+          <option>Product Data</option><option>Shop Drawings</option><option>Samples</option><option>IOM / O&amp;M Manual</option>
+          <option>Warranty</option><option>Test / TAB Report</option><option>Certificates</option><option>Other</option>
+        </select></div>
+      <div class="fld"><label>Manufacturer</label><input id="fMfr" placeholder="e.g. Carrier"></div>
+      <div class="fld"><label>Model / Tags</label><input id="fModel" placeholder="e.g. 48FC / RTU-1, RTU-2"></div>
+      <div class="fld"><label>Action requested</label>
+        <select id="fAction">
+          <option>For Approval</option><option>For Review &amp; Comment</option><option>For Record</option><option>For Information</option><option>Resubmittal</option>
+        </select></div>
+      <div class="fld"><label>Response needed by</label><input id="fDue" type="date"></div>
+      <div class="fld full"><label>Description</label><textarea id="fDesc" placeholder="What is being submitted (equipment, quantities, options)…"></textarea></div>
+      <div class="fld full"><label>Notes / Remarks</label><textarea id="fNotes" placeholder="Deviations from the specs, substitutions, lead times…"></textarea></div>
+    </div>
+  </div>
+
+  <div class="sb-card">
+    <h3>Submitted to</h3>
+    <div class="grid">
+      <div class="fld"><label>Company (GC / Architect)</label><input id="fToCompany"></div>
+      <div class="fld"><label>Attention</label><input id="fToAttn"></div>
+      <div class="fld"><label>Email(s)</label><input id="fToEmail" type="email" placeholder="name@company.com, other@company.com"></div>
+      <div class="fld"><label>Address</label><input id="fToAddress"></div>
+    </div>
+  </div>
+
+  <div class="sb-card">
+    <h3>Submitted by</h3>
+    <div class="grid">
+      <div class="fld"><label>Company</label><input id="fFromCompany" value="Northern Wolves Air Conditioning"></div>
+      <div class="fld"><label>Name</label><input id="fFromName"></div>
+      <div class="fld"><label>Email</label><input id="fFromEmail"></div>
+      <div class="fld"><label>Phone</label><input id="fFromPhone"></div>
+      <div class="fld full"><label>Address</label><input id="fFromAddress" value="55 9th Street, Unit 55A-2, Brooklyn, NY 11215"></div>
+    </div>
+  </div>
+
+  <div class="sb-card" id="attCard">
+    <h3>Submittal PDF(s) from the vendor</h3>
+    <div class="drop" id="drop">📎 <b>Attach PDF</b> or drop files here<br><span style="font-size:12px">They are added after the cover letter, in this order</span></div>
+    <input type="file" id="fileIn" accept="application/pdf,.pdf" multiple style="display:none">
+    <div id="attList"></div>
+  </div>
+
+  <div class="sb-card" id="saveCard">
+    <h3>Save to Google Drive</h3>
+    <div class="grid">
+      <div class="fld"><label>Folder</label><select id="fFolder"><option value="Submittals">Submittals</option></select></div>
+      <div class="fld" id="newFolderFld" style="display:none"><label>New sub-folder name</label><input id="fNewFolder" placeholder="e.g. RTU"></div>
+    </div>
+    <div class="note">Saved as one PDF (cover letter + attached PDFs) in NW Projects / <span id="projFolderName">project</span> / <span id="folderPreview">Submittals</span></div>
+    <div class="saved-box" id="savedBox"></div>
+  </div>
+</div>
+
+<div class="blocked" id="blocked" style="display:none"></div>
+
+<div class="bar" id="bar" style="display:none"><div class="in">
+  <button class="save" id="btnSave">💾 Save</button>
+  <button class="send" id="btnSend">✉️ Send</button>
+  <button id="btnDownload">⬇ Download</button>
+</div></div>
+
+<div class="modal-bg" id="sendModal"><div class="modal">
+  <h3>Send submittal</h3>
+  <div class="fld"><label class="req">To</label><input id="mTo" placeholder="name@company.com, other@company.com"></div>
+  <div class="fld" style="margin-top:10px"><label>CC</label><input id="mCc" placeholder="optional"></div>
+  <div class="fld" style="margin-top:10px"><label>Subject</label><input id="mSubject"></div>
+  <div class="fld" style="margin-top:10px"><label>Message</label><textarea id="mBody" style="min-height:150px"></textarea></div>
+  <div class="note">The submittal PDF is attached (over 20 MB it goes as a Google Drive link). You are CC'd and replies come to your email.</div>
+  <div class="acts"><button id="mCancel">Cancel</button><button class="go" id="mSend">Send</button></div>
+</div></div>
+
+<div class="busy" id="busy"><div class="spin"></div><div id="busyText">Working…</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+(function() {
+  'use strict';
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var MAX_TOTAL = 35 * 1024 * 1024;   // what the Drive proxy can take in one upload
+  var params = new URLSearchParams(location.search);
+  var projectId = params.get('project');
+  var editId = params.get('id');          // open a saved submittal (view / send again)
+  var fromId = params.get('from');        // resubmit: copy a submittal as its next revision
+  var project = null, prime = null, profile = null, userId = null, userEmail = '';
+  var attachments = [];                   // [{file, name, size, pages}]
+  var saved = null;                       // submittals row once saved
+  var dirty = true;                       // form changed since the last Save
+  var $ = function(id) { return document.getElementById(id); };
+  var val = function(id) { return ($(id).value || '').trim(); };
+
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3500); }
+  function busy(on, txt) { $('busy').classList.toggle('show', !!on); if (txt) $('busyText').textContent = txt; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function pad(n) { n = parseInt(n, 10) || 0; return n < 100 ? ('00' + n).slice(-3) : String(n); }
+  function mb(b) { return (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB'; }
+  function fmtDate(d) { if (!d) return ''; var p = d.split('-'); return p.length === 3 ? p[1] + '/' + p[2] + '/' + p[0] : d; }
+  function today() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+
+  $('backBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    if (history.length > 1) history.back(); else location.href = 'projects.html';
+  });
+
+  init().catch(function(e) { console.error(e); block('Could not load: ' + (e.message || e)); });
+
+  async function init() {
+    if (!projectId) { block('Open this page from a project (Projects → Submittals → Create new submittal).'); return; }
+    try {
+      var u = await supabaseClient.auth.getUser();
+      if (u && u.data && u.data.user) { userId = u.data.user.id; userEmail = u.data.user.email || ''; }
+      profile = await getAuthProfile();
+    } catch (e) {}
+    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { block('Submittals are prepared by the office (project managers). Ask your PM if you need one.'); return; }
+
+    var pr = await supabaseClient.from('projects').select('*').eq('id', projectId).maybeSingle();
+    project = pr.data;
+    if (!project) { block('Project not found.'); return; }
+    try { var ap = await supabaseClient.from('aia_projects').select('*').eq('project_id', projectId).maybeSingle(); prime = ap.data || null; } catch (e) {}
+
+    var customer = ((project.notes || '').match(/^Customer: (.+)$/m) || [])[1] || '';
+    var addr = [project.address, project.city, [project.state, project.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    $('projLine').textContent = project.project_name + (addr ? ' — ' + addr : '');
+    $('projFolderName').textContent = project.project_name;
+    $('fProject').value = project.project_name || '';
+    $('fAddress').value = addr;
+    $('fProjectNo').value = (prime && (prime.contract_number || prime.project_no)) || project.short_code || '';
+    $('fOwner').value = (prime && prime.client_name) || customer || '';
+    $('fArchitect').value = (prime && prime.architect_name) || '';
+    $('fPM').value = project.pm_name || '';
+    $('fToCompany').value = (prime && prime.client_name) || customer || '';
+    $('fToAddress').value = (prime && prime.client_address) || '';
+    $('fFromName').value = profile.full_name || '';
+    $('fFromEmail').value = profile.email || userEmail;
+    $('fFromPhone').value = profile.phone || '';
+    $('fDate').value = today();
+
+    var all = await supabaseClient.from('submittals').select('*').eq('project_id', projectId).order('number', { ascending: false });
+    var rows = all.data || [];
+    $('fNumber').value = pad((rows[0] ? rows[0].number : 0) + 1);
+
+    var srcId = editId || fromId;
+    var src = srcId ? rows.filter(function(r) { return r.id === srcId; })[0] : null;
+    if (src) fillFrom(src);
+    if (fromId && src) {
+      var revs = rows.filter(function(r) { return r.number === src.number; }).map(function(r) { return r.revision; });
+      $('fRevision').value = Math.max.apply(null, revs) + 1;
+      $('fAction').value = 'Resubmittal'; $('fDate').value = today();
+      $('pageTitle').textContent = 'Resubmit ' + pad(src.number);
+    }
+    if (editId && src) {
+      saved = src; dirty = false;
+      $('pageTitle').textContent = 'Submittal ' + pad(src.number) + (src.revision ? ' Rev ' + src.revision : '');
+      $('attCard').querySelector('h3').textContent = 'Submittal PDF';
+      $('drop').innerHTML = 'The saved package is in Google Drive (below). To change it, use <b>Resubmit</b> in the project\'s Submittals tab.';
+      $('drop').style.cursor = 'default';
+      document.querySelectorAll('#formWrap input, #formWrap select, #formWrap textarea').forEach(function(el) { el.disabled = true; });
+      $('btnSave').style.display = 'none';
+      $('btnDownload').textContent = '↗ Open PDF';
+      showSaved();
+    }
+
+    loadFolders();
+    bind();
+    $('formWrap').style.display = ''; $('bar').style.display = '';
+  }
+
+  function block(msg) { $('blocked').textContent = msg; $('blocked').style.display = ''; $('projLine').textContent = ''; }
+
+  function fillFrom(r) {
+    $('fNumber').value = pad(r.number); $('fRevision').value = r.revision || 0;
+    if (r.created_at) $('fDate').value = r.created_at.slice(0, 10);
+    $('fTitle').value = r.title || ''; $('fSpec').value = r.spec_section || '';
+    if (r.submittal_type) $('fType').value = r.submittal_type;
+    if (r.action_requested) $('fAction').value = r.action_requested;
+    $('fMfr').value = r.manufacturer || ''; $('fModel').value = r.model || '';
+    $('fDesc').value = r.description || ''; $('fNotes').value = r.notes || '';
+    if (r.to_company) $('fToCompany').value = r.to_company;
+    $('fToAttn').value = r.to_attention || '';
+    $('fToEmail').value = r.to_email || '';
+    if (r.to_address) $('fToAddress').value = r.to_address;
+    if (r.due_date) $('fDue').value = r.due_date;
+  }
+
+  // Submittals sub-folders that already exist in Drive (BOILER, ERV, RTU…)
+  async function loadFolders() {
+    try {
+      var t = await NWDrive.request({ action: 'list_tree', projectName: project.project_name, projectId: projectId, maxDepth: 2 });
+      var items = t.items || [], sel = $('fFolder');
+      var sub = items.filter(function(i) { return i.folder && i.parent === t.folderId && /^submittals$/i.test(i.name); })[0];
+      if (sub) {
+        items.filter(function(i) { return i.folder && i.parent === sub.id; }).sort(function(a, b) { return a.name.localeCompare(b.name); })
+          .forEach(function(f) { var o = document.createElement('option'); o.value = 'Submittals/' + f.name; o.textContent = 'Submittals / ' + f.name; sel.appendChild(o); });
+      }
+      var o2 = document.createElement('option'); o2.value = '__new'; o2.textContent = '+ New sub-folder…'; sel.appendChild(o2);
+      if (saved && saved.drive_folder) { if (![].some.call(sel.options, function(o) { return o.value === saved.drive_folder; })) { var o3 = document.createElement('option'); o3.value = o3.textContent = saved.drive_folder; sel.appendChild(o3); } sel.value = saved.drive_folder; }
+    } catch (e) { console.warn('[submittal] folders', e); }
+  }
+  function targetFolder() {
+    var v = $('fFolder').value;
+    if (v === '__new') { var n = val('fNewFolder').replace(/[\\/]+/g, '-'); return n ? 'Submittals/' + n : 'Submittals'; }
+    return v || 'Submittals';
+  }
+
+  function bind() {
+    var drop = $('drop'), fileIn = $('fileIn');
+    if (!editId) {
+      drop.addEventListener('click', function() { fileIn.click(); });
+      drop.addEventListener('dragover', function(e) { e.preventDefault(); drop.classList.add('over'); });
+      drop.addEventListener('dragleave', function() { drop.classList.remove('over'); });
+      drop.addEventListener('drop', function(e) { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+      fileIn.addEventListener('change', function() { addFiles(fileIn.files).then(function() { fileIn.value = ''; }); });
+    }
+    $('fFolder').addEventListener('change', function() { $('newFolderFld').style.display = this.value === '__new' ? '' : 'none'; $('folderPreview').textContent = targetFolder().replace('/', ' / '); });
+    $('fNewFolder').addEventListener('input', function() { $('folderPreview').textContent = targetFolder().replace('/', ' / '); });
+    document.querySelectorAll('#formWrap input, #formWrap select, #formWrap textarea').forEach(function(el) { el.addEventListener('input', function() { dirty = true; }); el.addEventListener('change', function() { dirty = true; }); });
+    $('btnSave').addEventListener('click', function() { save().catch(fail); });
+    $('btnDownload').addEventListener('click', function() { download().catch(fail); });
+    $('btnSend').addEventListener('click', openSend);
+    $('mCancel').addEventListener('click', function() { $('sendModal').classList.remove('show'); });
+    $('mSend').addEventListener('click', function() { send().catch(fail); });
+  }
+  function fail(e) { busy(false); console.error('[submittal]', e); alert('Error: ' + (e && e.message ? e.message : e)); }
+
+  async function addFiles(list) {
+    var files = [].slice.call(list || []);
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { toast('Only PDF files: ' + f.name); continue; }
+      var a = { file: f, name: f.name, size: f.size, pages: null };
+      attachments.push(a);
+      try { var d = await PDFLib.PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true }); a.pages = d.getPageCount(); } catch (e) { console.warn(e); a.pages = -1; }
+    }
+    dirty = true; renderAtt();
+  }
+  function renderAtt() {
+    $('attList').innerHTML = attachments.map(function(a, i) {
+      return '<div class="att"><span>📄</span><span class="nm">' + esc(a.name) + '</span><span class="meta">' +
+        (a.pages === -1 ? '<span style="color:#dc2626">can\'t read · </span>' : (a.pages ? a.pages + ' pg · ' : '')) + mb(a.size) + '</span>' +
+        (i > 0 ? '<button data-up="' + i + '" title="Move up">↑</button>' : '') + '<button data-rm="' + i + '" title="Remove">✕</button></div>';
+    }).join('');
+    $('attList').querySelectorAll('[data-rm]').forEach(function(b) { b.onclick = function() { attachments.splice(+b.dataset.rm, 1); dirty = true; renderAtt(); }; });
+    $('attList').querySelectorAll('[data-up]').forEach(function(b) { b.onclick = function() { var i = +b.dataset.up, x = attachments[i]; attachments[i] = attachments[i - 1]; attachments[i - 1] = x; dirty = true; renderAtt(); }; });
+  }
+
+  function subNo() { var r = parseInt(val('fRevision'), 10) || 0; return 'SUB-' + pad(val('fNumber')) + (r ? ' R' + r : ''); }
+  function fileName() { return (subNo() + ' - ' + (val('fTitle') || 'Submittal')).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120) + '.pdf'; }
+
+  function validate() {
+    if (!val('fTitle')) { toast('Enter the submittal title'); $('fTitle').focus(); return false; }
+    if (!(parseInt(val('fNumber'), 10) > 0)) { toast('Enter the submittal number'); $('fNumber').focus(); return false; }
+    if (attachments.some(function(a) { return a.pages === -1; })) { toast('One of the PDFs can\'t be read — remove it or re-save it as PDF'); return false; }
+    return true;
+  }
+
+  // ---------- PDF: cover letter (jsPDF) + vendor PDFs (pdf-lib) ----------
+  var logoData = null;
+  async function loadLogo() {
+    if (logoData) return logoData;
+    try {
+      var img = new Image(); img.src = 'logo-full.png';
+      await new Promise(function(res, rej) { img.onload = res; img.onerror = rej; });
+      var c = document.createElement('canvas'); c.width = 600; c.height = Math.round(600 * img.height / img.width);
+      var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      logoData = { data: c.toDataURL('image/jpeg', 0.9), ratio: c.height / c.width };
+    } catch (e) { logoData = { data: null, ratio: 0.55 }; }
+    return logoData;
+  }
+
+  async function coverPdf() {
+    var jsPDF = window.jspdf.jsPDF, doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    var W = 612, M = 42, R = W - M, y = 40, ink = [17, 19, 24], mute = [107, 114, 128], line = [209, 213, 219], blue = [6, 150, 215];
+    var logo = await loadLogo();
+    if (logo.data) doc.addImage(logo.data, 'JPEG', M, y - 6, 120, 120 * logo.ratio);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor.apply(doc, ink);
+    doc.text('SUBMITTAL', R, y + 14, { align: 'right' });
+    doc.setFontSize(10); doc.setTextColor.apply(doc, blue); doc.text('TRANSMITTAL / COVER LETTER', R, y + 30, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setTextColor.apply(doc, ink); doc.setFontSize(10);
+    doc.text('No. ' + pad(val('fNumber')) + '    Rev. ' + (parseInt(val('fRevision'), 10) || 0) + '    Date ' + fmtDate(val('fDate')), R, y + 46, { align: 'right' });
+    y += Math.max(120 * logo.ratio, 56) + 10;
+    doc.setDrawColor.apply(doc, ink); doc.setLineWidth(1.2); doc.line(M, y, R, y); y += 22;
+
+    function label(t, x, yy) { doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, mute); doc.text(t.toUpperCase(), x, yy); }
+    function value(t, x, yy, w) { doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor.apply(doc, ink); var l = doc.splitTextToSize(t || '—', w); doc.text(l, x, yy); return l.length * 12.5; }
+    function pair(items, cols) {
+      var cw = (R - M) / cols, maxH = 0;
+      if (y > 700) { doc.addPage(); y = 50; }
+      items.forEach(function(it, i) { var x = M + i * cw; label(it[0], x, y); maxH = Math.max(maxH, value(it[1], x, y + 12, cw - 12)); });
+      y += 12 + maxH + 8;
+    }
+    function block(t, text) {
+      label(t, M, y); y += 12;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor.apply(doc, ink);
+      doc.splitTextToSize(text, R - M).forEach(function(l) { if (y > 730) { doc.addPage(); y = 50; } doc.text(l, M, y); y += 12.5; });
+      y += 8;
+    }
+    function section(t) {
+      if (y > 700) { doc.addPage(); y = 50; }
+      doc.setFillColor(243, 244, 246); doc.rect(M, y - 12, R - M, 18, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor.apply(doc, ink); doc.text(t.toUpperCase(), M + 6, y + 1); y += 22;
+    }
+    section('Project');
+    pair([['Project', val('fProject')], ['Project / Contract No.', val('fProjectNo')]], 2);
+    pair([['Address', val('fAddress')], ['Owner / Customer', val('fOwner')]], 2);
+    pair([['Architect / Engineer', val('fArchitect')], ['Project Manager', val('fPM')]], 2);
+
+    section('To / From');
+    var toBlock = [val('fToCompany'), val('fToAttn') ? 'Attn: ' + val('fToAttn') : '', val('fToAddress'), val('fToEmail')].filter(Boolean).join('\n');
+    var frBlock = [val('fFromCompany'), val('fFromName'), val('fFromAddress'), [val('fFromEmail'), val('fFromPhone')].filter(Boolean).join('  ·  ')].filter(Boolean).join('\n');
+    pair([['Submitted to', toBlock], ['Submitted by', frBlock]], 2);
+
+    section('Submittal');
+    pair([['Title / Equipment', val('fTitle')], ['Spec section', val('fSpec')], ['Type', val('fType')]], 3);
+    pair([['Manufacturer', val('fMfr')], ['Model / Tags', val('fModel')], ['Action requested', val('fAction')]], 3);
+    if (val('fDue')) pair([['Response needed by', fmtDate(val('fDue'))]], 3);
+    if (val('fDesc')) block('Description', val('fDesc'));
+    if (val('fNotes')) block('Notes / Remarks', val('fNotes'));
+
+    section('Enclosures');
+    if (!attachments.length) { value('None', M, y, R - M); y += 18; }
+    attachments.forEach(function(a, i) {
+      if (y > 730) { doc.addPage(); y = 50; }
+      y += value((i + 1) + '.  ' + a.name + (a.pages > 0 ? '  (' + a.pages + ' page' + (a.pages > 1 ? 's' : '') + ')' : ''), M, y, R - M) + 2;
+    });
+    y += 8;
+
+    // contractor certification + reviewer stamp area
+    if (y > 600) { doc.addPage(); y = 50; }
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, mute);
+    var cert = doc.splitTextToSize('Northern Wolves Air Conditioning has reviewed this submittal and certifies that it complies with the contract documents, except as noted above.', R - M);
+    doc.text(cert, M, y); y += cert.length * 11 + 10;
+    var boxH = 118, half = (R - M) / 2;
+    doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.8); doc.rect(M, y, R - M, boxH); doc.line(M + half, y, M + half, y + boxH);
+    label('Reviewer action', M + 10, y + 16);
+    ['No Exceptions Taken', 'Approved as Noted', 'Revise and Resubmit', 'Rejected'].forEach(function(t, i) {
+      var yy = y + 34 + i * 19;
+      doc.setDrawColor.apply(doc, [120, 120, 120]); doc.rect(M + 12, yy - 8, 9, 9);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor.apply(doc, ink); doc.text(t, M + 28, yy);
+    });
+    label('Reviewer stamp / comments', M + half + 10, y + 16);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, mute);
+    doc.text('Reviewed by: ______________________', M + half + 10, y + boxH - 26);
+    doc.text('Date: ______________', M + half + 10, y + boxH - 10);
+
+    var pages = doc.getNumberOfPages();
+    for (var p = 1; p <= pages; p++) {
+      doc.setPage(p); doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.5); doc.line(M, 760, R, 760);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, mute);
+      doc.text('Northern Wolves Air Conditioning  ·  New York & New Jersey  ·  ' + subNo(), M, 772);
+      if (pages > 1) doc.text('Cover ' + p + ' of ' + pages, R, 772, { align: 'right' });
+    }
+    return doc.output('arraybuffer');
+  }
+
+  async function buildPackage() {
+    var out = await PDFLib.PDFDocument.create();
+    var cover = await PDFLib.PDFDocument.load(await coverPdf());
+    (await out.copyPages(cover, cover.getPageIndices())).forEach(function(p) { out.addPage(p); });
+    for (var i = 0; i < attachments.length; i++) {
+      busy(true, 'Adding ' + attachments[i].name + '…');
+      var src = await PDFLib.PDFDocument.load(await attachments[i].file.arrayBuffer(), { ignoreEncryption: true });
+      (await out.copyPages(src, src.getPageIndices())).forEach(function(p) { out.addPage(p); });
+    }
+    out.setTitle(subNo() + ' - ' + val('fTitle')); out.setAuthor('Northern Wolves Air Conditioning'); out.setProducer('NW Field app');
+    return new Blob([await out.save()], { type: 'application/pdf' });
+  }
+
+  async function download() {
+    if (editId && saved) { window.open(saved.drive_url || ('https://drive.google.com/file/d/' + saved.drive_id + '/view'), '_blank'); return; }
+    if (!validate()) return;
+    busy(true, 'Building PDF…');
+    var blob = await buildPackage();
+    busy(false);
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName();
+    document.body.appendChild(a); a.click(); setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    toast('Downloaded ' + fileName());
+  }
+
+  function rowData() {
+    return {
+      project_id: projectId, number: parseInt(val('fNumber'), 10), revision: parseInt(val('fRevision'), 10) || 0,
+      title: val('fTitle'), spec_section: val('fSpec') || null, submittal_type: val('fType'), action_requested: val('fAction'),
+      manufacturer: val('fMfr') || null, model: val('fModel') || null, description: val('fDesc') || null, notes: val('fNotes') || null,
+      to_company: val('fToCompany') || null, to_attention: val('fToAttn') || null, to_email: val('fToEmail') || null, to_address: val('fToAddress') || null,
+      due_date: val('fDue') || null
+    };
+  }
+
+  // Save = build the package, store it in Drive (Submittals folder), log it in submittals + project_files
+  async function save() {
+    if (!validate()) return null;
+    var total = attachments.reduce(function(s, a) { return s + a.size; }, 0);
+    if (total > MAX_TOTAL) { toast('Attachments are ' + mb(total) + ' — the limit is 35 MB. Compress the PDFs or split the submittal.'); return null; }
+    busy(true, 'Building PDF…');
+    var blob = await buildPackage();
+    if (blob.size > MAX_TOTAL * 1.05) { busy(false); toast('The package is ' + mb(blob.size) + ' — too large to save. Compress the PDFs.'); return null; }
+    busy(true, 'Saving to Google Drive…');
+    var name = fileName(), folder = targetFolder();
+    var up = await NWDrive.request({ action: 'upload_file', projectName: project.project_name, projectId: projectId, fileName: name,
+      fileData: await NWDrive.toBase64(blob), mimeType: 'application/pdf', category: 'submittals', folder: folder });
+    var df = up.file;
+    var row = Object.assign(rowData(), { drive_id: df.id, drive_url: df.viewUrl || df.url, file_name: name, drive_folder: folder, updated_at: new Date().toISOString() });
+    var res;
+    if (saved && saved.id) res = await supabaseClient.from('submittals').update(row).eq('id', saved.id).select().single();
+    else res = await supabaseClient.from('submittals').insert(Object.assign(row, { status: 'saved', created_by: userId, created_by_name: profile.full_name || null })).select().single();
+    if (res.error) {
+      busy(false);
+      try { await NWDrive.deleteFile(df.id); } catch (e) {}
+      if (/duplicate|unique/i.test(res.error.message)) { toast('Submittal ' + pad(row.number) + ' Rev ' + row.revision + ' already exists — change the number or revision'); return null; }
+      throw new Error(res.error.message);
+    }
+    var prevDrive = saved && saved.drive_id !== df.id ? saved.drive_id : null;
+    saved = res.data;
+    if (prevDrive) {   // saving again replaces the previous copy in Drive
+      try { await NWDrive.deleteFile(prevDrive); await supabaseClient.from('project_files').delete().eq('drive_id', prevDrive); } catch (e) {}
+    }
+    try {
+      await supabaseClient.from('project_files').insert({ project_id: projectId, category: 'submittals', filename: name, storage_path: null,
+        drive_id: df.id, drive_url: row.drive_url, size_bytes: blob.size, content_type: 'application/pdf', uploaded_by: userId });
+    } catch (e) { console.warn('[submittal] project_files', e); }
+    try { Object.keys(sessionStorage).forEach(function(k) { if (k.indexOf(projectId) >= 0) sessionStorage.removeItem(k); }); } catch (e) {}
+    dirty = false; busy(false); showSaved();
+    toast('✅ Saved to Google Drive');
+    return saved;
+  }
+  function showSaved() {
+    if (!saved) return;
+    var b = $('savedBox');
+    b.innerHTML = '✅ <b>' + esc(saved.file_name || 'Submittal') + '</b> is saved in Drive (' + esc((saved.drive_folder || 'Submittals').replace('/', ' / ')) + ').  <a href="' + esc(saved.drive_url) + '" target="_blank">Open ↗</a>' +
+      (saved.sent_at ? '<br>Sent to ' + esc(saved.sent_to || '') + ' on ' + new Date(saved.sent_at).toLocaleDateString() : '');
+    b.style.display = 'block';
+  }
+
+  function openSend() {
+    if (!editId && !validate()) return;
+    var no = subNo(), title = val('fTitle');
+    $('mTo').value = val('fToEmail');
+    $('mCc').value = '';
+    $('mSubject').value = val('fProject') + ' - Submittal ' + no + ' - ' + title;
+    $('mBody').value = 'Hello' + (val('fToAttn') ? ' ' + val('fToAttn').split(' ')[0] : '') + ',\n\n' +
+      'Please find attached Submittal ' + no + ' - ' + title + (val('fSpec') ? ' (Spec Section ' + val('fSpec') + ')' : '') + ' for ' + val('fProject') + ', ' + val('fAction').toLowerCase() + '.' +
+      (val('fDue') ? '\nWe kindly ask for your response by ' + fmtDate(val('fDue')) + '.' : '') +
+      '\n\nPlease let us know if you have any questions.\n\nThank you,\n' + val('fFromName') + '\n' + val('fFromCompany') + (val('fFromPhone') ? '\n' + val('fFromPhone') : '') + (val('fFromEmail') ? '\n' + val('fFromEmail') : '');
+    $('sendModal').classList.add('show');
+  }
+
+  async function send() {
+    var to = val('mTo');
+    if (!/@/.test(to)) { toast('Enter the recipient email'); $('mTo').focus(); return; }
+    $('sendModal').classList.remove('show');
+    if (!saved || (dirty && !editId)) { if (!(await save())) return; }
+    busy(true, 'Sending…');
+    var r = await NWDrive.request({ action: 'send_email', to: to, cc: val('mCc'), subject: val('mSubject'), body: $('mBody').value, fileIds: [saved.drive_id],
+      fromName: (val('fFromName') ? val('fFromName') + ' - ' : '') + 'Northern Wolves AC' });
+    var upd = { status: 'sent', sent_to: (r.to || [to]).join(', '), sent_at: new Date().toISOString() };
+    if (!saved.to_email) upd.to_email = to;
+    var res = await supabaseClient.from('submittals').update(upd).eq('id', saved.id).select().single();
+    if (!res.error) saved = res.data;
+    busy(false); showSaved();
+    toast(r.linked ? '✅ Sent (file too large to attach — sent as a Drive link)' : '✅ Sent to ' + upd.sent_to);
+  }
+})();
+</script>
+<script src="sw-register.js?v=216"></script>
+</body>
+</html>

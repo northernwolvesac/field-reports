@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.7)
+// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.8)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -219,6 +219,32 @@ function fileInfo(file, category, subfolder) {
     url: file.getUrl(), downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
     viewUrl: file.getUrl(), directUrl: 'https://lh3.googleusercontent.com/d/' + file.getId()
   };
+}
+
+// ---------- send_email (v3.8): office users send Drive files (e.g. a submittal package) to outside recipients ----------
+// Sent from the script owner's Gmail with the app user as Reply-To and CC. Files up to 20 MB in total are attached;
+// anything bigger is shared view-only by link and the link goes into the message instead.
+function sendEmailWithFiles(b, caller) {
+  function emails(s) { return String(s || '').split(/[,;\s]+/).map(function(x) { return x.trim(); }).filter(function(x) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); }); }
+  var to = emails(b.to), cc = emails(b.cc);
+  if (!to.length) return { success: false, error: 'No valid recipient email' };
+  var me = caller && caller.email ? caller.email.toLowerCase() : '';
+  if (me && to.concat(cc).map(function(x) { return x.toLowerCase(); }).indexOf(me) < 0) cc.push(caller.email);
+  var attachments = [], links = [], total = 0;
+  (b.fileIds || []).forEach(function(id) {
+    var f = DriveApp.getFileById(id), size = f.getSize();
+    if (total + size <= 20 * 1024 * 1024) { attachments.push(f.getBlob()); total += size; }
+    else { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); links.push(f.getName() + ': ' + f.getUrl()); }
+  });
+  var text = String(b.body || '');
+  if (links.length) text += '\n\nFiles (too large to attach, open with the link):\n' + links.join('\n');
+  var esc = function(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">' + esc(text).replace(/(https:\/\/\S+)/g, '<a href="$1">$1</a>').replace(/\n/g, '<br>') + '</div>';
+  var opts = { htmlBody: html, attachments: attachments, name: String(b.fromName || 'Northern Wolves Air Conditioning').slice(0, 80) };
+  if (cc.length) opts.cc = cc.join(',');
+  if (me) opts.replyTo = caller.email;
+  GmailApp.sendEmail(to.join(','), String(b.subject || 'Northern Wolves AC').slice(0, 250), text, opts);
+  return { success: true, to: to, cc: cc, attached: attachments.length, linked: links.length };
 }
 
 // ---------- the live folder tree of a project (folders + files, any depth) ----------
@@ -452,7 +478,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.7' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.8' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -460,7 +486,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
-    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.7', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.8', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
     var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
     if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
     if (!caller.full) {
@@ -494,6 +520,7 @@ function doPost(e) {
       case 'apply_field_access': result = applyFieldAccess(body.folderId || getProjectFolder(body.projectName, body.projectId).getId()); break;
       case 'revoke_access':   result = revokeAccess(body.fileId, body.emails); break;
       case 'list_access':     result = listAccess(body.fileId); break;
+      case 'send_email':      result = sendEmailWithFiles(body, caller); break;
       case 'forget':          result = forgetProject(body.projectId); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };
