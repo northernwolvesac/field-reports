@@ -50,6 +50,7 @@ def wire(pts, color, lw=1.1, dash=None):
 # ---------------------------------------------------------------- title bar
 c.setFillColor(NAVY); c.rect(0, H - 40, W, 40, fill=1, stroke=0)
 text(28, H - 18, "ERU-1 / ERU-2 / ERU-3   Greenheck RVE-85-52D   -   duct sensor field wiring, one unit (typical of 3)", 11.5, True, white)
+text(W - 28, H - 18, "ISSUED FOR ADE / GREENHECK REVIEW  09/25/2026", 7, True, HexColor("#ffd166"), "r")
 text(28, H - 32, "Northern Wolves AC  |  IPA Church, 310A S. Oyster Bay Rd, Syosset NY  |  ref. Greenheck submittal wiring diagrams G31 (p.15) and Y07 (p.18)", 7, False, white)
 
 # ---------------------------------------------------------------- left: unit control center
@@ -65,23 +66,25 @@ term(*tR, "R   24 VAC hot", "l"); term(*tC, "C   common", "l"); term(*tG, "G   u
 term(*t70, "70   fire alarm input (S6)", "l"); term(*tGND, "GND", "l")
 
 # DDC controller
-box(IX, 322, IW, 130, "DDC controller  (Carel c.pCO, main board)")
+box(IX, 298, IW, 154, "DDC controller  (Carel c.pCO, main board)")
 tU9 = (TX, 424); tG2 = (TX, 410); tUa = (TX, 392); tUb = (TX, 378); tG3 = (TX, 364); tTp = (TX, 346); tTm = (TX, 332)
 term(*tU9, "U9   CO2 signal 0-10 V", "l"); term(*tG2, "GND", "l")
 term(*tUa, "U2*  space RH signal 0-10 V", "l"); term(*tUb, "U6*  space temp signal", "l"); term(*tG3, "GND", "l")
 term(*tTp, "J26 T+   Modbus room stat, not used", "l"); term(*tTm, "J26 T-   leave open", "l")
-text(IX, 313, "* inputs assigned by Greenheck / ADE when the controller is reconfigured for duct sensors", 5.6, color=GRAY)
+tSa = (TX, 318); tSb = (TX, 305)
+term(*tSa, "U4   discharge air temp (SAT), factory sensor", "l"); term(*tSb, "GND", "l")
+text(IX, 289, "* inputs assigned by Greenheck / ADE when the controller is reconfigured for duct sensors", 5.6, color=GRAY)
 
 # expansion board
-box(IX, 258, IW, 46, "Expansion board  (c.pCOe)")
-tXU1 = (TX, 280); tXG = (TX, 266)
+box(IX, 238, IW, 46, "Expansion board  (c.pCOe)")
+tXU1 = (TX, 260); tXG = (TX, 246)
 term(*tXU1, "U1   building pressure 0-10 V", "l"); term(*tXG, "GND", "l")
 
 # pressure transducer inside cabinet
-box(IX, 160, IW, 88, "Mamac PR-274-R2A-VDC  (mount inside this cabinet)", "range jumper +/-0.25 in wg; 3 wires inside cabinet, 18 AWG")
-pP = (IX + 14, 214); pM = (IX + 14, 200); pO = (IX + 14, 186)
+box(IX, 160, IW, 72, "Mamac PR-274-R2A-VDC  (mount inside this cabinet)", "range jumper +/-0.25 in wg; 3 wires inside cabinet, 18 AWG")
+pP = (IX + 14, 200); pM = (IX + 14, 188); pO = (IX + 14, 176)
 term(*pP, "+     from R"); term(*pM, "-     from C"); term(*pO, "OUT   to expansion U1")
-pHI = (TX, 214); pLO = (TX, 196)
+pHI = (TX, 200); pLO = (TX, 184)
 term(*pHI, "HI port -> space", "l"); term(*pLO, "LO port -> outdoor ref.", "l")
 
 # ---------------------------------------------------------------- right: field devices
@@ -107,8 +110,10 @@ term(*sN1, "N.C. contact   from R"); term(*sN2, "N.C. contact   to G   (opens ~2
 
 box(DX, 160, DW, 48, "BUILDING static pickup: Dwyer A-489 plate, central corridor / foyer", "one per unit; not in vestibules, toilets, kitchen. Alt: exhaust tracking, no sensor")
 sPort = (TDX, 170); term(*sPort, "tube to the A-489 plate")
-text(DX, 148, "Duct smoke detectors: already installed and wired by the E.C.", 5.8, color=GRAY)
-text(DX, 141, "If their contacts are to stop the unit, E.C. lands them on R-70 (fire input S6).", 5.8, color=GRAY)
+box(DX, 100, DW, 48, "SAT  discharge air temp sensor (Greenheck, found in the unit)", "relocate into the SUPPLY riser downstream of the unit; ADE to confirm distance")
+sA = (TDX, 110); sB = (TDX + 120, 110)
+term(*sA, "sensor lead 1  (U4)"); term(*sB, "sensor lead 2  (GND)")
+text(DX, 92, "Duct smoke detectors: already installed and wired by the E.C.; contacts to R-70 (S6) if they are to stop the unit.", 5.6, color=GRAY)
 
 # ---------------------------------------------------------------- cables
 def run(src, dst, cols, xs, label, ytop):
@@ -119,13 +124,17 @@ def run(src, dst, cols, xs, label, ytop):
 run([tR, tC, tUa, tUb], [hPp, hPm, hRH, hT], ["BLK", "WHT", "RED", "GRN"], [318, 323, 328, 333], "C1", 486)
 run([tR, tC, tU9, tG2], [cGp, cGo, cO1, cM], ["BLK", "WHT", "RED", "GRN"], [348, 353, 358, 363], "C2", 380)
 run([tR, tG], [sN1, sN2], ["BLK", "WHT"], [378, 383], "C3", 272)
+wire([tSa, (398, tSa[1]), (398, sA[1]), sA], NAVY, 0.9, [3, 2])
+wire([tSb, (403, tSb[1]), (403, sB[1] - 8), (sB[0], sB[1] - 8), sB], NAVY, 0.9, [3, 2])
+text(400, 122, "SAT", 7, True, BLUE, "c")
+text(DX, 152, "SAT factory lead: extend with 2 conductors of 18/4 if short", 5.4, color=GRAY)
 
 wire([pLO, (446, pLO[1]), (446, aPort[1]), aPort], BLUE, 1.4, [4, 3])
 wire([pHI, (436, pHI[1]), (436, sPort[1]), sPort], BLUE, 1.4, [4, 3])
 text(405, 548, "1/4 in FR poly tubing,", 6, color=BLUE)
 text(405, 541, "outdoor reference", 6, color=BLUE)
-text(430, 184, "1/4 in FR poly tubing,", 6, color=BLUE, align="r")
-text(430, 177, "space, down the shaft", 6, color=BLUE, align="r")
+text(392, 184, "1/4 in FR poly tubing,", 6, color=BLUE, align="r")
+text(392, 177, "space, down the shaft", 6, color=BLUE, align="r")
 
 # ---------------------------------------------------------------- notes (below left panel)
 notes = [
@@ -144,6 +153,7 @@ rows = [
     ("C1", "duct temp/RH  Mamac HU-226", "R -> PWR+", "C -> PWR-", "RH OUT -> U2*", "TEMP OUT -> U6*", "20-60 ft"),
     ("C2", "duct CO2  Honeywell C7232B", "R -> G+", "C -> GO", "OUT1 -> U9", "M -> GND", "20-60 ft"),
     ("C3", "high static cutoff switch", "R -> N.C.", "N.C. -> G", "spare", "spare", "< 20 ft"),
+    ("SAT", "discharge air temp (factory sensor)", "lead 1 -> U4", "lead 2 -> GND", "-", "-", "factory lead"),
 ]
 cw = [34, 150, 74, 74, 90, 96, 46]
 TY = 24; RH = 11.5
@@ -163,6 +173,7 @@ text(PX + sum(cw) + 10, TY + 12, "24 V hot, common, signal 1, signal 2.", 6.3, c
 c.showPage()
 c.setFillColor(NAVY); c.rect(0, H - 40, W, 40, fill=1, stroke=0)
 text(28, H - 18, "ERU-1 / ERU-2 / ERU-3   -   duct sensor placement detail (section at the roof curb, not to scale)", 11.5, True, white)
+text(W - 28, H - 18, "ISSUED FOR ADE / GREENHECK REVIEW  09/25/2026", 7, True, HexColor("#ffd166"), "r")
 text(28, H - 32, "Northern Wolves AC  |  IPA Church, Syosset NY  |  unit arrangement per Greenheck overview drawing (OA inlet at end, SA discharge and EA intake through the bottom)", 7, False, white)
 
 DUCT = HexColor("#3b4a5a")
@@ -238,6 +249,9 @@ def dev(x, y, name, sub, col, probe_to):
 dev(EAx - 66, 340, "HU-226", "duct temp + RH", BLUE, EAx + 26)
 dev(EAx - 66, 308, "C7232B", "duct CO2", BLUE, EAx + 26)
 dev(SAx + DW_ + 8, 262, "HI-STATIC", "cutoff, man. reset", RED, SAx + DW_ - 10)
+dev(SAx - 66, 322, "SAT", "discharge air temp", NAVY, SAx + 12)
+text(SAx - 8, 306, "factory sensor, 5 ft / 2 duct widths", 5, color=GRAY, align="r"); text(SAx - 8, 300, "below the discharge (ADE to confirm)", 5, color=GRAY, align="r")
+wire([(572, ROOF + 32), (572, ROOF + 10), (SAx - 12, ROOF + 10), (SAx - 12, 333)], NAVY, 1.0, [3, 2])
 text(SAx + DW_ + 8, 246, "static tip into SA, set ~2.0 in wg", 5, color=GRAY)
 # access door on EA riser
 rect(EAx + 8, 268, 24, 24, fill=HexColor("#fff6dc"), stroke=NAVY)
@@ -253,9 +267,9 @@ wire([(572, ROOF + 32), (572, ROOF + 10), (CX, ROOF + 10), (CX, 262)], NAVY, 1.0
 wire([(CX, 340), (EAx - 12, 340)], NAVY, 1.0, [3, 2])
 wire([(CX, 308), (EAx - 12, 308)], NAVY, 1.0, [3, 2])
 wire([(CX, 262), (SAx + DW_ + 62, 262)], NAVY, 1.0, [3, 2])
-text(SAx - 8, 300, "dashed = 18/4 shielded plenum C1-C3:", 5.4, True, NAVY, "r")
-text(SAx - 8, 293, "base knockout, inside the curb,", 5.4, color=NAVY, align="r")
-text(SAx - 8, 286, "strapped to the riser in the shaft", 5.4, color=NAVY, align="r")
+text(SAx - 8, 288, "dashed = 18/4 shielded plenum C1-C3", 5.4, True, NAVY, "r")
+text(SAx - 8, 281, "and the SAT factory lead: base knockout,", 5.4, color=NAVY, align="r")
+text(SAx - 8, 274, "inside the curb, strapped to the risers", 5.4, color=NAVY, align="r")
 
 # tubing: LO to A-306 on roof, HI down to ceiling plenum
 rect(676, ROOF + 8, 4, 44, fill=GRAY, stroke=GRAY)
@@ -281,7 +295,8 @@ for i, n in enumerate([
     "4. PR-274 stays inside the control center. Two 1/4 in FR poly tubes: LO to the A-306 (on a post or the unit side, not the curb, away from EA louver and condenser), HI down the shaft to the space pickup. Both tubes and the 18/4 cables leave the unit through the base knockout.",
     "   Pickup = building pressure, one point per unit in a central corridor / foyer (ERU-3: foyer 102 or fellowship hall 113; ERU-1/2: corridor 015). Not in the EA duct (fan suction), vestibules, toilets, kitchen.",
     "   Preferred alternative (RFI to DMG): exhaust VFD tracks the supply VFD at 90% (schedule ratio 4,800/5,375 and 5,775/6,370); no transducer, tubing or roof probe, and the three units cannot fight over one building pressure.",
-    "5. Smoke detectors already installed and wired by the E.C. Remote display: mount in the utility room / closet at the shaft, using Greenheck's own 150 ft cable, if the engineer does not accept the web UI.",
+    "5. Smoke detectors already installed and wired by the E.C. Remote displays deleted; owner access through the unit web UI (ADE to confirm network requirements).",
+    "6. Discharge air temp sensor (SAT): Greenheck sensor found in the unit, to be relocated into the supply riser below the deck, 5 ft / 2 duct widths downstream of the discharge so the air is mixed after the reheat coil. ADE to confirm the distance.",
 ]):
     text(nx, ny - 10 - 9.5 * i, n, 6.0)
 
