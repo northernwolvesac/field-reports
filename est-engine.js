@@ -289,6 +289,18 @@
     if (hasPipe) add('services', 'Piping shop drawings — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.pipeSD, 0, 'Standard — $1,300/floor (piping scope only)');
     if (!C.quotes.some(function (q) { return q.kind === 'tab'; }))
       add('services', 'Testing & balancing — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $2,500/floor');
+    // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
+    var rigTags = {}; C.rig.forEach(function (x) { rigTags[x.tag] = 1; });
+    Object.keys(C.sched).forEach(function (tag) {
+      var s = C.sched[tag], w = Number(s.weight_lb || 0); if (!w || rigTags[tag]) return;
+      var roof = /roof|rtu|doas|dry ?cooler|condens|cooling tower|accu|exhaust fan/i.test((s.type || '') + ' ' + tag);
+      if (w >= (roof ? 400 : 800)) {
+        var qty = Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1);
+        for (var i = 0; i < qty; i++) C.rig.push({ tag: s.label || tag, weight_lb: w, where: roof ? 'roof' : 'indoor', guessed: true });
+      }
+    });
+    if (C.rig.some(function (x) { return x.guessed; })) flags.push({ category: 'services', item: 'Rigging', flag: 'roof / indoor location guessed from the equipment type — confirm on the plans' });
+    if (C.rig.some(function (x) { return x.weight_lb >= 10000; })) flags.push({ category: 'services', item: 'Rigging', flag: 'unit over 10,000 lb — confirm crane size and street permits with the rigger' });
     rigging(C.rig, !!opts.highRise).forEach(function (r) { add('services', r.d, 1, 'ls', r.amt, 0, 'Rigging Standards — ' + r.basis, { flag: r.flag || null }); });
 
     var totals = window.nwEstTotals ? window.nwEstTotals(lines, { labor_rate: LABOR_RATE, is_ofci: !!opts.ofci }) : null;
