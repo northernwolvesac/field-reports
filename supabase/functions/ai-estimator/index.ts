@@ -59,7 +59,7 @@ Rules:
 Write inches as "in" inside text (6 in CWS, 24x12 in) — never a bare " character.
 Keep the answer compact: leave out empty arrays, empty strings and unknown fields; notes at most 15 words; combine identical
 air devices / duct sizes into one row per type+size (sum qty / lf).
-Return ONLY a JSON object (no markdown fences) with this shape:
+Answer with the "answer" tool, one object in this shape:
 {
  "sheet_no": "M-201", "sheet_title": "...", "discipline": "mechanical|plumbing|electrical|fire|architectural|other",
  "sheet_type": "legend|specs|demo|duct_plan|pipe_plan|enlarged|details|schedule|riser|controls|other",
@@ -80,7 +80,7 @@ Return ONLY a JSON object (no markdown fences) with this shape:
 }`;
 
 const QUOTE_PROMPT = `You are the senior HVAC estimator at Northern Wolves AC. This is a vendor or subcontractor quote for a bid.
-Return ONLY JSON (no markdown):
+Answer with the "answer" tool, one object in this shape:
 {"vendor":"","quote_no":"","date":"YYYY-MM-DD or null","valid_until":null,"total":0,"freight_included":null,
  "tax_included":null,"kind":"equipment|air_devices|controls|tab|rigging|insulation|sheetmetal|other",
  "lines":[{"tags":["AC-1-1"],"description":"","qty":0,"amount":null}],
@@ -92,7 +92,7 @@ Below: what was read from every sheet and quote, plus NWAC's own estimating proc
 Do what Kastriot's process demands: compare drawing counts to schedules, compare quotes to the drawings (what the vendor
 did NOT cover), find mechanical scope hidden in notes, basis-of-design brand mismatches, missing quotes, and risks.
 Write inches as "in" inside text (6 in pipe) — never a bare " character. Be concise: at most 12 entries per list (most expensive / riskiest first), every text under 30 words.
-Return ONLY JSON, keys in this order:
+Answer with the "answer" tool, one object, keys in this order:
 {"summary":"3-5 sentences for the estimator",
  "missing_quotes":[{"item":"","tags":[],"suggested_vendor":"","why":""}],
  "quote_gaps":[{"vendor":"","gap":"","impact":""}],
@@ -105,10 +105,14 @@ Return ONLY JSON, keys in this order:
 // ─── Claude call ──────────────────────────────────────────────────────
 async function claude(model: string, content: any[], maxTokens: number) {
   // extraction work: no extended thinking, so the whole output budget goes to the JSON answer
+  // the answer comes back through a forced tool call, so the API hands us parsed, valid JSON
+  const tool = { name: "answer", description: "Return the extracted data as one JSON object, in the shape the instructions describe.",
+    input_schema: { type: "object", additionalProperties: true } };
   const send = (extra: any) => fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }], ...extra }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }],
+      tools: [tool], tool_choice: { type: "tool", name: "answer" }, ...extra }),
   });
   let r = await send({ thinking: { type: "disabled" } });
   let t = await r.text();
@@ -116,12 +120,14 @@ async function claude(model: string, content: any[], maxTokens: number) {
   if (!r.ok) throw new Error("Claude API " + r.status + ": " + t.slice(0, 400));
   const j = JSON.parse(t);
   const text = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-  if (!text && j.stop_reason === "max_tokens")
+  const use = (j.content || []).find((c: any) => c.type === "tool_use");
+  const data = use && use.input && typeof use.input === "object" && Object.keys(use.input).length ? use.input : null;
+  if (!text && !data && j.stop_reason === "max_tokens")
     throw new Error("the model used the whole output budget before answering (" + (j.content || []).map((c: any) => c.type).join(",") + ")");
   const u = j.usage || {};
   const price = MODELS[model] || MODELS[DEFAULT_MODEL];
   const cost = ((u.input_tokens || 0) * price.in + (u.output_tokens || 0) * price.out) / 1e6;
-  return { text, tokens_in: u.input_tokens || 0, tokens_out: u.output_tokens || 0, cost, stop: j.stop_reason };
+  return { text, data, tokens_in: u.input_tokens || 0, tokens_out: u.output_tokens || 0, cost, stop: j.stop_reason };
 }
 
 function parseJson(text: string) {
@@ -172,7 +178,8 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
       content.push({ type: "text", text: prompt });
       const r = await claude(model, content, kind === "quote" ? 4000 : 8000);
       let result: any;
-      try { result = parseJson(r.text); } catch (_e) { result = { parse_error: true, raw: r.text.slice(0, 20000) }; }
+      if (r.data) result = r.data;
+      else try { result = parseJson(r.text); } catch (_e) { result = { parse_error: true, raw: r.text.slice(0, 20000) }; }
       if (r.stop === "max_tokens") result.truncated = true;
       await db.from("ai_est_pages").update({
         status: "done", result, tokens_in: r.tokens_in, tokens_out: r.tokens_out, cost: r.cost,
@@ -198,7 +205,8 @@ async function runReview(db: any, body: any) {
     try {
       const r = await claude(model, [{ type: "text", text: REVIEW_PROMPT + "\n\n" + String(body.context || "").slice(0, 600000) }], 8000);
       let review: any;
-      try { review = parseJson(r.text); } catch (_e) { review = { parse_error: true, raw: r.text.slice(0, 20000) }; }
+      if (r.data) review = r.data;
+      else try { review = parseJson(r.text); } catch (_e) { review = { parse_error: true, raw: r.text.slice(0, 20000) }; }
       const { data: cur } = await db.from("ai_est_sessions").select("result").eq("id", ses.id).single();
       await db.from("ai_est_sessions").update({
         result: { ...(cur?.result || {}), review, review_status: "done", review_cost: r.cost, review_at: new Date().toISOString() },
