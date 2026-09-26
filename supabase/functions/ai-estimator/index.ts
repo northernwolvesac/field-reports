@@ -98,12 +98,14 @@ specification sheets and general notes of one bid. Decide how the NEW supply/ret
 - shape: "rectangular" or "round/flat oval" (exposed spiral round or flat oval counts as round/flat oval). If both are used,
   pick the one that covers most of the new ductwork and explain in notes.
 - insulation: thickness in inches and whether it is internal acoustic LINING or EXTERNAL WRAP/board (R-6 wrap ≈ 1.5 in; R-8 ≈ 2 in).
+- lining_in: the internal duct LINER thickness only when the text states it in inches (e.g. 1, 1.5, 2); 0 when no liner thickness is stated.
+  Never derive it from an R-value.
 - exposed: is most new ductwork exposed (no ceiling)?
 - other cost drivers: flex duct not allowed, aluminum or stainless sections, double-wall, painting, pressure class, sealing class.
 Quote the exact words you relied on. If the passages do not say, answer "unknown" and confidence "low".
 Fill the fields of the record_findings tool.`;
 const DUCTSPEC_SCHEMA = { type: "object", additionalProperties: false, required: ["shape", "confidence"], properties: {
-  shape: { type: "string" }, insulation_in: { type: "number" }, insulation_type: { type: "string" }, exposed: { type: "boolean" },
+  shape: { type: "string" }, insulation_in: { type: "number" }, lining_in: { type: "number" }, insulation_type: { type: "string" }, exposed: { type: "boolean" },
   other: { type: "array", items: { type: "string" } }, evidence: { type: "array", items: { type: "string" } },
   confidence: { type: "string" }, notes: { type: "string" } } };
 

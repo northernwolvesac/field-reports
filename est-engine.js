@@ -71,7 +71,9 @@
   function familyFor(spec) {
     if (!spec) return 'rect_lined_1';
     if (spec.choice && DUCT_FAMILIES[spec.choice]) return spec.choice;
-    var oval = /oval|round|spiral/i.test(spec.shape || ''), t = Number(spec.insulation_in || 0), kind = String(spec.insulation_type || '');
+    // NWAC catalog families follow the stated LINER thickness; an R-value wrap (R-6 ≈ 1.5") stays in the 1" family (Kastriot, Crozier)
+    var kind = String(spec.insulation_type || ''), oval = /oval|round|spiral/i.test(spec.shape || '');
+    var t = spec.lining_in != null ? Number(spec.lining_in || 0) : (/R-?\s?\d/i.test(kind) ? 1 : Number(spec.insulation_in || 0));
     if (oval) return t >= 1.9 ? 'oval_2' : t >= 1.4 ? 'oval_15' : 'oval_lined_1';
     if (t >= 1.4) return 'rect_15';
     if (/wrap|external/i.test(kind) && !/lin/i.test(kind)) return 'rect_wrap_1';
