@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=254"></script>
-<script src="est-engine.js?v=254"></script>
-<script src="geo-takeoff.js?v=254"></script>
+<script src="est-totals.js?v=255"></script>
+<script src="est-engine.js?v=255"></script>
+<script src="geo-takeoff.js?v=255"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -191,7 +191,7 @@ var AE = (function() {
 
       '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">2 · AI reads every sheet — ' + done + ' / ' + pages.length + ' done</h3>' +
       '<div class="row"><button class="btn primary" id="readBtn" onclick="AE.readAll()" ' + (!todo || running ? 'disabled' : '') + '>' + (running ? 'Reading…' : '▶ Read ' + todo + ' sheet' + (todo === 1 ? '' : 's')) + '</button>' +
-      '<button class="btn" onclick="AE.measureDucts(true)" ' + (running || measuring || !pages.some(function(x) { return isDuctPlan(x) || isPipePlan(x); }) ? 'disabled' : '') + ' title="Measure new ductwork from the vector lines of the duct plans">' + (measuring ? '📐 Measuring…' : '📐 Measure ducts & pipes') + '</button></div></div>' +
+      '<button class="btn" onclick="AE.measureDucts(true)" ' + (running || measuring || !pages.some(function(x) { return isDuctPlan(x) || isPipePlan(x) || isRiserSheet(x); }) ? 'disabled' : '') + ' title="Measure new ductwork from the vector lines of the duct plans">' + (measuring ? '📐 Measuring…' : '📐 Measure ducts & pipes') + '</button></div></div>' +
       (measuring ? '<div class="muted" id="geoMsg" style="margin-top:6px">' + esc(measuring) + '</div>' : '') +
       '<div class="prog"><div id="rdProg" style="width:' + (pages.length ? Math.round(done / pages.length * 100) : 0) + '%"></div></div>' +
       (pages.length ? '<table class="t" style="margin-top:10px"><tr><th>#</th><th>Sheet</th><th class="hide-m">Type</th><th>Found</th><th>Status</th><th class="n hide-m">$</th><th></th></tr>' + pages.map(pageRow).join('') + '</table>' : '<div class="muted" style="margin-top:8px">Upload the drawing set first.</div>') + '</div>' +
@@ -220,6 +220,8 @@ var AE = (function() {
     if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
     if (r.geo_pipe && r.geo_pipe.total_ft) bits.push('📐 ' + Math.round(r.geo_pipe.total_ft) + ' ft pipe measured');
     if (r.geo_pipe && r.geo_pipe.error) bits.push('📐 ' + r.geo_pipe.error);
+    if (r.geo_riser && r.geo_riser.total_ft) bits.push('📐 ' + Math.round(r.geo_riser.total_ft) + ' ft vertical pipe (risers)');
+    if (r.geo_riser && r.geo_riser.error) bits.push('📐 ' + r.geo_riser.error);
     var tc = p.tag_counts && p.tag_counts.tags ? Object.keys(p.tag_counts.tags).length : 0;
     return '<tr class="click" onclick="AE.showPage(\'' + p.id + '\')"><td class="muted">' + (f.kind === 'quote' ? 'Q' : p.page_no) + '</td>' +
       '<td><b>' + esc(p.sheet_no || r.quote_no || '') + '</b> ' + esc(p.sheet_title || r.vendor || f.file_name || '') + '</td>' +
@@ -408,24 +410,28 @@ var AE = (function() {
     var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {};
     return f.kind !== 'quote' && f.kind !== 'specs' && p.status === 'done' && (r.sheet_type === 'pipe_plan' || (r.sheet_type === 'other' && /piping/i.test(r.sheet_title || '')));
   }
+  function isRiserSheet(p) {
+    var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {}, t = r.sheet_title || '';
+    return f.kind !== 'quote' && f.kind !== 'specs' && p.status === 'done' && (r.sheet_type === 'riser' || /riser/i.test(t)) && !/\bair\b|duct|exhaust/i.test(t);
+  }
   async function measureDucts(all) {
     if (measuring || !window.NWGeo) return;
-    var list = pages.filter(function(p) { return (isDuctPlan(p) && (all || !(p.result && p.result.geo))) || (isPipePlan(p) && (all || !(p.result && p.result.geo_pipe))); });
+    var list = pages.filter(function(p) { return (isDuctPlan(p) && (all || !(p.result && p.result.geo))) || (isPipePlan(p) && (all || !(p.result && p.result.geo_pipe))) || (isRiserSheet(p) && (all || !(p.result && p.result.geo_riser))); });
     if (!list.length) return;
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
-      var pipes = isPipePlan(p) && !isDuctPlan(p);
-      measuring = 'Measuring ' + (pipes ? 'pipes' : 'ducts') + ' on ' + (p.sheet_no || 'sheet ' + p.page_no) + ' (' + (i + 1) + ' of ' + list.length + ')…'; render();
+      var riser = isRiserSheet(p), pipes = !riser && isPipePlan(p) && !isDuctPlan(p);
+      measuring = 'Measuring ' + (riser ? 'risers' : pipes ? 'pipes' : 'ducts') + ' on ' + (p.sheet_no || 'sheet ' + p.page_no) + ' (' + (i + 1) + ' of ' + list.length + ')…'; render();
       var geo;
       try {
         var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise;
         var data = await NWGeo.extract(await pdf.getPage(1));
-        var g = pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
+        var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, labels: g.labels, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, labels: g.labels, unsized_ft: g.unsized_ft, levels: g.levels, at: new Date().toISOString() };
         pdf.destroy();
       } catch (e) { geo = { error: String(e.message || e).slice(0, 200), at: new Date().toISOString() }; }
-      var patch = {}; patch[pipes ? 'geo_pipe' : 'geo'] = geo;
+      var patch = {}; patch[riser ? 'geo_riser' : pipes ? 'geo_pipe' : 'geo'] = geo;
       var res = Object.assign({}, p.result || {}, patch);
       await supabaseClient.from('ai_est_pages').update({ result: res }).eq('id', p.id);
       p.result = res;
@@ -646,6 +652,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam };
 })();
 </script>
-<script src="sw-register.js?v=254"></script>
+<script src="sw-register.js?v=255"></script>
 </body>
 </html>

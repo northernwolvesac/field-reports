@@ -532,8 +532,122 @@
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, lab_list: labs.map(function (l) { return l.txt; }),
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
+    // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry
+    // elevations ("EL: 47'-0"" / "125'-0" ROOF"), so a pipe drawn between them is measured on that elevation scale.
+    function measureRisers(D) {
+      var EL = /^(?:EL\.?\s*:?\s*)?([+-]?)\s*(\d{1,3})\s*['’]\s*-?\s*(\d{1,2}(?:\.\d+)?)?\s*["”]?\s*(?:A\.?F\.?F\.?)?\s*(?:ROOF|FLOOR|LEVEL|BASEMENT|CELLAR|.{0,14}FLOOR)?\s*$/i;
+      var els = [];
+      D.text.forEach(function (t) {
+        var m = EL.exec(t.str); if (!m) return;
+        var blockTxt = D.text.filter(function (u) { return u.block && t.block && u.block[0] === t.block[0] && u.block[1] === t.block[1]; }).map(function (u) { return u.str; }).join(' ');
+        if (!/^EL/i.test(t.str) && !/FLOOR|ROOF|LEVEL|BASEMENT|CELLAR|EL\b/i.test(blockTxt)) return;
+        var v = (+m[2] + (m[3] ? +m[3] / 12 : 0)) * (m[1] === '-' ? -1 : 1);
+        els.push({ v: v, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2 });
+      });
+      if (els.length < 2) return { error: 'no floor elevations on the riser diagram' };
+      // the elevation axis: the page direction along which the elevation labels are spread
+      var sx = Math.max.apply(null, els.map(function (e) { return e.cx; })) - Math.min.apply(null, els.map(function (e) { return e.cx; }));
+      var sy = Math.max.apply(null, els.map(function (e) { return e.cy; })) - Math.min.apply(null, els.map(function (e) { return e.cy; }));
+      var ax = sx > sy ? 0 : 1;
+      els.forEach(function (e) { e.a = ax ? e.cy : e.cx; e.p = ax ? e.cx : e.cy; });
+      els.sort(function (p, q) { return p.a - q.a; });
+      // drop duplicates (same label twice), then split into diagrams: elevation must move one way along the axis
+      var runs = [], curR = [];
+      els.forEach(function (e) {
+        var last = curR[curR.length - 1];
+        if (last && Math.abs(e.a - last.a) < 3) return;
+        if (curR.length >= 2) {
+          var dir0 = Math.sign(curR[1].v - curR[0].v), dir1 = Math.sign(e.v - last.v);
+          var k0 = (curR[1].v - curR[0].v) / (curR[1].a - curR[0].a), k1 = (e.v - last.v) / (e.a - last.a);
+          if (dir1 !== dir0 || !(k1 / k0 > 0.33 && k1 / k0 < 3)) { runs.push(curR); curR = []; }
+        } else if (curR.length === 1 && e.v === last.v) { curR = []; }
+        curR.push(e);
+      });
+      runs.push(curR);
+      runs = runs.filter(function (r) { return r.length >= 2; });
+      if (!runs.length) return { error: 'floor elevations do not form a scale' };
+      function runOf(a) {
+        for (var i = 0; i < runs.length; i++) {
+          var r = runs[i], lo = r[0].a, hi = r[r.length - 1].a, pad = (hi - lo) / (r.length - 1) * 0.6;
+          if (a >= lo - pad && a <= hi + pad) return r;
+        }
+        return null;
+      }
+      function elev(r, a) {
+        var i = 0; while (i < r.length - 2 && a > r[i + 1].a) i++;
+        return r[i].v + (r[i + 1].v - r[i].v) * (a - r[i].a) / (r[i + 1].a - r[i].a);
+      }
+      // pipe lines: dark, solid; drawn along the elevation axis
+      var n = D.segs.length / 5, segs = [], cross = [];
+      function xyAt(a, pp) { return ax ? [pp, a] : [a, pp]; }
+      for (var i = 0; i < n; i++) {
+        var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col;
+        if (st.dash || Math.max.apply(null, c) > 0.3 || st.w < 0.3) continue;
+        var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3];
+        var a1 = ax ? y1 : x1, a2 = ax ? y2 : x2, p1 = ax ? x1 : y1, p2 = ax ? x2 : y2;
+        if (Math.abs(a1 - a2) <= 0.6 && Math.abs(p2 - p1) >= 10) { cross.push({ a: (a1 + a2) / 2, p0: Math.min(p1, p2), p1: Math.max(p1, p2) }); continue; }
+        if (Math.abs(p1 - p2) > 0.6 || Math.abs(a2 - a1) < 6) continue;
+        var ra = runOf(a1), rb = runOf(a2); if (!ra || ra !== rb) continue;
+        var span = ra[ra.length - 1].a - ra[0].a;
+        if (Math.abs(a2 - a1) > 0.9 * span) continue;                         // frames / building outline
+        var lo = Math.min(a1, a2), hi = Math.max(a1, a2), pm = (p1 + p2) / 2;
+        var cuts = [lo].concat(ra.map(function (e) { return e.a; }).filter(function (a) { return a > lo + 2 && a < hi - 2; }), [hi]);
+        for (var k = 0; k + 1 < cuts.length; k++) {
+          var A = xyAt(cuts[k], pm), B = xyAt(cuts[k + 1], pm);
+          segs.push({ a0: cuts[k], a1: cuts[k + 1], p: pm, run: ra, xy: [A[0], A[1], B[0], B[1]], ft: Math.abs(elev(ra, cuts[k + 1]) - elev(ra, cuts[k])) });
+        }
+      }
+      // size labels beside the risers (text runs across the pipe, or along it)
+      var labs = [];
+      D.text.forEach(function (t) {
+        var txt = t.str; if (/['’]/.test(txt) || txt.length > 34) return;
+        var mm = PSIZE.exec(txt); if (!mm) return;
+        var rest = (txt.slice(0, mm.index) + txt.slice(mm.index + mm[0].length)).trim();
+        if (rest && !PSVC.test(rest) && !/^(PROVIDE|NEW|TO|UP|DN|DOWN|\s)*$/i.test(rest)) return;
+        var v = pipeSizeIn(mm[2]); if (!(v > 0 && v <= 16)) return;
+        var sv = PSVC.exec(txt), L = { d: v, svc: sv ? sv[1] : null, a0: ax ? t.y0 : t.x0, a1: ax ? t.y1 : t.x1, p0: ax ? t.x0 : t.y0, p1: ax ? t.x1 : t.y1 };
+        var onBranch = cross.some(function (c) {
+          var d = c.a < L.a0 ? L.a0 - c.a : c.a > L.a1 ? c.a - L.a1 : 0;
+          return d <= 8 && Math.min(c.p1, L.p1) - Math.max(c.p0, L.p0) > 0.5 * (L.p1 - L.p0);
+        });
+        if (!onBranch) labs.push(L);
+      });
+      var got = {}, tol = 70;
+      segs.forEach(function (s, i) {
+        var best = null, bd = tol;
+        labs.forEach(function (l) {
+          if (l.a1 < s.a0 - 2 || l.a0 > s.a1 + 2) return;                       // label in the same floor band as the piece
+          var d = s.p < l.p0 ? l.p0 - s.p : s.p > l.p1 ? s.p - l.p1 : 0;
+          if (d < bd) { bd = d; best = l; }
+        });
+        if (best) got[i] = best;
+      });
+      // unlabeled pieces of a labeled riser (same line, further along) take its size
+      for (var pass = 0, changed = true; changed && pass < 20; pass++) {
+        changed = false;
+        segs.forEach(function (s, i) {
+          if (got[i]) return;
+          var best = null, bd = 1e9;
+          segs.forEach(function (t, j) {
+            if (!got[j] || Math.abs(t.p - s.p) > 1 || t.run !== s.run) return;
+            var d = Math.max(0, t.a0 - s.a1, s.a0 - t.a1); if (d < bd) { bd = d; best = got[j]; }
+          });
+          if (best && bd < 3) { got[i] = best; changed = true; }
+        });
+      }
+      var sizes = {}, total = 0, unsized = 0;
+      segs.forEach(function (s, i) {
+        if (!got[i]) { unsized += s.ft; return; }
+        if (s.ft < 1) return;
+        var k = pipeLabel(got[i].d) + (got[i].svc === 'CD' ? ' CD' : '');
+        sizes[k] = (sizes[k] || 0) + s.ft; total += s.ft;
+      });
+      for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
+      return { sizes: sizes, total_ft: Math.round(total * 10) / 10, unsized_ft: Math.round(unsized), levels: runs.map(function (r) { return r.map(function (e) { return e.v; }); }), risers: true,
+        xy: D.wantPieces ? segs.map(function (s, i) { return { s: s.xy, z: got[i] ? pipeLabel(got[i].d) : '?', ft: Math.round(s.ft * 10) / 10 }; }) : undefined };
+    }
     onmessage = function (e) {
-      try { postMessage({ ok: true, result: e.data.mode === 'pipes' ? measurePipes(e.data) : measure(e.data) }); }
+      try { postMessage({ ok: true, result: e.data.mode === 'risers' ? measureRisers(e.data) : e.data.mode === 'pipes' ? measurePipes(e.data) : measure(e.data) }); }
       catch (err) { postMessage({ ok: false, error: String(err && err.message || err) }); }
     };
   }
@@ -553,5 +667,6 @@
   }
 
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
-  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, _worker: workerMain };   // _worker: for offline tests
+  function measureRisers(data) { data.mode = 'risers'; return measure(data); }
+  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, _worker: workerMain };   // _worker: for offline tests
 })();

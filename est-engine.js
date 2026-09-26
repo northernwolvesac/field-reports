@@ -159,7 +159,7 @@
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], geoCheck = [];
+    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [];
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
@@ -240,6 +240,17 @@
           });
         }
       }
+      if (r.geo_riser && r.geo_riser.total_ft > 0) {
+        // vertical pipe measured on the water riser diagram between its floor elevations (plans only show it as UP/DN)
+        Object.keys(r.geo_riser.sizes || {}).forEach(function (key) {
+          var cd = / CD$/.test(key), sz = key.replace(/ CD$/, '');
+          var k = 'riser|' + (cd ? 'CD' : '') + '|' + sz;
+          var o = pipe[k] = pipe[k] || { service: cd ? 'CD riser' : 'riser', size: sz, material: '', lf: 0, sheets: [], riser: true };
+          o.lf += r.geo_riser.sizes[key]; o.sheets.push(sh);
+        });
+        risers.push(sh);
+      }
+      if (type === 'pipe_plan') pipeFloors[String(r.floor || sh)] = 1;
       if (isDemo) (r.demo || []).forEach(function (d) { demo.push({ item: d.item, qty: Number(d.qty || 0), sheet: sh }); });
       wetTaps += Number(r.wet_taps || 0);
       (r.rigging || []).forEach(function (x) { rig.push({ tag: String(x.tag || '').trim(), key: norm(x.tag), weight_lb: Number(x.weight_lb || 0), where: x.where, floor: x.floor, sheet: sh }); });
@@ -247,7 +258,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -310,6 +321,8 @@
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
+    if (C.pipeFloors.length >= 2 && !C.risers.length)
+      flags.push({ category: 'pipework', item: 'Pipe risers', flag: 'piping on ' + C.pipeFloors.length + ' floors but no water riser diagram measured — vertical pipe between floors is not in this estimate' });
     if (Object.keys(C.duct).length && !C.geoCheck.some(function (g) { return g.what !== 'Pipe'; }))
       flags.push({ category: 'ductwork', item: 'Duct lengths', flag: 'AI estimate only (no measurable vector lines) — typically ±30%; check or run 📐 Measure ducts' });
     var outletCount = 0, linearFt = 0;
@@ -327,7 +340,7 @@
       var p = C.pipe[k]; if (!p.lf) return; hasPipe = true;
       var r = pipeRate(R, p);
       add('pipework', [p.size, p.material, p.service].filter(Boolean).join(' ') + ' — ' + Math.round(p.lf) + ' ft', p.lf, 'lf', r.cost, r.hrs,
-        r.basis + (p.geo ? ' · measured from the piping plan lines on ' : ' · AI estimate from ') + uniq(p.sheets).join(', '), { flag: r.flag || null });
+        r.basis + (p.riser ? ' · vertical pipe measured between the floor elevations on ' : p.geo ? ' · measured from the piping plan lines on ' : ' · AI estimate from ') + uniq(p.sheets).join(', '), { flag: r.flag || null });
     });
     if (C.wetTaps) add('pipework', 'Wet-tap connection' + (C.wetTaps > 1 ? 's' : ''), C.wetTaps, 'ea', STD.wetTap, 0, 'Standard — $10,000 per connection (sub)', { is_wet_tap: true, labor_crew_type: 'none' });
 
