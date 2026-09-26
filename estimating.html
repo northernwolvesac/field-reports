@@ -702,6 +702,7 @@ requireAuth().catch(function(){});
       (canEdit ? ' · <a href="#" id="crumbNew">+ New estimate</a>' : '') +
       ' · <a href="assembly-library.html">📚 Assembly Library</a>' +
       ' · <a href="vendors.html">📇 Vendor Library</a>' +
+      ' · <a href="est-knowledge.html">📘 Knowledge</a>' +
       ' · <label style="margin-left:12px">Estimator: <select id="crumbEstimator" style="padding:3px 8px;font-size:12px;border:1px solid var(--nw-border);border-radius:5px"><option value="">All</option><option value="__me__">Just me</option></select></label>' +
       ' · <label>Status: <select id="crumbStatus" style="padding:3px 8px;font-size:12px;border:1px solid var(--nw-border);border-radius:5px"><option value="">All</option><option value="draft">Draft</option><option value="sent">Sent</option><option value="awarded">Awarded</option><option value="lost">Lost</option></select></label>';
     var link = document.getElementById('crumbNew');
@@ -1995,6 +1996,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=231"></script>
+<script src="sw-register.js?v=232"></script>
 </body>
 </html>

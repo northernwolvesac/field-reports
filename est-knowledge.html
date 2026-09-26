@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0696D7">
+<title>Estimating Knowledge — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="supabase-config.js?v=173"></script>
+<script src="auth.js?v=173"></script>
+<style>
+  body { padding-bottom: 24px; }
+  .kb-wrap { max-width: 1280px; margin: 0 auto; }
+  .kb-toolbar {
+    display: flex; gap: 10px; padding: 12px 16px;
+    background: var(--nw-card); border-bottom: 1px solid var(--nw-border);
+    align-items: center; flex-wrap: wrap;
+  }
+  .kb-toolbar input {
+    padding: 8px 12px; font-size: 13px; border: 1px solid var(--nw-border);
+    border-radius: 8px; background: #fff; min-width: 280px; flex: 1; max-width: 460px;
+  }
+  .kb-tabs { display: flex; gap: 4px; }
+  .kb-tab {
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--nw-border); background: #fff;
+    font-size: 12px; font-weight: 700; cursor: pointer; color: var(--nw-text);
+  }
+  .kb-tab.active { background: var(--nw-text); color: #fff; border-color: var(--nw-text); }
+  .kb-toolbar .grow { flex: 1; }
+  .kb-toolbar .src { font-size: 11px; color: var(--nw-muted); }
+  .kb-toolbar .src a { color: var(--nw-primary); }
+
+  .kb-layout { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 130px); }
+  @media (max-width: 800px) {
+    .kb-layout { grid-template-columns: 1fr; height: auto; }
+    .kb-detail { display: none; }
+    .kb-layout.detail-open .kb-list { display: none; }
+    .kb-layout.detail-open .kb-detail { display: block; }
+    .kb-toolbar input { min-width: 0; }
+  }
+  .kb-list { background: var(--nw-card); border-right: 1px solid var(--nw-border); overflow-y: auto; }
+  .grp { padding: 10px 14px 4px; font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--nw-muted); }
+  .k-row { padding: 9px 14px; border-bottom: 1px solid var(--nw-border); cursor: pointer; }
+  .k-row:hover, .k-row.active { background: #f0f9ff; }
+  .k-row.active { border-left: 3px solid var(--nw-primary); padding-left: 11px; }
+  .k-row .name { font-weight: 700; font-size: 13px; color: var(--nw-text); }
+  .k-row .meta { font-size: 11px; color: var(--nw-muted); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 10px; font-weight: 700; background: #e2e8f0; color: #334155; }
+  .pill.complete { background: #dcfce7; color: #166534; }
+  .pill.progress { background: #fef3c7; color: #92400e; }
+  .pill.pending { background: #e0e7ff; color: #3730a3; }
+
+  .kb-detail { padding: 20px 26px; overflow-y: auto; background: #fff; }
+  .kb-detail h2.t { margin: 0 0 4px; font-size: 21px; color: var(--nw-text); }
+  .kb-detail .sub { font-size: 12px; color: var(--nw-muted); margin-bottom: 14px; }
+  .kb-detail .back { display: none; margin-bottom: 10px; font-size: 13px; color: var(--nw-primary); cursor: pointer; font-weight: 700; }
+  @media (max-width: 800px) { .kb-detail .back { display: inline-block; } }
+  .md { font-size: 13.5px; line-height: 1.55; color: var(--nw-text); max-width: 900px; }
+  .md h1 { font-size: 19px; margin: 18px 0 8px; } .md h2 { font-size: 16px; margin: 18px 0 6px; } .md h3 { font-size: 14px; margin: 14px 0 6px; }
+  .md table { border-collapse: collapse; margin: 8px 0 14px; font-size: 12.5px; display: block; overflow-x: auto; }
+  .md th, .md td { border: 1px solid var(--nw-border); padding: 5px 9px; text-align: left; vertical-align: top; }
+  .md th { background: #f1f5f9; }
+  .md code { background: #f1f5f9; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+  .md pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 11.5px; }
+  .md pre code { background: none; color: inherit; }
+  .md blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid var(--nw-border); color: var(--nw-muted); }
+
+  .sec { margin: 18px 0 6px; font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--nw-muted); border-bottom: 1px solid var(--nw-border); padding-bottom: 4px; }
+  .bd { width: 100%; max-width: 900px; border-collapse: collapse; font-size: 12.5px; }
+  .bd td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  .bd td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .bd tr.st td { font-weight: 800; background: #f8fafc; }
+  .bd tr.grand td { font-weight: 800; font-size: 14px; border-top: 2px solid var(--nw-text); }
+  .big { font-size: 26px; font-weight: 800; color: var(--nw-text); margin: 4px 0 2px; }
+  .note { background: #f8fafc; border-radius: 8px; padding: 10px 14px; font-size: 12.5px; line-height: 1.5; margin: 6px 0; max-width: 900px; }
+  .note.warn { background: #fffbeb; }
+  ul.lst { margin: 4px 0; padding-left: 20px; font-size: 12.5px; line-height: 1.5; max-width: 900px; }
+  ul.files { list-style: none; padding: 0; margin: 4px 0; font-size: 12px; max-width: 900px; }
+  ul.files li { padding: 3px 0; border-bottom: 1px dashed #f1f5f9; display: flex; justify-content: space-between; gap: 10px; }
+  ul.files li span.sz { color: var(--nw-muted); white-space: nowrap; }
+  .empty { padding: 60px 20px; text-align: center; color: var(--nw-muted); }
+  .empty .icon { font-size: 44px; margin-bottom: 12px; opacity: .4; }
+  mark { background: #fde68a; padding: 0 1px; }
+</style>
+</head>
+<body>
+
+<div class="kb-wrap">
+  <div class="header">
+    <a href="estimating.html" class="back-btn">&#8592;</a>
+    <div class="header-content"><h1>Estimating Knowledge</h1></div>
+    <div class="profile-circle" id="profileCircle">--</div>
+  </div>
+
+  <div class="kb-toolbar">
+    <div class="kb-tabs">
+      <button class="kb-tab active" data-tab="know" onclick="KB.tab('know')">📘 Standards &amp; rules</button>
+      <button class="kb-tab" data-tab="bench" onclick="KB.tab('bench')">📊 Past bids</button>
+    </div>
+    <input type="search" id="qSearch" placeholder="🔍 Search rates, rules, projects (e.g. VAV, overhead, wet-tap)…">
+    <div class="grow"></div>
+    <span class="src">Source: Kastriot's <a href="https://drive.google.com/drive/folders/13OQ7604JDIAyBuYxRROe-a6u5XBSWS45" target="_blank" rel="noopener">Estimating</a> folder</span>
+  </div>
+
+  <div class="kb-layout" id="layout">
+    <div class="kb-list" id="kList"><div class="empty">Loading…</div></div>
+    <div class="kb-detail" id="kDetail">
+      <div class="empty">
+        <div class="icon">📘</div>
+        <p>NWAC pricing standards, the estimating process, proposal rules and every past bid with its full cost breakdown.<br>The AI estimator reads the same knowledge.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+requireAuth().catch(function(){});
+var KB = (function() {
+  'use strict';
+  var OFFICE = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var CATS = [
+    ['standard', 'Pricing & labor standards'], ['process', 'Process'], ['takeoff', 'Takeoff'],
+    ['proposal', 'Proposal'], ['vendors', 'Vendors'], ['subcontractors', 'Subcontractors'],
+    ['workflow', 'Workflow'], ['history', 'Change history'], ['project', 'Project analyses']
+  ];
+  var know = [], bench = [], tabNow = 'know', current = null;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function money(n) { return n == null ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function kb(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  function q() { return document.getElementById('qSearch').value.trim().toLowerCase(); }
+  function md(s) { return DOMPurify.sanitize(marked.parse(s || '')); }
+
+  init();
+
+  async function init() {
+    try {
+      var u = (await supabaseClient.auth.getUser()).data.user;
+      var p = u && (await supabaseClient.from('profiles').select('role').eq('id', u.id).maybeSingle()).data;
+      if (!p || OFFICE.indexOf(p.role) < 0) {
+        document.getElementById('layout').innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="icon">🔒</div><p>Estimating knowledge is for the office team.</p></div>';
+        return;
+      }
+    } catch (e) {}
+    var r1 = await supabaseClient.from('est_knowledge').select('key, category, title, body_md, source_path, project, updated_at').order('title');
+    var r2 = await supabaseClient.from('est_benchmark').select('*').order('created', { ascending: false });
+    if (r1.error || r2.error) {
+      document.getElementById('kList').innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>' + esc((r1.error || r2.error).message) + '</p></div>';
+      return;
+    }
+    know = r1.data || []; bench = r2.data || [];
+    document.getElementById('qSearch').addEventListener('input', renderList);
+    var h = location.hash.slice(1);
+    if (h.indexOf('bid:') === 0) { tab('bench', true); openBench(decodeURIComponent(h.slice(4))); }
+    else if (h) { renderList(); openKnow(decodeURIComponent(h)); }
+    else renderList();
+  }
+
+  function tab(t, quiet) {
+    tabNow = t;
+    document.querySelectorAll('.kb-tab').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-tab') === t); });
+    if (!quiet) renderList();
+  }
+
+  function renderList() {
+    var s = q(), html = '';
+    if (tabNow === 'know') {
+      var n = 0;
+      CATS.forEach(function(c) {
+        var rows = know.filter(function(k) {
+          return k.category === c[0] && (!s || (k.title + ' ' + (k.project || '') + ' ' + k.body_md).toLowerCase().indexOf(s) >= 0);
+        });
+        if (c[0] === 'project') rows.sort(function(a, b) { return (a.project || '').localeCompare(b.project || '') || a.title.localeCompare(b.title); });
+        if (!rows.length) return;
+        n += rows.length;
+        html += '<div class="grp">' + esc(c[1]) + ' · ' + rows.length + '</div>';
+        rows.forEach(function(k) {
+          html += '<div class="k-row' + (current === k.key ? ' active' : '') + '" onclick="KB.openKnow(\'' + esc(k.key) + '\')">' +
+            '<div class="name">' + esc(k.title) + '</div>' +
+            (k.project ? '<div class="meta">' + esc(k.project) + '</div>' : '') + '</div>';
+        });
+      });
+      if (!n) html = '<div class="empty">Nothing matches “' + esc(s) + '”.</div>';
+    } else {
+      var rows = bench.filter(function(b) { return !s || JSON.stringify(b).toLowerCase().indexOf(s) >= 0; });
+      var priced = rows.filter(function(b) { return b.total; });
+      html += '<div class="grp">' + rows.length + ' bids · ' + priced.length + ' priced · ' + money(priced.reduce(function(a, b) { return a + Number(b.total); }, 0)).replace(/\.\d\d$/, '') + '</div>';
+      rows.forEach(function(b) {
+        html += '<div class="k-row' + (current === 'bid:' + b.name ? ' active' : '') + '" onclick="KB.openBench(\'' + esc(b.name.replace(/'/g, '\\\'')) + '\')">' +
+          '<div class="name">' + esc(b.name) + '</div>' +
+          '<div class="meta"><span class="pill ' + esc(b.status) + '">' + esc(b.status || '—') + '</span>' +
+          '<span>' + (b.total ? money(b.total).replace(/\.\d\d$/, '') : 'not priced yet') + '</span>' +
+          '<span>' + esc(b.estimator || '') + (b.created ? ' · ' + esc(b.created) : '') + '</span></div></div>';
+      });
+      if (!rows.length) html = '<div class="empty">Nothing matches “' + esc(s) + '”.</div>';
+    }
+    document.getElementById('kList').innerHTML = html;
+  }
+
+  function show(html) {
+    var d = document.getElementById('kDetail');
+    d.innerHTML = '<span class="back" onclick="KB.closeDetail()">← Back to list</span>' + html;
+    d.scrollTop = 0;
+    document.getElementById('layout').classList.add('detail-open');
+    var s = q();
+    if (s && s.length > 2) highlight(d, s);
+  }
+
+  function closeDetail() { document.getElementById('layout').classList.remove('detail-open'); }
+
+  function openKnow(key) {
+    var k = know.find(function(x) { return x.key === key; });
+    if (!k) return;
+    current = key; history.replaceState(null, '', '#' + encodeURIComponent(key));
+    renderList();
+    show('<h2 class="t">' + esc(k.title) + '</h2>' +
+      '<div class="sub">' + esc(k.source_path || '') + (k.updated_at ? ' · loaded ' + esc(k.updated_at.slice(0, 10)) : '') + '</div>' +
+      '<div class="md">' + md(k.body_md) + '</div>');
+  }
+
+  function openBench(name) {
+    var b = bench.find(function(x) { return x.name === name; });
+    if (!b) return;
+    current = 'bid:' + name; history.replaceState(null, '', '#bid:' + encodeURIComponent(name));
+    renderList();
+    var h = '<h2 class="t">' + esc(b.name) + '</h2>' +
+      '<div class="sub">' + esc(b.location || '') + ' · ' + esc(b.estimator || '') + (b.created ? ' · ' + esc(b.created) : '') +
+      ' · <span class="pill ' + esc(b.status) + '">' + esc(b.status || '—') + '</span></div>' +
+      (b.total ? '<div class="big">' + money(b.total) + '</div>' : '') +
+      (b.description ? '<div class="note">' + esc(b.description) + '</div>' : '') +
+      (b.status_label ? '<div class="note warn">' + esc(b.status_label) + '</div>' : '');
+
+    var t = b.totals && b.totals.totals;
+    if (t && t.length) {
+      h += '<div class="sec">Totals</div><table class="bd">' + t.map(function(r) {
+        var cls = /PROJECT TOTAL|COMBINED/i.test(r[0]) ? 'grand' : (/SUBTOTAL/i.test(r[0]) ? 'st' : '');
+        return '<tr class="' + cls + '"><td>' + esc(String(r[0]).replace(/^[•·\s]+/, '')) + '</td><td class="n">' + money(r[1]) + '</td></tr>';
+      }).join('') + '</table>';
+    }
+    (b.breakdown || []).forEach(function(sec) {
+      h += '<div class="sec">' + esc(sec.title) + '</div><table class="bd">' +
+        (sec.items || []).map(function(it) { return '<tr><td>' + esc(it[0]) + '</td><td class="n">' + money(it[1]) + '</td></tr>'; }).join('') +
+        (sec.subtotal != null ? '<tr class="st"><td>Subtotal</td><td class="n">' + money(sec.subtotal) + '</td></tr>' : '') + '</table>';
+    });
+    var n = b.notes || {};
+    if (n.scope && n.scope.length) h += '<div class="sec">Scope &amp; pricing basis</div><ul class="lst">' + n.scope.map(function(x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    if (n.open && n.open.length) h += '<div class="sec">Open items</div><ul class="lst">' + n.open.map(function(x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+
+    var docs = know.filter(function(k) { return k.category === 'project' && b.drive_folder && k.source_path.indexOf(b.drive_folder + '/') === 0; });
+    if (docs.length) h += '<div class="sec">Analyses</div><ul class="lst">' + docs.map(function(k) {
+      return '<li><a href="#" onclick="KB.tab(\'know\');KB.openKnow(\'' + esc(k.key) + '\');return false">' + esc(k.title) + '</a></li>';
+    }).join('') + '</ul>';
+    if (b.files && b.files.length) {
+      h += '<div class="sec">Files in the Estimating folder · ' + b.files.length + '</div><ul class="files">' +
+        b.files.slice().sort(function(x, y) { return x.path.localeCompare(y.path); }).map(function(f) {
+          var p = f.path.split('/').slice(2).join('/');
+          return '<li><span>' + esc(p) + '</span><span class="sz">' + kb(f.size) + '</span></li>';
+        }).join('') + '</ul>' +
+        '<div class="sub" style="margin-top:6px">Open them in Drive: Estimating › ' + esc(b.drive_folder || '') + '</div>';
+    }
+    show(h);
+  }
+
+  // mark the search words in the opened document
+  function highlight(root, s) {
+    var re = new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), nodes = [], nd;
+    while ((nd = w.nextNode())) if (re.test(nd.nodeValue)) nodes.push(nd);
+    nodes.forEach(function(t) {
+      var span = document.createElement('span');
+      span.innerHTML = esc(t.nodeValue).replace(new RegExp(esc(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), function(m) { return '<mark>' + m + '</mark>'; });
+      t.parentNode.replaceChild(span, t);
+    });
+    var m = root.querySelector('mark'); if (m) m.scrollIntoView({ block: 'center' });
+  }
+
+  return { tab: tab, openKnow: openKnow, openBench: openBench, closeDetail: closeDetail };
+})();
+</script>
+<script src="sw-register.js?v=232"></script>
+</body>
+</html>
