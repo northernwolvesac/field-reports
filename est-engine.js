@@ -126,6 +126,7 @@
     var pvc = /pvc|condensate|drain/.test(mat + ' ' + svc);
     var cands = R.pipe.filter(function (n) {
       var nm = n.item.toLowerCase(), z = pipeSize(nm);
+      if (/refrig|\(\d+ pipes\)/.test(nm)) return false;            // "refrigerant lines (2 pipes)" is not a 2" pipe
       return z && Math.abs(z.d - ps.d) < 0.01 && (/pvc/.test(nm) === pvc);
     });
     if (cands.length) {
@@ -134,7 +135,7 @@
         flag: /steel|black|sch/.test(mat) ? 'copper rate used for steel pipe — confirm' : null };
     }
     // bigger than the catalog (NWAC rates stop at 4"): extend the copper curve per inch of diameter
-    var big = R.pipe.filter(function (n) { var z = pipeSize(n.item); return z && !/pvc/i.test(n.item); }).sort(function (a, b) { return pipeSize(b.item).d - pipeSize(a.item).d; })[0];
+    var big = R.pipe.filter(function (n) { var z = pipeSize(n.item); return z && !/pvc|refrig/i.test(n.item); }).sort(function (a, b) { return pipeSize(b.item).d - pipeSize(a.item).d; })[0];
     if (big && ps.d > pipeSize(big.item).d)
       return { cost: +(big.unit_cost * ps.d / pipeSize(big.item).d).toFixed(2), hrs: +(big.labor_hrs * Math.sqrt(ps.d / pipeSize(big.item).d)).toFixed(3),
         basis: 'scaled from Procore "' + big.item + '"', flag: ps.label + ' pipe is above the NWAC catalog — get a piping sub price' };
