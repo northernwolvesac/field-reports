@@ -87,20 +87,20 @@ Answer with the "answer" tool, one object in this shape:
  "included":["short phrases"],"excluded":["short phrases, e.g. 'smoke detectors', 'startup', 'rigging'"],
  "notes":"lead times, alternates, anything that affects pricing"}`;
 
-const REVIEW_PROMPT = `You are the senior HVAC estimator at Northern Wolves AC reviewing an AI-read bid before pricing.
+const REVIEW_INTRO = `You are the senior HVAC estimator at Northern Wolves AC reviewing an AI-read bid before pricing.
 Below: what was read from every sheet and quote, plus NWAC's own estimating process rules.
-Do what Kastriot's process demands: compare drawing counts to schedules, compare quotes to the drawings (what the vendor
-did NOT cover), find mechanical scope hidden in notes, basis-of-design brand mismatches, missing quotes, and risks.
-Write inches as "in" inside text (6 in pipe) — never a bare " character. Be concise: at most 12 entries per list (most expensive / riskiest first), every text under 30 words.
-Answer with the "answer" tool, one object, keys in this order:
-{"summary":"3-5 sentences for the estimator",
- "missing_quotes":[{"item":"","tags":[],"suggested_vendor":"","why":""}],
- "quote_gaps":[{"vendor":"","gap":"","impact":""}],
- "hidden_scope":[{"source":"","item":"","how_to_price":""}],
- "count_mismatches":[{"tag":"","schedule":0,"drawings":0,"note":""}],
- "rfis":[{"question":"","sheet":""}],
- "exclusions":["proposal exclusion lines"],
- "risks":[{"risk":"","severity":"high|medium|low"}]}`;
+Write inches as "in" inside text (6 in pipe) — never a bare " character. Every text under 30 words.
+Group related items: ONE entry per equipment type / vendor / issue, with all its tags in "tags" — never one entry per tag.
+Fill the fields of the "answer" tool directly.`;
+// part A — quotes against the drawings
+const REVIEW_A = REVIEW_INTRO + `
+Task: compare the quotes with the drawings. Which equipment types have no quote at all (most expensive first, max 12)?
+What does each quote leave out that the drawings need (max 10)? Where do schedule counts and drawing counts disagree (max 10)?
+Also write a 3-5 sentence summary for the estimator.`;
+// part B — scope, questions, exclusions, risks
+const REVIEW_B = REVIEW_INTRO + `
+Task: find mechanical scope hidden in the general/keyed notes that vendor quotes usually exclude (max 15, with how to price it),
+draft the RFIs to send before bidding (max 12), the exclusion lines for our proposal (max 20) and the main risks (max 8).`;
 
 
 // ─── answer shapes (the model fills these fields through the "answer" tool) ───
@@ -114,9 +114,17 @@ const QUOTE_SCHEMA = { type: "object", required: ["vendor", "total"], properties
   vendor: { type: "string" }, quote_no: { type: "string" }, date: { type: "string" }, valid_until: { type: "string" }, total: { type: "number" },
   freight_included: { type: "boolean" }, tax_included: { type: "boolean" }, kind: { type: "string" }, lines: OBJS,
   included: STRS, excluded: STRS, notes: { type: "string" } } };
-const REVIEW_SCHEMA = { type: "object", required: ["summary"], properties: {
-  summary: { type: "string" }, missing_quotes: OBJS, quote_gaps: OBJS, hidden_scope: OBJS, count_mismatches: OBJS,
-  rfis: OBJS, exclusions: STRS, risks: OBJS } };
+const obj = (props: Record<string, any>) => ({ type: "object", properties: props });
+const REVIEW_A_SCHEMA = { type: "object", required: ["summary", "missing_quotes"], properties: {
+  summary: { type: "string" },
+  missing_quotes: { type: "array", maxItems: 12, items: obj({ item: { type: "string" }, tags: STRS, suggested_vendor: { type: "string" }, why: { type: "string" } }) },
+  quote_gaps: { type: "array", maxItems: 10, items: obj({ vendor: { type: "string" }, gap: { type: "string" }, impact: { type: "string" } }) },
+  count_mismatches: { type: "array", maxItems: 10, items: obj({ tag: { type: "string" }, schedule: { type: "number" }, drawings: { type: "number" }, note: { type: "string" } }) } } };
+const REVIEW_B_SCHEMA = { type: "object", required: ["hidden_scope", "rfis", "exclusions"], properties: {
+  hidden_scope: { type: "array", maxItems: 15, items: obj({ source: { type: "string" }, item: { type: "string" }, how_to_price: { type: "string" } }) },
+  rfis: { type: "array", maxItems: 12, items: obj({ question: { type: "string" }, sheet: { type: "string" } }) },
+  exclusions: { type: "array", maxItems: 20, items: { type: "string" } },
+  risks: { type: "array", maxItems: 8, items: obj({ risk: { type: "string" }, severity: { type: "string" } }) } } };
 
 // ─── Claude call ──────────────────────────────────────────────────────
 async function claude(model: string, content: any[], maxTokens: number, schema: any = { type: "object" }) {
@@ -223,10 +231,15 @@ async function runReview(db: any, body: any) {
   await db.from("ai_est_sessions").update({ result: { ...res0, review_status: "running", review_error: null } }).eq("id", ses.id);
   const work = (async () => {
     try {
-      const r = await claude(model, [{ type: "text", text: REVIEW_PROMPT + "\n\n" + String(body.context || "").slice(0, 600000) }], 8000, REVIEW_SCHEMA);
-      let review: any;
-      if (r.data) review = r.data;
-      else try { review = parseJson(r.text); } catch (_e) { review = { parse_error: true, raw: r.text.slice(0, 20000) }; }
+      const ctx = String(body.context || "").slice(0, 600000);
+      // two focused calls in parallel: each stays short and finishes well inside the time limit
+      const [ra, rb] = await Promise.all([
+        claude(model, [{ type: "text", text: REVIEW_A + "\n\n" + ctx }], 6000, REVIEW_A_SCHEMA),
+        claude(model, [{ type: "text", text: REVIEW_B + "\n\n" + ctx }], 6000, REVIEW_B_SCHEMA),
+      ]);
+      const part = (r: any) => { if (r.data) return r.data; try { return parseJson(r.text); } catch (_e) { return { parse_error: true, raw: r.text.slice(0, 20000) }; } };
+      const review: any = { ...part(ra), ...part(rb) };
+      const r = { cost: ra.cost + rb.cost };
       const { data: cur } = await db.from("ai_est_sessions").select("result").eq("id", ses.id).single();
       await db.from("ai_est_sessions").update({
         result: { ...(cur?.result || {}), review, review_status: "done", review_cost: r.cost, review_at: new Date().toISOString() },
