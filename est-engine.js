@@ -59,34 +59,53 @@
   }
   function perim(z) { return z.round ? Math.PI * z.w : 2 * (z.w + z.h); }
 
+  // NWAC Procore duct families (catalog suffix after the size)
+  var DUCT_FAMILIES = {
+    rect_lined_1:   { rect: 'rectangular with 1" acl', round: 'round/oval with 1" acl',   label: 'rectangular, 1" acoustic lining' },
+    rect_wrap_1:    { rect: 'rectangular with 1"',     round: 'round/oval with 1" acl',   label: 'rectangular, 1" external wrap' },
+    rect_15:        { rect: 'rectangular with 1.5"',   round: 'round/oval with 1.5" acl', label: 'rectangular, 1-1/2" insulation' },
+    oval_lined_1:   { rect: 'round/oval with 1" acl',  round: 'round/oval with 1" acl',   label: 'round / flat oval, 1" lining or wrap' },
+    oval_15:        { rect: 'round/oval with 1.5" acl', round: 'round/oval with 1.5" acl', label: 'round / flat oval, 1-1/2" insulation' },
+    oval_2:         { rect: 'round/oval with 2" acl',  round: 'round/oval with 2" acl',   label: 'round / flat oval, 2" insulation' }
+  };
+  function familyFor(spec) {
+    if (!spec) return 'rect_lined_1';
+    if (spec.choice && DUCT_FAMILIES[spec.choice]) return spec.choice;
+    var oval = /oval|round|spiral/i.test(spec.shape || ''), t = Number(spec.insulation_in || 0), kind = String(spec.insulation_type || '');
+    if (oval) return t >= 1.9 ? 'oval_2' : t >= 1.4 ? 'oval_15' : 'oval_lined_1';
+    if (t >= 1.4) return 'rect_15';
+    if (/wrap|external/i.test(kind) && !/lin/i.test(kind)) return 'rect_wrap_1';
+    return 'rect_lined_1';
+  }
+
   function makeRates(norms) {
-    var duct = { rect: [], round: [] }, pipe = [], byName = {};
+    var fam = {}, pipe = [], byName = {};
     (norms || []).forEach(function (n) {
       byName[(n.item || '').toLowerCase()] = n;
       if (n.kind === 'duct' && n.unit === 'Ft') {
-        var z = sizeOf(n.item); if (!z) return;
-        var fam = /round|oval|spiral/i.test(n.item) ? 'round' : 'rect';
-        if (!/1" acl/i.test(n.item)) return;                 // standard family: 1" acoustic lining
-        duct[fam].push({ z: z, p: perim(z), cost: +n.unit_cost, hrs: +n.labor_hrs, item: n.item, projects: n.projects });
+        var m = String(n.item || '').match(/^\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s+(.*)$/i); if (!m) return;
+        var z = { w: +m[1], h: +m[2], round: false }, suf = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
+        (fam[suf] = fam[suf] || []).push({ z: z, p: perim(z), cost: +n.unit_cost, hrs: +n.labor_hrs, item: n.item, projects: n.projects });
       }
       if (n.kind === 'pipe' && n.unit === 'Ft') pipe.push(n);
     });
-    return { duct: duct, pipe: pipe, byName: byName };
+    return { fam: fam, pipe: pipe, byName: byName };
   }
 
-  function ductRate(R, size, shape) {
+  function ductRate(R, size, shape, familyKey) {
     var z = sizeOf(size); if (!z) return null;
-    var fam = (shape === 'round' || z.round) ? 'round' : 'rect';
-    if (fam === 'round') z = { w: z.w, h: z.w, round: false };      // Procore names round ducts "8x8 round/oval"
-    var list = R.duct[fam], p = 2 * (z.w + z.h);
-    var exact = list.find(function (x) { return x.z.w === z.w && x.z.h === z.h; }) ||
-      list.find(function (x) { return x.z.w === z.h && x.z.h === z.w; });
-    if (exact) return { cost: exact.cost, hrs: exact.hrs, basis: 'Procore rate "' + exact.item + '" (' + exact.projects + ' jobs)' };
+    var F = DUCT_FAMILIES[familyKey] || DUCT_FAMILIES.rect_lined_1;
+    var isRound = shape === 'round' || z.round;
+    if (isRound) z = { w: z.w, h: z.w, round: false };      // Procore names round ducts "8x8 round/oval"
+    var suf = isRound ? F.round : F.rect, base = DUCT_FAMILIES.rect_lined_1.rect;
+    var list = (R.fam && R.fam[suf]) || [], p = 2 * (z.w + z.h), scale = 1, note = '';
+    if (list.length < 3 && R.fam && R.fam[base]) { list = R.fam[base]; scale = suf === base ? 1 : 1.1; note = ' (family ' + suf + ' not in catalog, +10% on the lined rate)'; }
+    var exact = list.find(function (x) { return x.z.w === z.w && x.z.h === z.h; }) || list.find(function (x) { return x.z.w === z.h && x.z.h === z.w; });
+    if (exact) return { cost: +(exact.cost * scale).toFixed(3), hrs: +(exact.hrs * scale).toFixed(3), basis: 'Procore rate "' + exact.item + '" (' + exact.projects + ' jobs)' + note };
     if (list.length) {
       var near = list.slice().sort(function (a, b) { return Math.abs(a.p - p) - Math.abs(b.p - p); })[0];
-      return { cost: +(near.cost * p / near.p).toFixed(3), hrs: near.hrs, basis: 'scaled from Procore "' + near.item + '" by perimeter', flag: 'size not in catalog' };
+      return { cost: +(near.cost * p / near.p * scale).toFixed(3), hrs: +(near.hrs * scale).toFixed(3), basis: 'scaled from Procore "' + near.item + '" by perimeter' + note, flag: 'size not in catalog' };
     }
-    // no norms loaded yet: catalog formula (median $0.99/in perimeter, 42/63/105 min per ft by size)
     return { cost: +(0.99 * p).toFixed(3), hrs: p <= 80 ? 0.7 : p <= 140 ? 1.05 : 1.75, basis: 'catalog formula ($0.99 per inch of perimeter)', flag: 'rate table not loaded' };
   }
 
@@ -229,6 +248,9 @@
   function build(pages, opts) {
     opts = opts || {};
     var R = makeRates(opts.norms), C = collect(pages), lines = [], flags = [], sort = 0;
+    var famKey = familyFor(opts.ductSpec);
+    if (!opts.ductSpec) flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'not read from the specs — priced as rectangular with 1" lining; run 🔍 Duct spec' });
+    else if (opts.ductSpec.confidence === 'low') flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'spec reading uncertain — ' + DUCT_FAMILIES[famKey].label + '; confirm' });
     function add(cat, d, qty, unit, mat, hrs, basis, extra) {
       var l = Object.assign({ category: cat, description: d, quantity: +(+qty).toFixed(4), unit: unit, unit_material_cost: +(+mat || 0).toFixed(4),
         unit_labor_hours: +(+hrs || 0).toFixed(4), labor_crew_type: cat === 'pipework' ? 'pipe' : cat === 'services' ? 'none' : 'sm',
@@ -272,8 +294,8 @@
     var ductFt = 0;
     Object.keys(C.duct).forEach(function (k) {
       var d = C.duct[k]; if (!d.lf) return;
-      var r = ductRate(R, d.size, d.shape); ductFt += d.lf;
-      add('ductwork', d.size + ' ' + (d.shape === 'round' ? 'round' : 'rectangular') + ' duct w/ 1" ACL — ' + Math.round(d.lf) + ' ft', d.lf, 'lf', r.cost, r.hrs,
+      var r = ductRate(R, d.size, d.shape, famKey); ductFt += d.lf;
+      add('ductwork', d.size + ' duct — ' + (d.shape === 'round' ? DUCT_FAMILIES[famKey].round.replace(/acl/, 'ACL') : DUCT_FAMILIES[famKey].label) + ' — ' + Math.round(d.lf) + ' ft', d.lf, 'lf', r.cost, r.hrs,
         r.basis + (d.geo ? ' · measured from the drawing lines on ' + uniq(d.sheets).join(', ') + ' (+8% fittings)' : ' · AI estimate from ' + uniq(d.sheets).join(', ')),
         { flag: r.flag || null });
     });
@@ -407,5 +429,5 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, installHours: installHours, STD: STD };
+  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor };
 })();

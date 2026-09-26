@@ -92,6 +92,21 @@ Below: what was read from every sheet and quote, plus NWAC's own estimating proc
 Write inches as "in" inside text (6 in pipe) — never a bare " character. Every text under 30 words.
 Group related items: ONE entry per equipment type / vendor / issue, with all its tags in "tags" — never one entry per tag.
 Fill the fields of the record_findings tool directly.`;
+// duct construction from the specification / general notes (drives which NWAC rate family prices the ductwork)
+const DUCTSPEC_PROMPT = `You are the senior HVAC estimator at Northern Wolves AC. Below are the passages about ductwork taken from the
+specification sheets and general notes of one bid. Decide how the NEW supply/return ductwork must be built, for pricing:
+- shape: "rectangular" or "round/flat oval" (exposed spiral round or flat oval counts as round/flat oval). If both are used,
+  pick the one that covers most of the new ductwork and explain in notes.
+- insulation: thickness in inches and whether it is internal acoustic LINING or EXTERNAL WRAP/board (R-6 wrap ≈ 1.5 in; R-8 ≈ 2 in).
+- exposed: is most new ductwork exposed (no ceiling)?
+- other cost drivers: flex duct not allowed, aluminum or stainless sections, double-wall, painting, pressure class, sealing class.
+Quote the exact words you relied on. If the passages do not say, answer "unknown" and confidence "low".
+Fill the fields of the record_findings tool.`;
+const DUCTSPEC_SCHEMA = { type: "object", additionalProperties: false, required: ["shape", "confidence"], properties: {
+  shape: { type: "string" }, insulation_in: { type: "number" }, insulation_type: { type: "string" }, exposed: { type: "boolean" },
+  other: { type: "array", items: { type: "string" } }, evidence: { type: "array", items: { type: "string" } },
+  confidence: { type: "string" }, notes: { type: "string" } } };
+
 // part A — quotes against the drawings
 const REVIEW_A = REVIEW_INTRO + `
 Task: compare the quotes with the drawings. Which equipment types have no quote at all (most expensive first, max 12)?
@@ -274,6 +289,20 @@ Deno.serve(async (req: Request) => {
     if (body.action === "sheet") return json(await runPage(db, body, "sheet"));
     if (body.action === "quote") return json(await runPage(db, body, "quote"));
     if (body.action === "review") return json(await runReview(db, body));
+    if (body.action === "ductspec") {
+      const { data: ses } = await db.from("ai_est_sessions").select("id, model, result").eq("id", body.session_id).single();
+      if (!ses) return json({ ok: false, error: "session not found" }, 404);
+      const model = MODELS[ses.model] ? ses.model : DEFAULT_MODEL;
+      const r = await claude(model, [{ type: "text", text: DUCTSPEC_PROMPT + "\n\n" + String(body.text || "").slice(0, 60000) }], 1500, DUCTSPEC_SCHEMA);
+      let spec: any = r.data;
+      if (!spec) { try { spec = parseJson(r.text); } catch (_e) { spec = { confidence: "low", notes: "unreadable answer" }; } }
+      spec.at = new Date().toISOString(); spec.cost = r.cost;
+      const { data: cur } = await db.from("ai_est_sessions").select("result").eq("id", ses.id).single();
+      const prevChoice = cur?.result?.duct_spec?.choice;
+      if (prevChoice) spec.choice = prevChoice;
+      await db.from("ai_est_sessions").update({ result: { ...(cur?.result || {}), duct_spec: spec } }).eq("id", ses.id);
+      return json({ ok: true, spec });
+    }
     if (body.action === "ping") return json({ ok: true, user: u.user.email, role: prof.role });
     return json({ ok: false, error: "unknown action" }, 400);
   } catch (e) {

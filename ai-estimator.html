@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=249"></script>
-<script src="est-engine.js?v=249"></script>
-<script src="geo-takeoff.js?v=249"></script>
+<script src="est-totals.js?v=250"></script>
+<script src="est-engine.js?v=250"></script>
+<script src="geo-takeoff.js?v=250"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -202,6 +202,7 @@ var AE = (function() {
       '<button class="btn primary" onclick="AE.price()" ' + (done ? '' : 'disabled') + '>💲 Price it</button>' +
       '<button class="btn" onclick="AE.review()" ' + (done ? '' : 'disabled') + '>🔎 AI scope review</button>' +
       '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button></div></div>' +
+      renderDuctSpec(res) +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
       '<div id="revOut">' + renderReview(res) + '</div></div>';
     $('main').innerHTML = html;
@@ -430,6 +431,7 @@ var AE = (function() {
       p.result = res;
     }
     measuring = ''; render();
+    if (!(session.result || {}).duct_spec) readDuctSpec();      // then read how the ducts must be built
     toast('Ducts / pipes measured on ' + list.length + ' sheet' + (list.length === 1 ? '' : 's') + ' — press “Price it”');
   }
 
@@ -482,6 +484,53 @@ var AE = (function() {
   function readAll() { runQueue(pages.filter(function(p) { return p.status === 'pending' || p.status === 'error'; })); }
   function readOne(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) runQueue([p]); }
 
+  // ─── duct construction from the specs (shape + insulation → NWAC rate family) ───
+  var specBusy = false;
+  function renderDuctSpec(res) {
+    var sp = res.duct_spec, F = NWEngine.DUCT_FAMILIES, key = NWEngine.familyFor(sp);
+    var opts = Object.keys(F).map(function(k) { return '<option value="' + k + '"' + (k === key ? ' selected' : '') + '>' + esc(F[k].label) + '</option>'; }).join('');
+    var ev = sp && sp.evidence && sp.evidence.length ? '<div class="basis" style="margin-top:4px">“' + sp.evidence.slice(0, 3).map(esc).join('” · “') + '”</div>' : '';
+    var other = sp && sp.other && sp.other.length ? '<div class="basis">Also: ' + sp.other.slice(0, 5).map(esc).join(' · ') + '</div>' : '';
+    return '<div style="margin:10px 0;padding:10px 12px;background:#f8fafc;border-radius:8px">' +
+      '<div class="row"><b style="font-size:12.5px">Duct construction</b>' +
+      '<select id="ductFam" onchange="AE.setDuctFam(this.value)">' + opts + '</select>' +
+      '<button class="btn" onclick="AE.readDuctSpec()" ' + (specBusy || running ? 'disabled' : '') + '>' + (specBusy ? '🔍 Reading specs…' : '🔍 Read duct spec') + '</button>' +
+      '<span class="muted">' + (sp ? (sp.choice ? 'set by hand' : 'from the specs' + (sp.confidence ? ' (' + esc(sp.confidence) + ' confidence)' : '')) : 'not read yet — default') + '</span></div>' + ev + other + '</div>';
+  }
+  async function setDuctFam(v) {
+    var res = Object.assign({}, session.result || {}); res.duct_spec = Object.assign({}, res.duct_spec || {}, { choice: v });
+    session.result = res;
+    await supabaseClient.from('ai_est_sessions').update({ result: res }).eq('id', session.id);
+    toast('Duct construction set — press “Price it”');
+  }
+  var DUCT_WORDS = /\b(duct|ductwork|oval|spiral|lining|liner|lined|insulat|wrap|exposed|flexible|flex|double[- ]wall|aluminum|stainless|pressure class|seal class|smacna|R-\d)/i;
+  async function readDuctSpec() {
+    if (specBusy) return;
+    var src = pages.filter(function(p) {
+      var f = files.find(function(x) { return x.id === p.file_id; }) || {}, t = (p.result || {}).sheet_type || '';
+      return f.kind !== 'quote' && p.status === 'done' && /specs|legend|schedule|details|duct_plan|other/.test(t);
+    });
+    if (!src.length) { toast('Read the sheets first'); return; }
+    specBusy = true; render();
+    var chunks = [];
+    try {
+      for (var i = 0; i < src.length && chunks.join('\n').length < 60000; i++) {
+        var p = src[i];
+        var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise;
+        var tc = await (await pdf.getPage(1)).getTextContent(); pdf.destroy();
+        var txt = tc.items.map(function(t) { return t.str; }).join(' ').replace(/\s+/g, ' ');
+        // sentences / clauses that talk about ductwork
+        var keep = txt.split(/(?<=[.;:])\s+(?=[A-Z0-9])/).filter(function(x) { return DUCT_WORDS.test(x) && /duct|oval|spiral|lining|liner|insulat|wrap/i.test(x); });
+        if (keep.length) chunks.push('[' + (p.sheet_no || 'sheet ' + p.page_no) + '] ' + keep.join(' ').slice(0, 15000));
+      }
+      if (!chunks.length) throw new Error('no ductwork passages found in the specs / notes');
+      var r = await callFn({ action: 'ductspec', session_id: session.id, text: chunks.join('\n\n') });
+      session.result = Object.assign({}, session.result || {}, { duct_spec: r.spec });
+      toast('Duct construction: ' + NWEngine.DUCT_FAMILIES[NWEngine.familyFor(r.spec)].label + ' — press “Price it”');
+    } catch (e) { toast('Duct spec: ' + e.message); }
+    specBusy = false; render();
+  }
+
   // ─── pricing ────────────────────────────────────────────────────────
   async function loadNorms() {
     if (norms) return norms;
@@ -495,7 +544,7 @@ var AE = (function() {
   }
   async function price() {
     var n = await loadNorms();
-    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked });
+    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null });
     var res = Object.assign({}, session.result || {}, {
       engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
@@ -594,9 +643,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam };
 })();
 </script>
-<script src="sw-register.js?v=249"></script>
+<script src="sw-register.js?v=250"></script>
 </body>
 </html>
