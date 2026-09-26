@@ -129,17 +129,45 @@
           flush(false); break;
       }
     }
-    // text: whole-line strings with positions (items on one baseline merged)
-    var tc = await page.getTextContent(), items = tc.items.filter(function (t) { return t.str && t.str.trim(); });
-    items.sort(function (p, q) { return (Math.round(q.transform[5]) - Math.round(p.transform[5])) || (p.transform[4] - q.transform[4]); });
+    // text: whole-line strings with positions and reading direction (items on one baseline merged);
+    // stacked lines of one note are grouped into a block (leaders start from the block)
+    var tc = await page.getTextContent(), items = [];
+    tc.items.forEach(function (t) {
+      if (!t.str || !t.str.trim()) return;
+      var a = t.transform, n = Math.hypot(a[0], a[1]) || 1, dx = a[0] / n, dy = a[1] / n;
+      var h = Math.abs(t.height || Math.hypot(a[2], a[3]) || 6), w = t.width || h * t.str.length * 0.5;
+      var along = a[4] * dx + a[5] * dy, perp = -a[4] * dy + a[5] * dx;       // text frame coordinates
+      items.push({ str: t.str, dx: Math.round(dx * 100) / 100, dy: Math.round(dy * 100) / 100, a0: along, a1: along + w, p: perp, h: h });
+    });
+    items.sort(function (p, q) { return (p.dx - q.dx) || (p.dy - q.dy) || (Math.round(q.p) - Math.round(p.p)) || (p.a0 - q.a0); });
     var lines = [];
     items.forEach(function (t) {
-      var x = t.transform[4], y = t.transform[5], h = Math.abs(t.height || t.transform[3] || 6), w = t.width || h * t.str.length * 0.5;
       var last = lines[lines.length - 1];
-      if (last && Math.abs(last.y - y) < 1 && x - last.x1 < Math.max(2, h * 0.4) && x >= last.x0) { last.str += t.str; last.x1 = x + w; last.h = Math.max(last.h, h); }
-      else lines.push({ str: t.str, x0: x, x1: x + w, y: y, h: h });
+      if (last && last.dx === t.dx && last.dy === t.dy && Math.abs(last.p - t.p) < 1 && t.a0 - last.a1 < Math.max(2, t.h * 0.4) && t.a0 >= last.a0) {
+        last.str += t.str; last.a1 = t.a1; last.h = Math.max(last.h, t.h);
+      } else lines.push({ str: t.str, dx: t.dx, dy: t.dy, a0: t.a0, a1: t.a1, p: t.p, h: t.h });
     });
-    var text = lines.map(function (l) { return { str: l.str.trim(), x0: l.x0, y0: l.y, x1: l.x1, y1: l.y + l.h }; });
+    function toPage(l, al, pp) { return [al * l.dx - pp * l.dy, al * l.dy + pp * l.dx]; }
+    var text = lines.map(function (l) {
+      var c = [toPage(l, l.a0, l.p), toPage(l, l.a1, l.p), toPage(l, l.a0, l.p + l.h), toPage(l, l.a1, l.p + l.h)];
+      var xs = c.map(function (q) { return q[0]; }), ys = c.map(function (q) { return q[1]; });
+      return { str: l.str.trim(), x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys), x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys), dir: [l.dx, l.dy], _l: l };
+    });
+    // blocks: same direction, stacked within 1.8 line heights, overlapping along the text
+    var blk = text.map(function (_, i) { return i; });
+    function root(i) { while (blk[i] !== i) i = blk[i] = blk[blk[i]]; return i; }
+    for (var i2 = 0; i2 < text.length; i2++) for (var j2 = i2 + 1; j2 < text.length; j2++) {
+      var A = text[i2]._l, B = text[j2]._l;
+      if (A.dx !== B.dx || A.dy !== B.dy) continue;
+      if (Math.abs(A.p - B.p) > 1.8 * Math.max(A.h, B.h) || Math.min(A.a1, B.a1) - Math.max(A.a0, B.a0) < -2) continue;
+      blk[root(i2)] = root(j2);
+    }
+    var boxes = {};
+    text.forEach(function (t, i) {
+      var r = root(i), bx = boxes[r] || [Infinity, Infinity, -Infinity, -Infinity];
+      boxes[r] = [Math.min(bx[0], t.x0), Math.min(bx[1], t.y0), Math.max(bx[2], t.x1), Math.max(bx[3], t.y1)];
+    });
+    text.forEach(function (t, i) { t.block = boxes[root(i)]; delete t._l; });
     var flat = new Float64Array(segs.length * 5);
     segs.forEach(function (s, i) { flat.set(s, i * 5); });
     return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' ') };
@@ -148,7 +176,7 @@
   // ─── 2. geometry (runs inside a Web Worker) ───
   function workerMain() {
     var SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN)?\s*$/;
-    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|DIA\.?|RD)\s*(?:\(.*\))?\s*$/i;
+    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*$/i;
     var SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/g;
     function frac(s) { if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
     function hyp(a, b) { return Math.sqrt(a * a + b * b); }
@@ -371,8 +399,104 @@
       });
       return pieces;
     }
+
+    // ─── pipes: single lines; sizes from labels (beside the line or on a leader), carried through the network ───
+    var PSIZE = /(^|[^\d\/.\-])(\d{1,2}\s*-\s*\d\/\d|\d{1,2}\s+\d\/\d|\d\/\d|\d{1,3}(?:\.\d)?)\s*["”]\s*(?:Ø|ø|∅|DIA\.?)?(?!\s*[xX×]\s*\d)/;
+    var PSVC = /\b(CHWS\/R|CHWS|CHWR|CWS&R|CWS\/R|CWS|CWR|HWS\/R|HWS|HWR|HHWS|HHWR|CD|RS&R|RS\/RL|RS|RL|RLS|CW)\b/;
+    function pipeSizeIn(raw) {
+      raw = raw.replace(/\s+/g, ' ').trim();
+      var m = /^(\d{1,2})\s*-\s*(\d)\/(\d)$/.exec(raw) || /^(\d{1,2}) (\d)\/(\d)$/.exec(raw);
+      if (m) return +m[1] + (+m[2]) / (+m[3]);
+      m = /^(\d)\/(\d)$/.exec(raw); if (m) return (+m[1]) / (+m[2]);
+      if (/^\d{3}$/.test(raw) && '13'.indexOf(raw[1]) >= 0 && '248'.indexOf(raw[2]) >= 0) return +raw[0] + (+raw[1]) / (+raw[2]);   // "114" = 1¼ glyph
+      return parseFloat(raw);
+    }
+    function pipeLabel(v) {
+      var whole = Math.floor(v), f = { 0.25: '1/4', 0.5: '1/2', 0.75: '3/4' }[Math.round((v - whole) * 4) / 4] || '';
+      return (whole ? whole : '') + (whole && f ? '-' : '') + f + '"';
+    }
+    function measurePipes(D) {
+      var found = {}, m; SCALE_RE.lastIndex = 0;
+      while ((m = SCALE_RE.exec(D.fullText))) { var f = frac(m[1]); found[f] = (found[f] || 0) + 1; }
+      var best = null; for (var k in found) if (!best || found[k] > found[best]) best = k;
+      if (!best) return { error: 'no drawing scale found on the sheet' };
+      var ptft = +best * 72, labs = [];
+      D.text.forEach(function (t) {
+        var txt = t.str; if (/['’]/.test(txt) || txt.length > 34) return;
+        var mm = PSIZE.exec(txt); if (!mm) return;
+        var rest = (txt.slice(0, mm.index) + txt.slice(mm.index + mm[0].length)).trim();
+        if (rest && !PSVC.test(rest) && !/^(PROVIDE|NEW|TO|\s)*$/.test(rest)) return;
+        var v = pipeSizeIn(mm[2]); if (!(v > 0 && v <= 16)) return;
+        var sv = PSVC.exec(txt);
+        labs.push({ txt: txt, d: v, svc: sv ? sv[1] : null, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, dir: t.dir || [1, 0], bbox: [t.x0, t.y0, t.x1, t.y1], block: t.block || [t.x0, t.y0, t.x1, t.y1] });
+      });
+      if (labs.length < 2) return { error: 'fewer than 2 pipe size labels', ptft: ptft };
+      var n = D.segs.length / 5, segs = [], leaders = [];
+      for (var i = 0; i < n; i++) {
+        var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col;
+        var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3], L = hyp(x2 - x1, y2 - y1);
+        if (Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) continue;       // gray background
+        if (!st.dash && st.w <= 1.0 && Math.max.apply(null, c) <= 0.3 && L > 3) leaders.push([x1, y1, x2, y2]);
+        if (L >= 0.3 * ptft) { var sg = norm([x1, y1, x2, y2]); sg.push(st.key); segs.push(sg); }
+      }
+      function near(l, S) {
+        var tol = Math.max(1.3 * ptft, 20), dx = l.dir[0], dy = l.dir[1], hits = [];
+        S.forEach(function (s, i) {
+          if (Math.abs(s[4] * dx + s[5] * dy) < 0.97) return;
+          var ex = l.cx - s[0], ey = l.cy - s[1], along = ex * s[4] + ey * s[5], perp = Math.abs(-ex * s[5] + ey * s[4]);
+          if (along < -0.5 * ptft || along > s[6] + 0.5 * ptft || perp > tol) return;
+          hits.push([perp, i]);
+        });
+        return hits.sort(function (p, q) { return p[0] - q[0]; });
+      }
+      var votes = {};
+      labs.forEach(function (l) { var h = near(l, segs); if (h.length) votes[segs[h[0][1]][8]] = (votes[segs[h[0][1]][8]] || 0) + 1; });
+      var top = 0; for (var vk in votes) top = Math.max(top, votes[vk]);
+      if (!top) return { error: 'no pipe lines next to the size labels', ptft: ptft, labels: labs.length };
+      var keep = Object.keys(votes).filter(function (kk) { return votes[kk] >= Math.max(2, 0.25 * top) || votes[kk] === top; });
+      var S = segs.filter(function (s) { return keep.indexOf(s[8]) >= 0; });
+      var size = {};
+      labs.forEach(function (l) {
+        var h = near(l, S);
+        if (h.length) { var b0 = h[0][0]; h.forEach(function (x) { if (x[0] <= b0 + 0.9 * ptft && !(x[1] in size)) size[x[1]] = [l.d, l.svc]; }); return; }
+        leaderEnds(l, leaders).concat(leaderEnds({ bbox: l.block }, leaders)).forEach(function (pt) {
+          var bi = null, bd = 4;
+          S.forEach(function (s, i) { var dd = ptSeg(pt[0], pt[1], s); if (dd <= bd) { bi = i; bd = dd; } });
+          if (bi !== null && !(bi in size)) size[bi] = [l.d, l.svc];
+        });
+      });
+      // network: touching ends or an end on another line's body (tee); nearest label wins (multi-source BFS)
+      var grid = {};
+      S.forEach(function (s, i) { [[s[0], s[1]], [s[2], s[3]]].forEach(function (e) { var key = Math.floor(e[0] / 4) + ',' + Math.floor(e[1] / 4); (grid[key] = grid[key] || []).push(i); }); });
+      function nbrs(i) {
+        var s = S[i], cand = {}, out = [];
+        [[s[0], s[1]], [s[2], s[3]]].forEach(function (e) {
+          var gx = Math.floor(e[0] / 4), gy = Math.floor(e[1] / 4);
+          for (var ax = gx - 1; ax <= gx + 1; ax++) for (var ay = gy - 1; ay <= gy + 1; ay++) (grid[ax + ',' + ay] || []).forEach(function (j) { if (j !== i) cand[j] = 1; });
+        });
+        Object.keys(cand).forEach(function (js) {
+          var j = +js, t = S[j], E = [[s[0], s[1]], [s[2], s[3]]], F = [[t[0], t[1]], [t[2], t[3]]], touch = false;
+          for (var a = 0; a < 2; a++) for (var b = 0; b < 2; b++) if (hyp(E[a][0] - F[b][0], E[a][1] - F[b][1]) < 1.5) touch = true;
+          if (touch || Math.min(ptSeg(t[0], t[1], s), ptSeg(t[2], t[3], s), ptSeg(s[0], s[1], t), ptSeg(s[2], s[3], t)) < 1.5) out.push(j);
+        });
+        return out;
+      }
+      var q = Object.keys(size).map(Number), seen = {};
+      q.forEach(function (i) { seen[i] = 1; });
+      while (q.length) {
+        var cur = q.shift();
+        nbrs(cur).forEach(function (j) { if (!seen[j]) { seen[j] = 1; size[j] = size[cur]; q.push(j); } });
+      }
+      var sizes = {}, total = 0;
+      Object.keys(size).forEach(function (is) {
+        var i = +is, kk = pipeLabel(size[i][0]) + (size[i][1] === 'CD' ? ' CD' : '');
+        sizes[kk] = (sizes[kk] || 0) + S[i][6] / ptft; total += S[i][6] / ptft;
+      });
+      for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
+      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep };
+    }
     onmessage = function (e) {
-      try { postMessage({ ok: true, result: measure(e.data) }); }
+      try { postMessage({ ok: true, result: e.data.mode === 'pipes' ? measurePipes(e.data) : measure(e.data) }); }
       catch (err) { postMessage({ ok: false, error: String(err && err.message || err) }); }
     };
   }
@@ -391,5 +515,6 @@
     return job;
   }
 
-  window.NWGeo = { extract: extract, measure: measure, _worker: workerMain };   // _worker: for offline tests
+  function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
+  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, _worker: workerMain };   // _worker: for offline tests
 })();

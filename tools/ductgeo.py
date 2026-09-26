@@ -9,7 +9,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 H = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SIZE_RE = re.compile(r'^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN)?\s*$')
-ROUND_RE = re.compile(r'^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|DIA\.?|RD)\s*(?:\(.*\))?\s*$', re.I)
+ROUND_RE = re.compile(r'^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*$', re.I)
 SCALE_RE = re.compile(r'(\d+(?:/\d+)?)\s*["”]\s*=\s*1\s*[\'’]\s*-?\s*0\s*["”]?')
 
 def frac(s):

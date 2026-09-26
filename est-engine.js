@@ -197,7 +197,18 @@
             var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [] };
             o.lf += Number(x.lf || 0); o.sheets.push(sh);
           });
-          (r.pipe_runs || []).forEach(function (x) {
+          if (r.geo_pipe && r.geo_pipe.total_ft > 0) {
+            // measured from the piping plan's own lines (geo-takeoff.js); the AI reading stays a cross-check
+            var aiP = (r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
+            geoCheck.push({ sheet: sh, geo: r.geo_pipe.total_ft, ai: aiP, what: 'Pipe' });
+            Object.keys(r.geo_pipe.sizes || {}).forEach(function (key) {
+              var cd = / CD$/.test(key), sz = key.replace(/ CD$/, '');
+              var k = (cd ? 'CD' : '') + '|' + sz + '|';
+              var o = pipe[k] = pipe[k] || { service: cd ? 'CD' : '', size: sz, material: '', lf: 0, sheets: [], geo: true };
+              o.lf += r.geo_pipe.sizes[key]; o.sheets.push(sh);
+            });
+          }
+          if (!(r.geo_pipe && r.geo_pipe.total_ft > 0)) (r.pipe_runs || []).forEach(function (x) {
             var k = (x.service || '') + '|' + (x.size || '') + '|' + (x.material || '');
             var o = pipe[k] = pipe[k] || { service: x.service || '', size: x.size || '', material: x.material || '', lf: 0, sheets: [] };
             o.lf += Number(x.lf || 0); o.sheets.push(sh);
@@ -268,9 +279,9 @@
     });
     C.geoCheck.forEach(function (g) {
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
-        flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
+        flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
-    if (Object.keys(C.duct).length && !C.geoCheck.length)
+    if (Object.keys(C.duct).length && !C.geoCheck.some(function (g) { return g.what !== 'Pipe'; }))
       flags.push({ category: 'ductwork', item: 'Duct lengths', flag: 'AI estimate only (no measurable vector lines) — typically ±30%; check or run 📐 Measure ducts' });
     var outletCount = 0, linearFt = 0;
     Object.keys(C.devices).forEach(function (k) { var d = C.devices[k]; if (/diffuser|grille|register|vav|fpb/.test(d.type)) outletCount += d.qty; if (d.type === 'linear') linearFt += d.lf || d.qty * 4; });
@@ -286,7 +297,8 @@
     Object.keys(C.pipe).forEach(function (k) {
       var p = C.pipe[k]; if (!p.lf) return; hasPipe = true;
       var r = pipeRate(R, p);
-      add('pipework', [p.size, p.material, p.service].filter(Boolean).join(' ') + ' — ' + Math.round(p.lf) + ' ft', p.lf, 'lf', r.cost, r.hrs, r.basis + ' · AI-measured on ' + uniq(p.sheets).join(', '), { flag: r.flag || null });
+      add('pipework', [p.size, p.material, p.service].filter(Boolean).join(' ') + ' — ' + Math.round(p.lf) + ' ft', p.lf, 'lf', r.cost, r.hrs,
+        r.basis + (p.geo ? ' · measured from the piping plan lines on ' : ' · AI estimate from ') + uniq(p.sheets).join(', '), { flag: r.flag || null });
     });
     if (C.wetTaps) add('pipework', 'Wet-tap connection' + (C.wetTaps > 1 ? 's' : ''), C.wetTaps, 'ea', STD.wetTap, 0, 'Standard — $10,000 per connection (sub)', { is_wet_tap: true, labor_crew_type: 'none' });
 
