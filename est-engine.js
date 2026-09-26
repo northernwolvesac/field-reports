@@ -126,7 +126,7 @@
   }
 
   // ── read the AI sheet results ────────────────────────────────────────
-  function norm(s) { return String(s || '').trim().toUpperCase(); }
+  function norm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }   // AC1-1 = AC-1-1
 
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
@@ -139,13 +139,15 @@
       (r.equipment || []).forEach(function (e) {
         var tag = norm(e.tag); if (!tag) return;
         if (type === 'schedule' || type === 'enlarged' || type === 'riser') {
-          var s = sched[tag] = sched[tag] || { tag: tag, qty: 0, sheets: [] };
+          var s = sched[tag] = sched[tag] || { tag: tag, label: String(e.tag).trim(), qty: 0, sheets: [] };
           ['type', 'manufacturer', 'model', 'capacity', 'weight_lb', 'furnished_by', 'electrical'].forEach(function (k) { if (e[k] && !s[k]) s[k] = e[k]; });
           if (type === 'schedule') s.qty = Math.max(s.qty, Number(e.qty || 0));
           s.sheets.push(sh);
         } else if (!isDemo) {
-          var q = planEq[tag] = planEq[tag] || { tag: tag, qty: 0, sheets: [] };
-          q.qty += Number(e.qty || 1); q.sheets.push(sh);
+          var q = planEq[tag] = planEq[tag] || { tag: tag, label: String(e.tag).trim(), qty: 0, sheets: [], per: {} };
+          var fl = String(r.floor || sh), f = q.per[fl] = q.per[fl] || {};
+          f[type] = (f[type] || 0) + Number(e.qty || 1); q.sheets.push(sh);
+          q.qty = Object.keys(q.per).reduce(function (a, k) { return a + Math.max.apply(null, Object.values(q.per[k])); }, 0);
           if (!q.type && e.type) q.type = e.type;
           if (!q.weight_lb && e.weight_lb) q.weight_lb = e.weight_lb;
         }
@@ -224,7 +226,7 @@
       var s = C.sched[tag];
       if (quoted[tag] || /owner/i.test(s.furnished_by || '')) return;
       if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;   // air devices are counted below
-      add('equipment', tag + ' — ' + [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · '), Math.max(1, s.qty || (C.planEq[tag] && C.planEq[tag].qty) || 1), 'ea', 0, 0,
+      add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · '), Math.max(1, s.qty || (C.planEq[tag] && C.planEq[tag].qty) || 1), 'ea', 0, 0,
         'on schedule ' + s.sheets[0] + ' — no quote yet', { is_firm: false, flag: 'quote needed' });
     });
 
@@ -259,7 +261,7 @@
       var s = C.sched[tag];
       if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;
       var qty = Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1), ih = installHours(s);
-      add('equipment_install', 'Install ' + tag + (s.type ? ' — ' + s.type : '') + (s.weight_lb ? ' (' + s.weight_lb + ' lb)' : ''), qty, 'ea', 0, ih.h, 'Equipment Installation Standards — ' + ih.basis,
+      add('equipment_install', 'Install ' + (s.label || tag) + (s.type ? ' — ' + s.type : '') + (s.weight_lb ? ' (' + s.weight_lb + ' lb)' : ''), qty, 'ea', 0, ih.h, 'Equipment Installation Standards — ' + ih.basis,
         { flag: ih.flag || (C.planEq[tag] && s.qty && C.planEq[tag].qty !== s.qty ? 'plan count ' + C.planEq[tag].qty + ' ≠ schedule ' + s.qty : null), labor_crew_type: 'startup' });
     });
 
@@ -291,7 +293,12 @@
 
     var totals = window.nwEstTotals ? window.nwEstTotals(lines, { labor_rate: LABOR_RATE, is_ofci: !!opts.ofci }) : null;
     if (C.skipped.length) flags.push({ category: 'takeoff', item: 'Not added to quantities', flag: 'duct/pipe/air devices on ' + C.skipped.join(', ') + ' — these sheets repeat the floor plans; check that nothing shown only there is missing' });
-    C.notes.filter(function (n) { return n.often_missed; }).forEach(function (n) { flags.push({ category: 'scope', item: n.source + ' (' + n.sheet + ')', flag: n.text }); });
+    var seenNote = {}, uniqNotes = C.notes.filter(function (n) {
+      var k = String(n.text || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 70);
+      if (!n.often_missed || seenNote[k]) return false; seenNote[k] = 1; return true;
+    });
+    uniqNotes.slice(0, 25).forEach(function (n) { flags.push({ category: 'scope', item: n.source + ' (' + n.sheet + ')', flag: n.text }); });
+    if (uniqNotes.length > 25) flags.push({ category: 'scope', item: (uniqNotes.length - 25) + ' more notes', flag: 'see the AI scope review' });
     // the same warning on many lines → one entry with a count
     var grouped = [], byKey = {};
     flags.forEach(function (f) {
