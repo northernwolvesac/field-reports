@@ -169,7 +169,8 @@
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10,
-        styles: keep, labels: labs.length, pieces: all.length };
+        styles: keep, labels: labs.length, pieces: all.length,
+        debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2]]; }) };
     }
 
     function norm(s) {
