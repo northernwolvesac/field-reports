@@ -16,8 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=242"></script>
-<script src="est-engine.js?v=242"></script>
+<script src="est-totals.js?v=243"></script>
+<script src="est-engine.js?v=243"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -510,7 +510,8 @@ var AE = (function() {
     if (res.review_status === 'error') return '<p class="flag">Review failed: ' + esc(res.review_error || '') + '</p>';
     var v = res.review; if (!v) return '';
     v = unpack(v);
-    function list(title, arr, f) { return arr && arr.length ? '<h4 style="margin:12px 0 4px">' + title + ' (' + arr.length + ')</h4><ul class="l">' + arr.map(function(x) { return '<li>' + f(x) + '</li>'; }).join('') + '</ul>' : ''; }
+    function list(title, arr, f) { if (!Array.isArray(arr)) arr = arr ? [arr] : []; arr = arr.filter(function(x) { return x && (typeof x !== 'object' || Object.keys(x).length); });
+      return arr.length ? '<h4 style="margin:12px 0 4px">' + title + ' (' + arr.length + ')</h4><ul class="l">' + arr.map(function(x) { return '<li>' + f(x) + '</li>'; }).join('') + '</ul>' : ''; }
     return '<div style="margin-top:16px;border-top:1px solid var(--nw-border);padding-top:10px"><h3>AI scope review</h3>' +
       (v.summary ? '<p style="font-size:13px">' + esc(v.summary) + '</p>' : '') + (v.truncated ? '<p class="muted">(the answer was long and got cut off at the end — everything complete is shown)</p>' : '') +
       list('Missing quotes', v.missing_quotes, function(x) { return '<b>' + esc(x.item) + '</b> ' + esc((x.tags || []).join(', ')) + ' → ' + esc(x.suggested_vendor || '') + ' <span class="muted">' + esc(x.why || '') + '</span>'; }) +
@@ -552,6 +553,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote };
 })();
 </script>
-<script src="sw-register.js?v=242"></script>
+<script src="sw-register.js?v=243"></script>
 </body>
 </html>
