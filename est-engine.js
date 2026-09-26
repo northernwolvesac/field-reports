@@ -19,6 +19,8 @@
     if (/baseboard/.test(t)) return { h: 8, basis: 'baseboard — 2/day, 2 men' };
     if (/ptac/.test(t)) return { h: 16 / 6, basis: 'PTAC — 6/day, 2 men' };
     if (/kitchen/.test(t) && /fan/.test(t)) return { h: 16, basis: 'kitchen exhaust fan — 1/day, 2 men' };
+    if (!w && /induction|fan ?coil|fcu|cabinet|unit heater|thermostat|sensor|condensate pump|inline fan|cabinet fan|exhaust fan|ceiling fan/.test(t))
+      return { h: /fan ?coil|fcu/.test(t) ? 16 : 8, basis: 'weight not shown — small terminal unit (' + (/fan ?coil|fcu/.test(t) ? '100–190 lb tier' : '40–90 lb tier') + ')', flag: 'weight unknown' };
     if (!w) return { h: 32, basis: 'weight not shown — priced as 200–500 lb (1 day, 4 men)', flag: 'weight unknown' };
     if (w <= 35) return { h: 4, basis: '1–30 lb — 1/4 day, 2 men' };
     if (w <= 95) return { h: 8, basis: '40–90 lb — 1/2 day, 2 men' };
@@ -136,11 +138,16 @@
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
       if (r.floor && /^\d+$|roof|cellar|basement|mezz/i.test(r.floor)) floors[String(r.floor).toLowerCase()] = 1;
-      (r.equipment || []).forEach(function (e) {
+      var eqList = [];
+      (r.equipment || []).forEach(function (e0) {
+        var tags = expandTags(e0.tag);
+        tags.forEach(function (t) { eqList.push(Object.assign({}, e0, { tag: t, qty: tags.length > 1 ? 1 : e0.qty })); });
+      });
+      eqList.forEach(function (e) {
         var tag = norm(e.tag); if (!tag) return;
         if (type === 'schedule' || type === 'enlarged' || type === 'riser') {
           var s = sched[tag] = sched[tag] || { tag: tag, label: String(e.tag).trim(), qty: 0, sheets: [] };
-          ['type', 'manufacturer', 'model', 'capacity', 'weight_lb', 'furnished_by', 'electrical'].forEach(function (k) { if (e[k] && !s[k]) s[k] = e[k]; });
+          ['type', 'manufacturer', 'model', 'capacity', 'weight_lb', 'furnished_by', 'electrical', 'notes', 'location'].forEach(function (k) { if (e[k] && !s[k]) s[k] = e[k]; });
           if (type === 'schedule') s.qty = Math.max(s.qty, Number(e.qty || 0));
           s.sheets.push(sh);
         } else if (!isDemo) {
@@ -149,6 +156,7 @@
           f[type] = (f[type] || 0) + Number(e.qty || 1); q.sheets.push(sh);
           q.qty = Object.keys(q.per).reduce(function (a, k) { return a + Math.max.apply(null, Object.values(q.per[k])); }, 0);
           if (!q.type && e.type) q.type = e.type;
+          if (!q.notes && e.notes) q.notes = e.notes;
           if (!q.weight_lb && e.weight_lb) q.weight_lb = e.weight_lb;
         }
       });
@@ -269,9 +277,13 @@
       var s = C.sched[tag] || C.planEq[tag];
       if (!C.sched[tag] && !/unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens/i.test((s.type || '') + ' ' + tag)) return;
       if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;
+      var about = [s.type, s.notes, s.location, s.furnished_by].join(' ');
+      if (/existing|to remain|reference only|base building|by others|owner[- ]furnished|n\.?i\.?c/i.test(about)) return;
+      var alt = /alternate|\balt\b|add alt/i.test(about);
       var qty = Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1), ih = installHours(s);
-      add('equipment_install', 'Install ' + (s.label || tag) + (s.type ? ' — ' + s.type : '') + (s.weight_lb ? ' (' + s.weight_lb + ' lb)' : ''), qty, 'ea', 0, ih.h, 'Equipment Installation Standards — ' + ih.basis,
-        { flag: ih.flag || (C.planEq[tag] && s.qty && C.planEq[tag].qty !== s.qty ? 'plan count ' + C.planEq[tag].qty + ' ≠ schedule ' + s.qty : null), labor_crew_type: 'startup' });
+      add('equipment_install', 'Install ' + (s.label || tag) + (s.type ? ' — ' + s.type : '') + (s.weight_lb ? ' (' + s.weight_lb + ' lb)' : '') + (alt ? ' [ALTERNATE]' : ''), qty, 'ea', 0, ih.h, 'Equipment Installation Standards — ' + ih.basis,
+        { flag: alt ? 'alternate — not in the base price' : (ih.flag || (C.planEq[tag] && s.qty && C.planEq[tag].qty !== s.qty ? 'plan count ' + C.planEq[tag].qty + ' ≠ schedule ' + s.qty : null)),
+          is_optional: alt, labor_crew_type: 'startup' });
     });
 
     // 6. Air outlets install (labor only — material is in the vendor quote)
@@ -331,6 +343,21 @@
     });
     grouped.forEach(function (g) { if (g.n > 1) { g.item = g.n + ' lines (' + g.items.slice(0, 3).map(function (s) { return String(s).split(' — ')[0]; }).join(', ') + (g.n > 3 ? '…' : '') + ')'; } });
     return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, ductCheck: ductCheck };
+  }
+
+  // "IDU-35-A,B" → IDU-35-A, IDU-35-B ; "AC-1-1/1-2" → AC-1-1, AC-1-2 ; "EF-1 & EF-2" → EF-1, EF-2
+  function expandTags(raw) {
+    var t = String(raw || '').trim(); if (!t) return [];
+    var parts = t.split(/\s*(?:,|\/|&|\band\b)\s*/i).filter(Boolean);
+    if (parts.length < 2) return [t];
+    var first = parts[0], out = [first];
+    parts.slice(1).forEach(function (p) {
+      if (/^[A-Z]{1,5}-?\d/i.test(p) && /[A-Z]{2,}/i.test(p.replace(/\d.*$/, ''))) { out.push(p); return; }   // full tag
+      var cut = first.lastIndexOf('-', first.length - p.length - 1);
+      var byLen = first.slice(0, first.length - p.length);
+      out.push((/[-]$/.test(byLen) || cut < 0 ? byLen : first.slice(0, cut + 1)) + p);
+    });
+    return out;
   }
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
