@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
+<script src="est-totals.js?v=231"></script>
 <style>
   body { background: #f8fafc; padding-bottom: 40px; }
   .bp-wrap { max-width: 1600px; margin: 0 auto; }
@@ -718,28 +719,21 @@ requireAuth().catch(function(){});
   }
 
   async function insertTotals() {
-    var li = await supabaseClient.from('estimate_line_items').select('quantity, unit_material_cost, unit_labor_hours').eq('estimate_id', estimateId);
-    var matTot = 0, hrs = 0;
-    (li.data || []).forEach(function(l) {
-      matTot += (Number(l.quantity)||0) * (Number(l.unit_material_cost)||0);
-      hrs    += (Number(l.quantity)||0) * (Number(l.unit_labor_hours)||0);
-    });
-    var laborRate = Number(currentEstimate.labor_rate) || 60;
-    var laborTot = hrs * laborRate;
-    var subtotal = matTot + laborTot;
-    var ovh   = subtotal * (Number(currentEstimate.overhead_pct)      || 0.20);
-    var misc  = subtotal * (Number(currentEstimate.miscellaneous_pct) || 0.02);
-    var tax   = matTot   * (Number(currentEstimate.tax_rate)          || 0.08875);
-    var total = subtotal + ovh + misc + tax;
+    var li = await supabaseClient.from('estimate_line_items')
+      .select('category, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, is_wet_tap, is_optional').eq('estimate_id', estimateId);
+    var t = nwEstTotals(li.data || [], currentEstimate);
     var money = function(n){ return '$' + Math.round(n).toLocaleString(); };
+    var pctTxt = function(p){ return (Math.round(p * 100000) / 1000) + '%'; };
     insertAtCursor(
       '<table><tbody>' +
-      '<tr><td>Materials + Equipment</td><td style="text-align:right">' + money(matTot) + '</td></tr>' +
-      '<tr><td>Labor (' + hrs.toFixed(1) + ' hrs @ $' + laborRate + ')</td><td style="text-align:right">' + money(laborTot) + '</td></tr>' +
-      '<tr><td>Overhead (' + Math.round((currentEstimate.overhead_pct||0.20)*100) + '%)</td><td style="text-align:right">' + money(ovh) + '</td></tr>' +
-      '<tr><td>Miscellaneous (2%)</td><td style="text-align:right">' + money(misc) + '</td></tr>' +
-      '<tr><td>NY Sales Tax (8.875%)</td><td style="text-align:right">' + money(tax) + '</td></tr>' +
-      '<tr class="totals-row grand"><td>Total</td><td style="text-align:right">' + money(total) + '</td></tr>' +
+      '<tr><td>Equipment / Material</td><td style="text-align:right">' + money(t.materialTotal) + '</td></tr>' +
+      '<tr><td>Labor (' + t.laborHours.toFixed(1) + ' hrs @ $' + t.laborRate + ')</td><td style="text-align:right">' + money(t.labor) + '</td></tr>' +
+      (t.wetTap ? '<tr><td>Wet-tap</td><td style="text-align:right">' + money(t.wetTap) + '</td></tr>' : '') +
+      (t.services ? '<tr><td>Services</td><td style="text-align:right">' + money(t.services) + '</td></tr>' : '') +
+      '<tr><td>Overhead (' + pctTxt(t.rates.overhead) + ')</td><td style="text-align:right">' + money(t.overhead) + '</td></tr>' +
+      '<tr><td>Miscellaneous (' + pctTxt(t.rates.misc) + ')</td><td style="text-align:right">' + money(t.miscellaneous) + '</td></tr>' +
+      '<tr><td>NY Sales Tax (' + pctTxt(t.rates.tax) + ', material/equipment only)</td><td style="text-align:right">' + money(t.tax) + '</td></tr>' +
+      '<tr class="totals-row grand"><td>Total</td><td style="text-align:right">' + money(t.bidPrice) + '</td></tr>' +
       '</tbody></table>'
     );
   }
@@ -965,7 +959,7 @@ requireAuth().catch(function(){});
     var host = document.getElementById('estSummary');
     host.innerHTML = 'Loading…';
     var li = await supabaseClient.from('estimate_line_items')
-      .select('category, quantity, unit_material_cost, unit_labor_hours, is_wet_tap').eq('estimate_id', estimateId);
+      .select('category, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, is_wet_tap, is_optional').eq('estimate_id', estimateId);
     if (li.error) { host.textContent = 'Error: ' + li.error.message; return; }
     var lines = li.data || [];
     if (!lines.length) { host.textContent = 'No line items yet — open Estimate to add them.'; return; }
@@ -980,13 +974,7 @@ requireAuth().catch(function(){});
       byCat[l.category].h += hrs;
       byCat[l.category].n++;
     });
-    var laborRate = Number(currentEstimate.labor_rate) || 60;
-    var laborTot = laborHrs * laborRate;
-    var subtotal = matTot + laborTot;
-    var ovh   = subtotal * (Number(currentEstimate.overhead_pct)      || 0.20);
-    var misc  = subtotal * (Number(currentEstimate.miscellaneous_pct) || 0.02);
-    var tax   = matTot   * (Number(currentEstimate.tax_rate)          || 0.08875);
-    var total = subtotal + ovh + misc + tax;
+    var t = nwEstTotals(lines, currentEstimate);   // same totals as the Estimate page
 
     var catHtml = Object.keys(byCat).map(function(k) {
       var c = byCat[k];
@@ -1003,10 +991,11 @@ requireAuth().catch(function(){});
       '<th style="text-align:right;padding:4px 8px">Material $</th>' +
       '<th style="text-align:right;padding:4px 8px">Labor hrs</th></tr></thead><tbody>' + catHtml + '</tbody></table>' +
       '<div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:6px">' +
-      '<div>Material subtotal: <b>$' + Math.round(matTot).toLocaleString() + '</b></div>' +
-      '<div>Labor: <b>' + laborHrs.toFixed(1) + ' hrs</b> × $' + laborRate + ' = $' + Math.round(laborTot).toLocaleString() + '</div>' +
-      '<div>Overhead + Misc + Tax: <b>$' + Math.round(ovh + misc + tax).toLocaleString() + '</b></div>' +
-      '<div style="font-size:16px;margin-top:6px;font-weight:700;color:#059669">Total: $' + Math.round(total).toLocaleString() + '</div>' +
+      '<div>Equipment / Material: <b>$' + Math.round(t.materialTotal).toLocaleString() + '</b></div>' +
+      '<div>Labor: <b>' + t.laborHours.toFixed(1) + ' hrs</b> × $' + t.laborRate + ' = $' + Math.round(t.labor).toLocaleString() + '</div>' +
+      (t.wetTap + t.services ? '<div>Wet-tap + Services: <b>$' + Math.round(t.wetTap + t.services).toLocaleString() + '</b></div>' : '') +
+      '<div>Overhead + Misc + Tax: <b>$' + Math.round(t.overhead + t.miscellaneous + t.tax).toLocaleString() + '</b></div>' +
+      '<div style="font-size:16px;margin-top:6px;font-weight:700;color:#059669">Total: $' + Math.round(t.bidPrice).toLocaleString() + '</div>' +
       '</div>';
   }
 
@@ -1019,6 +1008,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=229"></script>
+<script src="sw-register.js?v=231"></script>
 </body>
 </html>

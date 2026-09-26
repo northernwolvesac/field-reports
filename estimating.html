@@ -17,6 +17,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
+<script src="est-totals.js?v=231"></script>
 <style>
   body { padding-bottom: 24px; }
   .es-wrap { max-width: 1400px; margin: 0 auto; }
@@ -721,9 +722,9 @@ requireAuth().catch(function(){});
 
     // Fetch line totals for each estimate (client-side sum)
     var linesRes = await supabaseClient.from('estimate_line_items')
-      .select('estimate_id, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, is_optional');
+      .select('estimate_id, category, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, is_wet_tap, is_optional');
     // Also grab rates per estimate
-    var ratesRes = await supabaseClient.from('estimates').select('id, labor_rate_sm, labor_rate_pipe, labor_rate_startup, labor_rate_other, tax_rate, overhead_pct, profit_pct, contingency_pct, bond_pct');
+    var ratesRes = await supabaseClient.from('estimates').select('id, labor_rate, is_ofci, overhead_pct, miscellaneous_pct, tax_rate');
     var ratesById = {};
     (ratesRes.data || []).forEach(function(r) { ratesById[r.id] = r; });
     var linesByEst = {};
@@ -859,7 +860,7 @@ requireAuth().catch(function(){});
         .order('quote_number', { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
       var nextQ = (seqRes && seqRes.data && seqRes.data.quote_number)
         ? seqRes.data.quote_number + 1
-        : 10011;
+        : 10013;
       document.getElementById('estModalTitle').textContent =
         'New Estimate — Quote # will be ' + nextQ + ' (auto-assigned)';
     }
@@ -1370,62 +1371,7 @@ requireAuth().catch(function(){});
   //   Sales Tax          = Equipment/Material × 8.875% (NY)
   //   PROJECT TOTAL      = Base Subtotal + Overhead + Miscellaneous + Sales Tax
   function computeAllTotals(lines, est) {
-    var rate = laborRate(null, est);
-
-    var equipMat = 0;   // equipment vendor quotes (material portion of equipment lines)
-    var ductMat  = 0;   // ductwork material
-    var pipeMat  = 0;   // pipework material (excludes wet-tap)
-    var labor    = 0;   // all labor $ (across all labor-carrying categories)
-    var laborHours = 0;
-    var wetTap   = 0;
-    var services = 0;
-    var breakdown = { sm: 0, pipe: 0, startup: 0, other: 0 };
-
-    lines.forEach(function(li) {
-      if (li.is_optional) return;
-      var q   = Number(li.quantity || 0);
-      var mat = q * Number(li.unit_material_cost || 0);
-      var hrs = q * Number(li.unit_labor_hours   || 0);
-      var lab = hrs * rate;
-
-      // Route material portion to the right bucket
-      if (li.is_wet_tap) {
-        wetTap += mat + lab;  // wet-tap is a subcontract line, treat as flat cost
-      } else if (li.category === 'equipment')     equipMat += mat;
-      else  if (li.category === 'ductwork')       ductMat  += mat;
-      else  if (li.category === 'pipework')       pipeMat  += mat;
-      else  if (li.category === 'services')       services += mat + lab; // services often has 0 labor, uses material $ as line amount
-      // disconnects / equipment_install / air_outlets: material typically 0
-
-      // Labor (only if not wet-tap — wet-tap already captured above)
-      if (!li.is_wet_tap && li.category !== 'services') {
-        labor      += lab;
-        laborHours += hrs;
-        if (breakdown[li.labor_crew_type] != null) breakdown[li.labor_crew_type] += hrs;
-      }
-    });
-
-    var materialTotal = equipMat + ductMat + pipeMat;         // TAXABLE base
-    var baseSubtotal  = materialTotal + labor + wetTap + services;
-    var overhead      = baseSubtotal * Number(est.overhead_pct || 0);
-    var misc          = baseSubtotal * Number(est.miscellaneous_pct || 0);
-    var tax           = materialTotal * Number(est.tax_rate || 0);
-    var bidPrice      = baseSubtotal + overhead + misc + tax;
-
-    return {
-      // component subtotals
-      equipmentMaterial: equipMat,
-      ductworkMaterial:  ductMat,
-      pipeworkMaterial:  pipeMat,
-      materialTotal:     materialTotal,
-      labor: labor, laborHours: laborHours, laborBreakdown: breakdown,
-      wetTap: wetTap, services: services,
-      // baseline + markups
-      baseSubtotal: baseSubtotal, overhead: overhead, miscellaneous: misc, tax: tax,
-      bidPrice: bidPrice,
-      // legacy alias for existing callers
-      material: materialTotal, baseCost: baseSubtotal
-    };
+    return nwEstTotals(lines, est);   // est-totals.js — same formula on every estimating page
   }
 
   function computeBidPrice(lines, est) {
@@ -2049,6 +1995,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=229"></script>
+<script src="sw-register.js?v=231"></script>
 </body>
 </html>
