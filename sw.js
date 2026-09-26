@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nw-field-v246';
+const CACHE_NAME = 'nw-field-v247';
 const ASSETS = [
   './',
   './index.html',
@@ -51,6 +51,7 @@ const ASSETS = [
   './est-knowledge.html',
   './ai-estimator.html',
   './est-engine.js',
+  './geo-takeoff.js',
   './bid-board.html',
   './bid-project.html',
   './takeoff.html',

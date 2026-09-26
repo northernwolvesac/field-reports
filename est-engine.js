@@ -4,6 +4,7 @@
 // Every line carries `basis` (where the number comes from) and `flag` (what a person must check).
 (function () {
   var LABOR_RATE = 60;
+  var GEO_FITTINGS = 1.12;   // elbows, transitions, tees are not straight wall pairs — calibrated on 3 NWAC bids (L'Catteron, Sage, April Tax)
 
   // ── Kastriot's standards ─────────────────────────────────────────────
   var STD = {
@@ -133,7 +134,7 @@
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [];
+    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], geoCheck = [];
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
@@ -177,7 +178,19 @@
           });
         });
         {
-          (r.duct_runs || []).forEach(function (x) {
+          var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
+          if (r.geo && r.geo.total_ft > 0) {
+            // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
+            geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
+            Object.keys(r.geo.sizes || {}).forEach(function (sz) {
+              var z = sizeOf(sz); if (!z) return;
+              var shape = /Ø/.test(sz) ? 'round' : 'rect';
+              var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
+              var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [], geo: true };
+              o.lf += r.geo.sizes[sz] * GEO_FITTINGS; o.sheets.push(sh); o.geo = true;
+            });
+          }
+          if (!(r.geo && r.geo.total_ft > 0)) (r.duct_runs || []).forEach(function (x) {
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
             var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
@@ -198,7 +211,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), wetTaps: wetTaps, skipped: skipped, quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -249,9 +262,16 @@
     Object.keys(C.duct).forEach(function (k) {
       var d = C.duct[k]; if (!d.lf) return;
       var r = ductRate(R, d.size, d.shape); ductFt += d.lf;
-      add('ductwork', d.size + ' ' + (d.shape === 'round' ? 'round' : 'rectangular') + ' duct w/ 1" ACL — ' + Math.round(d.lf) + ' ft', d.lf, 'lf', r.cost, r.hrs, r.basis + ' · AI-measured on ' + uniq(d.sheets).join(', '),
+      add('ductwork', d.size + ' ' + (d.shape === 'round' ? 'round' : 'rectangular') + ' duct w/ 1" ACL — ' + Math.round(d.lf) + ' ft', d.lf, 'lf', r.cost, r.hrs,
+        r.basis + (d.geo ? ' · measured from the drawing lines on ' + uniq(d.sheets).join(', ') + ' (+12% fittings)' : ' · AI estimate from ' + uniq(d.sheets).join(', ')),
         { flag: r.flag || null });
     });
+    C.geoCheck.forEach(function (g) {
+      if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
+        flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
+    });
+    if (Object.keys(C.duct).length && !C.geoCheck.length)
+      flags.push({ category: 'ductwork', item: 'Duct lengths', flag: 'AI estimate only (no measurable vector lines) — typically ±30%; check or run 📐 Measure ducts' });
     var outletCount = 0, linearFt = 0;
     Object.keys(C.devices).forEach(function (k) { var d = C.devices[k]; if (/diffuser|grille|register|vav|fpb/.test(d.type)) outletCount += d.qty; if (d.type === 'linear') linearFt += d.lf || d.qty * 4; });
     var ductCheck = null;

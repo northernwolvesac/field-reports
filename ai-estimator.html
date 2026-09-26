@@ -16,8 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=246"></script>
-<script src="est-engine.js?v=246"></script>
+<script src="est-totals.js?v=247"></script>
+<script src="est-engine.js?v=247"></script>
+<script src="geo-takeoff.js?v=247"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -189,7 +190,9 @@ var AE = (function() {
       }).join('') + '</table>' : '') + '</div>' +
 
       '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">2 · AI reads every sheet — ' + done + ' / ' + pages.length + ' done</h3>' +
-      '<div class="row"><button class="btn primary" id="readBtn" onclick="AE.readAll()" ' + (!todo || running ? 'disabled' : '') + '>' + (running ? 'Reading…' : '▶ Read ' + todo + ' sheet' + (todo === 1 ? '' : 's')) + '</button></div></div>' +
+      '<div class="row"><button class="btn primary" id="readBtn" onclick="AE.readAll()" ' + (!todo || running ? 'disabled' : '') + '>' + (running ? 'Reading…' : '▶ Read ' + todo + ' sheet' + (todo === 1 ? '' : 's')) + '</button>' +
+      '<button class="btn" onclick="AE.measureDucts(true)" ' + (running || measuring || !pages.some(isDuctPlan) ? 'disabled' : '') + ' title="Measure new ductwork from the vector lines of the duct plans">' + (measuring ? '📐 Measuring…' : '📐 Measure ducts') + '</button></div></div>' +
+      (measuring ? '<div class="muted" id="geoMsg" style="margin-top:6px">' + esc(measuring) + '</div>' : '') +
       '<div class="prog"><div id="rdProg" style="width:' + (pages.length ? Math.round(done / pages.length * 100) : 0) + '%"></div></div>' +
       (pages.length ? '<table class="t" style="margin-top:10px"><tr><th>#</th><th>Sheet</th><th class="hide-m">Type</th><th>Found</th><th>Status</th><th class="n hide-m">$</th><th></th></tr>' + pages.map(pageRow).join('') + '</table>' : '<div class="muted" style="margin-top:8px">Upload the drawing set first.</div>') + '</div>' +
 
@@ -212,6 +215,8 @@ var AE = (function() {
     if (r.pipe_runs && r.pipe_runs.length) bits.push(Math.round(r.pipe_runs.reduce(function(a, d) { return a + Number(d.lf || 0); }, 0)) + ' ft pipe');
     if (r.scope_notes && r.scope_notes.length) bits.push(r.scope_notes.length + ' notes');
     if (r.total) bits.push(money(r.total));
+    if (r.geo && r.geo.total_ft) bits.push('📐 ' + Math.round(r.geo.total_ft) + ' ft measured');
+    if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
     var tc = p.tag_counts && p.tag_counts.tags ? Object.keys(p.tag_counts.tags).length : 0;
     return '<tr class="click" onclick="AE.showPage(\'' + p.id + '\')"><td class="muted">' + (f.kind === 'quote' ? 'Q' : p.page_no) + '</td>' +
       '<td><b>' + esc(p.sheet_no || r.quote_no || '') + '</b> ' + esc(p.sheet_title || r.vendor || f.file_name || '') + '</td>' +
@@ -390,6 +395,36 @@ var AE = (function() {
     return new Promise(function(res) { var fr = new FileReader(); fr.onload = function() { res(String(fr.result).split(',')[1]); }; fr.readAsDataURL(new Blob([bytes])); });
   }
 
+  // ─── duct takeoff from the drawing geometry (geo-takeoff.js, in the browser, no AI cost) ──
+  var measuring = '';
+  function isDuctPlan(p) {
+    var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {};
+    return f.kind !== 'quote' && f.kind !== 'specs' && p.status === 'done' && (r.sheet_type === 'duct_plan' || (r.sheet_type === 'other' && /duct/i.test(r.sheet_title || '')));
+  }
+  async function measureDucts(all) {
+    if (measuring || !window.NWGeo) return;
+    var list = pages.filter(function(p) { return isDuctPlan(p) && (all || !(p.result && p.result.geo)); });
+    if (!list.length) return;
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      measuring = 'Measuring ducts on ' + (p.sheet_no || 'sheet ' + p.page_no) + ' (' + (i + 1) + ' of ' + list.length + ')…'; render();
+      var geo;
+      try {
+        var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise;
+        var data = await NWGeo.extract(await pdf.getPage(1));
+        var g = await NWGeo.measure(data);
+        geo = g.error ? { error: g.error, at: new Date().toISOString() } :
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, labels: g.labels, at: new Date().toISOString() };
+        pdf.destroy();
+      } catch (e) { geo = { error: String(e.message || e).slice(0, 200), at: new Date().toISOString() }; }
+      var res = Object.assign({}, p.result || {}, { geo: geo });
+      await supabaseClient.from('ai_est_pages').update({ result: res }).eq('id', p.id);
+      p.result = res;
+    }
+    measuring = ''; render();
+    toast('Ducts measured on ' + list.length + ' sheet' + (list.length === 1 ? '' : 's') + ' — press “Price it”');
+  }
+
   // ─── reading sheets through the Edge Function ──────────────────────
   async function callFn(body) {
     var s = (await supabaseClient.auth.getSession()).data.session;
@@ -432,6 +467,7 @@ var AE = (function() {
     function paint() { var el = $('main'); if (el) { var y = window.scrollY; render(); window.scrollTo(0, y); } }
     await Promise.all([worker(), worker(), worker()]);
     running = false; await reload(); render();
+    measureDucts(false);        // measure the new duct plans from their lines right away
     var bad = list.filter(function(p) { return p.status === 'error'; }).length;
     toast(bad ? bad + ' sheet(s) failed — press ↻ on them' : 'All sheets read ✓');
   }
@@ -550,9 +586,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts };
 })();
 </script>
-<script src="sw-register.js?v=246"></script>
+<script src="sw-register.js?v=247"></script>
 </body>
 </html>

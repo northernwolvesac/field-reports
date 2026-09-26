@@ -45,7 +45,34 @@
       if (!(k in styles)) { styles[k] = styleList.length; styleList.push({ key: k, col: c, w: w, dash: st.dash }); }
       return styles[k];
     }
+    var subIdx = 0;
+    function isRect(g) {
+      if (g.length !== 4) return false;
+      for (var i = 0; i < 4; i++) {
+        var a = g[i], b = g[(i + 1) % 4];
+        if (Math.hypot(a[2] - b[0], a[3] - b[1]) > 0.6) return false;                 // consecutive
+        var ux = a[2] - a[0], uy = a[3] - a[1], vx = b[2] - b[0], vy = b[3] - b[1];
+        var la = Math.hypot(ux, uy), lb = Math.hypot(vx, vy);
+        if (!la || !lb || Math.abs((ux * vx + uy * vy) / (la * lb)) > 0.03) return false;   // right angle
+      }
+      return true;
+    }
+    function endSub(closed) {
+      var g = path.slice(subIdx), virt = null;
+      if (closed && cur && start && Math.hypot(cur[0] - start[0], cur[1] - start[1]) > 0.6) { virt = [cur[0], cur[1], start[0], start[1]]; g.push(virt); }
+      // any 4 consecutive sides that close into a right-angled box are a symbol outline (square + diagonal etc.)
+      var keepSegs = [], k = 0;
+      while (k < g.length) {
+        if (k + 4 <= g.length && isRect(g.slice(k, k + 4))) { g.slice(k, k + 4).forEach(function (x) { rects.push(x); }); k += 4; }
+        else { keepSegs.push(g[k]); k++; }
+      }
+      if (virt) keepSegs = keepSegs.filter(function (x) { return x !== virt; });   // the virtual closing edge is never a wall
+      path.length = subIdx;
+      keepSegs.forEach(function (x) { path.push(x); });
+      subIdx = path.length;
+    }
     function flush(stroke) {
+      endSub(false);
       if (stroke && path.length) {
         var si = styleKey();
         for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) segs.push(g.concat([si])); }
@@ -55,7 +82,7 @@
         st.clip = inter(st.clip, bboxOf(pts));
       }
       pendingClip = false;
-      path = []; rects = []; cur = null; start = null;
+      path = []; rects = []; cur = null; start = null; subIdx = 0;
     }
     for (var i = 0; i < ol.fnArray.length; i++) {
       var fn = ol.fnArray[i], a = ol.argsArray[i];
@@ -82,11 +109,11 @@
           var ops = a[0], co = a[1], j = 0;
           for (var o = 0; o < ops.length; o++) {
             var op = ops[o];
-            if (op === OPS.moveTo) { cur = tp(st.ctm, co[j], co[j + 1]); start = cur; j += 2; }
+            if (op === OPS.moveTo) { endSub(false); cur = tp(st.ctm, co[j], co[j + 1]); start = cur; j += 2; }
             else if (op === OPS.lineTo) { var p = tp(st.ctm, co[j], co[j + 1]); if (cur) path.push([cur[0], cur[1], p[0], p[1]]); cur = p; j += 2; }
             else if (op === OPS.curveTo) { cur = tp(st.ctm, co[j + 4], co[j + 5]); j += 6; }
             else if (op === OPS.curveTo2 || op === OPS.curveTo3) { cur = tp(st.ctm, co[j + 2], co[j + 3]); j += 4; }
-            else if (op === OPS.closePath) { cur = start; }     // closing edges are not reported as lines (same as the reference)
+            else if (op === OPS.closePath) { endSub(true); cur = start; }     // closing edges are not reported as lines (same as the reference)
             else if (op === OPS.rectangle) {
               // rectangles on MEP plans are diffusers, grilles, equipment — not duct walls (validated on 3 bids);
               // they still count as clip regions
@@ -196,6 +223,7 @@
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10,
         styles: keep, labels: labs.length, pieces: all.length,
+        xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2]]; }) };
     }
 
@@ -339,7 +367,7 @@
           if (Math.min(mm[6], Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2)) > 0.5 * mm[6]) wall = true;
         }
         if (wall) return;
-        pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l) });
+        pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
       });
       return pieces;
     }
@@ -363,5 +391,5 @@
     return job;
   }
 
-  window.NWGeo = { extract: extract, measure: measure };
+  window.NWGeo = { extract: extract, measure: measure, _worker: workerMain };   // _worker: for offline tests
 })();
