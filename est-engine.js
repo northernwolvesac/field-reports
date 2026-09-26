@@ -94,19 +94,35 @@
       return rf ? { cost: +rf.unit_cost, hrs: +rf.labor_hrs, basis: 'Procore "refrigerant lines (2 pipes) w/ insulation"' }
         : { cost: 21, hrs: 0.28, basis: 'Procore refrigerant line set rate' };
     }
-    var sz = String(run.size || '').replace(/["”″\s]/g, '').replace(/(\d)-(\d)/, '$1-$2');
+    var ps = pipeSize(run.size);
+    if (!ps) return { cost: 30, hrs: 0.6, basis: 'budget — size not read', flag: 'pipe size not read — confirm' };
+    var pvc = /pvc|condensate|drain/.test(mat + ' ' + svc);
     var cands = R.pipe.filter(function (n) {
-      var nm = n.item.toLowerCase();
-      return nm.indexOf(sz.toLowerCase() + '"') === 0 && (!mat || /steel/.test(mat) === /steel/.test(nm));
+      var nm = n.item.toLowerCase(), z = pipeSize(nm);
+      return z && Math.abs(z.d - ps.d) < 0.01 && (/pvc/.test(nm) === pvc);
     });
-    if (!cands.length) cands = R.pipe.filter(function (n) { return n.item.toLowerCase().indexOf(sz.toLowerCase() + '"') === 0; });
     if (cands.length) {
       var c = cands.sort(function (a, b) { return b.projects - a.projects; })[0];
       return { cost: +c.unit_cost, hrs: +c.labor_hrs, basis: 'Procore rate "' + c.item + '" (' + c.projects + ' jobs)',
-        flag: /steel/.test(mat) && !/steel/i.test(c.item) ? 'copper rate used for steel' : null };
+        flag: /steel|black|sch/.test(mat) ? 'copper rate used for steel pipe — confirm' : null };
     }
-    var d = parseFloat(sz) || 1;
-    return { cost: +(12 + 18 * d).toFixed(2), hrs: 0.6, basis: 'budget $/ft by diameter', flag: 'no Procore rate for this size — confirm' };
+    // bigger than the catalog (NWAC rates stop at 4"): extend the copper curve per inch of diameter
+    var big = R.pipe.filter(function (n) { var z = pipeSize(n.item); return z && !/pvc/i.test(n.item); }).sort(function (a, b) { return pipeSize(b.item).d - pipeSize(a.item).d; })[0];
+    if (big && ps.d > pipeSize(big.item).d)
+      return { cost: +(big.unit_cost * ps.d / pipeSize(big.item).d).toFixed(2), hrs: +(big.labor_hrs * Math.sqrt(ps.d / pipeSize(big.item).d)).toFixed(3),
+        basis: 'scaled from Procore "' + big.item + '"', flag: ps.label + ' pipe is above the NWAC catalog — get a piping sub price' };
+    return { cost: +(12 + 18 * ps.d).toFixed(2), hrs: 0.6, basis: 'budget $/ft by diameter', flag: 'no Procore rate for ' + ps.label + ' — confirm' };
+  }
+  // "2 1/2", "2-1/2", "2½", "2.5", '3/4"' → { d: 2.5, label: '2-1/2"' }
+  function pipeSize(s) {
+    s = String(s || '').replace(/½/g, '-1/2').replace(/¼/g, '-1/4').replace(/¾/g, '-3/4').replace(/["”″]/g, '"');
+    var m = s.match(/(\d+)\s*[- ]\s*(\d)\/(\d)/) || null, d;
+    if (m) d = +m[1] + (+m[2] / +m[3]);
+    else if ((m = s.match(/(^|[^\d])(\d)\/(\d)/))) d = +m[2] / +m[3];
+    else if ((m = s.match(/(\d+(?:\.\d+)?)/))) d = +m[1];
+    if (!d || d > 48) return null;
+    var whole = Math.floor(d), frac = d - whole, f = frac ? ({ 0.25: '1/4', 0.5: '1/2', 0.75: '3/4' }[Math.round(frac * 4) / 4] || '') : '';
+    return { d: d, label: (whole ? whole : '') + (whole && f ? '-' : '') + f + '"' };
   }
 
   // ── read the AI sheet results ────────────────────────────────────────
@@ -115,7 +131,7 @@
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0;
+    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [];
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
@@ -134,13 +150,17 @@
           if (!q.weight_lb && e.weight_lb) q.weight_lb = e.weight_lb;
         }
       });
-      if (!isDemo) {
+      // quantities come from the floor plans only; enlarged plans, details, risers and controls repeat what the plans show
+      var takeoffSheet = type === 'duct_plan' || type === 'pipe_plan' || (type === 'other' && /plan/i.test(r.sheet_title || '') && !/enlarged/i.test(r.sheet_title || ''));
+      if (!isDemo && !takeoffSheet && ((r.duct_runs || []).length || (r.pipe_runs || []).length || (r.air_devices || []).length))
+        skipped.push(sh + ' (' + (type || 'sheet') + ')');
+      if (!isDemo && takeoffSheet) {
         (r.air_devices || []).forEach(function (a) {
           var k = (a.type || 'other') + '|' + (a.tag || '') + '|' + (a.size || '');
           var d = devices[k] = devices[k] || { type: a.type || 'other', tag: a.tag || '', size: a.size || '', qty: 0, lf: 0, sheets: [] };
           d.qty += Number(a.qty || 0); d.lf += Number(a.linear_ft || 0); d.sheets.push(sh);
         });
-        if (type !== 'details' && type !== 'riser') {
+        {
           (r.duct_runs || []).forEach(function (x) {
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
@@ -162,7 +182,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), wetTaps: wetTaps, quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), wetTaps: wetTaps, skipped: skipped, quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -270,8 +290,17 @@
     rigging(C.rig, !!opts.highRise).forEach(function (r) { add('services', r.d, 1, 'ls', r.amt, 0, 'Rigging Standards — ' + r.basis, { flag: r.flag || null }); });
 
     var totals = window.nwEstTotals ? window.nwEstTotals(lines, { labor_rate: LABOR_RATE, is_ofci: !!opts.ofci }) : null;
+    if (C.skipped.length) flags.push({ category: 'takeoff', item: 'Not added to quantities', flag: 'duct/pipe/air devices on ' + C.skipped.join(', ') + ' — these sheets repeat the floor plans; check that nothing shown only there is missing' });
     C.notes.filter(function (n) { return n.often_missed; }).forEach(function (n) { flags.push({ category: 'scope', item: n.source + ' (' + n.sheet + ')', flag: n.text }); });
-    return { lines: lines, totals: totals, flags: flags, collected: C, floors: floors, ductCheck: ductCheck };
+    // the same warning on many lines → one entry with a count
+    var grouped = [], byKey = {};
+    flags.forEach(function (f) {
+      var k = f.category === 'scope' || f.category === 'takeoff' ? f.category + '|' + f.item + '|' + f.flag : f.category + '|' + f.flag.replace(/\d[\d,.]*/g, '#');
+      if (byKey[k]) { byKey[k].n++; if (byKey[k].items.length < 6) byKey[k].items.push(f.item); return; }
+      byKey[k] = { category: f.category, flag: f.flag, item: f.item, items: [f.item], n: 1 }; grouped.push(byKey[k]);
+    });
+    grouped.forEach(function (g) { if (g.n > 1) { g.item = g.n + ' lines (' + g.items.slice(0, 3).map(function (s) { return String(s).split(' — ')[0]; }).join(', ') + (g.n > 3 ? '…' : '') + ')'; } });
+    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, ductCheck: ductCheck };
   }
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
