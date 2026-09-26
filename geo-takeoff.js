@@ -35,7 +35,7 @@
       }
       return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
     }
-    var segs = [];   // [x1,y1,x2,y2, styleIndex]
+    var segs = [], rects = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only)
     var styles = {}, styleList = [];
     function styleKey() {
       var scale = Math.sqrt(Math.abs(st.ctm[0] * st.ctm[3] - st.ctm[1] * st.ctm[2])) || 1;
@@ -50,12 +50,12 @@
         var si = styleKey();
         for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) segs.push(g.concat([si])); }
       }
-      if (pendingClip && path.length) {    // W n: the path just built becomes (part of) the clip region
-        var pts = []; path.forEach(function (g) { pts.push([g[0], g[1]], [g[2], g[3]]); });
+      if (pendingClip && (path.length || rects.length)) {    // W n: the path just built becomes (part of) the clip region
+        var pts = []; path.concat(rects).forEach(function (g) { pts.push([g[0], g[1]], [g[2], g[3]]); });
         st.clip = inter(st.clip, bboxOf(pts));
       }
       pendingClip = false;
-      path = []; cur = null; start = null;
+      path = []; rects = []; cur = null; start = null;
     }
     for (var i = 0; i < ol.fnArray.length; i++) {
       var fn = ol.fnArray[i], a = ol.argsArray[i];
@@ -88,8 +88,10 @@
             else if (op === OPS.curveTo2 || op === OPS.curveTo3) { cur = tp(st.ctm, co[j + 2], co[j + 3]); j += 4; }
             else if (op === OPS.closePath) { cur = start; }     // closing edges are not reported as lines (same as the reference)
             else if (op === OPS.rectangle) {
+              // rectangles on MEP plans are diffusers, grilles, equipment — not duct walls (validated on 3 bids);
+              // they still count as clip regions
               var x = co[j], y = co[j + 1], w = co[j + 2], h = co[j + 3], P = [tp(st.ctm, x, y), tp(st.ctm, x + w, y), tp(st.ctm, x + w, y + h), tp(st.ctm, x, y + h)];
-              for (var q = 0; q < 4; q++) path.push([P[q][0], P[q][1], P[(q + 1) % 4][0], P[(q + 1) % 4][1]]);
+              for (var q = 0; q < 4; q++) rects.push([P[q][0], P[q][1], P[(q + 1) % 4][0], P[(q + 1) % 4][1]]);
               j += 4;
             }
           }
