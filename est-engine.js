@@ -4,7 +4,7 @@
 // Every line carries `basis` (where the number comes from) and `flag` (what a person must check).
 (function () {
   var LABOR_RATE = 60;
-  var GEO_FITTINGS = 1.12;   // elbows, transitions, tees are not straight wall pairs — calibrated on 3 NWAC bids (L'Catteron, Sage, April Tax)
+  var GEO_FITTINGS = 1.08;   // elbows, transitions, tees are not straight wall pairs — calibrated on 4 NWAC bids (L'Catteron −17 %, April Tax −14 %, Sage −2 %, Crozier +3 % raw)
 
   // ── Kastriot's standards ─────────────────────────────────────────────
   var STD = {
@@ -274,7 +274,7 @@
       var d = C.duct[k]; if (!d.lf) return;
       var r = ductRate(R, d.size, d.shape); ductFt += d.lf;
       add('ductwork', d.size + ' ' + (d.shape === 'round' ? 'round' : 'rectangular') + ' duct w/ 1" ACL — ' + Math.round(d.lf) + ' ft', d.lf, 'lf', r.cost, r.hrs,
-        r.basis + (d.geo ? ' · measured from the drawing lines on ' + uniq(d.sheets).join(', ') + ' (+12% fittings)' : ' · AI estimate from ' + uniq(d.sheets).join(', ')),
+        r.basis + (d.geo ? ' · measured from the drawing lines on ' + uniq(d.sheets).join(', ') + ' (+8% fittings)' : ' · AI estimate from ' + uniq(d.sheets).join(', ')),
         { flag: r.flag || null });
     });
     C.geoCheck.forEach(function (g) {
