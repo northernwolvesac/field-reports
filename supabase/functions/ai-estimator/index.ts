@@ -102,12 +102,28 @@ Answer with the "answer" tool, one object, keys in this order:
  "exclusions":["proposal exclusion lines"],
  "risks":[{"risk":"","severity":"high|medium|low"}]}`;
 
+
+// ─── answer shapes (the model fills these fields through the "answer" tool) ───
+const OBJS = { type: "array", items: { type: "object" } };
+const STRS = { type: "array", items: { type: "string" } };
+const SHEET_SCHEMA = { type: "object", required: ["sheet_type"], properties: {
+  sheet_no: { type: "string" }, sheet_title: { type: "string" }, discipline: { type: "string" }, sheet_type: { type: "string" },
+  floor: { type: "string" }, scale: { type: "string" }, equipment: OBJS, air_devices: OBJS, duct_runs: OBJS, pipe_runs: OBJS,
+  demo: OBJS, wet_taps: { type: "number" }, rigging: OBJS, scope_notes: OBJS, questions: STRS, confidence: { type: "string" }, notes: { type: "string" } } };
+const QUOTE_SCHEMA = { type: "object", required: ["vendor", "total"], properties: {
+  vendor: { type: "string" }, quote_no: { type: "string" }, date: { type: "string" }, valid_until: { type: "string" }, total: { type: "number" },
+  freight_included: { type: "boolean" }, tax_included: { type: "boolean" }, kind: { type: "string" }, lines: OBJS,
+  included: STRS, excluded: STRS, notes: { type: "string" } } };
+const REVIEW_SCHEMA = { type: "object", required: ["summary"], properties: {
+  summary: { type: "string" }, missing_quotes: OBJS, quote_gaps: OBJS, hidden_scope: OBJS, count_mismatches: OBJS,
+  rfis: OBJS, exclusions: STRS, risks: OBJS } };
+
 // ─── Claude call ──────────────────────────────────────────────────────
-async function claude(model: string, content: any[], maxTokens: number) {
+async function claude(model: string, content: any[], maxTokens: number, schema: any = { type: "object" }) {
   // extraction work: no extended thinking, so the whole output budget goes to the JSON answer
   // the answer comes back through a forced tool call, so the API hands us parsed, valid JSON
   const tool = { name: "answer", description: "Return the extracted data as one JSON object, in the shape the instructions describe.",
-    input_schema: { type: "object", additionalProperties: true } };
+    input_schema: schema };
   const send = (extra: any) => fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -121,7 +137,11 @@ async function claude(model: string, content: any[], maxTokens: number) {
   const j = JSON.parse(t);
   const text = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
   const use = (j.content || []).find((c: any) => c.type === "tool_use");
-  const data = use && use.input && typeof use.input === "object" && Object.keys(use.input).length ? use.input : null;
+  let data = use && use.input && typeof use.input === "object" && Object.keys(use.input).length ? use.input : null;
+  // a model that packs the whole answer into one string field: unpack it
+  if (data && Object.keys(data).length === 1 && typeof Object.values(data)[0] === "string") {
+    try { data = parseJson(String(Object.values(data)[0])); } catch (_e) { /* keep as is */ }
+  }
   if (!text && !data && j.stop_reason === "max_tokens")
     throw new Error("the model used the whole output budget before answering (" + (j.content || []).map((c: any) => c.type).join(",") + ")");
   const u = j.usage || {};
@@ -176,7 +196,7 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
         if (body.text_hint) prompt += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
       }
       content.push({ type: "text", text: prompt });
-      const r = await claude(model, content, kind === "quote" ? 4000 : 8000);
+      const r = await claude(model, content, kind === "quote" ? 4000 : 8000, kind === "quote" ? QUOTE_SCHEMA : SHEET_SCHEMA);
       let result: any;
       if (r.data) result = r.data;
       else try { result = parseJson(r.text); } catch (_e) { result = { parse_error: true, raw: r.text.slice(0, 20000) }; }
@@ -203,7 +223,7 @@ async function runReview(db: any, body: any) {
   await db.from("ai_est_sessions").update({ result: { ...res0, review_status: "running", review_error: null } }).eq("id", ses.id);
   const work = (async () => {
     try {
-      const r = await claude(model, [{ type: "text", text: REVIEW_PROMPT + "\n\n" + String(body.context || "").slice(0, 600000) }], 8000);
+      const r = await claude(model, [{ type: "text", text: REVIEW_PROMPT + "\n\n" + String(body.context || "").slice(0, 600000) }], 8000, REVIEW_SCHEMA);
       let review: any;
       if (r.data) review = r.data;
       else try { review = parseJson(r.text); } catch (_e) { review = { parse_error: true, raw: r.text.slice(0, 20000) }; }

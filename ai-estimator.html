@@ -16,8 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=239"></script>
-<script src="est-engine.js?v=239"></script>
+<script src="est-totals.js?v=240"></script>
+<script src="est-engine.js?v=240"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -117,6 +117,14 @@ var AE = (function() {
     return null;
   }
 
+  function unpack(o) {
+    if (!o || typeof o !== 'object') return o;
+    if (o.parse_error && o.raw) return repairJson(o.raw) || o;
+    var k = Object.keys(o);
+    if (k.length === 1 && typeof o[k[0]] === 'string') return repairJson(o[k[0]]) || o;
+    return o;
+  }
+
   // ─── sessions list ──────────────────────────────────────────────────
   async function listSessions() {
     $('hTitle').textContent = 'AI Estimator'; $('backBtn').href = 'estimating.html';
@@ -156,7 +164,7 @@ var AE = (function() {
     var f = await supabaseClient.from('ai_est_files').select('*').eq('session_id', session.id).order('created_at');
     var p = await supabaseClient.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_title, sheet_type, status, error, cost, tokens_in, tokens_out, tag_counts, result, model, started_at').eq('session_id', session.id).order('page_no');
     files = f.data || []; pages = p.data || [];
-    pages.forEach(function(pg) { if (pg.result && pg.result.parse_error && pg.result.raw) { var o = repairJson(pg.result.raw); if (o) pg.result = o; } });
+    pages.forEach(function(pg) { if (pg.result) pg.result = unpack(pg.result); });
     pages.sort(function(a, b) { return files.findIndex(function(x) { return x.id === a.file_id; }) - files.findIndex(function(x) { return x.id === b.file_id; }) || a.page_no - b.page_no; });
   }
 
@@ -501,7 +509,7 @@ var AE = (function() {
     if (res.review_status === 'running') return '<p class="muted" style="margin-top:12px">🔎 AI scope review running…</p>';
     if (res.review_status === 'error') return '<p class="flag">Review failed: ' + esc(res.review_error || '') + '</p>';
     var v = res.review; if (!v) return '';
-    if (v.parse_error && v.raw) v = repairJson(v.raw) || v;
+    v = unpack(v);
     function list(title, arr, f) { return arr && arr.length ? '<h4 style="margin:12px 0 4px">' + title + ' (' + arr.length + ')</h4><ul class="l">' + arr.map(function(x) { return '<li>' + f(x) + '</li>'; }).join('') + '</ul>' : ''; }
     return '<div style="margin-top:16px;border-top:1px solid var(--nw-border);padding-top:10px"><h3>AI scope review</h3>' +
       (v.summary ? '<p style="font-size:13px">' + esc(v.summary) + '</p>' : '') + (v.truncated ? '<p class="muted">(the answer was long and got cut off at the end — everything complete is shown)</p>' : '') +
@@ -544,6 +552,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote };
 })();
 </script>
-<script src="sw-register.js?v=239"></script>
+<script src="sw-register.js?v=240"></script>
 </body>
 </html>
