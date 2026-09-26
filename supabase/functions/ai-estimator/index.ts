@@ -90,15 +90,16 @@ const REVIEW_PROMPT = `You are the senior HVAC estimator at Northern Wolves AC r
 Below: what was read from every sheet and quote, plus NWAC's own estimating process rules.
 Do what Kastriot's process demands: compare drawing counts to schedules, compare quotes to the drawings (what the vendor
 did NOT cover), find mechanical scope hidden in notes, basis-of-design brand mismatches, missing quotes, and risks.
-Return ONLY JSON:
-{"missing_quotes":[{"item":"","tags":[],"suggested_vendor":"","why":""}],
+Be concise: at most 12 entries per list (most expensive / riskiest first), every text under 30 words.
+Return ONLY JSON, keys in this order:
+{"summary":"3-5 sentences for the estimator",
+ "missing_quotes":[{"item":"","tags":[],"suggested_vendor":"","why":""}],
  "quote_gaps":[{"vendor":"","gap":"","impact":""}],
  "hidden_scope":[{"source":"","item":"","how_to_price":""}],
  "count_mismatches":[{"tag":"","schedule":0,"drawings":0,"note":""}],
  "rfis":[{"question":"","sheet":""}],
  "exclusions":["proposal exclusion lines"],
- "risks":[{"risk":"","severity":"high|medium|low"}],
- "summary":"3-5 sentences for the estimator"}`;
+ "risks":[{"risk":"","severity":"high|medium|low"}]}`;
 
 // ─── Claude call ──────────────────────────────────────────────────────
 async function claude(model: string, content: any[], maxTokens: number) {
@@ -124,9 +125,24 @@ async function claude(model: string, content: any[], maxTokens: number) {
 
 function parseJson(text: string) {
   let s = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-  const a = s.indexOf("{"), b = s.lastIndexOf("}");
-  if (a >= 0 && b > a) s = s.slice(a, b + 1);
-  return JSON.parse(s);
+  const a = s.indexOf("{");
+  if (a > 0) s = s.slice(a);
+  try { return JSON.parse(s.slice(0, s.lastIndexOf("}") + 1)); } catch (_e) { return repairJson(s); }
+}
+// an answer cut off at the output limit: keep every complete entry and close the brackets
+function repairJson(s: string): any {
+  for (let cut = s.length; cut > 0; cut = s.lastIndexOf(",", cut - 1)) {
+    const part = s.slice(0, cut);
+    const stack: string[] = []; let inStr = false, esc = false;
+    for (const ch of part) {
+      if (inStr) { if (esc) esc = false; else if (ch === "\\") esc = true; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true; else if (ch === "{" || ch === "[") stack.push(ch); else if (ch === "}" || ch === "]") stack.pop();
+    }
+    if (inStr) continue;
+    const closed = part.replace(/[,:\s]+$/, "") + stack.reverse().map((c) => (c === "{" ? "}" : "]")).join("");
+    try { const o = JSON.parse(closed); o.truncated = true; return o; } catch (_e) { /* try an earlier cut */ }
+  }
+  throw new Error("unreadable JSON");
 }
 
 // ─── handlers ─────────────────────────────────────────────────────────
