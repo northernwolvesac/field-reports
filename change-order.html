@@ -1045,8 +1045,6 @@ function generatePDF(){
       room(16);doc.setFont('helvetica',r[2]?'normal':'bold');doc.setFontSize(r[2]?9:10);doc.setTextColor(...(r[2]?mute:ink));
       doc.text(r[0],M+(r[2]?16:6),y);doc.text(money(r[1]),R-6,y,{align:'right'});y+=16});
     y+=4;
-  } else {
-    section('Cost');
   }
   // total
   room(40);doc.setDrawColor(...ink);doc.setLineWidth(1.2);doc.line(M,y-4,R,y-4);
@@ -1060,8 +1058,6 @@ function generatePDF(){
     block('Schedule notes',v('scheduleNotes'));
   }
 
-  section('Approval');
-  pair([['Requested by',v('requestedBy')],['Approved by',v('approvedBy')]],2);
 
   // photos by category, two per row
   var photoLabels={existing:'Existing Condition — Photos',proposed:'Proposed Change — Photos',completed:'Completed Work — Photos'};
@@ -1078,9 +1074,11 @@ function generatePDF(){
     });
   });
 
-  // signatures
-  room(130);section('Signatures');
-  const sigW=250,sigH=80,cx=M+(R-M)/2+6;
+  // approval + signatures (kept together on one page)
+  const sigW=250,sigH=72,cx=M+(R-M)/2+6;
+  if(y+22+40+sigH+22>752){doc.addPage();y=50}
+  section('Approval & Signatures');
+  pair([['Requested by',v('requestedBy')],['Approved by',v('approvedBy')]],2);
   doc.setDrawColor(...line);doc.setLineWidth(0.8);
   doc.rect(M,y,sigW,sigH);if(fmSigPad.toDataURL())try{doc.addImage(fmSigPad.toDataURL(),'JPEG',M,y,sigW,sigH)}catch(e){}
   doc.rect(cx,y,sigW,sigH);if(custSigPad.toDataURL())try{doc.addImage(custSigPad.toDataURL(),'JPEG',cx,y,sigW,sigH)}catch(e){}
@@ -1335,6 +1333,6 @@ function openChangeOrderAIChat() {
 <script src="form-utils.js?v=114"></script>
 <script src="nw-drive.js?v=221"></script>
 <script src="nw-form-kit.js?v=223"></script>
-<script src="sw-register.js?v=256"></script>
+<script src="sw-register.js?v=257"></script>
 </body>
 </html>
