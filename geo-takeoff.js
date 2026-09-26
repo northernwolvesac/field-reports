@@ -62,7 +62,7 @@
             else if (op === OPS.lineTo) { var p = tp(st.ctm, co[j], co[j + 1]); if (cur) path.push([cur[0], cur[1], p[0], p[1]]); cur = p; j += 2; }
             else if (op === OPS.curveTo) { cur = tp(st.ctm, co[j + 4], co[j + 5]); j += 6; }
             else if (op === OPS.curveTo2 || op === OPS.curveTo3) { cur = tp(st.ctm, co[j + 2], co[j + 3]); j += 4; }
-            else if (op === OPS.closePath) { if (cur && start) path.push([cur[0], cur[1], start[0], start[1]]); cur = start; }
+            else if (op === OPS.closePath) { cur = start; }     // closing edges are not reported as lines (same as the reference)
             else if (op === OPS.rectangle) {
               var x = co[j], y = co[j + 1], w = co[j + 2], h = co[j + 3], P = [tp(st.ctm, x, y), tp(st.ctm, x + w, y), tp(st.ctm, x + w, y + h), tp(st.ctm, x, y + h)];
               for (var q = 0; q < 4; q++) path.push([P[q][0], P[q][1], P[(q + 1) % 4][0], P[(q + 1) % 4][1]]);
@@ -134,7 +134,7 @@
         stats.push([sized, tot, key]);
       });
       var top = 0; stats.forEach(function (s) { top = Math.max(top, s[0]); });
-      var keep = stats.filter(function (s) { return top && s[0] >= 0.5 * top && s[0] / Math.max(s[1], 1) >= 0.5; }).map(function (s) { return s[2]; });
+      var keep = stats.filter(function (s) { return top && (s[0] === top || (s[0] >= 0.5 * top && s[0] / Math.max(s[1], 1) >= 0.5)); }).map(function (s) { return s[2]; });
       var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { S.push(norm(s)); }); });
       var fp = findPairs(S, ptft), pcs = fp.pieces;
       pcs.forEach(function (p) { var l = looseLabel(p, labs, ptft); if (l) p.size = sizeOf(l); });

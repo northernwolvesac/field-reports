@@ -252,7 +252,7 @@ def measure(pdf, pno, verbose=True):
         stats.append((sized, tot, key))
         if verbose: print('   style', key, 'segs', len(segs), 'pairs ft %.0f' % tot, 'sized ft %.0f' % sized)
     top = max((s[0] for s in stats), default=0)
-    keep = [k for (sz, tot, k) in stats if top and sz >= 0.5 * top and sz / max(tot, 1) >= 0.5]
+    keep = [k for (sz, tot, k) in stats if top and (sz == top or (sz >= 0.5 * top and sz / max(tot, 1) >= 0.5))]
     S = [norm_seg(s) for k in keep for s in by[k]]
     pcs, used = find_pairs(S, ptft)
     taken = set()
