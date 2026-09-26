@@ -141,6 +141,9 @@ async function claude(model: string, content: any[], maxTokens: number, schema: 
   let r = await send({ thinking: { type: "disabled" } });
   let t = await r.text();
   if (!r.ok && r.status === 400 && /thinking/i.test(t)) { r = await send({}); t = await r.text(); }
+  // models that refuse a forced tool call: offer the tool, the prompt asks for it
+  if (!r.ok && r.status === 400 && /tool_choice/i.test(t)) { r = await send({ thinking: { type: "disabled" }, tool_choice: { type: "auto" } }); t = await r.text(); }
+  if (!r.ok && r.status === 400 && /thinking/i.test(t)) { r = await send({ tool_choice: { type: "auto" } }); t = await r.text(); }
   if (!r.ok) throw new Error("Claude API " + r.status + ": " + t.slice(0, 400));
   const j = JSON.parse(t);
   const text = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");

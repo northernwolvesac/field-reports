@@ -297,6 +297,19 @@
       else if ((d.type === 'fsd' || d.type === 'motorized_damper') && !manual) ao.vavd += d.qty;
       else if (d.type === 'fpb') ao.fpb += d.qty;
     });
+    // VAV / CAV / fan-powered boxes that the reader listed as equipment instead of air devices
+    var devTags = {}; Object.keys(C.devices).forEach(function (k) { if (C.devices[k].tag) devTags[norm(C.devices[k].tag)] = 1; });
+    var boxTags = {};
+    [C.planEq, C.sched].forEach(function (src) {
+      Object.keys(src).forEach(function (tag) {
+        var e = src[tag], what = (e.type || '') + ' ' + (e.label || tag);
+        if (devTags[tag] || boxTags[tag] || !/\b(vav|cav|fpb)\b|terminal unit|fan[- ]powered|air valve/i.test(what)) return;
+        if (/existing|to remain|reference only/i.test((e.type || '') + ' ' + (e.notes || ''))) return;
+        boxTags[tag] = 1;
+        var n = Math.max(1, Number(e.qty) || 1);
+        if (/fpb|fan[- ]powered/i.test(what)) ao.fpb += n; else ao.vavd += n;
+      });
+    });
     if (ao.outlet) add('air_outlets', 'Diffusers / grilles / registers', ao.outlet, 'ea', 0, STD.airOutlet, 'Air Outlets Standards — 1.6 hr each');
     if (ao.linear) add('air_outlets', 'Linear diffusers', ao.linear, 'lf', 0, STD.linearPerFt, 'Air Outlets Standards — 0.8 hr/ft', ao.linearGuess ? { flag: 'some lengths not shown — counted 4 ft per piece; check the plans' } : null);
     if (ao.vavd) add('air_outlets', 'VAV boxes / fire-smoke / motorized dampers', ao.vavd, 'ea', 0, STD.vavOrDamper, 'Air Outlets Standards — 2.67 hr each');
