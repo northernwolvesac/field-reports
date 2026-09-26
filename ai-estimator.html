@@ -16,8 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=238"></script>
-<script src="est-engine.js?v=238"></script>
+<script src="est-totals.js?v=239"></script>
+<script src="est-engine.js?v=239"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -95,11 +95,14 @@ var AE = (function() {
     if (sid) openSession(sid); else listSessions();
   }
 
+  // the AI sometimes writes inches inside text without escaping them: 6" CWS -> 6\" CWS
+  function fixInches(s) { return s.replace(/(\d)"(?=[ 	]*[^,}\]:\s"])/g, '$1\\"'); }
   // an AI answer cut off at the output limit: keep every complete entry and close the brackets
   function repairJson(s) {
     s = String(s || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
     var a = s.indexOf('{'); if (a > 0) s = s.slice(a);
     try { return JSON.parse(s); } catch (e) {}
+    try { return JSON.parse(fixInches(s)); } catch (e) { s = fixInches(s); }
     for (var cut = s.length; cut > 0; cut = s.lastIndexOf(',', cut - 1)) {
       var part = s.slice(0, cut), stack = [], inStr = false, esc = false;
       for (var i = 0; i < part.length; i++) {
@@ -541,6 +544,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote };
 })();
 </script>
-<script src="sw-register.js?v=238"></script>
+<script src="sw-register.js?v=239"></script>
 </body>
 </html>

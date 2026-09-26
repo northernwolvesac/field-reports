@@ -56,6 +56,7 @@ Rules:
 - Wet taps: count explicit wet-tap connections. Rigging: any unit ≥ 400 lb on a roof or ≥ 800 lb indoors (tag, weight, where).
 - Anything unclear → put it in "questions" as a draft RFI. Never invent quantities: if you cannot read it, say so.
 
+Write inches as "in" inside text (6 in CWS, 24x12 in) — never a bare " character.
 Keep the answer compact: leave out empty arrays, empty strings and unknown fields; notes at most 15 words; combine identical
 air devices / duct sizes into one row per type+size (sum qty / lf).
 Return ONLY a JSON object (no markdown fences) with this shape:
@@ -90,7 +91,7 @@ const REVIEW_PROMPT = `You are the senior HVAC estimator at Northern Wolves AC r
 Below: what was read from every sheet and quote, plus NWAC's own estimating process rules.
 Do what Kastriot's process demands: compare drawing counts to schedules, compare quotes to the drawings (what the vendor
 did NOT cover), find mechanical scope hidden in notes, basis-of-design brand mismatches, missing quotes, and risks.
-Be concise: at most 12 entries per list (most expensive / riskiest first), every text under 30 words.
+Write inches as "in" inside text (6 in pipe) — never a bare " character. Be concise: at most 12 entries per list (most expensive / riskiest first), every text under 30 words.
 Return ONLY JSON, keys in this order:
 {"summary":"3-5 sentences for the estimator",
  "missing_quotes":[{"item":"","tags":[],"suggested_vendor":"","why":""}],
@@ -127,8 +128,12 @@ function parseJson(text: string) {
   let s = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   const a = s.indexOf("{");
   if (a > 0) s = s.slice(a);
+  try { return JSON.parse(s.slice(0, s.lastIndexOf("}") + 1)); } catch (_e) { /* next */ }
+  s = fixInches(s);
   try { return JSON.parse(s.slice(0, s.lastIndexOf("}") + 1)); } catch (_e) { return repairJson(s); }
 }
+// inches written inside text without escaping: 6" CWS -> 6\\" CWS
+function fixInches(s: string) { return s.replace(/(\d)"(?=[ 	]*[^,}\]:\s"])/g, '$1\\"'); }
 // an answer cut off at the output limit: keep every complete entry and close the brackets
 function repairJson(s: string): any {
   for (let cut = s.length; cut > 0; cut = s.lastIndexOf(",", cut - 1)) {
