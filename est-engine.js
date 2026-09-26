@@ -158,9 +158,15 @@
         skipped.push(sh + ' (' + (type || 'sheet') + ')');
       if (!isDemo && takeoffSheet) {
         (r.air_devices || []).forEach(function (a) {
-          var k = (a.type || 'other') + '|' + (a.tag || '') + '|' + (a.size || '');
-          var d = devices[k] = devices[k] || { type: a.type || 'other', tag: a.tag || '', size: a.size || '', qty: 0, lf: 0, sheets: [] };
-          d.qty += Number(a.qty || 0); d.lf += Number(a.linear_ft || 0); d.sheets.push(sh);
+          var k = (a.type || 'other') + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
+          var d = devices[k] = devices[k] || { type: a.type || 'other', tag: a.tag || '', size: a.size || '', notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
+          var fl = String(r.floor || sh), f = d.per[fl] = d.per[fl] || {}, ft = f[type] = f[type] || { q: 0, lf: 0 };
+          ft.q += Number(a.qty || 0); ft.lf += Number(a.linear_ft || 0); d.sheets.push(sh);
+          d.qty = 0; d.lf = 0;
+          Object.keys(d.per).forEach(function (fk) {
+            var best = Object.values(d.per[fk]).sort(function (x, y) { return y.q - x.q; })[0];
+            d.qty += best.q; d.lf += best.lf;
+          });
         });
         {
           (r.duct_runs || []).forEach(function (x) {
@@ -256,9 +262,12 @@
     });
     if (C.wetTaps) add('pipework', 'Wet-tap connection' + (C.wetTaps > 1 ? 's' : ''), C.wetTaps, 'ea', STD.wetTap, 0, 'Standard — $10,000 per connection (sub)', { is_wet_tap: true, labor_crew_type: 'none' });
 
-    // 5. Equipment install (every scheduled unit we furnish or set)
-    Object.keys(C.sched).sort().forEach(function (tag) {
-      var s = C.sched[tag];
+    // 5. Equipment install (every scheduled unit we furnish or set; units shown only on plans too)
+    var eqTags = Object.keys(C.sched);
+    Object.keys(C.planEq).forEach(function (tag) { if (!C.sched[tag]) eqTags.push(tag); });
+    eqTags.sort().forEach(function (tag) {
+      var s = C.sched[tag] || C.planEq[tag];
+      if (!C.sched[tag] && !/unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens/i.test((s.type || '') + ' ' + tag)) return;
       if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;
       var qty = Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1), ih = installHours(s);
       add('equipment_install', 'Install ' + (s.label || tag) + (s.type ? ' — ' + s.type : '') + (s.weight_lb ? ' (' + s.weight_lb + ' lb)' : ''), qty, 'ea', 0, ih.h, 'Equipment Installation Standards — ' + ih.basis,
@@ -269,13 +278,15 @@
     var ao = { outlet: 0, linear: 0, vavd: 0, fpb: 0 };
     Object.keys(C.devices).forEach(function (k) {
       var d = C.devices[k];
+      var manual = /^(VD|MVD|BD|COD|OD|CD)\d*$/.test(norm(d.tag)) || /volume|balanc|manual|cable|opposed/i.test((d.notes || '') + ' ' + d.size);
       if (/diffuser|grille|register/.test(d.type)) ao.outlet += d.qty;
-      else if (d.type === 'linear') ao.linear += d.lf || 0;
-      else if (d.type === 'vav' || d.type === 'fsd' || d.type === 'motorized_damper') ao.vavd += d.qty;
+      else if (d.type === 'linear') { if (d.lf) ao.linear += d.lf; else { ao.linear += d.qty * 4; ao.linearGuess = true; } }
+      else if (d.type === 'vav') ao.vavd += d.qty;
+      else if ((d.type === 'fsd' || d.type === 'motorized_damper') && !manual) ao.vavd += d.qty;
       else if (d.type === 'fpb') ao.fpb += d.qty;
     });
     if (ao.outlet) add('air_outlets', 'Diffusers / grilles / registers', ao.outlet, 'ea', 0, STD.airOutlet, 'Air Outlets Standards — 1.6 hr each');
-    if (ao.linear) add('air_outlets', 'Linear diffusers', ao.linear, 'lf', 0, STD.linearPerFt, 'Air Outlets Standards — 0.8 hr/ft');
+    if (ao.linear) add('air_outlets', 'Linear diffusers', ao.linear, 'lf', 0, STD.linearPerFt, 'Air Outlets Standards — 0.8 hr/ft', ao.linearGuess ? { flag: 'some lengths not shown — counted 4 ft per piece; check the plans' } : null);
     if (ao.vavd) add('air_outlets', 'VAV boxes / fire-smoke / motorized dampers', ao.vavd, 'ea', 0, STD.vavOrDamper, 'Air Outlets Standards — 2.67 hr each');
     if (ao.fpb) add('air_outlets', 'Fan-powered boxes', ao.fpb, 'ea', 0, STD.fpb, 'Air Outlets Standards — 8 hr each');
 

@@ -59,7 +59,7 @@ Rules:
 Write inches as "in" inside text (6 in CWS, 24x12 in) — never a bare " character.
 Keep the answer compact: leave out empty arrays, empty strings and unknown fields; notes at most 15 words; combine identical
 air devices / duct sizes into one row per type+size (sum qty / lf).
-Answer with the "answer" tool, one object in this shape:
+Answer with the record_findings tool, one object in this shape:
 {
  "sheet_no": "M-201", "sheet_title": "...", "discipline": "mechanical|plumbing|electrical|fire|architectural|other",
  "sheet_type": "legend|specs|demo|duct_plan|pipe_plan|enlarged|details|schedule|riser|controls|other",
@@ -80,7 +80,7 @@ Answer with the "answer" tool, one object in this shape:
 }`;
 
 const QUOTE_PROMPT = `You are the senior HVAC estimator at Northern Wolves AC. This is a vendor or subcontractor quote for a bid.
-Answer with the "answer" tool, one object in this shape:
+Answer with the record_findings tool, one object in this shape:
 {"vendor":"","quote_no":"","date":"YYYY-MM-DD or null","valid_until":null,"total":0,"freight_included":null,
  "tax_included":null,"kind":"equipment|air_devices|controls|tab|rigging|insulation|sheetmetal|other",
  "lines":[{"tags":["AC-1-1"],"description":"","qty":0,"amount":null}],
@@ -91,7 +91,7 @@ const REVIEW_INTRO = `You are the senior HVAC estimator at Northern Wolves AC re
 Below: what was read from every sheet and quote, plus NWAC's own estimating process rules.
 Write inches as "in" inside text (6 in pipe) — never a bare " character. Every text under 30 words.
 Group related items: ONE entry per equipment type / vendor / issue, with all its tags in "tags" — never one entry per tag.
-Fill the fields of the "answer" tool directly.`;
+Fill the fields of the record_findings tool directly.`;
 // part A — quotes against the drawings
 const REVIEW_A = REVIEW_INTRO + `
 Task: compare the quotes with the drawings. Which equipment types have no quote at all (most expensive first, max 12)?
@@ -103,24 +103,24 @@ Task: find mechanical scope hidden in the general/keyed notes that vendor quotes
 draft the RFIs to send before bidding (max 12), the exclusion lines for our proposal (max 20) and the main risks (max 8).`;
 
 
-// ─── answer shapes (the model fills these fields through the "answer" tool) ───
+// ─── answer shapes (the model fills these fields through the record_findings tool) ───
 const OBJS = { type: "array", items: { type: "object" } };
 const STRS = { type: "array", items: { type: "string" } };
-const SHEET_SCHEMA = { type: "object", required: ["sheet_type"], properties: {
+const SHEET_SCHEMA = { type: "object", additionalProperties: false, required: ["sheet_type"], properties: {
   sheet_no: { type: "string" }, sheet_title: { type: "string" }, discipline: { type: "string" }, sheet_type: { type: "string" },
   floor: { type: "string" }, scale: { type: "string" }, equipment: OBJS, air_devices: OBJS, duct_runs: OBJS, pipe_runs: OBJS,
   demo: OBJS, wet_taps: { type: "number" }, rigging: OBJS, scope_notes: OBJS, questions: STRS, confidence: { type: "string" }, notes: { type: "string" } } };
-const QUOTE_SCHEMA = { type: "object", required: ["vendor", "total"], properties: {
+const QUOTE_SCHEMA = { type: "object", additionalProperties: false, required: ["vendor", "total"], properties: {
   vendor: { type: "string" }, quote_no: { type: "string" }, date: { type: "string" }, valid_until: { type: "string" }, total: { type: "number" },
   freight_included: { type: "boolean" }, tax_included: { type: "boolean" }, kind: { type: "string" }, lines: OBJS,
   included: STRS, excluded: STRS, notes: { type: "string" } } };
 const obj = (props: Record<string, any>) => ({ type: "object", properties: props });
-const REVIEW_A_SCHEMA = { type: "object", required: ["summary", "missing_quotes"], properties: {
+const REVIEW_A_SCHEMA = { type: "object", additionalProperties: false, required: ["summary", "missing_quotes"], properties: {
   summary: { type: "string" },
   missing_quotes: { type: "array", maxItems: 12, items: obj({ item: { type: "string" }, tags: STRS, suggested_vendor: { type: "string" }, why: { type: "string" } }) },
   quote_gaps: { type: "array", maxItems: 10, items: obj({ vendor: { type: "string" }, gap: { type: "string" }, impact: { type: "string" } }) },
   count_mismatches: { type: "array", maxItems: 10, items: obj({ tag: { type: "string" }, schedule: { type: "number" }, drawings: { type: "number" }, note: { type: "string" } }) } } };
-const REVIEW_B_SCHEMA = { type: "object", required: ["hidden_scope", "rfis", "exclusions"], properties: {
+const REVIEW_B_SCHEMA = { type: "object", additionalProperties: false, required: ["hidden_scope", "rfis", "exclusions"], properties: {
   hidden_scope: { type: "array", maxItems: 15, items: obj({ source: { type: "string" }, item: { type: "string" }, how_to_price: { type: "string" } }) },
   rfis: { type: "array", maxItems: 12, items: obj({ question: { type: "string" }, sheet: { type: "string" } }) },
   exclusions: { type: "array", maxItems: 20, items: { type: "string" } },
@@ -130,13 +130,13 @@ const REVIEW_B_SCHEMA = { type: "object", required: ["hidden_scope", "rfis", "ex
 async function claude(model: string, content: any[], maxTokens: number, schema: any = { type: "object" }) {
   // extraction work: no extended thinking, so the whole output budget goes to the JSON answer
   // the answer comes back through a forced tool call, so the API hands us parsed, valid JSON
-  const tool = { name: "answer", description: "Return the extracted data as one JSON object, in the shape the instructions describe.",
+  const tool = { name: "record_findings", description: "Record the findings. Fill each field directly with real JSON values (arrays of objects, numbers) — never put JSON text inside a string.",
     input_schema: schema };
   const send = (extra: any) => fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }],
-      tools: [tool], tool_choice: { type: "tool", name: "answer" }, ...extra }),
+      tools: [tool], tool_choice: { type: "tool", name: "record_findings" }, ...extra }),
   });
   let r = await send({ thinking: { type: "disabled" } });
   let t = await r.text();
