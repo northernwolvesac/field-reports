@@ -114,7 +114,7 @@
 
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
-    var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error; });
+    var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0;
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
@@ -185,14 +185,17 @@
 
     // 2. Equipment — vendor quotes, then scheduled tags nobody quoted
     var quoted = {};
+    var today = new Date().toISOString().slice(0, 10);
     C.quotes.forEach(function (q) {
+      var expired = q.valid_until && /^\d{4}-\d{2}-\d{2}$/.test(q.valid_until) && q.valid_until < today;
+      var qflag = expired ? 'quote expired ' + q.valid_until + ' — re-quote' : null;
       if (!q.total) { add('equipment', (q.vendor || 'Vendor') + ' — ' + (q.quote_no || 'quote') + ' (no total found)', 1, 'ls', 0, 0, 'quote', { is_firm: false, flag: 'quote total not read — enter by hand', vendor_name: q.vendor, vendor_quote_ref: q.quote_no }); return; }
       if (/tab|rigging|crane/.test(q.kind || '')) {
-        add('services', (q.vendor || 'Sub') + ' — ' + (q.quote_no || '') + ' ' + (q.kind || ''), 1, 'ls', q.total, 0, 'subcontractor quote', { vendor_name: q.vendor, vendor_quote_ref: q.quote_no });
+        add('services', (q.vendor || 'Sub') + ' — ' + (q.quote_no || '') + ' ' + (q.kind || ''), 1, 'ls', q.total, 0, 'subcontractor quote', { vendor_name: q.vendor, vendor_quote_ref: q.quote_no, flag: qflag });
       } else if (q.kind === 'sheetmetal' || q.kind === 'insulation') {
         add('ductwork', (q.vendor || 'Sub') + ' — ' + (q.quote_no || '') + ' ' + q.kind, 1, 'ls', q.total, 0, 'subcontractor quote — check it does not overlap the takeoff below', { vendor_name: q.vendor, vendor_quote_ref: q.quote_no, flag: 'sub quote + takeoff may double count' });
       } else {
-        add('equipment', (q.vendor || 'Vendor') + ' — ' + (q.quote_no || 'quote'), 1, 'ls', q.total, 0, 'vendor quote' + (q.date ? ' ' + q.date : ''), { vendor_name: q.vendor, vendor_quote_ref: q.quote_no });
+        add('equipment', (q.vendor || 'Vendor') + ' — ' + (q.quote_no || 'quote') + (q.kind && q.kind !== 'equipment' ? ' (' + q.kind + ')' : ''), 1, 'ls', q.total, 0, 'vendor quote' + (q.date ? ' ' + q.date : ''), { vendor_name: q.vendor, vendor_quote_ref: q.quote_no, flag: qflag, is_firm: !expired });
       }
       (q.lines || []).forEach(function (l) { (l.tags || []).forEach(function (t) { quoted[norm(t)] = q.vendor || true; }); });
     });

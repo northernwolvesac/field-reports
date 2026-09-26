@@ -16,8 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=233"></script>
-<script src="est-engine.js?v=233"></script>
+<script src="est-totals.js?v=234"></script>
+<script src="est-engine.js?v=234"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -188,7 +188,8 @@ var AE = (function() {
       '<td class="muted">' + (bits.join(' · ') || (tc ? tc + ' tags in text' : '')) + (r.truncated ? ' <span class="flag">truncated</span>' : '') + (r.parse_error ? ' <span class="flag">unreadable answer</span>' : '') + '</td>' +
       '<td><span class="st ' + p.status + '" title="' + esc(p.error || '') + '">' + p.status + '</span></td>' +
       '<td class="n hide-m muted">' + (p.cost ? Number(p.cost).toFixed(2) : '') + '</td>' +
-      '<td><button class="btn" style="padding:3px 8px" onclick="event.stopPropagation();AE.readOne(\'' + p.id + '\')" ' + (running ? 'disabled' : '') + '>↻</button></td></tr>';
+      '<td style="white-space:nowrap">' + (f.kind === 'quote' && p.status === 'done' ? '<label class="muted" title="Use this quote in the price" onclick="event.stopPropagation()"><input type="checkbox" ' + (r.use !== false ? 'checked' : '') + ' onchange="AE.useQuote(\'' + p.id + '\', this.checked)"> use</label> ' : '') +
+      '<button class="btn" style="padding:3px 8px" onclick="event.stopPropagation();AE.readOne(\'' + p.id + '\')" ' + (running ? 'disabled' : '') + '>↻</button></td></tr>';
   }
 
   function showPage(id) {
@@ -205,6 +206,14 @@ var AE = (function() {
   async function saveFloors(v) {
     session.floors = Number(v) || null;
     await supabaseClient.from('ai_est_sessions').update({ floors: session.floors }).eq('id', session.id);
+  }
+
+  // competing quotes on the same scope: only the checked ones go into the price
+  async function useQuote(id, on) {
+    var p = pages.find(function(x) { return x.id === id; }); if (!p || !p.result) return;
+    p.result.use = !!on;
+    await supabaseClient.from('ai_est_pages').update({ result: p.result }).eq('id', id);
+    toast(on ? 'Quote included — press “Price it” again' : 'Quote left out — press “Price it” again');
   }
 
   // ─── upload + text layer ────────────────────────────────────────────
@@ -458,9 +467,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote };
 })();
 </script>
-<script src="sw-register.js?v=233"></script>
+<script src="sw-register.js?v=234"></script>
 </body>
 </html>
