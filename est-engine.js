@@ -68,16 +68,19 @@
     oval_15:        { rect: 'round/oval with 1.5" acl', round: 'round/oval with 1.5" acl', label: 'round / flat oval, 1-1/2" insulation' },
     oval_2:         { rect: 'round/oval with 2" acl',  round: 'round/oval with 2" acl',   label: 'round / flat oval, 2" insulation' }
   };
+  // Shape from the specs picks the family. Insulation stays 1" ACL: NWAC Procore history (1,187 jobs) prices 1" ACL even when the spec
+  // calls 1-1/2" liner or wrap (Sage, April Tax); 1.5"/2" families appear on only ~50 jobs — so thicker specs raise a note, not a new rate.
   function familyFor(spec) {
     if (!spec) return 'rect_lined_1';
     if (spec.choice && DUCT_FAMILIES[spec.choice]) return spec.choice;
-    // NWAC catalog families follow the stated LINER thickness; an R-value wrap (R-6 ≈ 1.5") stays in the 1" family (Kastriot, Crozier)
-    var kind = String(spec.insulation_type || ''), oval = /oval|round|spiral/i.test(spec.shape || '');
-    var t = spec.lining_in != null ? Number(spec.lining_in || 0) : (/R-?\s?\d/i.test(kind) ? 1 : Number(spec.insulation_in || 0));
-    if (oval) return t >= 1.9 ? 'oval_2' : t >= 1.4 ? 'oval_15' : 'oval_lined_1';
-    if (t >= 1.4) return 'rect_15';
-    if (/wrap|external/i.test(kind) && !/lin/i.test(kind)) return 'rect_wrap_1';
-    return 'rect_lined_1';
+    return /oval|round|spiral/i.test(spec.shape || '') ? 'oval_lined_1' : 'rect_lined_1';
+  }
+  function specNote(spec) {
+    if (!spec || spec.choice) return '';
+    var kind = String(spec.insulation_type || ''), t = spec.lining_in != null ? Number(spec.lining_in || 0) : 0;
+    if (t >= 1.4) return 'spec calls ' + (t >= 1.9 ? '2"' : '1-1/2"') + ' liner — priced at the usual 1" ACL rate (NWAC practice); pick the ' + (t >= 1.9 ? '2"' : '1-1/2"') + ' family if you want it carried';
+    if (/wrap|external/i.test(kind) && !/lin/i.test(kind)) return 'spec calls external wrap, not liner — priced at the usual 1" ACL rate; wrap by the insulation sub';
+    return '';
   }
 
   function makeRates(norms) {
@@ -253,6 +256,7 @@
     var famKey = familyFor(opts.ductSpec);
     if (!opts.ductSpec) flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'not read from the specs — priced as rectangular with 1" lining; run 🔍 Duct spec' });
     else if (opts.ductSpec.confidence === 'low') flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'spec reading uncertain — ' + DUCT_FAMILIES[famKey].label + '; confirm' });
+    if (specNote(opts.ductSpec)) flags.push({ category: 'ductwork', item: 'Duct construction', flag: specNote(opts.ductSpec) });
     function add(cat, d, qty, unit, mat, hrs, basis, extra) {
       var l = Object.assign({ category: cat, description: d, quantity: +(+qty).toFixed(4), unit: unit, unit_material_cost: +(+mat || 0).toFixed(4),
         unit_labor_hours: +(+hrs || 0).toFixed(4), labor_crew_type: cat === 'pipework' ? 'pipe' : cat === 'services' ? 'none' : 'sm',
