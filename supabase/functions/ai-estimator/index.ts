@@ -56,7 +56,9 @@ Rules:
 - Wet taps: count explicit wet-tap connections. Rigging: any unit ≥ 400 lb on a roof or ≥ 800 lb indoors (tag, weight, where).
 - Anything unclear → put it in "questions" as a draft RFI. Never invent quantities: if you cannot read it, say so.
 
-Return ONLY a JSON object (no markdown fences) with this shape; omit empty arrays:
+Keep the answer compact: leave out empty arrays, empty strings and unknown fields; notes at most 15 words; combine identical
+air devices / duct sizes into one row per type+size (sum qty / lf).
+Return ONLY a JSON object (no markdown fences) with this shape:
 {
  "sheet_no": "M-201", "sheet_title": "...", "discipline": "mechanical|plumbing|electrical|fire|architectural|other",
  "sheet_type": "legend|specs|demo|duct_plan|pipe_plan|enlarged|details|schedule|riser|controls|other",
@@ -100,15 +102,20 @@ Return ONLY JSON:
 
 // ─── Claude call ──────────────────────────────────────────────────────
 async function claude(model: string, content: any[], maxTokens: number) {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  // extraction work: no extended thinking, so the whole output budget goes to the JSON answer
+  const send = (extra: any) => fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }], ...extra }),
   });
-  const t = await r.text();
+  let r = await send({ thinking: { type: "disabled" } });
+  let t = await r.text();
+  if (!r.ok && r.status === 400 && /thinking/i.test(t)) { r = await send({}); t = await r.text(); }
   if (!r.ok) throw new Error("Claude API " + r.status + ": " + t.slice(0, 400));
   const j = JSON.parse(t);
   const text = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+  if (!text && j.stop_reason === "max_tokens")
+    throw new Error("the model used the whole output budget before answering (" + (j.content || []).map((c: any) => c.type).join(",") + ")");
   const u = j.usage || {};
   const price = MODELS[model] || MODELS[DEFAULT_MODEL];
   const cost = ((u.input_tokens || 0) * price.in + (u.output_tokens || 0) * price.out) / 1e6;

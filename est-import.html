@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Procore Import — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=173"></script>
+<script src="auth.js?v=173"></script>
+<style>
+  body { padding: 24px; }
+  .box { max-width: 760px; margin: 0 auto; background: var(--nw-card); border: 1px solid var(--nw-border); border-radius: 12px; padding: 20px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 12px; white-space: pre-wrap; max-height: 420px; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h2 style="margin-top:0">Procore estimating history → app</h2>
+  <p style="font-size:13px;color:var(--nw-muted)">Admin tool. This page is opened from a Procore Estimating tab; it receives NWAC's estimate lines
+  and unit rates from that tab (browser message, Procore origin only) and saves them under your own login. Nothing is sent anywhere else.</p>
+  <pre id="log">Waiting for data from the Procore tab…</pre>
+</div>
+<script>
+requireAuth().catch(function(){});
+(function() {
+  var ALLOWED = /^https:\/\/([a-z0-9-]+\.)*procore\.com$/;
+  var logEl = document.getElementById('log'), ready = false, busy = false;
+  function log(m) { logEl.textContent += '\n' + m; logEl.scrollTop = logEl.scrollHeight; }
+
+  (async function() {
+    var u = (await supabaseClient.auth.getUser()).data.user;
+    var p = u && (await supabaseClient.from('profiles').select('role').eq('id', u.id).maybeSingle()).data;
+    if (!p || p.role !== 'admin') { logEl.textContent = 'Admins only.'; return; }
+    ready = true;
+    if (window.opener) window.opener.postMessage({ type: 'nw-import-ready' }, '*');
+    log('Signed in as ' + u.email + ' — ready.');
+  })();
+
+  async function put(table, rows, size, conflict) {
+    var ok = 0;
+    for (var i = 0; i < rows.length; i += size) {
+      var chunk = rows.slice(i, i + size);
+      var r = conflict ? await supabaseClient.from(table).upsert(chunk, { onConflict: conflict }) : await supabaseClient.from(table).insert(chunk);
+      if (r.error) { log('✗ ' + table + ' @' + i + ': ' + r.error.message); return ok; }
+      ok += chunk.length;
+      if ((i / size) % 5 === 0) log(table + ': ' + ok + ' / ' + rows.length);
+    }
+    log('✓ ' + table + ': ' + ok);
+    return ok;
+  }
+
+  window.addEventListener('message', async function(e) {
+    if (!ALLOWED.test(e.origin)) return;                       // only a Procore page may send data here
+    var d = e.data || {};
+    if (d.type !== 'nw-procore-import' || !ready || busy) return;
+    busy = true;
+    log('Received from ' + e.origin + ': ' + (d.projects || []).length + ' projects, ' + (d.lines || []).length + ' lines, ' + (d.norms || []).length + ' unit rates');
+    var res = {};
+    try {
+      if (d.norms && d.norms.length) res.norms = await put('est_norms', d.norms, 300, 'kind,item,unit');
+      if (d.projects && d.projects.length) res.projects = await put('est_procore_projects', d.projects, 500, 'id');
+      if (d.lines && d.lines.length) {
+        var ids = Array.from(new Set(d.lines.map(function(l) { return l.project_id; })));
+        for (var i = 0; i < ids.length; i += 200) await supabaseClient.from('est_procore_lines').delete().in('project_id', ids.slice(i, i + 200));
+        res.lines = await put('est_procore_lines', d.lines, 2000);
+      }
+      if (d.ratios) {
+        var k = await supabaseClient.from('est_knowledge').upsert({ key: 'norms/procore-ratios', category: 'takeoff', title: 'NWAC Procore ratios (duct ft per air device, pipe ft per unit)',
+          body_md: '```json\n' + JSON.stringify(d.ratios, null, 2) + '\n```\nFrom ' + (d.projects || []).length + ' NWAC Procore estimates (primary proposal of each), imported ' + new Date().toISOString().slice(0, 10) + '.',
+          source_path: 'Procore Estimating API', project: null, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+        log(k.error ? '✗ ratios: ' + k.error.message : '✓ ratios saved to the knowledge base');
+      }
+    } catch (err) { log('✗ ' + err.message); }
+    log('Done.');
+    e.source.postMessage({ type: 'nw-import-done', res: res }, e.origin);
+    busy = false;
+  });
+})();
+</script>
+</body>
+</html>
