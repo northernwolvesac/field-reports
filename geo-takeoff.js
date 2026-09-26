@@ -455,15 +455,29 @@
       if (!top) return { error: 'no pipe lines next to the size labels', ptft: ptft, labels: labs.length };
       var keep = Object.keys(votes).filter(function (kk) { return votes[kk] >= Math.max(2, 0.25 * top) || votes[kk] === top; });
       var S = segs.filter(function (s) { return keep.indexOf(s[8]) >= 0; });
-      var size = {};
+      var size = {}, seedD = {};
+      function seed(i, l, d) { if (!(i in size) || d < seedD[i]) { size[i] = [l.d, l.svc]; seedD[i] = d; } }   // the closest label owns a line
       labs.forEach(function (l) {
         var h = near(l, S);
-        if (h.length) { var b0 = h[0][0]; h.forEach(function (x) { if (x[0] <= b0 + 0.9 * ptft && !(x[1] in size)) size[x[1]] = [l.d, l.svc]; }); return; }
+        if (h.length) { var b0 = h[0][0]; h.forEach(function (x) { if (x[0] <= b0 + 0.9 * ptft) seed(x[1], l, x[0]); }); return; }
+        var led = false;
         leaderEnds(l, leaders).concat(leaderEnds({ bbox: l.block }, leaders)).forEach(function (pt) {
           var bi = null, bd = 4;
           S.forEach(function (s, i) { var dd = ptSeg(pt[0], pt[1], s); if (dd <= bd) { bi = i; bd = dd; } });
-          if (bi !== null && !(bi in size)) size[bi] = [l.d, l.svc];
+          if (bi !== null) { seed(bi, l, bd); led = true; }
         });
+        if (led) return;
+        // text written across a pipe (horizontal label beside a vertical run): the pipes just off the text box
+        var bb = l.bbox, pc = [], ptol = Math.max(2 * ptft, 45);
+        S.forEach(function (s, i) {
+          if (Math.abs(s[4] * l.dir[0] + s[5] * l.dir[1]) > 0.26) return;
+          var ox = Math.abs(s[4]) > 0.5 ? 0 : 1, lo = Math.min(s[ox], s[ox + 2]), hi = Math.max(s[ox], s[ox + 2]), c0 = ox ? bb[1] : bb[0], c1 = ox ? bb[3] : bb[2];
+          if (Math.abs(s[4]) > 0.02 && Math.abs(s[5]) > 0.02) return;         // orthogonal runs only
+          if (hi < c0 - 2 || lo > c1 + 2) return;                              // the run must pass alongside the text
+          var q0 = ox ? bb[0] : bb[1], q1 = ox ? bb[2] : bb[3], v = s[1 - ox], d = v < q0 ? q0 - v : v > q1 ? v - q1 : 0;
+          if (d <= ptol) pc.push([d, i]);
+        });
+        if (pc.length) { pc.sort(function (a, b) { return a[0] - b[0]; }); pc.forEach(function (x) { if (x[0] <= pc[0][0] + 0.9 * ptft) seed(x[1], l, x[0] + 0.5 * ptft); }); }
       });
       // network: touching ends or an end on another line's body (tee); nearest label wins (multi-source BFS)
       var grid = {};
@@ -481,11 +495,33 @@
         });
         return out;
       }
-      var q = Object.keys(size).map(Number), seen = {};
-      q.forEach(function (i) { seen[i] = 1; });
-      while (q.length) {
-        var cur = q.shift();
-        nbrs(cur).forEach(function (j) { if (!seen[j]) { seen[j] = 1; size[j] = size[cur]; q.push(j); } });
+      // Sizes spread by distance along the pipe (Dijkstra), but a branch's size does not climb through a tee onto the run it
+      // feeds: that costs a big penalty, so the run takes its own label if any reaches it (else the largest branch size).
+      var NB = {};
+      function nb(i) { return NB[i] || (NB[i] = nbrs(i)); }
+      function ends(s) { return [[s[0], s[1]], [s[2], s[3]]]; }
+      function onBody(e, t) { return ptSeg(e[0], e[1], t) < 1.5 && hyp(e[0] - t[0], e[1] - t[1]) > 1.5 && hyp(e[0] - t[2], e[1] - t[3]) > 1.5; }
+      function colin(a, b) { return Math.abs(a[4] * b[5] - a[5] * b[4]) < 0.05; }
+      function branchToRun(i, j) {
+        var a = S[i], b = S[j], ea = ends(a), eb = ends(b), P = null;
+        if (onBody(ea[0], b) || onBody(ea[1], b)) return true;            // i's end lands on j's body: i tees into j
+        if (onBody(eb[0], a) || onBody(eb[1], a)) return false;           // j tees off i
+        for (var x = 0; x < 2 && !P; x++) for (var y = 0; y < 2; y++) if (hyp(ea[x][0] - eb[y][0], ea[x][1] - eb[y][1]) < 1.5) { P = ea[x]; break; }
+        if (!P || colin(a, b)) return false;
+        var others = nb(i).filter(function (k) { return k !== j && ptSeg(P[0], P[1], S[k]) < 1.5; });
+        if (!others.length) return false;                                  // plain elbow
+        return others.some(function (k) { return colin(S[k], b); });      // j continues straight on the far side: j is the run
+      }
+      var dist = {}, heap = [];
+      function push(d, i) { heap.push([d, i]); var c = heap.length - 1; while (c) { var p2 = (c - 1) >> 1; if (heap[p2][0] <= heap[c][0]) break; var tmp = heap[p2]; heap[p2] = heap[c]; heap[c] = tmp; c = p2; } }
+      function pop() { var top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; var c = 0; for (;;) { var l2 = 2 * c + 1, r2 = l2 + 1, m2 = c; if (l2 < heap.length && heap[l2][0] < heap[m2][0]) m2 = l2; if (r2 < heap.length && heap[r2][0] < heap[m2][0]) m2 = r2; if (m2 === c) break; var t2 = heap[m2]; heap[m2] = heap[c]; heap[c] = t2; c = m2; } } return top; }
+      Object.keys(size).forEach(function (is) { dist[is] = 0; push(0, +is); });
+      while (heap.length) {
+        var tp = pop(), cur = tp[1]; if (tp[0] > dist[cur]) continue;
+        nb(cur).forEach(function (j) {
+          var c = tp[0] + S[j][6] / ptft + (branchToRun(cur, j) ? 1000 - 10 * size[cur][0] : 0);
+          if (!(j in dist) || c < dist[j]) { dist[j] = c; size[j] = size[cur]; push(c, j); }
+        });
       }
       var sizes = {}, total = 0;
       Object.keys(size).forEach(function (is) {
@@ -493,7 +529,8 @@
         sizes[kk] = (sizes[kk] || 0) + S[i][6] / ptft; total += S[i][6] / ptft;
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
-      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep };
+      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, lab_list: labs.map(function (l) { return l.txt; }),
+        xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     onmessage = function (e) {
       try { postMessage({ ok: true, result: e.data.mode === 'pipes' ? measurePipes(e.data) : measure(e.data) }); }
