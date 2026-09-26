@@ -20,7 +20,21 @@
 
   async function extract(page) {
     var OPS = pdfjsLib.OPS, ol = await page.getOperatorList();
-    var st = { ctm: [1, 0, 0, 1, 0, 0], lw: 1, col: [0, 0, 0], dash: false }, stack = [], path = [], cur = null, start = null;
+    var st = { ctm: [1, 0, 0, 1, 0, 0], lw: 1, col: [0, 0, 0], dash: false, clip: null }, stack = [], path = [], cur = null, start = null, pendingClip = false;
+    function snap() { return { ctm: st.ctm.slice(), lw: st.lw, col: st.col.slice(), dash: st.dash, clip: st.clip ? st.clip.slice() : null }; }
+    function inter(a, b) { if (!a) return b; if (!b) return a; return [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]; }
+    function bboxOf(pts) { var r = [Infinity, Infinity, -Infinity, -Infinity]; pts.forEach(function (q) { r[0] = Math.min(r[0], q[0]); r[1] = Math.min(r[1], q[1]); r[2] = Math.max(r[2], q[0]); r[3] = Math.max(r[3], q[1]); }); return r; }
+    // visible part of a line inside the clip box (Liang–Barsky); null when fully clipped away
+    function clipSeg(g, c) {
+      if (!c) return g;
+      var x1 = g[0], y1 = g[1], dx = g[2] - x1, dy = g[3] - y1, t0 = 0, t1 = 1, P = [-dx, dx, -dy, dy], Q = [x1 - c[0], c[2] - x1, y1 - c[1], c[3] - y1];
+      for (var i = 0; i < 4; i++) {
+        if (P[i] === 0) { if (Q[i] < -0.01) return null; continue; }
+        var r = Q[i] / P[i];
+        if (P[i] < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; }
+      }
+      return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
+    }
     var segs = [];   // [x1,y1,x2,y2, styleIndex]
     var styles = {}, styleList = [];
     function styleKey() {
@@ -34,17 +48,27 @@
     function flush(stroke) {
       if (stroke && path.length) {
         var si = styleKey();
-        for (var i = 0; i < path.length; i++) segs.push(path[i].concat([si]));
+        for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) segs.push(g.concat([si])); }
       }
+      if (pendingClip && path.length) {    // W n: the path just built becomes (part of) the clip region
+        var pts = []; path.forEach(function (g) { pts.push([g[0], g[1]], [g[2], g[3]]); });
+        st.clip = inter(st.clip, bboxOf(pts));
+      }
+      pendingClip = false;
       path = []; cur = null; start = null;
     }
     for (var i = 0; i < ol.fnArray.length; i++) {
       var fn = ol.fnArray[i], a = ol.argsArray[i];
       switch (fn) {
-        case OPS.save: stack.push({ ctm: st.ctm.slice(), lw: st.lw, col: st.col.slice(), dash: st.dash }); break;
+        case OPS.save: stack.push(snap()); break;
         case OPS.restore: if (stack.length) st = stack.pop(); break;
         case OPS.transform: st.ctm = mul(a, st.ctm); break;
-        case OPS.paintFormXObjectBegin: stack.push({ ctm: st.ctm.slice(), lw: st.lw, col: st.col.slice(), dash: st.dash }); if (a && a[0]) st.ctm = mul(a[0], st.ctm); break;
+        case OPS.paintFormXObjectBegin:
+          stack.push(snap());
+          if (a && a[0]) st.ctm = mul(a[0], st.ctm);
+          if (a && a[1] && a[1].length === 4) { var fb = a[1]; st.clip = inter(st.clip, bboxOf([tp(st.ctm, fb[0], fb[1]), tp(st.ctm, fb[2], fb[1]), tp(st.ctm, fb[2], fb[3]), tp(st.ctm, fb[0], fb[3])])); }
+          break;
+        case OPS.clip: case OPS.eoClip: pendingClip = true; break;
         case OPS.paintFormXObjectEnd: if (stack.length) st = stack.pop(); break;
         case OPS.setLineWidth: st.lw = a[0]; break;
         case OPS.setDash: st.dash = !!(a && a[0] && a[0].length); break;
