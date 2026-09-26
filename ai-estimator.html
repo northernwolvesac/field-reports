@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0696D7">
+<title>AI Estimator — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="supabase-config.js?v=173"></script>
+<script src="auth.js?v=173"></script>
+<script src="est-totals.js?v=233"></script>
+<script src="est-engine.js?v=233"></script>
+<style>
+  body { padding-bottom: 40px; }
+  .ae-wrap { max-width: 1280px; margin: 0 auto; }
+  .ae-body { padding: 16px; }
+  .card { background: var(--nw-card); border: 1px solid var(--nw-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color: var(--nw-muted); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > label { font-size: 12px; color: var(--nw-muted); display: flex; flex-direction: column; gap: 4px; }
+  input[type=text], input[type=number], select, textarea { padding: 8px 10px; border: 1px solid var(--nw-border); border-radius: 8px; font-size: 13px; background: #fff; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--nw-border); background: #fff; font-weight: 700; font-size: 12px; cursor: pointer; color: var(--nw-text); }
+  .btn.primary { background: var(--nw-text); color: #fff; border-color: var(--nw-text); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .muted { color: var(--nw-muted); font-size: 12px; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.t th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--nw-muted); border-bottom: 1px solid var(--nw-border); padding: 6px 8px; }
+  table.t td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  table.t td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.t tr.cat td { background: #f8fafc; font-weight: 800; }
+  table.t tr.click { cursor: pointer; } table.t tr.click:hover td { background: #f0f9ff; }
+  .st { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 10.5px; font-weight: 800; background: #e2e8f0; color: #334155; }
+  .st.done { background: #dcfce7; color: #166534; } .st.running { background: #e0f2fe; color: #075985; }
+  .st.error { background: #fee2e2; color: #991b1b; } .st.skipped { background: #f1f5f9; color: #94a3b8; }
+  .flag { color: #b45309; font-size: 11.5px; } .basis { color: var(--nw-muted); font-size: 11px; }
+  .big { font-size: 28px; font-weight: 800; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .hide-m { display: none; } }
+  pre.json { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 11px; max-height: 460px; overflow: auto; white-space: pre-wrap; }
+  .drop { border: 2px dashed var(--nw-border); border-radius: 10px; padding: 18px; text-align: center; color: var(--nw-muted); font-size: 13px; }
+  .drop.over { border-color: var(--nw-primary); background: #f0f9ff; }
+  .prog { height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .prog > div { height: 100%; background: var(--nw-text); width: 0; transition: width .3s; }
+  ul.l { margin: 4px 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; }
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 300; opacity: 0; transition: opacity .2s; }
+  .toast.show { opacity: 1; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: min(900px, 100%); max-height: 88vh; overflow: auto; padding: 18px 20px; }
+</style>
+</head>
+<body>
+<div class="ae-wrap">
+  <div class="header">
+    <a href="estimating.html" class="back-btn" id="backBtn">&#8592;</a>
+    <div class="header-content"><h1 id="hTitle">AI Estimator</h1></div>
+    <div class="profile-circle" id="profileCircle">--</div>
+  </div>
+  <div class="ae-body" id="main"><div class="muted">Loading…</div></div>
+</div>
+<div class="modal-bg" id="modal" onclick="if(event.target===this)AE.closeModal()"><div class="modal" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+var AE = (function() {
+  'use strict';
+  var OFFICE = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var FN = SUPABASE_URL + '/functions/v1/ai-estimator';
+  var KINDS = [['drawings', 'Drawings'], ['specs', 'Specifications'], ['addendum', 'Addendum / revision'], ['rfi', 'Bid RFI / answers'], ['quote', 'Vendor / sub quote'], ['other', 'Other']];
+  var session = null, files = [], pages = [], norms = null, fileCache = {}, running = false, me = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function money(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
+  function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+  init();
+  async function init() {
+    var u = (await supabaseClient.auth.getUser()).data.user;
+    var p = u && (await supabaseClient.from('profiles').select('role, full_name').eq('id', u.id).maybeSingle()).data;
+    if (!p || OFFICE.indexOf(p.role) < 0) { $('main').innerHTML = '<div class="card">🔒 The AI Estimator is for the office team.</div>'; return; }
+    me = { id: u.id, name: p.full_name || u.email };
+    var sid = new URLSearchParams(location.search).get('s');
+    if (sid) openSession(sid); else listSessions();
+  }
+
+  // ─── sessions list ──────────────────────────────────────────────────
+  async function listSessions() {
+    $('hTitle').textContent = 'AI Estimator'; $('backBtn').href = 'estimating.html';
+    var r = await supabaseClient.from('ai_est_sessions').select('id, name, location, status, created_at, estimate_id').order('created_at', { ascending: false });
+    var rows = (r.data || []).map(function(s) {
+      return '<tr class="click" onclick="location.href=\'ai-estimator.html?s=' + s.id + '\'"><td><b>' + esc(s.name) + '</b><div class="muted">' + esc(s.location || '') + '</div></td>' +
+        '<td><span class="st">' + esc(s.status) + '</span></td><td class="muted">' + esc(s.created_at.slice(0, 10)) + '</td><td>' + (s.estimate_id ? '📐 estimate' : '') + '</td></tr>';
+    }).join('');
+    $('main').innerHTML =
+      '<div class="card"><h3>New bid session</h3><div class="row">' +
+      '<label>Project / bid name<input type="text" id="nName" placeholder="e.g. Crozier Fine Arts — 32-02 Queens Blvd" style="min-width:320px"></label>' +
+      '<label>Location<input type="text" id="nLoc" placeholder="Address"></label>' +
+      '<label>Floors<input type="number" id="nFloors" min="1" style="width:80px"></label>' +
+      '<label>AI model<select id="nModel"><option value="claude-sonnet-5">Sonnet 5 (fast, ~$0.10/sheet)</option><option value="claude-opus-5-5">Opus 5.5 (most careful)</option></select></label>' +
+      '<button class="btn primary" style="align-self:flex-end" onclick="AE.create()">Create session</button></div>' +
+      '<p class="muted" style="margin:10px 0 0">One session per bid: upload the drawings, specs, addenda, bid RFIs and vendor quotes. The AI reads every sheet, then the estimate is priced with NWAC standards (Kastriot\'s Estimating Standards) and NWAC\'s Procore unit rates.</p></div>' +
+      '<div class="card"><h3>Sessions</h3>' + (rows ? '<table class="t"><tr><th>Bid</th><th>Status</th><th>Created</th><th></th></tr>' + rows + '</table>' : '<div class="muted">No sessions yet.</div>') + '</div>';
+  }
+
+  async function create() {
+    var name = $('nName').value.trim(); if (!name) { toast('Enter the bid name'); return; }
+    var r = await supabaseClient.from('ai_est_sessions').insert({ name: name, location: $('nLoc').value.trim() || null, floors: Number($('nFloors').value) || null, model: $('nModel').value }).select('id').single();
+    if (r.error) { toast(r.error.message); return; }
+    location.href = 'ai-estimator.html?s=' + r.data.id;
+  }
+
+  // ─── one session ────────────────────────────────────────────────────
+  async function openSession(sid) {
+    $('backBtn').href = 'ai-estimator.html';
+    var r = await supabaseClient.from('ai_est_sessions').select('*').eq('id', sid).single();
+    if (r.error) { $('main').innerHTML = '<div class="card">' + esc(r.error.message) + '</div>'; return; }
+    session = r.data; $('hTitle').textContent = session.name;
+    await reload();
+    render();
+  }
+  async function reload() {
+    var f = await supabaseClient.from('ai_est_files').select('*').eq('session_id', session.id).order('created_at');
+    var p = await supabaseClient.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_title, sheet_type, status, error, cost, tokens_in, tokens_out, tag_counts, result, model, started_at').eq('session_id', session.id).order('page_no');
+    files = f.data || []; pages = p.data || [];
+    pages.sort(function(a, b) { return files.findIndex(function(x) { return x.id === a.file_id; }) - files.findIndex(function(x) { return x.id === b.file_id; }) || a.page_no - b.page_no; });
+  }
+
+  function render() {
+    var done = pages.filter(function(p) { return p.status === 'done'; }).length, cost = pages.reduce(function(a, p) { return a + Number(p.cost || 0); }, 0);
+    var todo = pages.filter(function(p) { return p.status === 'pending' || p.status === 'error'; }).length;
+    var res = session.result || {};
+    var html =
+      '<div class="card"><div class="row" style="justify-content:space-between">' +
+      '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
+      ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + '</div></div>' +
+      '<div class="row"><label>Floors<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
+      (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a>' : '') + '</div></div></div>' +
+
+      '<div class="card"><h3>1 · Bid documents</h3>' +
+      '<div class="row"><select id="upKind">' + KINDS.map(function(k) { return '<option value="' + k[0] + '">' + k[1] + '</option>'; }).join('') + '</select>' +
+      '<input type="file" id="upFile" accept="application/pdf" multiple onchange="AE.upload(this.files)">' +
+      '<span class="muted" id="upMsg"></span></div>' +
+      '<div class="prog"><div id="upProg"></div></div>' +
+      (files.length ? '<table class="t" style="margin-top:10px"><tr><th>File</th><th>Kind</th><th class="n">Pages</th><th class="n hide-m">Size</th></tr>' + files.map(function(f) {
+        return '<tr><td>' + esc(f.file_name) + '</td><td>' + esc(f.kind) + '</td><td class="n">' + (f.pages || '') + '</td><td class="n hide-m">' + (f.size ? (f.size / 1048576).toFixed(1) + ' MB' : '') + '</td></tr>';
+      }).join('') + '</table>' : '') + '</div>' +
+
+      '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">2 · AI reads every sheet — ' + done + ' / ' + pages.length + ' done</h3>' +
+      '<div class="row"><button class="btn primary" id="readBtn" onclick="AE.readAll()" ' + (!todo || running ? 'disabled' : '') + '>' + (running ? 'Reading…' : '▶ Read ' + todo + ' sheet' + (todo === 1 ? '' : 's')) + '</button></div></div>' +
+      '<div class="prog"><div id="rdProg" style="width:' + (pages.length ? Math.round(done / pages.length * 100) : 0) + '%"></div></div>' +
+      (pages.length ? '<table class="t" style="margin-top:10px"><tr><th>#</th><th>Sheet</th><th class="hide-m">Type</th><th>Found</th><th>Status</th><th class="n hide-m">$</th><th></th></tr>' + pages.map(pageRow).join('') + '</table>' : '<div class="muted" style="margin-top:8px">Upload the drawing set first.</div>') + '</div>' +
+
+      '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">3 · Estimate</h3><div class="row">' +
+      '<label class="muted" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="ofci" ' + (res.ofci ? 'checked' : '') + '> Owner-furnished equipment (30% OH)</label>' +
+      '<label class="muted" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="highRise" ' + (res.highRise ? 'checked' : '') + '> Roof above 10th floor (crane)</label>' +
+      '<button class="btn primary" onclick="AE.price()" ' + (done ? '' : 'disabled') + '>💲 Price it</button>' +
+      '<button class="btn" onclick="AE.review()" ' + (done ? '' : 'disabled') + '>🔎 AI scope review</button>' +
+      '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button></div></div>' +
+      '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
+      '<div id="revOut">' + renderReview(res) + '</div></div>';
+    $('main').innerHTML = html;
+  }
+
+  function pageRow(p) {
+    var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {}, bits = [];
+    if (r.equipment && r.equipment.length) bits.push(r.equipment.length + ' equip');
+    if (r.air_devices && r.air_devices.length) bits.push(r.air_devices.reduce(function(a, d) { return a + Number(d.qty || 0); }, 0) + ' air dev');
+    if (r.duct_runs && r.duct_runs.length) bits.push(Math.round(r.duct_runs.reduce(function(a, d) { return a + Number(d.lf || 0); }, 0)) + ' ft duct');
+    if (r.pipe_runs && r.pipe_runs.length) bits.push(Math.round(r.pipe_runs.reduce(function(a, d) { return a + Number(d.lf || 0); }, 0)) + ' ft pipe');
+    if (r.scope_notes && r.scope_notes.length) bits.push(r.scope_notes.length + ' notes');
+    if (r.total) bits.push(money(r.total));
+    var tc = p.tag_counts && p.tag_counts.tags ? Object.keys(p.tag_counts.tags).length : 0;
+    return '<tr class="click" onclick="AE.showPage(\'' + p.id + '\')"><td class="muted">' + (f.kind === 'quote' ? 'Q' : p.page_no) + '</td>' +
+      '<td><b>' + esc(p.sheet_no || r.quote_no || '') + '</b> ' + esc(p.sheet_title || r.vendor || f.file_name || '') + '</td>' +
+      '<td class="hide-m muted">' + esc(p.sheet_type || '') + '</td>' +
+      '<td class="muted">' + (bits.join(' · ') || (tc ? tc + ' tags in text' : '')) + (r.truncated ? ' <span class="flag">truncated</span>' : '') + (r.parse_error ? ' <span class="flag">unreadable answer</span>' : '') + '</td>' +
+      '<td><span class="st ' + p.status + '" title="' + esc(p.error || '') + '">' + p.status + '</span></td>' +
+      '<td class="n hide-m muted">' + (p.cost ? Number(p.cost).toFixed(2) : '') + '</td>' +
+      '<td><button class="btn" style="padding:3px 8px" onclick="event.stopPropagation();AE.readOne(\'' + p.id + '\')" ' + (running ? 'disabled' : '') + '>↻</button></td></tr>';
+  }
+
+  function showPage(id) {
+    var p = pages.find(function(x) { return x.id === id; }); if (!p) return;
+    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">' + esc((p.sheet_no || 'Page ' + p.page_no) + ' ' + (p.sheet_title || '')) + '</h3><button class="btn" onclick="AE.closeModal()">Close</button></div>' +
+      (p.error ? '<p class="flag">' + esc(p.error) + '</p>' : '') +
+      '<p class="muted">Model ' + esc(p.model || '') + ' · ' + (p.tokens_in || 0) + ' in / ' + (p.tokens_out || 0) + ' out tokens · $' + Number(p.cost || 0).toFixed(3) + '</p>' +
+      (p.tag_counts && p.tag_counts.tags ? '<p class="muted"><b>Tags counted in the PDF text:</b> ' + esc(Object.entries(p.tag_counts.tags).map(function(e) { return e[0] + '×' + e[1]; }).join(', ')) + '</p>' : '') +
+      '<pre class="json">' + esc(JSON.stringify(p.result || {}, null, 2)) + '</pre>';
+    $('modal').classList.add('open');
+  }
+  function closeModal() { $('modal').classList.remove('open'); }
+
+  async function saveFloors(v) {
+    session.floors = Number(v) || null;
+    await supabaseClient.from('ai_est_sessions').update({ floors: session.floors }).eq('id', session.id);
+  }
+
+  // ─── upload + text layer ────────────────────────────────────────────
+  var TAG_RE = /\b([A-Z]{1,4}(?:-[A-Z]{1,3})?)-(\d{1,2}[A-Z]?(?:-\d{1,3}[A-Z]?)?)\b/g;
+  var SHEET_PREFIX = /^(M|MD|MP|P|PD|E|A|S|FP|FA|T|G|H|C|L|D)$/;
+  function textStats(text) {
+    var tags = {}, sizes = {}, m;
+    TAG_RE.lastIndex = 0;
+    while ((m = TAG_RE.exec(text))) {
+      if (SHEET_PREFIX.test(m[1])) continue;                 // M-1, E-2: sheet or keyed-note refs, not equipment
+      tags[m[0]] = (tags[m[0]] || 0) + 1;
+    }
+    var re = /(\d{1,2})["”]?\s*[xX×]\s*(\d{1,2})["”]?(?![\d'])/g;
+    while ((m = re.exec(text))) { var k = m[1] + 'x' + m[2]; sizes[k] = (sizes[k] || 0) + 1; }
+    var rr = /(\d{1,2})["”]\s*(?:Ø|ø|⌀|RD\b|DIA\b|ROUND)/g;
+    while ((m = rr.exec(text))) { var k2 = m[1] + '"Ø'; sizes[k2] = (sizes[k2] || 0) + 1; }
+    return { tags: tags, sizes: sizes };
+  }
+  function guessSheet(text) {
+    var all = text.match(/\b(M|MD|MP|P|H)-?\d{3}(?:\.\d{1,2})?\b/g) || [];
+    return all.length ? all[all.length - 1] : null;
+  }
+
+  async function upload(list) {
+    if (!list || !list.length) return;
+    var kind = $('upKind').value, n = 0;
+    for (var fi = 0; fi < list.length; fi++) {
+      var file = list[fi];
+      $('upMsg').textContent = 'Uploading ' + file.name + '…';
+      var path = session.id + '/' + Date.now() + '_' + file.name.replace(/[^\w.\- ]+/g, '_');
+      var up = await supabaseClient.storage.from('ai-estimator').upload(path, file, { contentType: 'application/pdf' });
+      if (up.error) { toast('Upload failed: ' + up.error.message); continue; }
+      var buf = await file.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+      var fr = await supabaseClient.from('ai_est_files').insert({ session_id: session.id, kind: kind, file_name: file.name, storage_path: path, pages: pdf.numPages, size: file.size }).select('id').single();
+      if (fr.error) { toast(fr.error.message); continue; }
+      fileCache[fr.data.id] = buf;
+      var rows = [];
+      if (kind === 'quote') {
+        rows.push({ session_id: session.id, file_id: fr.data.id, page_no: 1, sheet_type: 'quote', sheet_title: file.name, status: 'pending' });
+      } else {
+        for (var i = 1; i <= pdf.numPages; i++) {
+          $('upMsg').textContent = file.name + ': reading text of page ' + i + ' / ' + pdf.numPages;
+          $('upProg').style.width = Math.round(i / pdf.numPages * 100) + '%';
+          var tc = await (await pdf.getPage(i)).getTextContent();
+          var text = tc.items.map(function(it) { return it.str; }).join(' ');
+          var st = textStats(text);
+          rows.push({ session_id: session.id, file_id: fr.data.id, page_no: i, sheet_no: guessSheet(text), text_len: text.length, tag_counts: st,
+            status: kind === 'specs' && pdf.numPages > 20 ? 'skipped' : 'pending' });
+        }
+      }
+      var ins = await supabaseClient.from('ai_est_pages').insert(rows);
+      if (ins.error) toast(ins.error.message); else n += rows.length;
+    }
+    $('upMsg').textContent = n + ' page(s) added'; $('upProg').style.width = '0';
+    await reload(); render();
+  }
+
+  // ─── reading sheets through the Edge Function ──────────────────────
+  async function fileBytes(fileId) {
+    if (fileCache[fileId]) return fileCache[fileId];
+    var f = files.find(function(x) { return x.id === fileId; });
+    var d = await supabaseClient.storage.from('ai-estimator').download(f.storage_path);
+    if (d.error) throw new Error(d.error.message);
+    fileCache[fileId] = await d.data.arrayBuffer();
+    return fileCache[fileId];
+  }
+  function b64(bytes) {
+    return new Promise(function(res) { var fr = new FileReader(); fr.onload = function() { res(String(fr.result).split(',')[1]); }; fr.readAsDataURL(new Blob([bytes])); });
+  }
+  async function onePagePdf(buf, pageNo) {
+    var src = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+    var out = await PDFLib.PDFDocument.create();
+    var cp = await out.copyPages(src, [pageNo - 1]); out.addPage(cp[0]);
+    return await out.save();
+  }
+  // zoomed tiles of a plan sheet, so small tags and duct sizes are legible
+  async function tiles(buf, pageNo) {
+    var pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise, pg = await pdf.getPage(pageNo);
+    var vp1 = pg.getViewport({ scale: 1 }), scale = Math.min(4200 / Math.max(vp1.width, vp1.height), 3);
+    var vp = pg.getViewport({ scale: scale }), c = document.createElement('canvas');
+    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    var cols = c.width >= c.height ? 3 : 2, rowsN = c.width >= c.height ? 2 : 3, out = [];
+    var tw = Math.ceil(c.width / cols), th = Math.ceil(c.height / rowsN);
+    for (var r = 0; r < rowsN; r++) for (var k = 0; k < cols; k++) {
+      var t = document.createElement('canvas'); t.width = tw; t.height = th;
+      var g = t.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, tw, th);
+      g.drawImage(c, k * tw, r * th, tw, th, 0, 0, tw, th);
+      out.push(t.toDataURL('image/jpeg', 0.72).split(',')[1]);
+    }
+    c.width = c.height = 0;
+    return out;
+  }
+  async function callFn(body) {
+    var s = (await supabaseClient.auth.getSession()).data.session;
+    var r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.access_token, apikey: SUPABASE_ANON_KEY }, body: JSON.stringify(body) });
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
+  }
+  async function readPage(p) {
+    var f = files.find(function(x) { return x.id === p.file_id; }), buf = await fileBytes(p.file_id), body;
+    if (f.kind === 'quote') {
+      var src = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true }), bytes = buf;
+      if (src.getPageCount() > 20) { var o = await PDFLib.PDFDocument.create(); (await o.copyPages(src, Array.from({ length: 20 }, function(_, i) { return i; }))).forEach(function(pp) { o.addPage(pp); }); bytes = await o.save(); }
+      body = { action: 'quote', page_id: p.id, pdf_base64: await b64(bytes) };
+    } else {
+      var one = await onePagePdf(buf, p.page_no), txt = p.tag_counts || {};
+      var plan = /plan|enlarged/i.test(p.sheet_title || '') || Object.keys(txt.sizes || {}).length > 3 || Object.keys(txt.tags || {}).length > 6;
+      body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(one), tag_counts: txt.tags || {},
+        text_hint: Object.entries(txt.sizes || {}).map(function(e) { return e[0] + '×' + e[1]; }).join(', ') };
+      if (plan) body.tiles = await tiles(buf, p.page_no);
+    }
+    await callFn(body);
+    // the function works in the background; wait for its row to finish
+    for (var i = 0; i < 70; i++) {
+      await sleep(4000);
+      var r = await supabaseClient.from('ai_est_pages').select('status, error, result, cost, tokens_in, tokens_out, sheet_no, sheet_title, sheet_type, model').eq('id', p.id).single();
+      if (r.data && (r.data.status === 'done' || r.data.status === 'error')) { Object.assign(p, r.data); return; }
+    }
+    await supabaseClient.from('ai_est_pages').update({ status: 'error', error: 'timed out — press ↻ to try again' }).eq('id', p.id);
+    p.status = 'error'; p.error = 'timed out';
+  }
+  async function runQueue(list) {
+    if (running) return; running = true; render();
+    var i = 0, done = 0;
+    async function worker() {
+      while (i < list.length) {
+        var p = list[i++]; p.status = 'running'; paint();
+        try { await readPage(p); } catch (e) { p.status = 'error'; p.error = e.message; await supabaseClient.from('ai_est_pages').update({ status: 'error', error: e.message }).eq('id', p.id); }
+        done++; paint();
+      }
+    }
+    function paint() { var el = $('main'); if (el) { var y = window.scrollY; render(); window.scrollTo(0, y); } }
+    await Promise.all([worker(), worker(), worker()]);
+    running = false; await reload(); render();
+    var bad = list.filter(function(p) { return p.status === 'error'; }).length;
+    toast(bad ? bad + ' sheet(s) failed — press ↻ on them' : 'All sheets read ✓');
+  }
+  function readAll() { runQueue(pages.filter(function(p) { return p.status === 'pending' || p.status === 'error'; })); }
+  function readOne(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) runQueue([p]); }
+
+  // ─── pricing ────────────────────────────────────────────────────────
+  async function loadNorms() {
+    if (norms) return norms;
+    var all = [], from = 0;
+    while (true) {
+      var r = await supabaseClient.from('est_norms').select('kind, item, unit, unit_cost, labor_hrs, projects').range(from, from + 999);
+      if (r.error || !r.data || !r.data.length) break;
+      all = all.concat(r.data); if (r.data.length < 1000) break; from += 1000;
+    }
+    norms = all; return norms;
+  }
+  async function price() {
+    var n = await loadNorms();
+    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked });
+    var res = Object.assign({}, session.result || {}, {
+      engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
+      ofci: $('ofci').checked, highRise: $('highRise').checked });
+    session.result = res; session.status = 'priced';
+    await supabaseClient.from('ai_est_sessions').update({ result: res, status: 'priced', updated_at: new Date().toISOString() }).eq('id', session.id);
+    render();
+    if (!n.length) toast('Priced with the fallback duct/pipe formula — Procore rate table not loaded yet');
+  }
+  var CAT_LABEL = { disconnects: '1 · Disconnects', equipment: '2 · Equipment', ductwork: '3 · Ductwork', pipework: '4 · Pipework', equipment_install: '5 · Equipment install', air_outlets: '6 · Air outlets install', services: '7 · Services' };
+  function lineAmt(l) { return l.quantity * l.unit_material_cost + l.quantity * l.unit_labor_hours * 60; }
+  function renderEngine(e) {
+    var h = '<table class="t" style="margin-top:10px"><tr><th>Item</th><th class="n">Qty</th><th class="n hide-m">Material</th><th class="n hide-m">Hours</th><th class="n">Amount</th></tr>';
+    Object.keys(CAT_LABEL).forEach(function(c) {
+      var ls = e.lines.filter(function(l) { return l.category === c; }); if (!ls.length) return;
+      var sub = ls.reduce(function(a, l) { return a + lineAmt(l); }, 0);
+      h += '<tr class="cat"><td colspan="4">' + CAT_LABEL[c] + '</td><td class="n">' + money(sub) + '</td></tr>';
+      ls.forEach(function(l) {
+        h += '<tr><td>' + esc(l.description) + (l.is_firm === false ? ' <span class="flag">BUDGET</span>' : '') + '<div class="basis">' + esc(l.basis || '') + '</div>' + (l.flag ? '<div class="flag">⚠ ' + esc(l.flag) + '</div>' : '') + '</td>' +
+          '<td class="n">' + (+l.quantity).toLocaleString('en-US', { maximumFractionDigits: 1 }) + ' ' + esc(l.unit || '') + '</td>' +
+          '<td class="n hide-m">' + (l.unit_material_cost ? money(l.quantity * l.unit_material_cost) : '') + '</td>' +
+          '<td class="n hide-m">' + (l.unit_labor_hours ? (l.quantity * l.unit_labor_hours).toFixed(1) : '') + '</td><td class="n">' + money(lineAmt(l)) + '</td></tr>';
+      });
+    });
+    var t = e.totals || {};
+    h += '</table><div class="grid2" style="margin-top:14px"><div><table class="t">' +
+      [['Equipment / Material', t.materialTotal], ['Labor (' + (t.laborHours || 0).toFixed(1) + ' hrs @ $60)', t.labor], ['Wet-tap', t.wetTap], ['Services', t.services],
+        ['Base subtotal', t.baseSubtotal], ['Overhead (' + Math.round(((t.rates || {}).overhead || 0) * 100) + '%)', t.overhead], ['Miscellaneous (2%)', t.miscellaneous], ['Sales tax (8.875%, material only)', t.tax]]
+        .map(function(r) { return '<tr><td>' + r[0] + '</td><td class="n">' + money(r[1]) + '</td></tr>'; }).join('') +
+      '<tr class="cat"><td>PROJECT TOTAL</td><td class="n">' + money(t.bidPrice) + '</td></tr></table>' +
+      '<p class="muted">Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' NWAC Procore rates' : 'fallback formula (Procore rate table not loaded yet)') + '. Floors: ' + e.floors + '.</p></div><div>' +
+      (e.ductCheck ? '<p><b>Duct footage check:</b> ' + e.ductCheck.measured_ft + ' ft measured for ' + e.ductCheck.outlets + ' air devices; NWAC history says ' + e.ductCheck.expected_ft[0] + '–' + e.ductCheck.expected_ft[2] + ' ft (median ' + e.ductCheck.expected_ft[1] + ').</p>' : '') +
+      (e.flags.length ? '<b>To check before this goes out (' + e.flags.length + ')</b><ul class="l">' + e.flags.map(function(f) { return '<li><b>' + esc(f.item) + '</b> — ' + esc(f.flag) + '</li>'; }).join('') + '</ul>' : '') +
+      '</div></div>';
+    return h;
+  }
+
+  // ─── AI scope review ────────────────────────────────────────────────
+  async function review() {
+    var C = NWEngine.collect(pages);
+    var k = await supabaseClient.from('est_knowledge').select('title, body_md').in('category', ['process', 'proposal']).limit(6);
+    var ctx = 'PROJECT: ' + session.name + ' — ' + (session.location || '') + '\n\nNWAC PROCESS RULES:\n' +
+      (k.data || []).filter(function(d) { return /process notes|proposal template/i.test(d.title); }).map(function(d) { return '## ' + d.title + '\n' + d.body_md.slice(0, 14000); }).join('\n\n') +
+      '\n\nWHAT WAS READ FROM THE DRAWINGS AND QUOTES (JSON):\n' + JSON.stringify({ schedules: C.sched, on_plans: C.planEq, air_devices: C.devices, duct: C.duct, pipe: C.pipe, demo: C.demo,
+        wet_taps: C.wetTaps, rigging: C.rig, scope_notes: C.notes, open_questions: C.questions, quotes: C.quotes });
+    try { await callFn({ action: 'review', session_id: session.id, context: ctx }); } catch (e) { toast(e.message); return; }
+    session.result = Object.assign({}, session.result || {}, { review_status: 'running' }); render();
+    for (var i = 0; i < 60; i++) {
+      await sleep(5000);
+      var r = await supabaseClient.from('ai_est_sessions').select('result').eq('id', session.id).single();
+      if (r.data && r.data.result && r.data.result.review_status !== 'running') { session.result = r.data.result; render(); return; }
+    }
+    toast('Review is taking long — reload the page in a minute');
+  }
+  function renderReview(res) {
+    if (res.review_status === 'running') return '<p class="muted" style="margin-top:12px">🔎 AI scope review running…</p>';
+    if (res.review_status === 'error') return '<p class="flag">Review failed: ' + esc(res.review_error || '') + '</p>';
+    var v = res.review; if (!v) return '';
+    function list(title, arr, f) { return arr && arr.length ? '<h4 style="margin:12px 0 4px">' + title + ' (' + arr.length + ')</h4><ul class="l">' + arr.map(function(x) { return '<li>' + f(x) + '</li>'; }).join('') + '</ul>' : ''; }
+    return '<div style="margin-top:16px;border-top:1px solid var(--nw-border);padding-top:10px"><h3>AI scope review</h3>' +
+      (v.summary ? '<p style="font-size:13px">' + esc(v.summary) + '</p>' : '') +
+      list('Missing quotes', v.missing_quotes, function(x) { return '<b>' + esc(x.item) + '</b> ' + esc((x.tags || []).join(', ')) + ' → ' + esc(x.suggested_vendor || '') + ' <span class="muted">' + esc(x.why || '') + '</span>'; }) +
+      list('Quote gaps', v.quote_gaps, function(x) { return '<b>' + esc(x.vendor) + ':</b> ' + esc(x.gap) + ' <span class="muted">' + esc(x.impact || '') + '</span>'; }) +
+      list('Hidden scope in notes', v.hidden_scope, function(x) { return '<b>' + esc(x.source) + ':</b> ' + esc(x.item) + ' <span class="muted">' + esc(x.how_to_price || '') + '</span>'; }) +
+      list('Count mismatches', v.count_mismatches, function(x) { return '<b>' + esc(x.tag) + '</b> schedule ' + esc(x.schedule) + ' vs drawings ' + esc(x.drawings) + ' <span class="muted">' + esc(x.note || '') + '</span>'; }) +
+      list('Draft RFIs', v.rfis, function(x) { return esc(x.question) + ' <span class="muted">' + esc(x.sheet || '') + '</span>'; }) +
+      list('Proposal exclusions', v.exclusions, function(x) { return esc(x); }) +
+      list('Risks', v.risks, function(x) { return '<b>' + esc(x.severity) + ':</b> ' + esc(x.risk); }) + '</div>';
+  }
+
+  // ─── push into the regular estimate ─────────────────────────────────
+  async function toEstimate() {
+    var e = (session.result || {}).engine; if (!e) return;
+    if (session.estimate_id && !confirm('Replace the line items of the linked estimate with this AI breakdown?')) return;
+    var v = (session.result || {}).review || {};
+    var estId = session.estimate_id;
+    if (!estId) {
+      var r = await supabaseClient.from('estimates').insert({ name: session.name, project_address: session.location, estimator_name: me.name, status: 'draft',
+        is_ofci: !!(session.result || {}).ofci, overhead_pct: (session.result || {}).ofci ? 0.30 : 0.20,
+        exclusions: (v.exclusions || []).join('\n') || null, notes: 'Built by the AI Estimator (session ' + session.id + '). Check every BUDGET line and flag before sending.' }).select('id').single();
+      if (r.error) { toast(r.error.message); return; }
+      estId = r.data.id;
+    } else {
+      await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estId);
+    }
+    var rows = e.lines.map(function(l) {
+      return { estimate_id: estId, category: l.category, description: l.description, quantity: l.quantity, unit: l.unit, unit_material_cost: l.unit_material_cost,
+        unit_labor_hours: l.unit_labor_hours, labor_crew_type: l.labor_crew_type, vendor_name: l.vendor_name || null, vendor_quote_ref: l.vendor_quote_ref || null,
+        is_firm: l.is_firm !== false, is_wet_tap: !!l.is_wet_tap, sort_order: l.sort_order, notes: [l.basis, l.flag ? '⚠ ' + l.flag : ''].filter(Boolean).join(' — ') };
+    });
+    var ins = await supabaseClient.from('estimate_line_items').insert(rows);
+    if (ins.error) { toast(ins.error.message); return; }
+    session.estimate_id = estId;
+    await supabaseClient.from('ai_est_sessions').update({ estimate_id: estId }).eq('id', session.id);
+    toast('Estimate ready ✓'); render();
+  }
+
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors };
+})();
+</script>
+<script src="sw-register.js?v=233"></script>
+</body>
+</html>
