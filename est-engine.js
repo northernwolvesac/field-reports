@@ -179,7 +179,7 @@
       }
       if (isDemo) (r.demo || []).forEach(function (d) { demo.push({ item: d.item, qty: Number(d.qty || 0), sheet: sh }); });
       wetTaps += Number(r.wet_taps || 0);
-      (r.rigging || []).forEach(function (x) { rig.push({ tag: norm(x.tag), weight_lb: Number(x.weight_lb || 0), where: x.where, floor: x.floor, sheet: sh }); });
+      (r.rigging || []).forEach(function (x) { rig.push({ tag: String(x.tag || '').trim(), key: norm(x.tag), weight_lb: Number(x.weight_lb || 0), where: x.where, floor: x.floor, sheet: sh }); });
       (r.scope_notes || []).forEach(function (n) { if (n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
@@ -290,7 +290,7 @@
     if (!C.quotes.some(function (q) { return q.kind === 'tab'; }))
       add('services', 'Testing & balancing — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $2,500/floor');
     // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
-    var rigTags = {}; C.rig.forEach(function (x) { rigTags[x.tag] = 1; });
+    var rigTags = {}; C.rig.forEach(function (x) { rigTags[x.key || norm(x.tag)] = 1; });
     Object.keys(C.sched).forEach(function (tag) {
       var s = C.sched[tag], w = Number(s.weight_lb || 0); if (!w || rigTags[tag]) return;
       var roof = /roof|rtu|doas|dry ?cooler|condens|cooling tower|accu|exhaust fan/i.test((s.type || '') + ' ' + tag);
