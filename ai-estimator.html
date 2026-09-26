@@ -16,8 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=234"></script>
-<script src="est-engine.js?v=234"></script>
+<script src="est-totals.js?v=235"></script>
+<script src="est-engine.js?v=235"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -265,6 +265,12 @@ var AE = (function() {
             status: kind === 'specs' && pdf.numPages > 20 ? 'skipped' : 'pending' });
         }
       }
+      if (kind !== 'quote') {
+        $('upMsg').textContent = file.name + ': splitting pages…';
+        try {
+          await splitAndStore(fr.data.id, buf.slice(0), function(i, nn) { $('upMsg').textContent = file.name + ': storing page ' + i + ' / ' + nn; $('upProg').style.width = Math.round(i / nn * 100) + '%'; });
+        } catch (e) { toast('Page split failed (' + e.message + ') — sheets will be split when read'); }
+      }
       var ins = await supabaseClient.from('ai_est_pages').insert(rows);
       if (ins.error) toast(ins.error.message); else n += rows.length;
     }
@@ -272,7 +278,64 @@ var AE = (function() {
     await reload(); render();
   }
 
-  // ─── reading sheets through the Edge Function ──────────────────────
+  // ─── PDF work in a background worker, so 36×48 sheets never freeze the page ──
+  function pdfWorkerMain() {
+    importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js');
+    onmessage = async function(e) {
+      var m = e.data, L = PDFLib;
+      try {
+        var src = await L.PDFDocument.load(m.buf, { ignoreEncryption: true, updateMetadata: false });
+        if (m.op === 'split') {                       // one small PDF per page
+          var outs = [];
+          for (var i = 0; i < src.getPageCount(); i++) {
+            var d = await L.PDFDocument.create(), cp = await d.copyPages(src, [i]);
+            d.addPage(cp[0]); outs.push(await d.save());
+          }
+          postMessage({ ok: true, pages: outs }, outs.map(function(u) { return u.buffer; }));
+        } else if (m.op === 'first') {                // first n pages (long quotes)
+          var d2 = await L.PDFDocument.create(), n = Math.min(m.n || 20, src.getPageCount());
+          (await d2.copyPages(src, Array.from({ length: n }, function(_, k) { return k; }))).forEach(function(pg) { d2.addPage(pg); });
+          var b2 = await d2.save(); postMessage({ ok: true, bytes: b2 }, [b2.buffer]);
+        } else if (m.op === 'zoom') {                 // page 1 = whole sheet, then zoomed crops with ~10% overlap
+          var d3 = await L.PDFDocument.create();
+          d3.addPage((await d3.copyPages(src, [0]))[0]);
+          var sp = src.getPage(0), rot = ((sp.getRotation().angle || 0) % 360 + 360) % 360;
+          var emb = await d3.embedPage(sp), W = emb.width, H = emb.height;
+          var cols = W >= H ? 3 : 2, rows = W >= H ? 2 : 3, ov = 0.1;
+          var tw = W / cols * (1 + ov), th = H / rows * (1 + ov);
+          for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+            var x0 = Math.min(Math.max(c * W / cols - (tw - W / cols) / 2, 0), W - tw);
+            var y0 = Math.min(Math.max(r * H / rows - (th - H / rows) / 2, 0), H - th);
+            var pg3 = d3.addPage([tw, th]);
+            pg3.drawPage(emb, { x: -x0, y: -y0, width: W, height: H });
+            if (rot) pg3.setRotation(L.degrees(rot));
+          }
+          var b3 = await d3.save(); postMessage({ ok: true, bytes: b3, tiles: cols * rows }, [b3.buffer]);
+        }
+      } catch (err) { postMessage({ ok: false, error: String((err && err.message) || err) }); }
+    };
+  }
+  var pdfWorker = null, jobChain = Promise.resolve();
+  function runJob(msg) {
+    if (!pdfWorker) pdfWorker = new Worker(URL.createObjectURL(new Blob(['(' + pdfWorkerMain.toString() + ')()'], { type: 'text/javascript' })));
+    return new Promise(function(res, rej) {
+      pdfWorker.onmessage = function(e) { e.data.ok ? res(e.data) : rej(new Error(e.data.error)); };
+      pdfWorker.onerror = function(e) { rej(new Error(e.message || 'PDF worker failed')); };
+      pdfWorker.postMessage(msg, [msg.buf]);
+    });
+  }
+  function pdfJob(msg) { var p = jobChain.then(function() { return runJob(msg); }); jobChain = p.catch(function() {}); return p; }
+
+  // every page is stored on its own, so reading a sheet never re-opens a 10 MB set
+  function pagePath(fileId, n) { return session.id + '/pages/' + fileId + '/' + n + '.pdf'; }
+  async function splitAndStore(fileId, buf, onProg) {
+    var r = await pdfJob({ op: 'split', buf: buf });
+    for (var i = 0; i < r.pages.length; i++) {
+      if (onProg) onProg(i + 1, r.pages.length);
+      var up = await supabaseClient.storage.from('ai-estimator').upload(pagePath(fileId, i + 1), new Blob([r.pages[i]], { type: 'application/pdf' }), { upsert: true, contentType: 'application/pdf' });
+      if (up.error) throw new Error(up.error.message);
+    }
+  }
   async function fileBytes(fileId) {
     if (fileCache[fileId]) return fileCache[fileId];
     var f = files.find(function(x) { return x.id === fileId; });
@@ -281,33 +344,22 @@ var AE = (function() {
     fileCache[fileId] = await d.data.arrayBuffer();
     return fileCache[fileId];
   }
+  var splitting = {};
+  async function pageBytes(p) {
+    var d = await supabaseClient.storage.from('ai-estimator').download(pagePath(p.file_id, p.page_no));
+    if (d.error) {   // uploaded before pages were stored one by one: split that file once
+      if (!splitting[p.file_id]) splitting[p.file_id] = fileBytes(p.file_id).then(function(b) { return splitAndStore(p.file_id, b.slice(0)); });
+      await splitting[p.file_id];
+      d = await supabaseClient.storage.from('ai-estimator').download(pagePath(p.file_id, p.page_no));
+      if (d.error) throw new Error(d.error.message);
+    }
+    return await d.data.arrayBuffer();
+  }
   function b64(bytes) {
     return new Promise(function(res) { var fr = new FileReader(); fr.onload = function() { res(String(fr.result).split(',')[1]); }; fr.readAsDataURL(new Blob([bytes])); });
   }
-  async function onePagePdf(buf, pageNo) {
-    var src = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
-    var out = await PDFLib.PDFDocument.create();
-    var cp = await out.copyPages(src, [pageNo - 1]); out.addPage(cp[0]);
-    return await out.save();
-  }
-  // zoomed tiles of a plan sheet, so small tags and duct sizes are legible
-  async function tiles(buf, pageNo) {
-    var pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise, pg = await pdf.getPage(pageNo);
-    var vp1 = pg.getViewport({ scale: 1 }), scale = Math.min(4200 / Math.max(vp1.width, vp1.height), 3);
-    var vp = pg.getViewport({ scale: scale }), c = document.createElement('canvas');
-    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-    await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
-    var cols = c.width >= c.height ? 3 : 2, rowsN = c.width >= c.height ? 2 : 3, out = [];
-    var tw = Math.ceil(c.width / cols), th = Math.ceil(c.height / rowsN);
-    for (var r = 0; r < rowsN; r++) for (var k = 0; k < cols; k++) {
-      var t = document.createElement('canvas'); t.width = tw; t.height = th;
-      var g = t.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, tw, th);
-      g.drawImage(c, k * tw, r * th, tw, th, 0, 0, tw, th);
-      out.push(t.toDataURL('image/jpeg', 0.72).split(',')[1]);
-    }
-    c.width = c.height = 0;
-    return out;
-  }
+
+  // ─── reading sheets through the Edge Function ──────────────────────
   async function callFn(body) {
     var s = (await supabaseClient.auth.getSession()).data.session;
     var r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.access_token, apikey: SUPABASE_ANON_KEY }, body: JSON.stringify(body) });
@@ -316,17 +368,15 @@ var AE = (function() {
     return j;
   }
   async function readPage(p) {
-    var f = files.find(function(x) { return x.id === p.file_id; }), buf = await fileBytes(p.file_id), body;
+    var f = files.find(function(x) { return x.id === p.file_id; }), body;
     if (f.kind === 'quote') {
-      var src = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true }), bytes = buf;
-      if (src.getPageCount() > 20) { var o = await PDFLib.PDFDocument.create(); (await o.copyPages(src, Array.from({ length: 20 }, function(_, i) { return i; }))).forEach(function(pp) { o.addPage(pp); }); bytes = await o.save(); }
-      body = { action: 'quote', page_id: p.id, pdf_base64: await b64(bytes) };
+      var q = await pdfJob({ op: 'first', n: 20, buf: (await fileBytes(p.file_id)).slice(0) });
+      body = { action: 'quote', page_id: p.id, pdf_base64: await b64(q.bytes) };
     } else {
-      var one = await onePagePdf(buf, p.page_no), txt = p.tag_counts || {};
-      var plan = /plan|enlarged/i.test(p.sheet_title || '') || Object.keys(txt.sizes || {}).length > 3 || Object.keys(txt.tags || {}).length > 6;
-      body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(one), tag_counts: txt.tags || {},
+      var one = await pageBytes(p), txt = p.tag_counts || {}, bytes = one, zoom = 0;
+      if (f.kind !== 'specs') { var z = await pdfJob({ op: 'zoom', buf: one.slice(0) }); bytes = z.bytes; zoom = z.tiles; }
+      body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(bytes), zoom_tiles: zoom, tag_counts: txt.tags || {},
         text_hint: Object.entries(txt.sizes || {}).map(function(e) { return e[0] + '×' + e[1]; }).join(', ') };
-      if (plan) body.tiles = await tiles(buf, p.page_no);
     }
     await callFn(body);
     // the function works in the background; wait for its row to finish
@@ -470,6 +520,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote };
 })();
 </script>
-<script src="sw-register.js?v=234"></script>
+<script src="sw-register.js?v=235"></script>
 </body>
 </html>

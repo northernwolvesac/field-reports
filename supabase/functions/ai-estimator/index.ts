@@ -37,8 +37,9 @@ const json = (o: any, status = 200) =>
 // ─── prompts ──────────────────────────────────────────────────────────
 const SHEET_PROMPT = `You are the senior HVAC estimator at Northern Wolves AC (NY/NJ mechanical contractor).
 You are reading ONE sheet of a bid drawing set. Extract everything an estimator needs to price the HVAC scope.
-The PDF page (with its text layer) is attached; for plan sheets, zoomed tiles of the same sheet follow in reading order
-(left→right, top→bottom). TAG COUNTS below were counted exactly from the PDF text layer — trust them for quantities of
+The attached PDF (with its text layer): page 1 is the WHOLE sheet; any further pages are zoomed crops of the same sheet
+(about 10% overlap between neighbours) so small tags, sizes and notes are legible. Read details on the crops, but count every
+item ONCE — anything inside an overlap strip shows on two crops. TAG COUNTS below were counted exactly from the PDF text layer — trust them for quantities of
 tagged items on this sheet, and use the drawing to decide what each tag is.
 
 Rules:
