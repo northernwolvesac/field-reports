@@ -11,8 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="supabase-config.js?v=174"></script>
 <script src="auth.js?v=174"></script>
-<script src="est-totals.js?v=272"></script>
-<script src="geo-takeoff.js?v=272"></script>
+<script src="est-totals.js?v=273"></script>
+<script src="geo-takeoff.js?v=273"></script>
 <style>
   html, body { height: 100%; margin: 0; }
   body { background: #f8fafc; color: #0f172a; overflow: hidden; display: flex; flex-direction: column; }
@@ -332,6 +332,7 @@
   <h2>Roll up takeoff into estimate line items</h2>
   <p style="font-size:12px;color:#64748b;margin:0 0 10px">One estimate line per layer, priced with the layer's unit cost and labor (waste and labor factor applied). Lines created by an earlier roll-up are replaced.</p>
   <div id="rollupPreview" style="max-height:380px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px"></div>
+  <div class="field" style="margin-top:10px" id="rollupCatsWrap"><label style="text-transform:none;letter-spacing:0;font-size:12px;color:#0f172a"><input type="checkbox" id="rollupCats" checked style="width:auto;margin-right:6px">Replace the estimate's other <span id="rollupCatsList">Ductwork / Pipework</span> lines too — the takeoff becomes the source for those categories (after an AI Estimator import)</label></div>
   <div class="modal-actions"><button class="btn-ghost" id="rollupCancel">Cancel</button><button class="btn-primary" id="rollupApply">Insert into estimate</button></div>
 </div></div>
 
@@ -1032,12 +1033,17 @@ requireAuth().catch(function(){});
     var html = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:6px 8px">Layer</th><th style="text-align:left;padding:6px 8px">Category</th><th style="text-align:right;padding:6px 8px">Qty</th><th style="text-align:right;padding:6px 8px">Unit $</th><th style="text-align:right;padding:6px 8px">Unit h</th><th style="text-align:right;padding:6px 8px">Total</th></tr></thead><tbody>';
     rollupRows.forEach(function(r) { html += '<tr style="border-top:1px solid #f1f5f9"><td style="padding:6px 8px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + r.l.color + ';margin-right:6px"></span>' + esc(r.l.name) + '</td><td style="padding:6px 8px;color:#64748b">' + CATS[r.l.category] + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + fmtQty(r.qty, typeUnit(r.l.takeoff_type)) + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + r.mat.toFixed(2) + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + r.hrs.toFixed(3) + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + fmtMoney(r.t.total) + '</td></tr>'; });
     html += '</tbody></table>' + (rollupRows.length ? '' : '<div style="padding:20px;text-align:center;color:#64748b">Nothing measured yet.</div>');
-    $('rollupPreview').innerHTML = html; openModal('rollupModal');
+    $('rollupPreview').innerHTML = html;
+    var cats = uniq(rollupRows.map(function(r) { return r.l.category; })).filter(function(c) { return c === 'ductwork' || c === 'pipework'; });
+    $('rollupCatsWrap').style.display = cats.length ? '' : 'none'; $('rollupCatsList').textContent = cats.map(function(c) { return CATS[c]; }).join(' / ');
+    openModal('rollupModal');
   }
   async function applyRollup() {
     if (!me.canEdit) return; if (!rollupRows.length) { closeModal('rollupModal'); return; }
     var b = $('rollupApply'); b.disabled = true;
     await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estimateId).like('notes', '%[from PDF takeoff]%');
+    var cats = uniq(rollupRows.map(function(r) { return r.l.category; })).filter(function(c) { return c === 'ductwork' || c === 'pipework'; });
+    if (cats.length && $('rollupCats').checked) await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estimateId).in('category', cats).eq('is_wet_tap', false);
     var ex = await supabaseClient.from('estimate_line_items').select('sort_order').eq('estimate_id', estimateId).order('sort_order', { ascending: false }).limit(1).maybeSingle();
     var so = (ex.data ? ex.data.sort_order : 0) + 1;
     var rows = rollupRows.map(function(r) { return { estimate_id: estimateId, category: r.l.category, description: r.l.name + (r.l.group_name !== 'Default Group' ? ' (' + r.l.group_name + ')' : ''), quantity: r.qty, unit: typeUnit(r.l.takeoff_type) === 'sqft' ? 'sf' : typeUnit(r.l.takeoff_type) === 'ft' ? 'lf' : 'ea',
@@ -1175,6 +1181,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing };
 })();
 </script>
-<script src="sw-register.js?v=272"></script>
+<script src="sw-register.js?v=273"></script>
 </body>
 </html>

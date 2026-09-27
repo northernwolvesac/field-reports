@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=264"></script>
-<script src="est-engine.js?v=264"></script>
-<script src="geo-takeoff.js?v=264"></script>
+<script src="est-totals.js?v=273"></script>
+<script src="est-engine.js?v=273"></script>
+<script src="geo-takeoff.js?v=273"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -201,7 +201,8 @@ var AE = (function() {
       '<label class="muted" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="highRise" ' + (res.highRise ? 'checked' : '') + '> Roof above 10th floor (crane)</label>' +
       '<button class="btn primary" onclick="AE.price()" ' + (done ? '' : 'disabled') + '>💲 Price it</button>' +
       '<button class="btn" onclick="AE.review()" ' + (done ? '' : 'disabled') + '>🔎 AI scope review</button>' +
-      '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button></div></div>' +
+      '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button>' +
+      '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { var r = p.result || {}; return r.geo || r.geo_pipe || r.geo_riser; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button></div></div>' +
       renderDuctSpec(res) +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
       '<div id="revOut">' + renderReview(res) + '</div></div>';
@@ -623,6 +624,105 @@ var AE = (function() {
   }
 
   // ─── push into the regular estimate ─────────────────────────────────
+  // ─── the measured ducts / pipes / risers as takeoff layers + marks on the plans (takeoff.html) ───
+  var bridging = '';
+  var BRIDGE_COLORS = ['#0696D7', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#ef4444', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#0f172a', '#a16207'];
+  function scaleLabelFor(ptft) {
+    var inch = ptft / 72, names = [[1 / 16, '1/16"'], [3 / 32, '3/32"'], [1 / 8, '1/8"'], [3 / 16, '3/16"'], [1 / 4, '1/4"'], [3 / 8, '3/8"'], [1 / 2, '1/2"'], [3 / 4, '3/4"'], [1, '1"'], [1.5, '1 1/2"'], [3, '3"']];
+    for (var i = 0; i < names.length; i++) if (Math.abs(names[i][0] - inch) < 0.002) return names[i][1] + ' = 1\'';
+    return inch.toFixed(3) + '" = 1\'';
+  }
+  async function bridgeRate(patterns) {
+    for (var i = 0; i < patterns.length; i++) {
+      var c = await supabaseClient.from('est_catalog_items').select('id,name,unit_cost,unit_labor_min').ilike('name', patterns[i]).order('is_custom', { ascending: false }).limit(1).maybeSingle();
+      if (c.data) return { id: c.data.id, name: c.data.name, cost: Number(c.data.unit_cost || 0), hrs: Number(c.data.unit_labor_min || 0) / 60, basis: 'Procore catalog' };
+      var n = await supabaseClient.from('est_norms').select('item,unit_cost,labor_hrs,projects').ilike('item', patterns[i]).order('projects', { ascending: false }).limit(1).maybeSingle();
+      if (n.data) return { id: null, name: n.data.item, cost: Number(n.data.unit_cost || 0), hrs: Number(n.data.labor_hrs || 0), basis: 'NWAC Procore rate (' + n.data.projects + ' jobs)' };
+    }
+    return { id: null, name: null, cost: 0, hrs: 0, basis: 'no rate found — set by hand' };
+  }
+  async function toTakeoff() {
+    if (bridging) return;
+    if (!session.estimate_id) { toast('Create the estimate first'); return; }
+    var estId = session.estimate_id;
+    var list = pages.filter(function(p) { var r = p.result || {}; return (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || (isPipePlan(p) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0); });
+    if (!list.length) { toast('Nothing measured yet — press “Measure ducts & pipes” first'); return; }
+    if (!confirm('Copy the drawing set into this estimate\'s Takeoff and lay the measured ducts, pipes and risers on the plans as layers? Earlier auto-marks there are replaced.')) return;
+    bridging = 'Preparing…'; render();
+    try {
+      var lr = await supabaseClient.from('estimate_takeoff_layers').select('*').eq('estimate_id', estId);
+      if (lr.error) throw new Error(/does not exist|42P01/i.test(lr.error.message) ? 'run takeoff-v2-schema.sql in Supabase first' : lr.error.message);
+      var layers = lr.data || [];
+      // 1 · one takeoff drawing per session file (copied into the takeoff bucket once, matched by file name)
+      var ex = await supabaseClient.from('estimate_drawings').select('id,filename,page_count').eq('estimate_id', estId);
+      var have = {}; (ex.data || []).forEach(function(d) { have[d.filename] = d; });
+      var fileIds = Array.from(new Set(list.map(function(p) { return p.file_id; }))), dwg = {};
+      for (var fi = 0; fi < fileIds.length; fi++) {
+        var f = files.find(function(x) { return x.id === fileIds[fi]; });
+        if (have[f.file_name]) { dwg[f.id] = have[f.file_name]; continue; }
+        bridging = 'Copying ' + f.file_name + '…'; render();
+        var bytes = await fileBytes(f.id), path = estId + '/' + Date.now() + '_' + f.file_name.replace(/[^A-Za-z0-9._-]/g, '_');
+        var up = await supabaseClient.storage.from('estimate-drawings').upload(path, new Blob([bytes], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false });
+        if (up.error) throw new Error(up.error.message);
+        var meta = {}; pages.forEach(function(p) { var r = p.result || {}; if (p.file_id === f.id && r.sheet_no) meta[String(p.page_no)] = { sheet: r.sheet_no }; });
+        var ins = await supabaseClient.from('estimate_drawings').insert({ estimate_id: estId, filename: f.file_name, storage_path: path, page_count: f.pages || 1, drawing_type: 'base', page_meta: meta, uploaded_by: me.id }).select().single();
+        if (ins.error) throw new Error(ins.error.message);
+        dwg[f.id] = ins.data;
+      }
+      var dIds = Object.keys(dwg).map(function(k) { return dwg[k].id; });
+      await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('label', 'auto');
+      await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%');
+      // 2 · layers by size, rates from the catalog; the duct family comes from the spec reading
+      var famKey = NWEngine.familyFor((session.result || {}).duct_spec || null), F = NWEngine.DUCT_FAMILIES[famKey], made = 0;
+      async function layerFor(name, cat, group, patterns) {
+        var l = layers.find(function(x) { return x.name.toLowerCase() === name.toLowerCase(); }); if (l) return l;
+        var rate = await bridgeRate(patterns || [name]);
+        var r = await supabaseClient.from('estimate_takeoff_layers').insert({ estimate_id: estId, group_name: group, name: rate.name || name, takeoff_type: 'linear', category: cat, labor_crew_type: cat === 'pipework' ? 'pipe' : 'sm', unit: 'ft',
+          unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id, color: BRIDGE_COLORS[layers.length % BRIDGE_COLORS.length], sort_order: layers.length, notes: rate.basis + ' · from the AI Estimator' }).select().single();
+        if (r.error) throw new Error(r.error.message); layers.push(r.data); made++; return r.data;
+      }
+      // 3 · the drawing geometry again, this time keeping every piece, laid on the plan
+      var rows = [], scales = [];
+      for (var i = 0; i < list.length; i++) {
+        var p = list[i], res = p.result || {}, d = dwg[p.file_id];
+        bridging = 'Laying out ' + (res.sheet_no || 'p' + p.page_no) + ' (' + (i + 1) + ' / ' + list.length + ')…'; render();
+        var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, page = await pdf.getPage(1), vp = page.getViewport({ scale: 1 });
+        var V = function(x, y) { var q = vp.convertToViewportPoint(x, y); return [q[0], q[1]]; };
+        var mk = function(l, pts, ft, ptft, extra) { return Object.assign({ drawing_id: d.id, page_number: p.page_no, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: ptft || null, label: 'auto' }, extra || {}); };
+        var ptft = null;
+        if (isDuctPlan(p) && res.geo && res.geo.total_ft > 0) {
+          var data = await NWGeo.extract(page); data.wantPieces = true; var g = await NWGeo.measure(data);
+          if (g && !g.error && g.xy) { ptft = g.ptft;
+            for (var k = 0; k < g.xy.length; k++) { var pc = g.xy[k], sz = String(pc.size || ''), round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x');
+              var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group');
+              if (pc.k === 'd') { var h = pc.len * ptft / 2; rows.push(mk(l, [V(pc.cx - pc.ux * h, pc.cy - pc.uy * h), V(pc.cx + pc.ux * h, pc.cy + pc.uy * h)], pc.len, ptft)); }
+              else (pc.segs || []).forEach(function(s) { rows.push(mk(l, [V(s[0], s[1]), V(s[2], s[3])], Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft, ptft)); }); } }
+        }
+        if (isPipePlan(p) && res.geo_pipe && res.geo_pipe.total_ft > 0) {
+          var pdata = await NWGeo.extract(page); pdata.wantPieces = true; var pp = await NWGeo.measurePipes(pdata);
+          if (pp && !pp.error && pp.xy) { ptft = ptft || pp.ptft;
+            for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
+              var pl = await layerFor(cd ? size + ' condensate drain' : size + ' copper pipe & 1" insulation', 'pipework', 'Pipes', cd ? [size + '%pvc%', size + ' copper pipe & 1" insulation'] : null);
+              rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / pp.ptft, pp.ptft)); } }
+        }
+        if (isRiserSheet(p) && res.geo_riser && res.geo_riser.total_ft > 0) {
+          var rdata = await NWGeo.extract(page); rdata.wantPieces = true; var rr = await NWGeo.measureRisers(rdata);
+          if (rr && !rr.error && rr.xy) for (var q = 0; q < rr.xy.length; q++) { var rs = rr.xy[q]; if (rs.z === '?' || !(rs.ft > 0.5)) continue;
+            var rl = await layerFor(rs.z + ' copper pipe & 1" insulation', 'pipework', 'Pipes');
+            rows.push(mk(rl, [V(rs.s[0], rs.s[1]), V(rs.s[2], rs.s[3])], rs.ft, null, { notes: 'riser — length from the floor elevations, not the drawing scale' })); }
+        }
+        if (ptft) scales.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(ptft) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ptft, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' });
+        pdf.destroy();
+      }
+      bridging = 'Saving ' + rows.length + ' marks…'; render();
+      var all = scales.concat(rows);
+      for (var c = 0; c < all.length; c += 200) { var ins2 = await supabaseClient.from('estimate_measurements').insert(all.slice(c, c + 200)); if (ins2.error) throw new Error(ins2.error.message); }
+      toast('✅ ' + rows.length + ' runs on ' + list.length + ' plans, ' + made + ' layers — opening the takeoff');
+      setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
+    } catch (e) { toast('Takeoff: ' + (e.message || e)); }
+    bridging = ''; render();
+  }
+
   async function toEstimate() {
     var e = (session.result || {}).engine; if (!e) return;
     if (session.estimate_id && !confirm('Replace the line items of the linked estimate with this AI breakdown?')) return;
@@ -649,9 +749,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=264"></script>
+<script src="sw-register.js?v=273"></script>
 </body>
 </html>
