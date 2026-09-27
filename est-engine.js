@@ -38,8 +38,17 @@
         basis: r.weight_lb > 3000 ? '3,100 lb+ — $4,000/unit' : 'up to 3,000 lb — $1,000/unit' });
     });
     if (roof.length) {
-      if (highRise) out.push({ d: 'Crane — ' + roof.length + ' rooftop unit(s)', amt: 25000, basis: 'crane above 10th floor — $25,000/day (no permits)', flag: 'confirm floor height / permits' });
-      else {
+      // a unit over 10,000 lb is beyond a boom truck: Kastriot carries a crane day as a placeholder until the rigger quotes
+      // (Crozier DOAS-3-1, 18,300 lb → Procore "Crane" $25,000); the other roof units go up on the same crane day(s)
+      var critical = roof.filter(function (r) { return r.weight_lb >= 10000; });
+      if (highRise || critical.length) {
+        var days = Math.ceil(roof.length / 12);
+        out.push({ d: 'Crane — ' + roof.length + ' rooftop / outdoor unit(s)' + (days > 1 ? ', ' + days + ' days' : '') +
+            (critical.length ? ' (heaviest ' + critical.map(function (r) { return (r.tag || 'unit') + ' ' + r.weight_lb.toLocaleString() + ' lb'; }).join(', ') + ')' : ''),
+          amt: 25000 * days,
+          basis: (critical.length ? 'unit over 10,000 lb is beyond a boom truck' : 'crane above 10th floor') + ' — $25,000/day, max 12 units/day (no permits)',
+          flag: critical.length ? 'placeholder — critical pick: get a crane / rigger quote (DOB/MTA permits can make it $50,000/day)' : 'confirm floor height / permits' });
+      } else {
         var heavy = roof.filter(function (r) { return r.weight_lb >= 4000; }), light = roof.length - heavy.length;
         if (light) out.push({ d: 'Boom truck — ' + light + ' rooftop unit(s) 400–3,000 lb', amt: light <= 2 ? 3000 : Math.ceil(light / 5) * 6000,
           basis: '$3,000 half day / $6,000 full day, max 5/day' });
