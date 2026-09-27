@@ -36,6 +36,7 @@
       return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
     }
     var segs = [], rects = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only)
+    var glyphs = [], pathPts = [];   // small painted paths = glyph outlines of stroked/outlined text (for OCR)
     var styles = {}, styleList = [];
     function styleKey() {
       var scale = Math.sqrt(Math.abs(st.ctm[0] * st.ctm[3] - st.ctm[1] * st.ctm[2])) || 1;
@@ -71,8 +72,13 @@
       keepSegs.forEach(function (x) { path.push(x); });
       subIdx = path.length;
     }
-    function flush(stroke) {
+    function flush(stroke, paint) {
       endSub(false);
+      if (paint !== false && pathPts.length && pathPts.length <= 400) {
+        var gb = bboxOf(pathPts), gw = gb[2] - gb[0], gh = gb[3] - gb[1];
+        if (gw <= 22 && gh <= 22 && (gw >= 0.4 || gh >= 0.4)) glyphs.push([gb[0], gb[1], gb[2], gb[3]]);
+      }
+      pathPts = [];
       if (stroke && path.length) {
         var si = styleKey();
         for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) segs.push(g.concat([si])); }
@@ -109,10 +115,10 @@
           var ops = a[0], co = a[1], j = 0;
           for (var o = 0; o < ops.length; o++) {
             var op = ops[o];
-            if (op === OPS.moveTo) { endSub(false); cur = tp(st.ctm, co[j], co[j + 1]); start = cur; j += 2; }
-            else if (op === OPS.lineTo) { var p = tp(st.ctm, co[j], co[j + 1]); if (cur) path.push([cur[0], cur[1], p[0], p[1]]); cur = p; j += 2; }
-            else if (op === OPS.curveTo) { cur = tp(st.ctm, co[j + 4], co[j + 5]); j += 6; }
-            else if (op === OPS.curveTo2 || op === OPS.curveTo3) { cur = tp(st.ctm, co[j + 2], co[j + 3]); j += 4; }
+            if (op === OPS.moveTo) { endSub(false); cur = tp(st.ctm, co[j], co[j + 1]); start = cur; pathPts.push(cur); j += 2; }
+            else if (op === OPS.lineTo) { var p = tp(st.ctm, co[j], co[j + 1]); if (cur) path.push([cur[0], cur[1], p[0], p[1]]); cur = p; pathPts.push(p); j += 2; }
+            else if (op === OPS.curveTo) { pathPts.push(tp(st.ctm, co[j], co[j + 1]), tp(st.ctm, co[j + 2], co[j + 3])); cur = tp(st.ctm, co[j + 4], co[j + 5]); pathPts.push(cur); j += 6; }
+            else if (op === OPS.curveTo2 || op === OPS.curveTo3) { pathPts.push(tp(st.ctm, co[j], co[j + 1])); cur = tp(st.ctm, co[j + 2], co[j + 3]); pathPts.push(cur); j += 4; }
             else if (op === OPS.closePath) { endSub(true); cur = start; }     // closing edges are not reported as lines (same as the reference)
             else if (op === OPS.rectangle) {
               // rectangles on MEP plans are diffusers, grilles, equipment — not duct walls (validated on 3 bids);
@@ -125,8 +131,8 @@
           break;
         case OPS.stroke: case OPS.closeStroke: case OPS.fillStroke: case OPS.eoFillStroke: case OPS.closeFillStroke: case OPS.closeEOFillStroke:
           flush(true); break;
-        case OPS.fill: case OPS.eoFill: case OPS.endPath:
-          flush(false); break;
+        case OPS.fill: case OPS.eoFill: flush(false, true); break;
+        case OPS.endPath: flush(false, false); break;
       }
     }
     // text: whole-line strings with positions and reading direction (items on one baseline merged);
@@ -170,7 +176,140 @@
     text.forEach(function (t, i) { t.block = boxes[root(i)]; delete t._l; });
     var flat = new Float64Array(segs.length * 5);
     segs.forEach(function (s, i) { flat.set(s, i * 5); });
-    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' ') };
+    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs };
+  }
+
+  // ─── 1b. OCR for sheets whose text is outlined / stroked (AutoCAD SHX fonts export as tiny paths, not text) ───
+  //  glyph boxes (small painted paths) → letters → words (chained along one baseline) → each word rendered from the page,
+  //  everything outside its letter boxes whitened, upright, Tesseract single-line read at 0° and 180°. Only label-like words are kept.
+  var M_SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/;
+  var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/i;
+  var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
+  var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
+  function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
+  function isPipeLabel(s) { return M_PIPE_RE.test(s); }
+  function hasScale(s) { return M_SCALE_RE.test(s || ''); }
+  function normOcr(s) {
+    return String(s || '').replace(/[“”″]/g, '"').replace(/[‘’]/g, "'").replace(/[×*]/g, 'x').replace(/(\d)\s*[xX]\s*(\d)/g, '$1x$2')
+      .replace(/(\d)\s*"?\s*[øØoO0@Q](?![A-Za-z0-9])/g, '$1"Ø').replace(/\s+/g, ' ').trim();
+  }
+  // glyph boxes → words; boxes are [x0,y0,x1,y1] in PDF user space
+  function clusterWords(glyphs, opts) {
+    opts = opts || {};
+    var boxes = glyphs.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }), letters = [];
+    boxes.forEach(function (b) {
+      for (var i = letters.length - 1, k = 0; i >= 0 && k < 400; i--, k++) {
+        var o = letters[i];
+        if (b[0] <= o[2] + 0.25 && b[2] >= o[0] - 0.25 && b[1] <= o[3] + 0.25 && b[3] >= o[1] - 0.25) {
+          o[0] = Math.min(o[0], b[0]); o[1] = Math.min(o[1], b[1]); o[2] = Math.max(o[2], b[2]); o[3] = Math.max(o[3], b[3]); return;
+        }
+      }
+      letters.push(b.slice());
+    });
+    letters = letters.filter(function (b) { var m = Math.max(b[2] - b[0], b[3] - b[1]); return m >= 1.5 && m <= 24; });
+    var cell = 30, grid = {};
+    letters.forEach(function (b, i) { var key = Math.floor(b[0] / cell) + ',' + Math.floor(b[1] / cell); (grid[key] = grid[key] || []).push(i); });
+    function near(b) { var cx = Math.floor(b[0] / cell), cy = Math.floor(b[1] / cell), out = []; for (var dx = -1; dx <= 1; dx++) for (var dy = -1; dy <= 1; dy++) out = out.concat(grid[(cx + dx) + ',' + (cy + dy)] || []); return out; }
+    function gapH(g, b) { return Math.max(b[0] - g[2], g[0] - b[2]); }
+    function gapV(g, b) { return Math.max(b[1] - g[3], g[1] - b[3]); }
+    function ovV(g, b) { return Math.min(g[3], b[3]) - Math.max(g[1], b[1]); }
+    function ovH(g, b) { return Math.min(g[2], b[2]) - Math.max(g[0], b[0]); }
+    var used = new Uint8Array(letters.length), words = [];
+    letters.forEach(function (a, i) {
+      if (used[i]) return;
+      used[i] = 1; var grp = [a], orient = null, frontier = [a];
+      while (frontier.length) {
+        var g = frontier.pop(), hg = g[3] - g[1], wg = g[2] - g[0];
+        near(g).forEach(function (j) {
+          if (used[j]) return;
+          var b = letters[j], hb = b[3] - b[1], wb = b[2] - b[0];
+          var isH = ovV(g, b) >= 0.5 * Math.min(hg, hb) && gapH(g, b) >= -0.3 * Math.min(wg, wb) && gapH(g, b) <= 0.8 * Math.max(hg, hb) && Math.max(hg, hb) <= 2.2 * Math.min(hg, hb);
+          var isV = ovH(g, b) >= 0.5 * Math.min(wg, wb) && gapV(g, b) >= -0.3 * Math.min(hg, hb) && gapV(g, b) <= 0.8 * Math.max(wg, wb) && Math.max(wg, wb) <= 2.2 * Math.min(wg, wb);
+          if (orient === 'h' && !isH) return; if (orient === 'v' && !isV) return; if (!isH && !isV) return;
+          if (!orient) orient = isH ? 'h' : 'v';
+          used[j] = 1; grp.push(b); frontier.push(b);
+        });
+      }
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      grp.forEach(function (b) { x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); });
+      words.push({ box: [x0, y0, x1, y1], n: grp.length, orient: orient || ((y1 - y0) > (x1 - x0) * 1.4 ? 'v' : 'h'), letters: grp });
+    });
+    var maxL = opts.maxLetters || 10, minL = opts.minLetters || 2;
+    return words.filter(function (w) {
+      var len = Math.max(w.box[2] - w.box[0], w.box[3] - w.box[1]), th = Math.min(w.box[2] - w.box[0], w.box[3] - w.box[1]);
+      return w.n >= minL && w.n <= maxL && len >= 4 && len <= 120 && th >= 2 && th <= 22;
+    });
+  }
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve();
+    return new Promise(function (res, rej) {
+      var s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      s.onload = res; s.onerror = function () { rej(new Error('tesseract.js failed to load')); }; document.head.appendChild(s);
+    });
+  }
+  // page: pdf.js page; D: from extract(); opts: { dpi, maxLetters, onProgress(done, total), pipes }
+  async function ocrLabels(page, D, opts) {
+    opts = opts || {};
+    var t0 = Date.now(), words = clusterWords(D.glyphs || [], { maxLetters: opts.maxLetters || 10 });
+    if (!words.length) return { items: [], words: 0, secs: 0, text: '' };
+    await loadTesseract();
+    var worker = await Tesseract.createWorker('eng', 1, { logger: function () {} });
+    await worker.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789xX"\'øØ/-()SRAEOTYPUDNWVBFCGHKLMIJZ. ' });
+    var scale = (opts.dpi || 300) / 72, vp0 = page.getViewport({ scale: scale, rotation: 0 }), W = vp0.width, Hh = vp0.height;
+    var T = 2400, OV = 80, PAD = 2.5 * scale, M = 0.5 * scale, items = [], allText = [], done = 0, ocred = 0;
+    function px(vp, x, y) { return vp.convertToViewportPoint(x, y); }
+    function score(r) { return r.conf + (isSizeLabel(r.txt) || isPipeLabel(r.txt) ? 40 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
+    var pending = words.map(function (w, i) { return i; });
+    for (var ty = 0; ty < Hh && pending.length; ty += T - OV) for (var tx = 0; tx < W && pending.length; tx += T - OV) {
+      var vp = page.getViewport({ scale: scale, rotation: 0, offsetX: -tx, offsetY: -ty });
+      var cw = Math.min(T, Math.ceil(W - tx)), ch = Math.min(T, Math.ceil(Hh - ty));
+      // words whose padded box lies fully inside this tile
+      var mine = [];
+      pending = pending.filter(function (i) {
+        var w = words[i], c = [px(vp, w.box[0], w.box[1]), px(vp, w.box[2], w.box[3])];
+        var bx0 = Math.min(c[0][0], c[1][0]) - PAD, by0 = Math.min(c[0][1], c[1][1]) - PAD, bx1 = Math.max(c[0][0], c[1][0]) + PAD, by1 = Math.max(c[0][1], c[1][1]) + PAD;
+        if (bx0 >= 0 && by0 >= 0 && bx1 <= cw && by1 <= ch) { mine.push({ i: i, b: [bx0, by0, bx1, by1] }); return false; }
+        return true;
+      });
+      if (!mine.length) continue;
+      var canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
+      var ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
+      await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
+      for (var k = 0; k < mine.length; k++) {
+        var w = words[mine[k].i], b = mine[k].b, bw = Math.ceil(b[2] - b[0]), bh = Math.ceil(b[3] - b[1]);
+        var img = ctx.getImageData(Math.floor(b[0]), Math.floor(b[1]), bw, bh), d = img.data;
+        // whiten everything outside the letter boxes
+        var lb = w.letters.map(function (L) { var c1 = px(vp, L[0], L[1]), c2 = px(vp, L[2], L[3]);
+          return [Math.min(c1[0], c2[0]) - M - Math.floor(b[0]), Math.min(c1[1], c2[1]) - M - Math.floor(b[1]), Math.max(c1[0], c2[0]) + M - Math.floor(b[0]), Math.max(c1[1], c2[1]) + M - Math.floor(b[1])]; });
+        for (var yy = 0; yy < bh; yy++) for (var xx = 0; xx < bw; xx++) {
+          var inside = false;
+          for (var q = 0; q < lb.length; q++) if (xx >= lb[q][0] && xx <= lb[q][2] && yy >= lb[q][1] && yy <= lb[q][3]) { inside = true; break; }
+          if (!inside) { var o = (yy * bw + xx) * 4; d[o] = d[o + 1] = d[o + 2] = 255; }
+        }
+        var crop = document.createElement('canvas');
+        if (w.orient === 'v') { crop.width = bh; crop.height = bw; var cc = crop.getContext('2d'); var tmpc = document.createElement('canvas'); tmpc.width = bw; tmpc.height = bh; tmpc.getContext('2d').putImageData(img, 0, 0); cc.translate(bh, 0); cc.rotate(Math.PI / 2); cc.drawImage(tmpc, 0, 0); }
+        else { crop.width = bw; crop.height = bh; crop.getContext('2d').putImageData(img, 0, 0); }
+        var reads = [];
+        for (var ang = 0; ang < 2; ang++) {
+          var rr = await worker.recognize(crop, ang ? { rotateAuto: false, rotateRadians: Math.PI } : {});
+          reads.push({ txt: normOcr(rr.data.text), conf: rr.data.confidence || 0 });
+          if (isSizeLabel(reads[ang].txt) && reads[ang].conf >= 80) break;
+        }
+        reads.sort(function (a, c) { return score(c) - score(a); });
+        var best = reads[0]; ocred++;
+        if (best.txt) allText.push(best.txt);
+        if ((isSizeLabel(best.txt) || isPipeLabel(best.txt)) && best.conf >= 40) {
+          var dir = w.orient === 'v' ? [0, 1] : [1, 0];
+          items.push({ str: best.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: dir, block: w.box.slice(), ocr: true, conf: Math.round(best.conf) });
+        }
+        done++;
+        if (opts.onProgress && (done % 15 === 0 || done === words.length)) opts.onProgress(done, words.length);
+      }
+      canvas.width = canvas.height = 0;
+    }
+    await worker.terminate();
+    return { items: items, words: words.length, ocred: ocred, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' ') };
   }
 
   // ─── 2. geometry (runs inside a Web Worker) ───
@@ -762,5 +901,6 @@
 
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
   function measureRisers(data) { data.mode = 'risers'; return measure(data); }
-  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, _worker: workerMain };   // _worker: for offline tests
+  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords,
+    isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, _worker: workerMain };   // _worker: for offline tests
 })();

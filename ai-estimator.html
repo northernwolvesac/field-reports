@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=284"></script>
-<script src="est-engine.js?v=284"></script>
-<script src="geo-takeoff.js?v=284"></script>
+<script src="est-totals.js?v=285"></script>
+<script src="est-engine.js?v=285"></script>
+<script src="geo-takeoff.js?v=285"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -424,16 +424,32 @@ var AE = (function() {
       var p = list[i];
       var riser = isRiserSheet(p), pipes = !riser && isPipePlan(p) && !isDuctPlan(p);
       measuring = 'Measuring ' + (riser ? 'risers' : pipes ? 'pipes' : 'ducts') + ' on ' + (p.sheet_no || 'sheet ' + p.page_no) + ' (' + (i + 1) + ' of ' + list.length + ')…'; render();
-      var geo;
+      var geo, ocrSave = null;
       try {
-        var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise;
-        var data = await NWGeo.extract(await pdf.getPage(1));
+        var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, pg1 = await pdf.getPage(1);
+        var data = await NWGeo.extract(pg1), ocrInfo = null;
+        // outlined / stroked text (AutoCAD SHX): no size labels in the text layer but thousands of glyph paths → OCR the labels
+        if (!riser) {
+          var nLab = data.text.filter(function (t) { return pipes ? NWGeo.isPipeLabel(t.str) : NWGeo.isSizeLabel(t.str); }).length;
+          if (nLab < (pipes ? 2 : 3) && (data.glyphs || []).length > 150) {
+            var cached = !all && p.result && p.result.ocr_labels;
+            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10,
+              onProgress: function (d, n) { measuring = 'Reading labels (OCR) on ' + (p.sheet_no || 'sheet ' + p.page_no) + ': ' + d + ' / ' + n + ' words…'; render(); } });
+            data.text = data.text.concat(ocr.items);
+            data.fullText += ' ' + ocr.items.map(function (t) { return t.str; }).join(' ') + ' ' + (ocr.text || '');
+            ocrInfo = { labels: ocr.items.length, words: ocr.words || null, secs: ocr.secs || null, cached: !!cached };
+            if (!cached) ocrSave = ocr.items;
+          }
+        }
+        var aiScale = p.result && p.result.scale;
+        if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
-        geo = g.error ? { error: g.error, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, labels: g.labels, unsized_ft: g.unsized_ft, levels: g.levels, at: new Date().toISOString() };
+        geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, at: new Date().toISOString() } :
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, labels: g.labels, unsized_ft: g.unsized_ft, levels: g.levels, ocr: ocrInfo || undefined, at: new Date().toISOString() };
         pdf.destroy();
       } catch (e) { geo = { error: String(e.message || e).slice(0, 200), at: new Date().toISOString() }; }
       var patch = {}; patch[riser ? 'geo_riser' : pipes ? 'geo_pipe' : 'geo'] = geo;
+      if (ocrSave) patch.ocr_labels = ocrSave;
       var res = Object.assign({}, p.result || {}, patch);
       await supabaseClient.from('ai_est_pages').update({ result: res }).eq('id', p.id);
       p.result = res;
@@ -773,6 +789,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=284"></script>
+<script src="sw-register.js?v=285"></script>
 </body>
 </html>
