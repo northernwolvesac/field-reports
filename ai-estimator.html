@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=274"></script>
-<script src="est-engine.js?v=274"></script>
-<script src="geo-takeoff.js?v=274"></script>
+<script src="est-totals.js?v=275"></script>
+<script src="est-engine.js?v=275"></script>
+<script src="geo-takeoff.js?v=275"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -641,6 +641,15 @@ var AE = (function() {
     }
     return { id: null, name: null, cost: 0, hrs: 0, basis: 'no rate found — set by hand' };
   }
+  function loosePatterns(name) {   // '6" copper pipe & 1" insulation' → also matches "6'' copper pipe & 1'' insulation"
+    var m = /^(\S+)"\s+(copper|pvc|cpvc|black iron|steel)/i.exec(name);
+    return m ? [name, m[1] + '%' + m[2] + ' pipe%'] : [name];
+  }
+  async function pipeRateFallback(size, cd) {
+    if (!norms || !window.NWEngine || !NWEngine.pipeRate) return null;
+    var r = NWEngine.pipeRate(NWEngine.makeRates(norms), { size: size, service: cd ? 'CD' : '', material: cd ? 'pvc' : '' });
+    return r ? { id: null, name: null, cost: r.cost, hrs: r.hrs, basis: r.basis + (r.flag ? ' — ' + r.flag : '') } : null;
+  }
   async function toTakeoff() {
     if (bridging) return;
     if (!session.estimate_id) { toast('Create the estimate first'); return; }
@@ -674,9 +683,17 @@ var AE = (function() {
       await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%');
       // 2 · layers by size, rates from the catalog; the duct family comes from the spec reading
       var famKey = NWEngine.familyFor((session.result || {}).duct_spec || null), F = NWEngine.DUCT_FAMILIES[famKey], made = 0;
-      async function layerFor(name, cat, group, patterns) {
-        var l = layers.find(function(x) { return x.name.toLowerCase() === name.toLowerCase(); }); if (l) return l;
-        var rate = await bridgeRate(patterns || [name]);
+      async function layerFor(name, cat, group, patterns, size, cd) {
+        var l = layers.find(function(x) { return x.name.toLowerCase() === name.toLowerCase(); });
+        if (l && (Number(l.unit_material_cost) || Number(l.unit_labor_hours))) return l;
+        var rate = await bridgeRate((patterns || []).concat(loosePatterns(name)));
+        if (!rate.cost && !rate.hrs && cat === 'pipework' && size) { var fb = await pipeRateFallback(size, cd); if (fb) rate = fb; }
+        if (!rate.cost && !rate.hrs && cat === 'ductwork' && size && norms && NWEngine.ductRate) {   // odd size: the engine scales the nearest catalog size by perimeter
+          var dr = NWEngine.ductRate(NWEngine.makeRates(norms), size, /Ø/.test(size) ? 'round' : 'rect', famKey);
+          if (dr) rate = { id: null, name: null, cost: dr.cost, hrs: dr.hrs, basis: dr.basis + (dr.flag ? ' — ' + dr.flag : '') }; }
+        if (l) {   // an earlier run left this layer without a rate: fill it in now
+          var u = await supabaseClient.from('estimate_takeoff_layers').update({ unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id, notes: rate.basis + ' · from the AI Estimator' }).eq('id', l.id).select().single();
+          if (!u.error) { Object.assign(l, u.data); } return l; }
         var r = await supabaseClient.from('estimate_takeoff_layers').insert({ estimate_id: estId, group_name: group, name: rate.name || name, takeoff_type: 'linear', category: cat, labor_crew_type: cat === 'pipework' ? 'pipe' : 'sm', unit: 'ft',
           unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id, color: BRIDGE_COLORS[layers.length % BRIDGE_COLORS.length], sort_order: layers.length, notes: rate.basis + ' · from the AI Estimator' }).select().single();
         if (r.error) throw new Error(r.error.message); layers.push(r.data); made++; return r.data;
@@ -694,7 +711,7 @@ var AE = (function() {
           var data = await NWGeo.extract(page); data.wantPieces = true; var g = await NWGeo.measure(data);
           if (g && !g.error && g.xy) { ptft = g.ptft;
             for (var k = 0; k < g.xy.length; k++) { var pc = g.xy[k], sz = String(pc.size || ''), round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x');
-              var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group');
+              var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group', null, sz, false);
               if (pc.k === 'd') { var h = pc.len * ptft / 2; rows.push(mk(l, [V(pc.cx - pc.ux * h, pc.cy - pc.uy * h), V(pc.cx + pc.ux * h, pc.cy + pc.uy * h)], pc.len, ptft)); }
               else (pc.segs || []).forEach(function(s) { rows.push(mk(l, [V(s[0], s[1]), V(s[2], s[3])], Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft, ptft)); }); } }
         }
@@ -702,13 +719,13 @@ var AE = (function() {
           var pdata = await NWGeo.extract(page); pdata.wantPieces = true; var pp = await NWGeo.measurePipes(pdata);
           if (pp && !pp.error && pp.xy) { ptft = ptft || pp.ptft;
             for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
-              var pl = await layerFor(cd ? size + ' condensate drain' : size + ' copper pipe & 1" insulation', 'pipework', 'Pipes', cd ? [size + '%pvc%', size + ' copper pipe & 1" insulation'] : null);
+              var pl = await layerFor(cd ? size + ' condensate drain' : size + ' copper pipe & 1" insulation', 'pipework', 'Pipes', cd ? [size + '%pvc%', size + ' copper pipe & 1" insulation'] : null, size, cd);
               rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / pp.ptft, pp.ptft)); } }
         }
         if (isRiserSheet(p) && res.geo_riser && res.geo_riser.total_ft > 0) {
           var rdata = await NWGeo.extract(page); rdata.wantPieces = true; var rr = await NWGeo.measureRisers(rdata);
           if (rr && !rr.error && rr.xy) for (var q = 0; q < rr.xy.length; q++) { var rs = rr.xy[q]; if (rs.z === '?' || !(rs.ft > 0.5)) continue;
-            var rl = await layerFor(rs.z + ' copper pipe & 1" insulation', 'pipework', 'Pipes');
+            var rl = await layerFor(rs.z + ' copper pipe & 1" insulation', 'pipework', 'Pipes', null, rs.z, false);
             rows.push(mk(rl, [V(rs.s[0], rs.s[1]), V(rs.s[2], rs.s[3])], rs.ft, null, { notes: 'riser — length from the floor elevations, not the drawing scale' })); }
         }
         if (ptft) scales.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(ptft) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ptft, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' });
@@ -752,6 +769,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=274"></script>
+<script src="sw-register.js?v=275"></script>
 </body>
 </html>
