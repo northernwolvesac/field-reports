@@ -20,8 +20,8 @@
 
   async function extract(page) {
     var OPS = pdfjsLib.OPS, ol = await page.getOperatorList();
-    var st = { ctm: [1, 0, 0, 1, 0, 0], lw: 1, col: [0, 0, 0], dash: false, clip: null }, stack = [], path = [], cur = null, start = null, pendingClip = false;
-    function snap() { return { ctm: st.ctm.slice(), lw: st.lw, col: st.col.slice(), dash: st.dash, clip: st.clip ? st.clip.slice() : null }; }
+    var st = { ctm: [1, 0, 0, 1, 0, 0], lw: 1, col: [0, 0, 0], fill: [0, 0, 0], dash: false, clip: null }, stack = [], path = [], cur = null, start = null, pendingClip = false;
+    function snap() { return { ctm: st.ctm.slice(), lw: st.lw, col: st.col.slice(), fill: st.fill.slice(), dash: st.dash, clip: st.clip ? st.clip.slice() : null }; }
     function inter(a, b) { if (!a) return b; if (!b) return a; return [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]; }
     function bboxOf(pts) { var r = [Infinity, Infinity, -Infinity, -Infinity]; pts.forEach(function (q) { r[0] = Math.min(r[0], q[0]); r[1] = Math.min(r[1], q[1]); r[2] = Math.max(r[2], q[0]); r[3] = Math.max(r[3], q[1]); }); return r; }
     // visible part of a line inside the clip box (Liang–Barsky); null when fully clipped away
@@ -76,7 +76,8 @@
       endSub(false);
       if (paint !== false && pathPts.length && pathPts.length <= 400) {
         var gb = bboxOf(pathPts), gw = gb[2] - gb[0], gh = gb[3] - gb[1];
-        if (gw <= 22 && gh <= 22 && (gw >= 0.4 || gh >= 0.4)) glyphs.push([gb[0], gb[1], gb[2], gb[3]]);
+        var whiteFill = !stroke && Math.min(st.fill[0], st.fill[1], st.fill[2]) > 0.9;     // a label halo, not a glyph
+        if (!whiteFill && gw <= 22 && gh <= 22 && (gw >= 0.4 || gh >= 0.4)) glyphs.push([gb[0], gb[1], gb[2], gb[3]]);
       }
       pathPts = [];
       if (stroke && path.length) {
@@ -109,6 +110,9 @@
           (a[0] || []).forEach(function (kv) { if (kv[0] === 'LW') st.lw = kv[1]; if (kv[0] === 'D') st.dash = !!(kv[1] && kv[1][0] && kv[1][0].length); });
           break;
         case OPS.setStrokeRGBColor: st.col = rgb(a); break;
+        case OPS.setFillRGBColor: st.fill = rgb(a); break;
+        case OPS.setFillGray: st.fill = [a[0], a[0], a[0]].map(Number); break;
+        case OPS.setFillCMYKColor: var kf = a[3]; st.fill = [(1 - a[0]) * (1 - kf), (1 - a[1]) * (1 - kf), (1 - a[2]) * (1 - kf)]; break;
         case OPS.setStrokeGray: st.col = [a[0], a[0], a[0]].map(Number); break;
         case OPS.setStrokeCMYKColor: var k = a[3]; st.col = [(1 - a[0]) * (1 - k), (1 - a[1]) * (1 - k), (1 - a[2]) * (1 - k)]; break;
         case OPS.constructPath:
@@ -198,7 +202,8 @@
   }
   function normOcr(s) {
     return slashSize(String(s || '').replace(/[“”″]/g, '"').replace(/[‘’]/g, "'").replace(/[×*]/g, 'x').replace(/(\d)\s*[xX]\s*(\d)/g, '$1x$2')
-      .replace(/(\d)\s*"?\s*[øØoO0@Q](?![A-Za-z0-9])/g, '$1"Ø').replace(/\s+/g, ' ').trim());
+      .replace(/(\d)\s*"\s*[øØoO0@Q9pg](?![A-Za-z0-9])/g, '$1"Ø').replace(/(\d)\s*[øØ⌀∅](?![A-Za-z0-9])/g, '$1"Ø')
+      .replace(/(\d{1,2})\s*"+\s*[^\s"\dA-Za-z]{1,2}$/g, '$1"Ø').replace(/\s+/g, ' ').trim());
   }
   // glyph boxes → words; boxes are [x0,y0,x1,y1] in PDF user space
   function clusterWords(glyphs, opts) {
@@ -213,7 +218,7 @@
       }
       letters.push(b.slice());
     });
-    letters = letters.filter(function (b) { var m = Math.max(b[2] - b[0], b[3] - b[1]); return m >= 1.5 && m <= 24; });
+    letters = letters.filter(function (b) { var m = Math.max(b[2] - b[0], b[3] - b[1]); return m >= 1.0 && m <= 24; });
     var cell = 30, grid = {};
     letters.forEach(function (b, i) { var key = Math.floor(b[0] / cell) + ',' + Math.floor(b[1] / cell); (grid[key] = grid[key] || []).push(i); });
     function near(b) { var cx = Math.floor(b[0] / cell), cy = Math.floor(b[1] / cell), out = []; for (var dx = -1; dx <= 1; dx++) for (var dy = -1; dy <= 1; dy++) out = out.concat(grid[(cx + dx) + ',' + (cy + dy)] || []); return out; }
@@ -227,11 +232,20 @@
       used[i] = 1; var grp = [a], orient = null, frontier = [a];
       while (frontier.length) {
         var g = frontier.pop(), hg = g[3] - g[1], wg = g[2] - g[0];
+        var band = [Infinity, Infinity, -Infinity, -Infinity];
+        grp.forEach(function (x) { band[0] = Math.min(band[0], x[0]); band[1] = Math.min(band[1], x[1]); band[2] = Math.max(band[2], x[2]); band[3] = Math.max(band[3], x[3]); });
+        var bh = band[3] - band[1], bw = band[2] - band[0];
         near(g).forEach(function (j) {
           if (used[j]) return;
-          var b = letters[j], hb = b[3] - b[1], wb = b[2] - b[0];
-          var isH = ovV(g, b) >= 0.5 * Math.min(hg, hb) && gapH(g, b) >= -0.3 * Math.min(wg, wb) && gapH(g, b) <= 0.8 * Math.max(hg, hb) && Math.max(hg, hb) <= 2.2 * Math.min(hg, hb);
-          var isV = ovH(g, b) >= 0.5 * Math.min(wg, wb) && gapV(g, b) >= -0.3 * Math.min(hg, hb) && gapV(g, b) <= 0.8 * Math.max(wg, wb) && Math.max(wg, wb) <= 2.2 * Math.min(wg, wb);
+          var b = letters[j], hb = b[3] - b[1], wb = b[2] - b[0], isH, isV;
+          if (Math.max(hg, wg) < 3 || Math.max(hb, wb) < 3) {
+            var cyb = (b[1] + b[3]) / 2, cxb = (b[0] + b[2]) / 2;
+            isH = cyb >= band[1] - 0.5 * bh && cyb <= band[3] + 0.5 * bh && gapH(g, b) >= -0.3 * Math.min(wg, wb) && gapH(g, b) <= 0.9 * Math.max(bh, hb);
+            isV = cxb >= band[0] - 0.5 * bw && cxb <= band[2] + 0.5 * bw && gapV(g, b) >= -0.3 * Math.min(hg, hb) && gapV(g, b) <= 0.9 * Math.max(bw, wb);
+          } else {
+            isH = ovV(g, b) >= 0.5 * Math.min(hg, hb) && gapH(g, b) >= -0.3 * Math.min(wg, wb) && gapH(g, b) <= 0.9 * Math.max(hg, hb) && Math.max(hg, hb) <= 2.2 * Math.min(hg, hb);
+            isV = ovH(g, b) >= 0.5 * Math.min(wg, wb) && gapV(g, b) >= -0.3 * Math.min(hg, hb) && gapV(g, b) <= 0.9 * Math.max(wg, wb) && Math.max(wg, wb) <= 2.2 * Math.min(wg, wb);
+          }
           if (orient === 'h' && !isH) return; if (orient === 'v' && !isV) return; if (!isH && !isV) return;
           if (!orient) orient = isH ? 'h' : 'v';
           used[j] = 1; grp.push(b); frontier.push(b);
@@ -304,7 +318,7 @@
     }
     // 2. compose ~30 crops per sheet (rows), read once; then the same sheet with every crop turned 180°
     var GAP = 24, SW = 2400, results = {}, done = 0;
-    function score(r) { return r.conf + (isSizeLabel(r.txt) || isPipeLabel(r.txt) ? 40 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
+    function score(r) { return r.conf + (isSizeLabel(r.txt) ? 150 : isPipeLabel(r.txt) ? 60 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
     for (var s0 = 0; s0 < crops.length; s0 += 30) {
       var batch = crops.slice(s0, s0 + 30), cells = [], x = GAP, y = GAP, rowH = 0;
       batch.forEach(function (cr) {
@@ -344,7 +358,7 @@
     Object.keys(results).forEach(function (i) {
       var r = results[i], w = words[+i]; if (!r.txt) return;
       allText.push(r.txt);
-      if ((isSizeLabel(r.txt) || isPipeLabel(r.txt)) && r.conf >= 40)
+      if (isSizeLabel(r.txt) || (isPipeLabel(r.txt) && r.conf >= 30))
         items.push({ str: r.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, conf: Math.round(r.conf) });
     });
     return { items: items, words: words.length, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' ') };
