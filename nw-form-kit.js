@@ -54,6 +54,7 @@
     '.nwk-att{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid #e5e7eb;border-radius:8px;margin-top:8px;font-size:13px;background:#fff}',
     '.nwk-att .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nwk-att .meta{color:#6b7280;font-size:12px;white-space:nowrap}',
     '.nwk-att button{border:1px solid #e5e7eb;background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:13px}',
+    '.nwk-att button.nwk-del{color:#dc2626;border-color:#fecaca;font-weight:700;padding:4px 10px}.nwk-att button.nwk-del:hover{background:#fef2f2}',
     '.nwk-note{font-size:12px;color:#6b7280;margin-top:8px}',
     '.nwk-banner{max-width:832px;margin:12px auto 0;padding:10px 14px;border-radius:10px;font-size:13px;background:#eff8fd;border:1px solid #bae6fd;color:#075985}',
     '@media(max-width:860px){.nwk-banner{margin:12px 12px 0}}',
@@ -164,9 +165,13 @@
     el.innerHTML = K.files.map(function(a, i) {
       return '<div class="nwk-att"><span>📄</span><span class="nm">' + esc(a.name) + '</span><span class="meta">' +
         (a.pages === -1 ? '<span style="color:#dc2626">can\'t read · </span>' : (a.pages ? a.pages + ' pg · ' : '')) + (a.size ? mb(a.size) : 'saved') + '</span>' +
-        (i > 0 ? '<button type="button" data-up="' + i + '" title="Move up">↑</button>' : '') + '<button type="button" data-rm="' + i + '" title="Remove">✕</button></div>';
+        (i > 0 ? '<button type="button" data-up="' + i + '" title="Move up">↑</button>' : '') + '<button type="button" class="nwk-del" data-rm="' + i + '" title="Delete this attachment">🗑 Delete</button></div>';
     }).join('');
-    el.querySelectorAll('[data-rm]').forEach(function(b) { b.onclick = function() { K.files.splice(+b.dataset.rm, 1); renderFiles(); }; });
+    el.querySelectorAll('[data-rm]').forEach(function(b) { b.onclick = function() {
+      var f = K.files[+b.dataset.rm]; if (!f) return;
+      if (f.driveId && !confirm('Delete "' + f.name + '" from this ' + cfg.label + '? It will be left out of the PDF when you save.')) return;
+      K.files.splice(+b.dataset.rm, 1); renderFiles(); toast('Attachment removed — press Save to keep the change');
+    }; });
     el.querySelectorAll('[data-up]').forEach(function(b) { b.onclick = function() { var i = +b.dataset.up, x = K.files[i]; K.files[i] = K.files[i - 1]; K.files[i - 1] = x; renderFiles(); }; });
   }
   function buildCard() {
