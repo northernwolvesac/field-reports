@@ -11,8 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="supabase-config.js?v=174"></script>
 <script src="auth.js?v=174"></script>
-<script src="est-totals.js?v=271"></script>
-<script src="geo-takeoff.js?v=271"></script>
+<script src="est-totals.js?v=272"></script>
+<script src="geo-takeoff.js?v=272"></script>
 <style>
   html, body { height: 100%; margin: 0; }
   body { background: #f8fafc; color: #0f172a; overflow: hidden; display: flex; flex-direction: column; }
@@ -93,6 +93,17 @@
   #overlayCanvas.sel { cursor: default; }
   .tk-empty { color: #64748b; text-align: center; padding: 80px 20px; font-size: 13px; }
   .tk-empty .icon { font-size: 56px; opacity: .35; margin-bottom: 10px; }
+  .tk-thumbs { display: flex; gap: 8px; padding: 8px 10px; background: #fff; border-top: 1px solid #e2e8f0; overflow-x: auto; overflow-y: hidden; flex: none; }
+  .tk-thumbs.hidden { display: none; }
+  .thumb { flex: none; width: 150px; cursor: pointer; border: 2px solid transparent; border-radius: 8px; padding: 4px; background: #f8fafc; }
+  .thumb:hover { background: #eff8fd; }
+  .thumb.on { border-color: #0696D7; background: #eff8fd; }
+  .thumb .im { width: 142px; height: 96px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 11px; overflow: hidden; }
+  .thumb .im img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .thumb .lb { font-size: 11px; font-weight: 700; color: #0f172a; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; justify-content: space-between; gap: 4px; }
+  .thumb .lb small { color: #0696D7; font-weight: 700; }
+  .stamp-chip { display: inline-block; padding: 5px 10px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 12px; font-weight: 800; cursor: pointer; margin: 0 6px 6px 0; letter-spacing: .3px; }
+  .stamp-chip.on { border-color: #0f172a; background: #f1f5f9; }
   .tk-status { padding: 5px 12px; font-size: 11px; color: #475569; background: #fff; border-top: 1px solid #e2e8f0; display: flex; gap: 14px; align-items: center; min-height: 18px; }
   .tk-status b { color: #0f172a; }
   .tk-status .kbd { font-family: 'Courier New', monospace; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0 5px; font-size: 10px; }
@@ -197,13 +208,18 @@
       <button class="tool" data-tool="count"   title="Count (C)">●</button>
       <button class="tool" data-tool="linear"  title="Linear (L) — click points, Enter or double-click to finish, D adds a drop">📐</button>
       <button class="tool" data-tool="area"    title="Area (A)">▰</button>
+      <button class="tool" data-tool="countline" title="Count by distance (K) — click a path, Enter, then the spacing in feet">●┄</button>
       <button class="tool" data-tool="measure" title="Measure only, nothing saved (M)">📏</button>
-      <button class="tool" data-tool="note"    title="Note / annotation (N)">💬</button>
+      <button class="tool" data-tool="note"    title="Note (N)">💬</button>
+      <button class="tool" data-tool="stamp"   title="Stamp — RFI, VERIFY, EXISTING… (T)">🔖</button>
+      <button class="tool" data-tool="cloud"   title="Revision cloud (U) — click the corners, Enter to close">☁</button>
+      <button class="tool" data-tool="highlight" title="Highlight (G) — click two corners">🖍</button>
       <span class="sep"></span>
       <button class="tool" id="zoomOut" title="Zoom out (−)">−</button>
       <span class="zoomlbl" id="zoomLabel">100%</span>
       <button class="tool" id="zoomIn" title="Zoom in (+)">+</button>
       <button class="tool" id="zoomFit" title="Fit width (0)">⤢</button>
+      <button class="tool" id="thumbsBtn" title="Sheet thumbnails (B)">▦</button>
       <span class="sep"></span>
       <button class="tool" id="undoBtn" title="Undo (Ctrl+Z)">↶</button>
       <label style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:4px">Compare <select id="compareSelect" style="max-width:140px"><option value="">none</option></select></label>
@@ -217,6 +233,7 @@
         <canvas id="pdfCanvas"></canvas><canvas id="compareCanvas"></canvas><canvas id="overlayCanvas"></canvas>
       </div>
     </div>
+    <div class="tk-thumbs hidden" id="thumbs"></div>
     <div class="tk-status" id="status"><span id="statusHint">Pick a layer on the left, then click on the plan.</span><span class="grow" style="flex:1"></span><span id="statusPage"></span></div>
   </section>
 
@@ -285,6 +302,24 @@
   <div class="modal-actions"><button class="btn-ghost" id="scaleCancel">Cancel</button><button class="btn-primary" id="scaleSet">Set scale</button></div>
 </div></div>
 
+<!-- ═══ Count by distance ═══ -->
+<div class="modal-overlay" id="spacingModal"><div class="modal-card" style="max-width:420px">
+  <h2>Count by distance</h2>
+  <p style="font-size:13px;color:#64748b;margin:0 0 12px" id="spacingInfo"></p>
+  <div class="field"><label>Spacing (feet)</label><input type="number" id="spacingFt" step="0.5" min="0.5" placeholder="8"></div>
+  <div class="field"><label><input type="checkbox" id="spacingEnds" checked style="width:auto;margin-right:6px">Mark both ends of the path</label></div>
+  <div class="modal-actions"><button class="btn-ghost" id="spacingCancel">Cancel</button><button class="btn-primary" id="spacingApply">Place marks</button></div>
+</div></div>
+
+<!-- ═══ Stamp ═══ -->
+<div class="modal-overlay" id="stampModal"><div class="modal-card" style="max-width:460px">
+  <h2>Stamp</h2>
+  <div class="field"><label>Pick</label><div id="stampChips"></div></div>
+  <div class="row"><div class="field"><label>Or your own text</label><input type="text" id="stampText" maxlength="40" placeholder="e.g. RELOCATE"></div>
+    <div class="field"><label>Color</label><div class="swatches" id="stampColors"></div><input type="hidden" id="stampColor" value="#dc2626"></div></div>
+  <div class="modal-actions"><button class="btn-ghost" id="stampCancel">Cancel</button><button class="btn-primary" id="stampSave">Place stamp</button></div>
+</div></div>
+
 <!-- ═══ Note ═══ -->
 <div class="modal-overlay" id="noteModal"><div class="modal-card" style="max-width:420px">
   <h2>Note</h2>
@@ -335,6 +370,10 @@ requireAuth().catch(function(){});
   var pdfDocs = {}, pdfPage = null, pdfCanvas, overlayCanvas, ctx, renderScale = 1, zoom = 1, viewport1 = null;
   var tool = 'select', activeLayerId = null, selectedId = null, draft = [], draftDrops = [], hover = null, measureLine = null, panState = null, dragState = null, undoStack = [];
   var scalePpf = null, scaleLabel = null, compareDoc = null, layerFilter = '', laborRate = 60;
+  var annotVisible = true, thumbCache = {}, thumbsOn = false, thumbBusy = false, stampPoint = null;
+  var STAMPS = ['RFI', 'VERIFY', 'EXISTING', 'DEMO', 'BY OTHERS', 'NOT IN SCOPE', 'ADD ALT', 'HOLD', 'RELOCATE', 'NEW'];
+  function isAnnot(m) { return !m.layer_id && /^(stamp|cloud|highlight)$/.test(m.notes || ''); }
+  try { thumbsOn = localStorage.getItem('tk_thumbs') === '1'; } catch (e) {}
   var $ = function(id) { return document.getElementById(id); };
 
   init();
@@ -400,7 +439,7 @@ requireAuth().catch(function(){});
     var legacy = {};
     allMeas.forEach(function(m) { if (!m.layer_id && m.layer_category && m.tool_type !== 'scale') legacy[m.layer_category] = (legacy[m.layer_category] || 0) + 1; });
     $('layerCount').textContent = '(' + layers.length + ')';
-    if (!layers.length && !Object.keys(legacy).length) { host.innerHTML = '<div class="empty">No takeoff layers yet.<br>Add a layer (a catalog item: duct size, pipe size, diffuser…) and start clicking on the plan.<br><br><button class="btn-secondary" id="stdBtn">⭐ Add NWAC standard layers</button></div>';
+    if (!layers.length && !Object.keys(legacy).length && !allMeas.some(isAnnot)) { host.innerHTML = '<div class="empty">No takeoff layers yet.<br>Add a layer (a catalog item: duct size, pipe size, diffuser…) and start clicking on the plan.<br><br><button class="btn-secondary" id="stdBtn">⭐ Add NWAC standard layers</button></div>';
       var sb = $('stdBtn'); if (sb) sb.onclick = addStandardLayers; return; }
     order.sort(function(a, b) { return (a === 'Default Group' ? -1 : b === 'Default Group' ? 1 : a.localeCompare(b)); });
     var html = '';
@@ -418,8 +457,11 @@ requireAuth().catch(function(){});
       });
       html += '</div>';
     });
+    var na = allMeas.filter(isAnnot).length;
+    if (na) html += '<div class="grp"><div class="grp-h" style="cursor:default"><span class="chev"></span><span class="eye' + (annotVisible ? '' : ' off') + '" id="annotEye" title="Show / hide stamps, clouds, highlights">' + (annotVisible ? '👁' : '⊘') + '</span><span>Annotations</span><span class="cnt" style="font-weight:600">' + na + '</span></div></div>';
     Object.keys(legacy).forEach(function(c) { html += '<div class="grp"><div class="lay" data-lay="legacy:' + c + '"><span class="sw" style="background:#94a3b8"></span><span class="nm">Legacy marks — ' + CATS[c] + '</span><span class="qty">' + legacy[c] + '</span></div></div>'; });
     host.innerHTML = html;
+    var ae = $('annotEye'); if (ae) ae.addEventListener('click', function() { annotVisible = !annotVisible; renderLayerTree(); redraw(); });
     host.querySelectorAll('[data-grp]').forEach(function(el) { el.addEventListener('click', function(e) { if (e.target.hasAttribute('data-geye')) return; var g = el.getAttribute('data-grp'); groupsOpen[g] = groupsOpen[g] === false; renderLayerTree(); }); });
     host.querySelectorAll('[data-geye]').forEach(function(el) { el.addEventListener('click', async function(e) { e.stopPropagation(); var g = el.getAttribute('data-geye'), ls = layers.filter(function(l) { return l.group_name === g; }), vis = !ls.every(function(l) { return l.is_visible !== false; }); ls.forEach(function(l) { l.is_visible = vis; }); renderLayerTree(); redraw(); await supabaseClient.from('estimate_takeoff_layers').update({ is_visible: vis }).in('id', ls.map(function(l) { return l.id; })); }); });
     host.querySelectorAll('[data-eye]').forEach(function(el) { el.addEventListener('click', async function(e) { e.stopPropagation(); var l = layerById(el.getAttribute('data-eye')); l.is_visible = l.is_visible === false; renderLayerTree(); redraw(); await supabaseClient.from('estimate_takeoff_layers').update({ is_visible: l.is_visible }).eq('id', l.id); }); });
@@ -563,6 +605,29 @@ requireAuth().catch(function(){});
     if (ids.length) { var m = await supabaseClient.from('estimate_measurements').select('*').in('drawing_id', ids).order('created_at'); allMeas = m.data || []; }
     renderPlanSelect();
     if (plans.length && planIdx < 0) await openPlan(0);
+    renderThumbs();
+  }
+  // ─── sheet thumbnails (rendered once per session, in the background) ───
+  function renderThumbs() {
+    var host = $('thumbs'); host.classList.toggle('hidden', !thumbsOn); $('thumbsBtn').classList.toggle('on', thumbsOn);
+    if (!thumbsOn) return;
+    var counts = {}; allMeas.forEach(function(m) { if (m.tool_type === 'scale') return; var k = m.drawing_id + ':' + m.page_number; counts[k] = (counts[k] || 0) + 1; });
+    host.innerHTML = plans.map(function(p, i) { var k = p.drawing.id + ':' + p.page; return '<div class="thumb' + (i === planIdx ? ' on' : '') + '" data-plan="' + i + '"><div class="im">' + (thumbCache[k] ? '<img src="' + thumbCache[k] + '">' : 'p' + p.page) + '</div><div class="lb"><span>' + esc(p.sheet || 'p' + p.page) + '</span>' + (counts[k] ? '<small>' + counts[k] + '</small>' : '') + '</div></div>'; }).join('');
+    host.querySelectorAll('[data-plan]').forEach(function(el) { el.onclick = function() { openPlan(+el.getAttribute('data-plan')); }; });
+    var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    buildThumbs();
+  }
+  async function buildThumbs() {
+    if (thumbBusy || !thumbsOn) return; thumbBusy = true;
+    try {
+      for (var i = 0; i < plans.length && thumbsOn; i++) { var p = plans[i], k = p.drawing.id + ':' + p.page; if (thumbCache[k]) continue;
+        var doc = await getDoc(p.drawing), pg = await doc.getPage(p.page), v1 = pg.getViewport({ scale: 1 }), sc = 284 / Math.max(v1.width, v1.height * 284 / 192);
+        var c = document.createElement('canvas'), v = pg.getViewport({ scale: sc }); c.width = Math.ceil(v.width); c.height = Math.ceil(v.height);
+        await pg.render({ canvasContext: c.getContext('2d'), viewport: v, intent: 'print' }).promise;
+        thumbCache[k] = c.toDataURL('image/jpeg', .72);
+        var el = $('thumbs').querySelector('[data-plan="' + i + '"] .im'); if (el) el.innerHTML = '<img src="' + thumbCache[k] + '">'; }
+    } catch (e) { console.warn('thumbs', e); }
+    thumbBusy = false;
   }
   function planLabel(p) { return (p.sheet ? p.sheet + ' — ' : '') + p.drawing.filename.replace(/\.pdf$/i, '') + ' · p' + p.page + (p.drawing.page_count > 1 ? '/' + p.drawing.page_count : ''); }
   function renderPlanSelect() {
@@ -592,6 +657,7 @@ requireAuth().catch(function(){});
     if (my !== openSeq) return;
     if (!p.sheet || (!scalePpf && !p.scaleChecked)) detectPageMeta(p);
     renderLayerTree(); renderProps(); updateStatus();
+    if (thumbsOn) { var host = $('thumbs'); host.querySelectorAll('.thumb').forEach(function(el) { el.classList.toggle('on', +el.getAttribute('data-plan') === planIdx); }); var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }
   }
   // sheet number + scale from the page text — auto-applies the scale when the sheet states it
   async function detectPageMeta(p) {
@@ -609,7 +675,7 @@ requireAuth().catch(function(){});
       p.sheet = sheet; p.drawing.page_meta = meta;
       supabaseClient.from('estimate_drawings').update({ page_meta: meta }).eq('id', p.drawing.id).then(function() {});
       if (best && !scalePpf && me.canEdit) { var preset = SCALE_PRESETS.find(function(x) { return Math.abs(x.ppf - Number(best) * 72) < 0.01; }); await setPresetScale(preset || { label: best + '" = 1\'', ppf: Number(best) * 72 }, true); }
-      renderPlanSelect();
+      renderPlanSelect(); if (thumbsOn) renderThumbs();
     } catch (e) { console.warn('page meta', e); }
   }
   function frac(s) { s = s.replace(/\s+/g, ''); if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
@@ -691,14 +757,16 @@ requireAuth().catch(function(){});
       count: 'Click each item' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first') + '. <span class="kbd">Shift</span>+click removes.',
       linear: 'Click points along the run' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first') + '. <span class="kbd">Enter</span>/double-click finishes, <span class="kbd">D</span> adds a drop at the last point, <span class="kbd">Shift</span> locks 90°, <span class="kbd">Backspace</span> removes a point.',
       area: 'Click the corners' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first') + '. <span class="kbd">Enter</span>/double-click closes.',
-      measure: 'Click two points to read a distance. Nothing is saved.', note: 'Click where the note goes.' };
-    h.innerHTML = (!scalePpf && pdfPage && tool !== 'count' && tool !== 'note' && tool !== 'select' && tool !== 'pan') ? '<b style="color:#991b1b">Set the scale first</b> — pick it from the list next to the plan name.' : (hints[tool] || '');
+      measure: 'Click two points to read a distance. Nothing is saved.', note: 'Click where the note goes.',
+      countline: 'Click the path the items follow' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a count layer first') + '. <span class="kbd">Enter</span> finishes, then type the spacing in feet.',
+      stamp: 'Click where the stamp goes.', cloud: 'Click the corners of the cloud. <span class="kbd">Enter</span>/double-click closes it.', highlight: 'Click two opposite corners.' };
+    h.innerHTML = (!scalePpf && pdfPage && ['count', 'note', 'select', 'pan', 'stamp', 'cloud', 'highlight'].indexOf(tool) < 0) ? '<b style="color:#991b1b">Set the scale first</b> — pick it from the list next to the plan name.' : (hints[tool] || '');
     $('statusPage').textContent = pdfPage ? (plans[planIdx].sheet ? plans[planIdx].sheet + ' · ' : '') + meas.filter(function(m) { return m.tool_type !== 'scale'; }).length + ' marks on this plan' : '';
   }
   function bindOverlay() {
     overlayCanvas.onmousedown = onDown; overlayCanvas.onmousemove = onMove; overlayCanvas.onmouseup = onUp; overlayCanvas.onmouseleave = onUp;
-    overlayCanvas.ondblclick = function(e) { e.preventDefault(); if ((tool === 'linear' || tool === 'area') && draft.length >= 2) finishDraft(); };
-    overlayCanvas.oncontextmenu = function(e) { e.preventDefault(); if (draft.length >= 2) finishDraft(); else { draft = []; redraw(); } };
+    overlayCanvas.ondblclick = function(e) { e.preventDefault(); if (['linear', 'area', 'countline', 'cloud'].indexOf(tool) >= 0 && draft.length >= 2) finishDraft(); };
+    overlayCanvas.oncontextmenu = function(e) { e.preventDefault(); if (draft.length >= 2 && tool !== 'highlight') finishDraft(); else { draft = []; redraw(); } };
     overlayCanvas.onclick = onClick;
     $('viewport').onwheel = function(e) { if (e.ctrlKey || e.metaKey) { e.preventDefault(); var r = $('viewport').getBoundingClientRect(); setZoom(zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX - r.left, e.clientY - r.top); } };
   }
@@ -736,7 +804,11 @@ requireAuth().catch(function(){});
     if (tool === 'measure') { if (!measureLine || measureLine.length === 2) measureLine = [p]; else measureLine.push(p); redraw(); return; }
     if (tool === 'scale') { draft.push(p); if (draft.length === 2) { $('scaleFeet').value = ''; openModal('scaleModal'); setTimeout(function() { $('scaleFeet').focus(); }, 50); } redraw(); return; }
     if (tool === 'note') { draft = [p]; $('noteText').value = ''; openModal('noteModal'); setTimeout(function() { $('noteText').focus(); }, 50); return; }
+    if (tool === 'stamp') { stampPoint = p; openStamp(); return; }
+    if (tool === 'highlight') { draft.push(p); if (draft.length === 2) { var a = draft[0], b = draft[1]; saveAnnot({ tool_type: 'area', points: [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]], notes: 'highlight', color: '#facc15' }); draft = []; } redraw(); return; }
+    if (tool === 'cloud') { draft.push(p); hover = null; redraw(); return; }
     var l = layerById(activeLayerId); if (!l) { toast('Pick a takeoff layer first (left panel)', 'error'); return; }
+    if (tool === 'countline' && l.takeoff_type !== 'count') { toast('Count by distance needs a count layer (diffusers, hangers, sprinklers…)', 'error'); return; }
     if (tool === 'count') {
       if (e.shiftKey) { var h = hitTest(p); if (h && h.m.layer_id === l.id) deleteMark(h.m.id); return; }
       saveMark({ tool_type: 'count', points: [p], computed_value: 1, computed_unit: 'ea', mark_no: nextMarkNo(l) }); return;
@@ -747,7 +819,9 @@ requireAuth().catch(function(){});
   var markSeq = {};   // next mark number per layer, kept locally so quick clicks do not reuse a number while a save is in flight
   function nextMarkNo(l) { var n = 0; allMeas.forEach(function(m) { if (m.layer_id === l.id && m.mark_no > n) n = m.mark_no; }); n = Math.max(n, markSeq[l.id] || 0) + 1; markSeq[l.id] = n; return n; }
   function finishDraft() {
+    if (tool === 'cloud') { if (draft.length >= 3) saveAnnot({ tool_type: 'area', points: draft.slice(), notes: 'cloud', color: '#dc2626' }); draft = []; hover = null; redraw(); return; }
     if (!scalePpf || draft.length < 2) { draft = []; redraw(); return; }
+    if (tool === 'countline') { openSpacing(); return; }
     if (tool === 'linear') saveMark({ tool_type: 'length', points: draft.slice(), computed_value: polyLen(draft) / scalePpf, computed_unit: 'ft', drops: draftDrops.length });
     else if (tool === 'area') { if (draft.length < 3) { draft = []; redraw(); return; } saveMark({ tool_type: 'area', points: draft.slice(), computed_value: polyArea(draft) / (scalePpf * scalePpf), computed_unit: 'sqft' }); }
     draft = []; draftDrops = []; hover = null; redraw();
@@ -759,6 +833,48 @@ requireAuth().catch(function(){});
     var r = await supabaseClient.from('estimate_measurements').insert(m).select().single();
     if (r.error) { toast('Save failed: ' + r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); renderAll();
+  }
+  async function saveAnnot(m) {
+    var p = plans[planIdx];
+    var row = Object.assign({ drawing_id: p.drawing.id, page_number: p.page, computed_value: 0, computed_unit: null, layer_id: null, layer_category: null, scale_pixels_per_foot: scalePpf }, m);
+    var r = await supabaseClient.from('estimate_measurements').insert(row).select().single();
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    allMeas.push(r.data); meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); renderAll();
+  }
+  function openStamp() {
+    $('stampChips').innerHTML = STAMPS.map(function(t) { return '<span class="stamp-chip" data-t="' + t + '">' + t + '</span>'; }).join('');
+    $('stampChips').querySelectorAll('.stamp-chip').forEach(function(c) { c.onclick = function() { $('stampChips').querySelectorAll('.stamp-chip').forEach(function(x) { x.classList.toggle('on', x === c); }); $('stampText').value = c.getAttribute('data-t'); }; });
+    $('stampColors').innerHTML = ['#dc2626', '#0696D7', '#16a34a', '#f59e0b', '#7c3aed', '#0f172a'].map(function(c) { return '<span style="background:' + c + '" data-c="' + c + '" class="' + (c === $('stampColor').value ? 'on' : '') + '"></span>'; }).join('');
+    $('stampColors').querySelectorAll('span').forEach(function(sw) { sw.onclick = function() { $('stampColor').value = sw.getAttribute('data-c'); $('stampColors').querySelectorAll('span').forEach(function(x) { x.classList.toggle('on', x === sw); }); }; });
+    $('stampText').value = ''; openModal('stampModal'); setTimeout(function() { $('stampText').focus(); }, 50);
+  }
+  async function saveStamp() {
+    var t = $('stampText').value.trim().toUpperCase(); if (!t || !stampPoint) { toast('Pick or type the stamp text', 'error'); return; }
+    closeModal('stampModal');
+    await saveAnnot({ tool_type: 'note', points: [stampPoint], label: t, notes: 'stamp', color: $('stampColor').value }); stampPoint = null;
+  }
+  function openSpacing() {
+    var l = layerById(activeLayerId), len = polyLen(draft) / scalePpf, def = 8;
+    try { def = Number(localStorage.getItem('tk_spacing_' + l.id)) || Number(localStorage.getItem('tk_spacing')) || 8; } catch (e) {}
+    $('spacingFt').value = def; $('spacingInfo').textContent = 'Path of ' + len.toFixed(1) + ' ft on ' + l.name + ' — one mark every N feet along it.';
+    openModal('spacingModal'); setTimeout(function() { $('spacingFt').select(); }, 50);
+  }
+  async function applySpacing() {
+    var l = layerById(activeLayerId), sp = Number($('spacingFt').value || 0); if (!l || !(sp > 0) || draft.length < 2) { toast('Enter the spacing in feet', 'error'); return; }
+    try { localStorage.setItem('tk_spacing_' + l.id, String(sp)); localStorage.setItem('tk_spacing', String(sp)); } catch (e) {}
+    var step = sp * scalePpf, ends = $('spacingEnds').checked, pts = [], acc = 0, next = ends ? 0 : step, total = polyLen(draft);
+    for (var i = 1; i < draft.length; i++) { var a = draft[i - 1], b = draft[i], d = dist(a, b);
+      while (next <= acc + d + 1e-6) { var t = d ? (next - acc) / d : 0; pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); next += step; } acc += d; }
+    if (ends) { var last = draft[draft.length - 1]; if (!pts.length || dist(pts[pts.length - 1], last) > step * 0.25) pts.push(last); }
+    if (!pts.length) { toast('Spacing is longer than the path', 'error'); return; }
+    if (pts.length > 400 && !confirm(pts.length + ' marks — continue?')) return;
+    closeModal('spacingModal');
+    var p = plans[planIdx], rows = pts.map(function(q) { return { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'count', points: [q], computed_value: 1, computed_unit: 'ea', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: scalePpf, mark_no: nextMarkNo(l), label: 'spaced ' + sp + ' ft' }; });
+    var r = await supabaseClient.from('estimate_measurements').insert(rows).select();
+    draft = []; hover = null;
+    if (r.error) { toast(r.error.message, 'error'); redraw(); return; }
+    allMeas = allMeas.concat(r.data); meas = meas.concat(r.data); r.data.forEach(function(m) { undoStack.push({ type: 'add', id: m.id }); });
+    toast('✅ ' + r.data.length + ' marks placed every ' + sp + ' ft (' + (total / scalePpf).toFixed(0) + ' ft path)', 'success'); renderAll();
   }
   async function saveNote() {
     var t = $('noteText').value.trim(); if (!t || !draft.length) { closeModal('noteModal'); return; }
@@ -797,17 +913,19 @@ requireAuth().catch(function(){});
   // ─── overlay drawing ───
   function redraw() {
     if (!ctx) return; ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-    meas.forEach(function(m) { var l = layerById(m.layer_id); if (l && l.is_visible === false) return; drawMark(m, l, m.id === selectedId); });
-    var l = layerById(activeLayerId), col = tool === 'scale' ? '#dc2626' : (l ? l.color : '#0696D7');
+    meas.forEach(function(m) { if (!annotVisible && isAnnot(m)) return; var l = layerById(m.layer_id); if (l && l.is_visible === false) return; drawMark(m, l, m.id === selectedId); });
+    var l = layerById(activeLayerId), col = tool === 'scale' ? '#dc2626' : tool === 'cloud' ? '#dc2626' : tool === 'highlight' ? '#eab308' : (l ? l.color : '#0696D7');
     if (draft.length) { var pts = draft.map(S); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-      if (hover) { var h = S(hover); ctx.lineTo(h[0], h[1]); } if (tool === 'area' && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); pts.forEach(function(q) { dot(q, col); });
+      if (hover) { var h = S(hover); ctx.lineTo(h[0], h[1]); } if ((tool === 'area' || tool === 'cloud') && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); pts.forEach(function(q) { dot(q, col); });
+      if (tool === 'highlight' && hover) { var hh = S(hover); ctx.globalAlpha = .3; ctx.fillRect(Math.min(pts[0][0], hh[0]), Math.min(pts[0][1], hh[1]), Math.abs(hh[0] - pts[0][0]), Math.abs(hh[1] - pts[0][1])); ctx.globalAlpha = 1; }
       draftDrops.forEach(function(di) { if (pts[di]) glyph(pts[di], '▼', col); });
-      if (scalePpf && tool !== 'scale') { var v = tool === 'area' ? (pts.length > 2 ? polyArea(draft.concat(hover ? [hover] : [])) / (scalePpf * scalePpf) : 0) : polyLen(draft.concat(hover ? [hover] : [])) / scalePpf; var lp = hover ? S(hover) : pts[pts.length - 1]; label([lp[0] + 14, lp[1] - 14], tool === 'area' ? v.toFixed(0) + ' sf' : v.toFixed(1) + ' ft', col); } }
+      if (scalePpf && ['scale', 'cloud', 'highlight'].indexOf(tool) < 0) { var v = tool === 'area' ? (pts.length > 2 ? polyArea(draft.concat(hover ? [hover] : [])) / (scalePpf * scalePpf) : 0) : polyLen(draft.concat(hover ? [hover] : [])) / scalePpf; var lp = hover ? S(hover) : pts[pts.length - 1]; label([lp[0] + 14, lp[1] - 14], tool === 'area' ? v.toFixed(0) + ' sf' : v.toFixed(1) + ' ft', col); } }
     if (measureLine) { var a = S(measureLine[0]), b = measureLine[1] ? S(measureLine[1]) : (hover ? S(hover) : null); if (b) { ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); var ft = scalePpf ? dist(measureLine[0], measureLine[1] || hover) / scalePpf : 0; label([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], scalePpf ? ftIn(ft) : 'no scale', '#0f172a'); } dot(a, '#0f172a'); }
   }
   function S(p) { return [p[0] * renderScale, p[1] * renderScale]; }
   function drawMark(m, l, sel) {
     var col = (l && l.color) || m.color || '#0696D7', pts = m.points.map(S), lw = (l ? Number(l.line_width || 3) : 2);
+    if (isAnnot(m)) { drawAnnot(m, pts, sel); return; }
     ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = sel ? lw + 2 : lw; ctx.setLineDash(m.deduct ? [8, 5] : []);
     if (m.tool_type === 'count') { symbol(pts[0], l ? l.symbol : 'circle', col, sel, m.mark_no); }
     else if (m.tool_type === 'note') { ctx.setLineDash([]); ctx.fillStyle = '#fef3c7'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5; var w = Math.min(260, ctx.measureText(m.label || '').width + 16); ctx.font = '11px Arial'; w = Math.min(260, ctx.measureText(m.label || '').width + 16);
@@ -819,6 +937,26 @@ requireAuth().catch(function(){});
       if (sel || m.tool_type === 'scale' || polyLen(pts) > 110) { var mid = midOf(pts), v = Number(m.computed_value || 0); label(mid, (m.deduct ? '−' : '') + (m.tool_type === 'scale' ? (m.label || '') : ftIn(v + (l ? Number(m.drops || 0) * Number(l.drop_length_ft || 0) : 0))) + (m.drops ? ' +' + m.drops + '▼' : ''), m.tool_type === 'scale' ? '#dc2626' : col); } }
     else if (m.tool_type === 'area') { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]); ctx.closePath(); ctx.globalAlpha = sel ? .35 : .2; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke(); ctx.setLineDash([]);
       if (sel) pts.forEach(function(q) { dot(q, col, true); }); label(centroid(pts), (m.deduct ? '−' : '') + Number(m.computed_value || 0).toFixed(0) + ' sf', col); }
+  }
+  function drawAnnot(m, pts, sel) {
+    var col = m.color || '#dc2626'; ctx.setLineDash([]);
+    if (m.notes === 'highlight') { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = col; ctx.globalAlpha = sel ? .5 : .35; ctx.fill(); ctx.globalAlpha = 1; if (sel) { ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1; ctx.stroke(); } return; }
+    if (m.notes === 'cloud') {
+      var r = 9, n = pts.length, area = 0; for (var k = 0; k < n; k++) { var a0 = pts[k], b0 = pts[(k + 1) % n]; area += a0[0] * b0[1] - b0[0] * a0[1]; }
+      ctx.strokeStyle = col; ctx.lineWidth = sel ? 3 : 2; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var j = 1; j < n; j++) ctx.lineTo(pts[j][0], pts[j][1]); ctx.closePath(); ctx.globalAlpha = .06; ctx.fill(); ctx.globalAlpha = 1;
+      for (var e = 0; e < n; e++) { var A = pts[e], B = pts[(e + 1) % n], dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+        if (area < 0) { nx = -nx; ny = -ny; }                      // scallops bulge outward whichever way the corners were clicked
+        var cnt = Math.max(1, Math.round(L / (2 * r))), seg = L / cnt;
+        for (var q = 0; q < cnt; q++) { var cx = A[0] + ux * (q * seg + seg / 2), cy = A[1] + uy * (q * seg + seg / 2), rr = seg / 2;
+          var sA = Math.atan2(-uy, -ux), eA = Math.atan2(uy, ux), mid = sA + ((eA - sA + Math.PI * 2) % (Math.PI * 2)) / 2, ccw = (Math.cos(mid) * nx + Math.sin(mid) * ny) < 0;
+          ctx.beginPath(); ctx.arc(cx, cy, rr, sA, eA, ccw); ctx.stroke(); } }
+      if (m.label) label(centroid(pts), m.label, col); return; }
+    // stamp
+    ctx.font = 'bold 12px Arial'; var t = m.label || 'STAMP', w = ctx.measureText(t).width + 18, h = 24, x = pts[0][0], y = pts[0][1];
+    ctx.fillStyle = '#fff'; ctx.globalAlpha = .9; ctx.fillRect(x - w / 2, y - h / 2, w, h); ctx.globalAlpha = 1;
+    ctx.strokeStyle = col; ctx.lineWidth = sel ? 3 : 2; ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+    ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y + 1);
   }
   function symbol(p, sym, col, sel, no) {
     var r = sel ? 10 : 8; ctx.setLineDash([]); ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath();
@@ -838,6 +976,13 @@ requireAuth().catch(function(){});
   // ═══════════════════════ properties + totals ═══════════════════════
   function renderProps() {
     var host = $('propPanel'), m = selectedId ? meas.find(function(x) { return x.id === selectedId; }) : null;
+    if (m && isAnnot(m)) {
+      host.innerHTML = '<div class="hd"><span class="sw" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + esc(m.color || '#dc2626') + '"></span>' + { stamp: 'Stamp', cloud: 'Revision cloud', highlight: 'Highlight' }[m.notes] + '</div>' +
+        (m.notes !== 'highlight' ? '<div class="row"><span>Text</span><input type="text" id="pLabel" style="text-align:left;width:150px" value="' + esc(m.label || '') + '"></div>' : '') +
+        '<div class="actions">' + (m.notes !== 'highlight' ? '<button class="btn-ghost" id="pSave">Save</button>' : '') + '<button class="btn-danger" id="pDel">🗑 Delete</button></div>';
+      $('pDel').onclick = function() { deleteMark(m.id); };
+      if ($('pSave')) $('pSave').onclick = async function() { var v = $('pLabel').value.trim(); var r = await supabaseClient.from('estimate_measurements').update({ label: m.notes === 'stamp' ? v.toUpperCase() : (v || null) }).eq('id', m.id); if (r.error) { toast(r.error.message, 'error'); return; } m.label = m.notes === 'stamp' ? v.toUpperCase() : (v || null); renderAll(); };
+      return; }
     if (m) { var l = layerById(m.layer_id), q = markQty(m, l), unit = l ? typeUnit(l.takeoff_type) : (m.computed_unit || '');
       host.innerHTML = '<div class="hd"><span class="sw" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + ((l && l.color) || m.color) + '"></span>' + esc(l ? l.name : (m.tool_type === 'note' ? 'Note' : m.tool_type === 'scale' ? 'Scale' : 'Legacy mark')) + '</div>' +
         (m.tool_type === 'note' ? '<div class="row"><span>Text</span><b style="font-family:inherit">' + esc(m.label || '') + '</b></div>' : '') +
@@ -878,7 +1023,7 @@ requireAuth().catch(function(){});
       '<div style="margin-top:8px;font-size:11px;color:#64748b">Before overhead, misc and tax — those are applied on the <a href="estimating.html?est=' + estimateId + '" style="color:#0696D7">Estimating</a> page after roll-up.</div>';
     $('totals').innerHTML = html; $('tkTotalChip').textContent = fmtMoney(gm + gh * laborRate);
   }
-  function renderAll() { renderLayerTree(); renderProps(); renderTotals(); updateStatus(); redraw(); }
+  function renderAll() { renderLayerTree(); renderProps(); renderTotals(); updateStatus(); redraw(); if (thumbsOn) renderThumbs(); }
 
   // ═══════════════════════ roll-up ═══════════════════════
   var rollupRows = [];
@@ -981,6 +1126,11 @@ requireAuth().catch(function(){});
     $('scaleChip').onclick = function() { $('scalePreset').focus(); };
     $('scaleCancel').onclick = function() { closeModal('scaleModal'); draft = []; setTool('select'); }; $('scaleSet').onclick = applyCustomScale;
     $('noteCancel').onclick = function() { closeModal('noteModal'); draft = []; }; $('noteSave').onclick = saveNote;
+    $('spacingCancel').onclick = function() { closeModal('spacingModal'); draft = []; redraw(); }; $('spacingApply').onclick = applySpacing;
+    $('stampCancel').onclick = function() { closeModal('stampModal'); stampPoint = null; }; $('stampSave').onclick = saveStamp;
+    $('stampText').addEventListener('keydown', function(e) { if (e.key === 'Enter') saveStamp(); });
+    $('spacingFt').addEventListener('keydown', function(e) { if (e.key === 'Enter') applySpacing(); });
+    $('thumbsBtn').onclick = function() { thumbsOn = !thumbsOn; try { localStorage.setItem('tk_thumbs', thumbsOn ? '1' : '0'); } catch (e) {} renderThumbs(); fitHeight(); if (pdfPage) renderPage(); };
     document.querySelectorAll('[data-tool]').forEach(function(b) { b.onclick = function() { setTool(b.getAttribute('data-tool')); }; });
     $('zoomIn').onclick = function() { setZoom(zoom * 1.25); }; $('zoomOut').onclick = function() { setZoom(zoom / 1.25); }; $('zoomFit').onclick = function() { setZoom(1); };
     $('undoBtn').onclick = undo; $('exportBtn').onclick = exportPdf;
@@ -991,13 +1141,14 @@ requireAuth().catch(function(){});
       if (e.code === 'Space' && !e.repeat && !inField(e)) { spaceDown = true; if (overlayCanvas) overlayCanvas.classList.add('hand'); }
       if (document.querySelector('.modal-overlay.open') || inField(e)) return;
       var k = e.key.toLowerCase();
-      if (e.key === 'Enter' && (tool === 'linear' || tool === 'area') && draft.length >= 2) finishDraft();
+      if (e.key === 'Enter' && ['linear', 'area', 'countline', 'cloud'].indexOf(tool) >= 0 && draft.length >= 2) finishDraft();
       else if (e.key === 'Escape') { draft = []; draftDrops = []; measureLine = null; selectedId = null; renderProps(); redraw(); }
       else if (e.key === 'Backspace' && draft.length) { e.preventDefault(); draft.pop(); draftDrops = draftDrops.filter(function(i) { return i < draft.length; }); redraw(); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { e.preventDefault(); deleteMark(selectedId); }
       else if (k === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
       else if (k === 'd' && tool === 'linear' && draft.length) { var i = draft.length - 1; if (draftDrops.indexOf(i) < 0) draftDrops.push(i); redraw(); }
       else if (k === 'v') setTool('select'); else if (k === 'h') setTool('pan'); else if (k === 'c') setTool('count'); else if (k === 'l') setTool('linear'); else if (k === 'a') setTool('area'); else if (k === 'm') setTool('measure'); else if (k === 'n') setTool('note');
+      else if (k === 'k') setTool('countline'); else if (k === 't') setTool('stamp'); else if (k === 'u') setTool('cloud'); else if (k === 'g') setTool('highlight'); else if (k === 'b') $('thumbsBtn').click();
       else if (e.key === '+' || e.key === '=') setZoom(zoom * 1.25); else if (e.key === '-') setZoom(zoom / 1.25); else if (e.key === '0') setZoom(1);
       else if (e.key === 'PageUp') { e.preventDefault(); openPlan(planIdx - 1); } else if (e.key === 'PageDown') { e.preventDefault(); openPlan(planIdx + 1); }
     });
@@ -1021,9 +1172,9 @@ requireAuth().catch(function(){});
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   // console access for support / debugging
   window.TK = { get plans() { return plans; }, get planIdx() { return planIdx; }, get meas() { return meas; }, get allMeas() { return allMeas; }, get layers() { return layers; }, get me() { return me; }, get scale() { return { ppf: scalePpf, label: scaleLabel }; },
-    detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll };
+    detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing };
 })();
 </script>
-<script src="sw-register.js?v=271"></script>
+<script src="sw-register.js?v=272"></script>
 </body>
 </html>
