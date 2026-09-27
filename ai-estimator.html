@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=275"></script>
-<script src="est-engine.js?v=275"></script>
-<script src="geo-takeoff.js?v=275"></script>
+<script src="est-totals.js?v=276"></script>
+<script src="est-engine.js?v=276"></script>
+<script src="geo-takeoff.js?v=276"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -659,6 +659,7 @@ var AE = (function() {
     if (!confirm('Copy the drawing set into this estimate\'s Takeoff and lay the measured ducts, pipes and risers on the plans as layers? Earlier auto-marks there are replaced.')) return;
     bridging = 'Preparing…'; render();
     try {
+      await loadNorms();   // engine fallbacks for sizes the catalog does not carry
       var lr = await supabaseClient.from('estimate_takeoff_layers').select('*').eq('estimate_id', estId);
       if (lr.error) throw new Error(/does not exist|42P01/i.test(lr.error.message) ? 'run takeoff-v2-schema.sql in Supabase first' : lr.error.message);
       var layers = lr.data || [];
@@ -769,6 +770,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=275"></script>
+<script src="sw-register.js?v=276"></script>
 </body>
 </html>
