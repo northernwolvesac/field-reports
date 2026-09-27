@@ -183,6 +183,10 @@
   .li-table tbody td.desc { font-family: inherit; text-align: left; }
   .li-table tbody td.num  { text-align: right; }
   .li-table tbody td.ctr  { text-align: center; }
+  .li-table .rel-tag { font-family: inherit; font-size: 10px; font-weight: 700; color: #16a34a; white-space: nowrap; }
+  .rel-row { display: grid; grid-template-columns: 28px 52px 1fr 110px 80px 110px; gap: 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  .rel-row.head { position: sticky; top: 0; background: #f8fafc; font-weight: 700; font-size: 11px; color: #64748b; text-transform: uppercase; }
+  .rel-row .n { text-align: right; font-variant-numeric: tabular-nums; }
   .li-table tbody td input, .li-table tbody td textarea {
     width: 100%; box-sizing: border-box; padding: 4px 6px;
     border: 1px solid #cbd5e1; border-radius: 4px; font: inherit;
@@ -629,6 +633,29 @@
   </div>
 </div>
 
+<!-- Release retainage modal -->
+<div class="modal-overlay" id="relModal">
+  <div class="modal-card" style="max-width:760px">
+    <h2>Release Retainage</h2>
+    <div class="field-hint" style="margin-bottom:10px">Choose the lines and how much of their retainage to release. The released amount comes off Column I and is added to this invoice's
+      <b>Current Payment Due</b> (G702 line 8). The % is the share of each line's retainage released to date — 100% releases all of it. Later invoices keep the release.</div>
+    <div class="row">
+      <div class="field" style="flex:0 0 140px"><label>Release %</label><input type="number" id="relPct" min="1" max="100" step="0.01" value="100"></div>
+      <div class="field"><label>Apply to</label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;padding-top:8px;font-size:14px">
+          <label style="font-weight:600;text-transform:none;letter-spacing:0"><input type="radio" name="relScope" value="all" checked> All lines</label>
+          <label style="font-weight:600;text-transform:none;letter-spacing:0"><input type="radio" name="relScope" value="sel"> Selected lines only</label>
+        </div></div>
+    </div>
+    <div id="relList" style="max-height:340px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;margin-top:6px"></div>
+    <div id="relSummary" style="margin-top:12px;font-size:14px"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="relUndo" title="Hold the full retainage again on the chosen lines" style="margin-right:auto">Undo release</button>
+      <button class="btn-cancel" id="relCancel">Cancel</button>
+      <button class="btn-save" id="relApply">Release</button>
+    </div>
+  </div>
+</div>
 
 <!-- Change Order modal -->
 <div class="modal-overlay" id="coModal">
@@ -996,24 +1023,16 @@ requireAuth().catch(function(){});
     var priorLine6 = 0;
     if (carry) {
       var prior = await supabaseClient.from('aia_applications')
-        .select('id, application_no, retainage_rate, retainage_rate_stored')
+        .select('*')
         .eq('aia_project_id', newAppProjectId)
         .lt('application_no', appNo)
         .order('application_no', { ascending: false }).limit(1).maybeSingle();
       if (prior && prior.data) {
         priorId = prior.data.id;
         // Compute Line 6 for prior app: G(prior) - Retainage(prior)
-        var setupRes = await supabaseClient.from('aia_projects').select('retainage_rate').eq('id', newAppProjectId).maybeSingle();
-        var rate = effRate(setupRes.data || {}, prior.data);
-        var priorLines = await supabaseClient.from('aia_line_items')
-          .select('scheduled_value, prev_amount, this_amount, stored_amount, is_parent')
-          .eq('application_id', priorId);
-        var priorG = 0;
-        (priorLines.data || []).forEach(function(li) {
-          if (li.is_parent) return;
-          priorG += Number(li.prev_amount) + Number(li.this_amount) + Number(li.stored_amount);
-        });
-        priorLine6 = priorG - (priorG * rate);
+        var setupRes = await supabaseClient.from('aia_projects').select('*').eq('id', newAppProjectId).maybeSingle();
+        var priorLines = await supabaseClient.from('aia_line_items').select('*').eq('application_id', priorId);
+        priorLine6 = computeTotalsFor(setupRes.data || {}, prior.data, priorLines.data || []).lines.L6;
       }
     }
 
@@ -1046,7 +1065,7 @@ requireAuth().catch(function(){});
       var toInsert = (priorLines.data || []).map(function(li) {
         var newPrev = li.is_parent ? 0 :
           (Number(li.prev_amount) + Number(li.this_amount) + Number(li.stored_amount));
-        return {
+        var row = {
           application_id:   newAppId,
           item_no:          li.item_no,
           budget_code:      li.budget_code,
@@ -1060,6 +1079,8 @@ requireAuth().catch(function(){});
           parent_item_no:   li.parent_item_no,
           sort_order:       li.sort_order
         };
+        if (li.retainage_release_pct) row.retainage_release_pct = li.retainage_release_pct;   // a release stays released
+        return row;
       });
       if (toInsert.length) {
         await supabaseClient.from('aia_line_items').insert(toInsert);
@@ -1257,16 +1278,26 @@ requireAuth().catch(function(){});
     var pfx = String(parent.item_no) + '.';
     return currentLines.filter(function(l) { return !l.is_parent && String(l.item_no).indexOf(pfx) === 0; });
   }
+  // share of a line's retainage released to date (0..1); lines saved before the column existed read as 0
+  function relOf(l) { var r = Number((l && l.retainage_release_pct) || 0); return r > 0 ? Math.min(1, r) : 0; }
   function lineVals(l, rate, rateStored) {
-    var c, d, e, f;
+    var c, d, e, f, full = 0, ret = 0;
     if (l.is_parent) {
       c = d = e = f = 0;
-      lineChildren(l).forEach(function(k) { c += Number(k.scheduled_value || 0); d += Number(k.prev_amount || 0); e += Number(k.this_amount || 0); f += Number(k.stored_amount || 0); });
+      lineChildren(l).forEach(function(k) {
+        var kd = Number(k.prev_amount || 0), ke = Number(k.this_amount || 0), kf = Number(k.stored_amount || 0), kr = (kd + ke) * rate + kf * rateStored;
+        c += Number(k.scheduled_value || 0); d += kd; e += ke; f += kf; full += kr; ret += kr * (1 - relOf(k));
+      });
     } else {
       c = Number(l.scheduled_value || 0); d = Number(l.prev_amount || 0); e = Number(l.this_amount || 0); f = Number(l.stored_amount || 0);
+      full = (d + e) * rate + f * rateStored; ret = full * (1 - relOf(l));
     }
     var g = d + e + f;
-    return { c: c, d: d, e: e, f: f, g: g, pct: c ? g / c : 0, bal: c - g, ret: (d + e) * rate + f * rateStored };
+    return { c: c, d: d, e: e, f: f, g: g, pct: c ? g / c : 0, bal: c - g, ret: ret, retFull: full, released: full - ret };
+  }
+  function retCell(l, v) {
+    var r = l.is_parent ? 0 : relOf(l);
+    return fmtMoney(v.ret) + (r > 0 ? '<div class="rel-tag" title="Retainage released: ' + fmtMoney(v.released) + '">' + (r * 100).toFixed(r * 100 % 1 ? 2 : 0) + '% released</div>' : '');
   }
 
   function renderLinesPanel() {
@@ -1281,7 +1312,8 @@ requireAuth().catch(function(){});
         (canEdit ? (linesEditMode
           ? '<span class="field-hint" style="margin-right:auto">Enter <b>This Period</b> and <b>Stored</b> amounts (or a % complete). Parent rows roll up automatically.</span>' +
             '<button class="btn-cancel" id="linesCancel">Cancel</button><button class="btn-create" id="linesSave">Save</button>'
-          : '<button class="btn-secondary" id="pullCOs" title="Add approved change orders whose approval date is within this billing period">↻ Pull approved COs</button>' +
+          : '<button class="btn-secondary" id="relRet" title="Release retainage on all or selected lines">⤴ Release retainage</button>' +
+            '<button class="btn-secondary" id="pullCOs" title="Add approved change orders whose approval date is within this billing period">↻ Pull approved COs</button>' +
             '<button class="btn-secondary" data-addline="contract">+ Contract Line</button>' +
             '<button class="btn-secondary" data-addline="co">+ Change Order Line</button>' +
             '<button class="btn-create" id="linesEdit">Edit</button>') : '') +
@@ -1336,7 +1368,7 @@ requireAuth().catch(function(){});
         '<td class="num" data-calc="g">' + fmtMoney(v.g) + '</td>',
         '<td class="num" data-calc="pct">' + (v.pct * 100).toFixed(2) + '%</td>',
         '<td class="num" data-calc="bal">' + fmtMoney(v.bal) + '</td>',
-        '<td class="num" data-calc="ret">' + fmtMoney(v.ret) + '</td>'
+        '<td class="num" data-calc="ret">' + retCell(l, v) + '</td>'
       ]);
     } else {
       cells = cells.concat([
@@ -1347,30 +1379,32 @@ requireAuth().catch(function(){});
         '<td class="num">' + fmtMoney(v.g) + '</td>',
         '<td class="num">' + (v.pct * 100).toFixed(2) + '%</td>',
         '<td class="num">' + fmtMoney(v.bal) + '</td>',
-        '<td class="num">' + fmtMoney(v.ret) + '</td>'
+        '<td class="num">' + retCell(l, v) + '</td>'
       ]);
     }
     return '<tr class="' + rowCls + '" data-row="' + l.id + '">' + cells.join('') + '</tr>';
   }
 
   function renderTotalsRow(lines, rate, rateStored, cls, label) {
-    var c = 0, d = 0, e = 0, f = 0;
+    var c = 0, d = 0, e = 0, f = 0, rt = 0;
     lines.forEach(function(l) {
       if (l.is_parent) return;
       c += Number(l.scheduled_value || 0); d += Number(l.prev_amount || 0); e += Number(l.this_amount || 0); f += Number(l.stored_amount || 0);
+      rt += lineVals(l, rate, rateStored).ret;
     });
     var g = d + e + f, pct = c ? g / c : 0;
     return '<tr class="' + cls + '">' +
       '<td colspan="2" class="desc" style="text-align:right;font-weight:800">' + label + ':</td>' +
       '<td class="num">' + fmtMoney(c) + '</td><td class="num">' + fmtMoney(d) + '</td><td class="num">' + fmtMoney(e) + '</td>' +
       '<td class="num">' + fmtMoney(f) + '</td><td class="num">' + fmtMoney(g) + '</td><td class="num">' + (pct * 100).toFixed(2) + '%</td>' +
-      '<td class="num">' + fmtMoney(c - g) + '</td><td class="num">' + fmtMoney((d + e) * rate + f * rateStored) + '</td>' +
+      '<td class="num">' + fmtMoney(c - g) + '</td><td class="num">' + fmtMoney(rt) + '</td>' +
     '</tr>';
   }
 
   function bindLinesPanel() {
     var main = document.getElementById('mainView');
     var pcb = document.getElementById('pullCOs'); if (pcb) pcb.addEventListener('click', pullApprovedCOs);
+    var rrb = document.getElementById('relRet'); if (rrb) rrb.addEventListener('click', openReleaseModal);
     var ed = document.getElementById('linesEdit');
     if (ed) ed.addEventListener('click', function() { linesEditMode = true; rerenderLines(); });
     var cn = document.getElementById('linesCancel');
@@ -1426,7 +1460,7 @@ requireAuth().catch(function(){});
           tds[4].textContent = fmtMoney(v.g); tds[5].textContent = (v.pct * 100).toFixed(2) + '%'; tds[6].textContent = fmtMoney(v.bal); tds[7].textContent = fmtMoney(v.ret); }
       } else {
         var g = tr.querySelector('[data-calc="g"]'), p = tr.querySelector('[data-calc="pct"]'), b = tr.querySelector('[data-calc="bal"]'), r = tr.querySelector('[data-calc="ret"]');
-        if (g) g.textContent = fmtMoney(v.g); if (p) p.textContent = (v.pct * 100).toFixed(2) + '%'; if (b) b.textContent = fmtMoney(v.bal); if (r) r.textContent = fmtMoney(v.ret);
+        if (g) g.textContent = fmtMoney(v.g); if (p) p.textContent = (v.pct * 100).toFixed(2) + '%'; if (b) b.textContent = fmtMoney(v.bal); if (r) r.innerHTML = retCell(l, v);
       }
     });
     // totals rows: rebuild them in place
@@ -1453,6 +1487,72 @@ requireAuth().catch(function(){});
     renderApplication(currentApp.id);
   }
 
+  // ─── Release retainage: all lines or selected lines, 1–100% of their retainage ───
+  function releaseLines() { return currentLines.filter(function(l) { return !l.is_parent; }); }
+  function openReleaseModal() {
+    var rate = effRate(currentSetup, currentApp), rateStored = effRateStored(currentSetup, currentApp);
+    var lines = releaseLines();
+    var html = '<div class="rel-row head"><span></span><span>Item</span><span>Description</span><span class="n">Retainage held</span><span class="n">Released</span><span class="n">After release</span></div>';
+    lines.forEach(function(l) {
+      var v = lineVals(l, rate, rateStored);
+      html += '<label class="rel-row" data-rel="' + l.id + '"><input type="checkbox" class="relChk" value="' + l.id + '"' + (v.retFull > 0.005 ? ' checked' : '') + ' disabled>' +
+        '<span>' + escHtml(l.item_no || '') + '</span><span>' + escHtml(l.description || '') + (l.is_change_order ? ' <span style="color:#94a3b8">(CO)</span>' : '') + '</span>' +
+        '<span class="n">' + fmtMoney(v.ret) + '</span><span class="n">' + (relOf(l) ? (relOf(l) * 100).toFixed(0) + '%' : '—') + '</span><span class="n" data-after>—</span></label>';
+    });
+    document.getElementById('relList').innerHTML = html;
+    document.getElementById('relPct').value = 100;
+    document.querySelector('input[name="relScope"][value="all"]').checked = true;
+    var m = document.getElementById('relModal'); m.classList.add('open');
+    m.querySelectorAll('input[name="relScope"]').forEach(function(r) { r.onchange = releasePreview; });
+    m.querySelectorAll('.relChk').forEach(function(c) { c.onchange = releasePreview; });
+    document.getElementById('relPct').oninput = releasePreview;
+    document.getElementById('relCancel').onclick = function() { m.classList.remove('open'); };
+    document.getElementById('relApply').onclick = function() { applyRelease(false); };
+    document.getElementById('relUndo').onclick = function() { applyRelease(true); };
+    releasePreview();
+  }
+  function releaseChosen() {
+    var all = document.querySelector('input[name="relScope"]:checked').value === 'all';
+    document.querySelectorAll('#relList .relChk').forEach(function(c) { c.disabled = all; });
+    if (all) return releaseLines().map(function(l) { return l.id; });
+    return [].slice.call(document.querySelectorAll('#relList .relChk:checked')).map(function(c) { return c.value; });
+  }
+  function releasePreview() {
+    var rate = effRate(currentSetup, currentApp), rateStored = effRateStored(currentSetup, currentApp);
+    var pct = Math.max(0, Math.min(100, Number(document.getElementById('relPct').value || 0))) / 100;
+    var chosen = releaseChosen(), before = 0, after = 0;
+    releaseLines().forEach(function(l) {
+      var v = lineVals(l, rate, rateStored), on = chosen.indexOf(l.id) >= 0;
+      var a = on ? v.retFull * (1 - pct) : v.ret;
+      before += v.ret; after += a;
+      var cell = document.querySelector('#relList [data-rel="' + l.id + '"] [data-after]'); if (cell) cell.textContent = on ? fmtMoney(a) : '—';
+    });
+    document.getElementById('relSummary').innerHTML = chosen.length
+      ? 'Retainage held on this invoice: <b>' + fmtMoney(before) + '</b> → <b>' + fmtMoney(after) + '</b> · ' +
+        (before - after >= 0 ? 'released now: <b style="color:#16a34a">' + fmtMoney(before - after) + '</b>' : 'held again: <b style="color:#dc2626">' + fmtMoney(after - before) + '</b>') +
+        ' (' + chosen.length + ' line' + (chosen.length === 1 ? '' : 's') + ')'
+      : '<span style="color:#dc2626">Tick the lines to release.</span>';
+  }
+  async function applyRelease(undo) {
+    if (!canEdit) return;
+    var chosen = releaseChosen();
+    if (!chosen.length) { showToast('Tick the lines to release', 'error'); return; }
+    var pct = Number(document.getElementById('relPct').value || 0);
+    if (!undo && !(pct >= 1 && pct <= 100)) { showToast('Release % must be between 1 and 100', 'error'); return; }
+    var val = undo ? 0 : Math.round(pct * 100) / 10000;
+    var btn = document.getElementById(undo ? 'relUndo' : 'relApply'); btn.disabled = true;
+    var r = await supabaseClient.from('aia_line_items').update({ retainage_release_pct: val }).in('id', chosen);
+    btn.disabled = false;
+    if (r.error) {
+      if (/retainage_release_pct/.test(r.error.message || '')) alert('Retainage release needs one database update first.\n\nOpen Supabase → SQL Editor and run the file retainage-release.sql from the app folder (one line: add column retainage_release_pct).');
+      else showToast('Release failed: ' + r.error.message, 'error');
+      return;
+    }
+    document.getElementById('relModal').classList.remove('open');
+    showToast(undo ? 'Retainage held again on ' + chosen.length + ' line(s)' : '✅ Released ' + pct + '% of retainage on ' + chosen.length + ' line(s)', 'success');
+    renderApplication(currentApp.id);
+  }
+
   // Retainage: an invoice may override the contract rate (e.g. retainage released on the final invoice)
   function effRate(setup, app) {
     if (app && app.retainage_rate != null && app.retainage_rate !== '') return Number(app.retainage_rate);
@@ -1467,12 +1567,14 @@ requireAuth().catch(function(){});
     // Sum non-parent lines
     var totalG = 0, totalCompleted = 0, totalStored = 0;
     var totalCoG = 0, totalCoCompleted = 0, totalCoStored = 0;
+    var heldCompleted = 0, heldStored = 0;     // what retainage still applies to, after line releases
     lines.forEach(function(li) {
       if (li.is_parent) return;
       var d = Number(li.prev_amount   || 0);
       var e = Number(li.this_amount   || 0);
       var f = Number(li.stored_amount || 0);
-      var g = d + e + f;
+      var g = d + e + f, keep = 1 - relOf(li);
+      heldCompleted += (d + e) * keep; heldStored += f * keep;
       if (li.is_change_order) {
         totalCoG += g; totalCoCompleted += (d + e); totalCoStored += f;
       } else {
@@ -1494,9 +1596,10 @@ requireAuth().catch(function(){});
     var line2 = coNet;
     var line3 = line1 + line2;
     var line4 = grandG;
-    var line5a = grandCompleted * rate;
-    var line5b = grandStored    * rateStored;
+    var line5a = heldCompleted * rate;
+    var line5b = heldStored    * rateStored;
     var line5t = line5a + line5b;
+    var released = (grandCompleted * rate + grandStored * rateStored) - line5t;
     var line6 = line4 - line5t;
     var line7 = Number(app.previous_certificates || 0);
     var line8 = line6 - line7;
@@ -1507,7 +1610,7 @@ requireAuth().catch(function(){});
       co:         {totalG:totalCoG, totalCompleted:totalCoCompleted, totalStored:totalCoStored},
       grand:      {G:grandG, completed:grandCompleted, stored:grandStored},
       lines:      {L1:line1, L2:line2, L3:line3, L4:line4, L5a:line5a, L5b:line5b, L5t:line5t,
-                   L6:line6, L7:line7, L8:line8, L9:line9}
+                   L6:line6, L7:line7, L8:line8, L9:line9, released:released}
     };
   }
 
@@ -1526,6 +1629,7 @@ requireAuth().catch(function(){});
         row('   a. ' + (effRate(currentSetup, currentApp) * 100).toFixed(2) + '% of Completed Work',  L.L5a, 'indent') +
         row('   b. ' + (effRateStored(currentSetup, currentApp) * 100).toFixed(2) + '% of Stored Material', L.L5b, 'indent') +
         row('   Total Retainage (5a + 5b)',                                         L.L5t, 'indent') +
+        (L.released > 0.005 ? row('   Retainage released (already taken off line 5)',  L.released, 'indent') : '') +
         row('6. Total Earned Less Retainage (Line 4 − 5)',                          L.L6) +
         row('7. Less Previous Certificates for Payment',                            L.L7) +
         row('8. CURRENT PAYMENT DUE',                                               L.L8, 'key-line') +
@@ -1827,7 +1931,7 @@ requireAuth().catch(function(){});
       if (appIds.length) {
         lines = await fetchAll(function() {
           return supabaseClient.from('aia_line_items')
-            .select('application_id, scheduled_value, prev_amount, this_amount, stored_amount, is_parent, is_change_order')
+            .select('*')
             .in('application_id', appIds);
         });
       }
@@ -1918,7 +2022,7 @@ requireAuth().catch(function(){});
     var lines = { data: [] };
     if (appIds.length) {
       lines = await supabaseClient.from('aia_line_items')
-        .select('application_id, scheduled_value, prev_amount, this_amount, stored_amount, is_parent, is_change_order')
+        .select('*')
         .in('application_id', appIds);
     }
     var cos = await supabaseClient.from('aia_change_orders').select('*').eq('aia_project_id', id).order('number', { ascending: true });
@@ -2876,7 +2980,7 @@ requireAuth().catch(function(){});
     function rowVals(l) {
       var c = Number(l.scheduled_value || 0), d = Number(l.prev_amount || 0), e = Number(l.this_amount || 0), f = Number(l.stored_amount || 0);
       var g = d + e + f;
-      return { c: c, d: d, e: e, f: f, g: g, pct: c ? g / c : 0, bal: c - g, ret: (d + e) * rate + f * rateStored };
+      return { c: c, d: d, e: e, f: f, g: g, pct: c ? g / c : 0, bal: c - g, ret: ((d + e) * rate + f * rateStored) * (1 - relOf(l)) };
     }
     function sumLines(lines) {
       var s = { c: 0, d: 0, e: 0, f: 0, g: 0, ret: 0 };
@@ -3001,6 +3105,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=259"></script>
 </body>
 </html>
