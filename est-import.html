@@ -20,6 +20,8 @@
   <p style="font-size:13px;color:var(--nw-muted)">Admin tool. This page is opened from a Procore Estimating tab; it receives NWAC's estimate lines,
   unit rates and the cost catalog from that tab (browser message, Procore origin only) and saves them under your own login. Nothing is sent anywhere else.</p>
   <pre id="log">Waiting for data from the Procore tab…</pre>
+  <div style="margin-top:12px;font-size:13px">Or load an export file (nw-catalog.json / nw-history.json saved from the Procore tab):
+    <input type="file" id="importFile" accept="application/json,.json" style="margin-left:8px"></div>
 </div>
 <script>
 requireAuth().catch(function(){});
@@ -50,12 +52,26 @@ requireAuth().catch(function(){});
     return ok;
   }
 
+  document.getElementById('importFile').addEventListener('change', async function() {
+    var f = this.files && this.files[0]; if (!f) return;
+    if (!ready || busy) { log('Not ready.'); return; }
+    var d; try { d = JSON.parse(await f.text()); } catch (e) { log('✗ not a JSON export: ' + e.message); return; }
+    if (d.type !== 'nw-procore-import') { log('✗ not an NW export file'); return; }
+    await importData(d, 'file ' + f.name);
+    this.value = '';
+  });
+
   window.addEventListener('message', async function(e) {
     if (!ALLOWED.test(e.origin)) return;                       // only a Procore page may send data here
     var d = e.data || {};
     if (d.type !== 'nw-procore-import' || !ready || busy) return;
+    var res = await importData(d, e.origin);
+    e.source.postMessage({ type: 'nw-import-done', res: res }, e.origin);
+  });
+
+  async function importData(d, from) {
     busy = true;
-    log('Received from ' + e.origin + ': ' + (d.projects || []).length + ' projects, ' + (d.lines || []).length + ' lines, ' +
+    log('Received from ' + from + ': ' + (d.projects || []).length + ' projects, ' + (d.lines || []).length + ' lines, ' +
         (d.norms || []).length + ' unit rates, ' + (d.catalog_folders || []).length + ' catalog folders, ' + (d.catalog_items || []).length + ' catalog items');
     var res = {};
     try {
@@ -77,9 +93,9 @@ requireAuth().catch(function(){});
       }
     } catch (err) { log('✗ ' + err.message); }
     log('Done.');
-    e.source.postMessage({ type: 'nw-import-done', res: res }, e.origin);
     busy = false;
-  });
+    return res;
+  }
 })();
 </script>
 </body>
