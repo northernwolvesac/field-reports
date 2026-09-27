@@ -732,6 +732,7 @@
         var ids = chains[c], cnt = {}, majority = null;
         ids.forEach(function (i) { if (segSize[i]) cnt[segSize[i]] = (cnt[segSize[i]] || 0) + B[i][6]; });
         Object.keys(cnt).forEach(function (k) { if (majority === null || cnt[k] > cnt[majority]) majority = k; });
+        if (majority === null) return;                    // a bar network without a single label is a wall outline, not duct
         ids.forEach(function (i) {
           var sz = segSize[i] || majority, via = segSize[i] ? 'label' : majority ? 'run' : 'default';
           if (!sz) {
