@@ -72,8 +72,36 @@
       keepSegs.forEach(function (x) { path.push(x); });
       subIdx = path.length;
     }
+    function thinQuad() {
+      var all = path.concat(rects);                    // a thin rectangle's sides were moved to rects by endSub
+      if (all.length < 2 || all.length > 10) return null;
+      var L = function (g) { return Math.hypot(g[2] - g[0], g[3] - g[1]); };
+      var e1 = all.slice().sort(function (a, b) { return L(b) - L(a); })[0];
+      if (!e1 || L(e1) < 6) return null;
+      var ux = (e1[2] - e1[0]) / L(e1), uy = (e1[3] - e1[1]) / L(e1), nx = -uy, ny = ux, tmax = 0, sgn = 1, along = true;
+      all.forEach(function (g) {
+        [[g[0], g[1]], [g[2], g[3]]].forEach(function (q) {
+          var d = (q[0] - e1[0]) * nx + (q[1] - e1[1]) * ny, a = (q[0] - e1[0]) * ux + (q[1] - e1[1]) * uy;
+          if (Math.abs(d) > tmax) { tmax = Math.abs(d); sgn = d < 0 ? -1 : 1; }
+          if (a < -2 || a > L(e1) + 2) along = false;                                          // points beyond the long edge: not a bar
+        });
+      });
+      if (!along || tmax < 0.3 || tmax > 4.5) return null;
+      var o = tmax / 2 * sgn;
+      return { seg: [e1[0] + nx * o, e1[1] + ny * o, e1[2] + nx * o, e1[3] + ny * o], t: Math.round(tmax * 10) / 10 };
+    }
     function flush(stroke, paint) {
       endSub(false);
+      var quad = null;
+      if ((paint === true || paint === 'both') && Math.min(st.fill[0], st.fill[1], st.fill[2]) < 0.6) {
+        quad = thinQuad();
+        if (quad) {
+          var qk = 'fill|' + quad.t + '|';
+          if (!(qk in styles)) { styles[qk] = styleList.length; styleList.push({ key: qk, col: [0, 0, 0], w: quad.t, dash: false }); }
+          var qg = clipSeg(quad.seg, st.clip); if (qg) segs.push(qg.concat([styles[qk]]));
+        }
+      }
+      if (quad) { pathPts = []; pendingClip = false; path = []; rects = []; cur = null; start = null; subIdx = 0; return; }
       if (paint !== false && pathPts.length && pathPts.length <= 400) {
         var gb = bboxOf(pathPts), gw = gb[2] - gb[0], gh = gb[3] - gb[1];
         var whiteFill = (paint === true || paint === 'both') && Math.min(st.fill[0], st.fill[1], st.fill[2]) > 0.9;     // a label halo, not a glyph
@@ -475,7 +503,18 @@
         var a1 = D.segs[o2], b1 = D.segs[o2 + 1], a2 = D.segs[o2 + 2], b2 = D.segs[o2 + 3];
         if (hyp(a2 - a1, b2 - b1) > 3) leaders.push([a1, b1, a2, b2]);
       }
-      var singles = singleLines(S, fp.used, labs, ptft, leaders);
+      // single-line ducts (round runs drawn as one thick line — BOSS Belmont) may sit in a style that has no wall pairs: chain them
+      // from every dark solid style of comparable weight, walls of the paired styles still excluded
+      // only on single-line drawings (few paired feet per label — BOSS 5 ft/label vs 8–22 on double-line sets), otherwise the
+      // extra styles add flex runouts and equipment outlines that Procore takeoffs do not carry
+      var S2 = S.slice(), used2 = fp.used.slice(), minW = Infinity; keep.forEach(function (k) { minW = Math.min(minW, +k.split('|')[1]); });
+      var pairFt = pcs.reduce(function (a, p) { return a + p.len_ft; }, 0), singleMode = labs.length > 0 && pairFt / labs.length < 7;
+      if (singleMode) Object.keys(bySty).forEach(function (key) {
+        if (keep.indexOf(key) >= 0 || bySty[key].length < 40) return;
+        var w = +key.split('|')[1]; if (w < Math.max(0.5, minW * 0.6)) return;
+        bySty[key].forEach(function (sg) { S2.push(norm(sg)); used2.push([]); });
+      });
+      var singles = singleLines(S2, used2, labs, ptft, leaders);
       var all = pcs.concat(singles), sizes = {}, total = 0, sf = 0, wf = 0;
       all.forEach(function (p) {
         sizes[p.size] = (sizes[p.size] || 0) + p.len_ft; total += p.len_ft;
