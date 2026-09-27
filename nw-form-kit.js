@@ -135,12 +135,17 @@
     var J = window.jspdf && window.jspdf.jsPDF;
     if (!J || !J.API) { if (tries < 40) setTimeout(function() { patchSave(tries + 1); }, 250); return; }
     if (J.API.__nwkSave) return;
+    // jsPDF 2.x builds save() inside each document, so API.save is usually empty here: fall back to our own download
     var orig = J.API.save;
+    function plain(doc, name, opts) {
+      if (typeof orig === 'function') return orig.call(doc, name, opts);
+      downloadBlob(doc.output('blob'), name || 'report.pdf'); return doc;
+    }
     J.API.save = function(name, opts) {
-      if (!K.files.length) return orig.call(this, name, opts);
+      if (!K.files.length) return plain(this, name, opts);
       var doc = this; busy(true, 'Adding attachments…');
       K.mergeDoc(doc).then(function(b) { busy(false); downloadBlob(b, name); })
-        .catch(function(e) { busy(false); alert('Could not add the attachments: ' + e.message); orig.call(doc, name, opts); });
+        .catch(function(e) { busy(false); alert('Could not add the attachments: ' + e.message); plain(doc, name, opts); });
       return this;
     };
     J.API.__nwkSave = true;
