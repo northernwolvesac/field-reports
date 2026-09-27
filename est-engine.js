@@ -240,6 +240,8 @@
           var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
           var coarseDup = !!coarseSet[sh];
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
+          var weakGeo = r.geo && r.geo.total_ft > 0 && (r.geo.labels || 0) < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft;
+          if (weakGeo && !coarseDup) { geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: r.geo.labels || 0 }); coarseDup = true; }
           if (!coarseDup && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
             geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
@@ -371,6 +373,7 @@
         { is_firm: false, flag: 'roof drops are not on the plan — 2 × 14 ft per unit budgeted; confirm the height and size' });
     });
     C.geoCheck.forEach(function (g) {
+      if (g.weak) { flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry (' + g.weak + ' ft, ' + g.labels + ' labels, mostly width-guessed) not trusted — AI reading ' + Math.round(g.ai) + ' ft used' }); return; }
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
