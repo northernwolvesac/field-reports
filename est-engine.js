@@ -240,7 +240,8 @@
           var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
           var coarseDup = !!coarseSet[sh];
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
-          var weakGeo = r.geo && r.geo.total_ft > 0 && (r.geo.labels || 0) < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft;
+          var weakGeo = r.geo && r.geo.total_ft > 0 && (((r.geo.labels || 0) < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft) ||
+            ((r.geo.labels || 0) < 20 && aiFt > 2 * r.geo.total_ft * GEO_FITTINGS));
           if (weakGeo && !coarseDup) { geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: r.geo.labels || 0 }); coarseDup = true; }
           if (!coarseDup && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
