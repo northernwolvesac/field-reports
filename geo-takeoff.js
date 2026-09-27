@@ -389,6 +389,23 @@
       done += batch.length;
       if (opts.onProgress) opts.onProgress(done, crops.length);
     }
+    var retry = crops.filter(function (cr) {
+      var w = words[cr.i], r = results[cr.i], ticks = w.letters.filter(function (L) { return Math.max(L[3] - L[1], L[2] - L[0]) < 2.5; }).length;
+      return !(r && isSizeLabel(r.txt)) && ticks >= 1 && w.n >= 3 && w.n <= 8;
+    }).slice(0, 80);
+    if (retry.length) {
+      await worker.setParameters({ tessedit_pageseg_mode: '7' });
+      for (var ri = 0; ri < retry.length; ri++) {
+        var cr2 = retry[ri], reads2 = [];
+        for (var ang = 0; ang < 2; ang++) {
+          var r2 = await worker.recognize(cr2.c, ang ? { rotateAuto: false, rotateRadians: Math.PI } : {});
+          reads2.push({ txt: normOcr(r2.data.text), conf: r2.data.confidence || 0, flip: ang });
+        }
+        reads2.sort(function (a, c) { return score(c) - score(a); });
+        if (isSizeLabel(reads2[0].txt)) results[cr2.i] = reads2[0];
+        if (opts.onProgress && ri % 10 === 9) opts.onProgress(crops.length, crops.length, 'retry ' + (ri + 1) + '/' + retry.length);
+      }
+    }
     await worker.terminate();
     var items = [], allText = [];
     Object.keys(results).forEach(function (i) {
