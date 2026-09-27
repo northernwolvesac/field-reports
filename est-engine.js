@@ -172,7 +172,9 @@
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
-      if (r.floor && /^\d+$|roof|cellar|basement|mezz/i.test(r.floor)) floors[String(r.floor).toLowerCase()] = 1;
+      // every level with work counts for shop drawings / T&B — numbered floors plus ground, cellar, mezzanine, roof, penthouse
+      var fl = String(r.floor || '').trim().toLowerCase().replace(/^(level|floor|flr\.?)\s*/, '').replace(/(st|nd|rd|th)\s*(floor|fl\.?)?$/, '');
+      if (fl && (/^\d+$/.test(fl) || /^(g|gf|ground|lobby|ll|lower level|cellar|basement|b\d?|mezz\w*|roof|ph|penthouse)$/.test(fl))) floors[fl.replace(/^(gf|lobby)$/, 'ground').replace(/^g$/, 'ground')] = 1;
       var eqList = [];
       (r.equipment || []).forEach(function (e0) {
         var tags = expandTags(e0.tag);
@@ -285,7 +287,7 @@
       if (l.flag) flags.push({ category: cat, item: d, flag: l.flag });
       lines.push(l); return l;
     }
-    var floors = Number(opts.floors) || C.floors.filter(function (f) { return /^\d+$/.test(f); }).length || 1;
+    var floors = Number(opts.floors) || C.floors.length || 1;
 
     // 1. Disconnects
     var dq = C.demo.reduce(function (a, d) { return a + (d.qty || 0); }, 0);
