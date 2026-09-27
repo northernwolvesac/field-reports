@@ -174,7 +174,7 @@
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
       // every level with work counts for shop drawings / T&B — numbered floors plus ground, cellar, mezzanine, roof, penthouse
       var fl = String(r.floor || '').trim().toLowerCase().replace(/^(level|floor|flr\.?)\s*/, '').replace(/(st|nd|rd|th)\s*(floor|fl\.?)?$/, '');
-      if (fl && (/^\d+$/.test(fl) || /^(g|gf|ground|lobby|ll|lower level|cellar|basement|b\d?|mezz\w*|roof|ph|penthouse)$/.test(fl))) floors[fl.replace(/^(gf|lobby)$/, 'ground').replace(/^g$/, 'ground')] = 1;
+      if (fl && !/^(specs|legend|schedule|details|controls|riser)$/.test(type) && (/^\d+$/.test(fl) || /^(g|gf|ground|lobby|ll|lower level|cellar|basement|b\d?|mezz\w*|roof|ph|penthouse)$/.test(fl))) floors[fl.replace(/^(gf|lobby)$/, 'ground').replace(/^g$/, 'ground')] = 1;
       var eqList = [];
       (r.equipment || []).forEach(function (e0) {
         var tags = expandTags(e0.tag);
