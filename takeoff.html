@@ -11,8 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="supabase-config.js?v=174"></script>
 <script src="auth.js?v=174"></script>
-<script src="est-totals.js?v=270"></script>
-<script src="geo-takeoff.js?v=270"></script>
+<script src="est-totals.js?v=271"></script>
+<script src="geo-takeoff.js?v=271"></script>
 <style>
   html, body { height: 100%; margin: 0; }
   body { background: #f8fafc; color: #0f172a; overflow: hidden; display: flex; flex-direction: column; }
@@ -815,7 +815,8 @@ requireAuth().catch(function(){});
     else if (m.tool_type === 'length' || m.tool_type === 'scale') { if (m.tool_type === 'scale' && pts.length < 2) return; if (m.tool_type === 'scale') { ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 3; }
       ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); ctx.setLineDash([]);
       if (sel || pts.length <= 12) pts.forEach(function(q) { dot(q, m.tool_type === 'scale' ? '#dc2626' : col, sel); });
-      var mid = midOf(pts), v = Number(m.computed_value || 0); label(mid, (m.deduct ? '−' : '') + (m.tool_type === 'scale' ? (m.label || '') : ftIn(v + (l ? Number(m.drops || 0) * Number(l.drop_length_ft || 0) : 0))) + (m.drops ? ' +' + m.drops + '▼' : ''), m.tool_type === 'scale' ? '#dc2626' : col); }
+      // short runs (auto-measured pieces) keep the plan readable: their length shows when selected
+      if (sel || m.tool_type === 'scale' || polyLen(pts) > 110) { var mid = midOf(pts), v = Number(m.computed_value || 0); label(mid, (m.deduct ? '−' : '') + (m.tool_type === 'scale' ? (m.label || '') : ftIn(v + (l ? Number(m.drops || 0) * Number(l.drop_length_ft || 0) : 0))) + (m.drops ? ' +' + m.drops + '▼' : ''), m.tool_type === 'scale' ? '#dc2626' : col); } }
     else if (m.tool_type === 'area') { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]); ctx.closePath(); ctx.globalAlpha = sel ? .35 : .2; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke(); ctx.setLineDash([]);
       if (sel) pts.forEach(function(q) { dot(q, col, true); }); label(centroid(pts), (m.deduct ? '−' : '') + Number(m.computed_value || 0).toFixed(0) + ' sf', col); }
   }
@@ -1023,6 +1024,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll };
 })();
 </script>
-<script src="sw-register.js?v=270"></script>
+<script src="sw-register.js?v=271"></script>
 </body>
 </html>
