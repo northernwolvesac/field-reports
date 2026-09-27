@@ -170,8 +170,15 @@
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {};
     // an overall plan at a small scale that repeats what the enlarged plans show (Sky Zone: M1.0 at 3/32" vs M2.0 at 3/16") must not be measured twice
-    var enlargedPtft = 0, enlargedLabels = 0, ductDrops = false;
+    var enlargedPtft = 0, enlargedLabels = 0, ductDrops = false, coarseSet = {}, ductGeoPlans = 0;
     sheets.forEach(function (p) { var r = p.result, t = r.sheet_type || p.sheet_type || ''; if (t === 'enlarged' && r.geo && r.geo.total_ft > 0) { enlargedPtft = Math.max(enlargedPtft, r.geo.ptft || 0); enlargedLabels = Math.max(enlargedLabels, r.geo.labels || 0); } });
+    sheets.forEach(function (p) {
+      var r = p.result, t = r.sheet_type || p.sheet_type || '', sh0 = r.sheet_no || ('p' + p.page_no);
+      if (t !== 'duct_plan' || !(r.geo && r.geo.total_ft > 0)) return;
+      if (enlargedPtft > 0 && (r.geo.ptft || 0) <= 0.6 * enlargedPtft && (r.geo.labels || 0) < 12 && enlargedLabels >= 3 * (r.geo.labels || 0)) coarseSet[sh0] = 1; else ductGeoPlans++;
+    });
+    // enlarged plans carry the duct takeoff only when they replace a coarse overall plan (or nothing else was measurable)
+    var useEnlargedGeo = Object.keys(coarseSet).length > 0 || ductGeoPlans === 0;
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
@@ -216,8 +223,9 @@
       var takeoffSheet = type === 'duct_plan' || type === 'pipe_plan' || (type === 'other' && /plan/i.test(r.sheet_title || '') && !/enlarged/i.test(r.sheet_title || ''));
       if (!isDemo && !takeoffSheet && ((r.duct_runs || []).length || (r.pipe_runs || []).length || (r.air_devices || []).length))
         skipped.push(sh + ' (' + (type || 'sheet') + ')');
-      if (!isDemo && takeoffSheet) {
-        (r.air_devices || []).forEach(function (a) {
+      var enlargedGeoSheet = !takeoffSheet && type === 'enlarged' && useEnlargedGeo && r.geo && r.geo.total_ft > 0;
+      if (!isDemo && (takeoffSheet || enlargedGeoSheet)) {
+        if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
           var k = (a.type || 'other') + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
           var d = devices[k] = devices[k] || { type: a.type || 'other', tag: a.tag || '', size: a.size || '', notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
           var fl = String(r.floor || sh), f = d.per[fl] = d.per[fl] || {}, ft = f[type] = f[type] || { q: 0, lf: 0 };
@@ -230,8 +238,7 @@
         });
         {
           var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
-          var coarseDup = type === 'duct_plan' && enlargedPtft > 0 && r.geo && r.geo.total_ft > 0 && (r.geo.ptft || 0) <= 0.6 * enlargedPtft &&
-            (r.geo.labels || 0) < 12 && enlargedLabels >= 3 * (r.geo.labels || 0);
+          var coarseDup = !!coarseSet[sh];
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
           if (!coarseDup && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
@@ -244,14 +251,14 @@
               o.lf += r.geo.sizes[sz] * GEO_FITTINGS; o.sheets.push(sh); o.geo = true;
             });
           }
-          if (!coarseDup && !(r.geo && r.geo.total_ft > 0)) (r.duct_runs || []).forEach(function (x) {
+          if (takeoffSheet && !coarseDup && !(r.geo && r.geo.total_ft > 0)) (r.duct_runs || []).forEach(function (x) {
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
             var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
             var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [] };
             o.lf += Number(x.lf || 0); o.sheets.push(sh);
           });
-          if (r.geo_pipe && r.geo_pipe.total_ft > 0) {
+          if (takeoffSheet && r.geo_pipe && r.geo_pipe.total_ft > 0) {
             // measured from the piping plan's own lines (geo-takeoff.js); the AI reading stays a cross-check
             var aiP = (r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
             geoCheck.push({ sheet: sh, geo: r.geo_pipe.total_ft, ai: aiP, what: 'Pipe' });
@@ -262,7 +269,7 @@
               o.lf += r.geo_pipe.sizes[key]; o.sheets.push(sh);
             });
           }
-          if (!(r.geo_pipe && r.geo_pipe.total_ft > 0)) (r.pipe_runs || []).forEach(function (x) {
+          if (takeoffSheet && !(r.geo_pipe && r.geo_pipe.total_ft > 0)) (r.pipe_runs || []).forEach(function (x) {
             var k = (x.service || '') + '|' + (x.size || '') + '|' + (x.material || '');
             var o = pipe[k] = pipe[k] || { service: x.service || '', size: x.size || '', material: x.material || '', lf: 0, sheets: [] };
             o.lf += Number(x.lf || 0); o.sheets.push(sh);
