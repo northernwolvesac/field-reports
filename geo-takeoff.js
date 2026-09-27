@@ -175,7 +175,8 @@
 
   // ─── 2. geometry (runs inside a Web Worker) ───
   function workerMain() {
-    var SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN)?\s*$/;
+    // 24x12, 24"x12", 36X12Ø (flat oval), 12X6 SA BRANCH, 10x6 (TYP.), 8x6 UP
+    var SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:S\.?A\.?|R\.?A\.?|E\.?A\.?|O\.?A\.?)\b.{0,24})?\s*$/;
     var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*$/i;
     var SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/g;
     function frac(s) { if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
@@ -210,18 +211,50 @@
       var stats = [];
       Object.keys(bySty).forEach(function (key) {
         var segs = bySty[key]; if (segs.length < 20) return;
-        var S = segs.map(norm), pc = findPairs(S, ptft).pieces, sized = 0, tot = 0;
+        var S = segs.map(norm), pc = findPairs(S, ptft, labs).pieces, sized = 0, tot = 0;
         pc.forEach(function (p) { tot += p.len_ft; if (looseLabel(p, labs, ptft)) sized += p.len_ft; });
         stats.push([sized, tot, key]);
       });
       var top = 0; stats.forEach(function (s) { top = Math.max(top, s[0]); });
       var keep = stats.filter(function (s) { return top && (s[0] === top || (s[0] >= 0.5 * top && s[0] / Math.max(s[1], 1) >= 0.5)); }).map(function (s) { return s[2]; });
       var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { S.push(norm(s)); }); });
-      var fp = findPairs(S, ptft), pcs = fp.pieces;
-      pcs.forEach(function (p) { var l = looseLabel(p, labs, ptft); if (l) p.size = sizeOf(l); });
+      var fp = findPairs(S, ptft, labs), pcs = fp.pieces;
+      // sizing order: the label written on / beside the piece → carried along the connected run → the nearest label within
+      // 8 ft (same width) → carried again → width + usual depth. A label 25 ft away used to win over the run itself, so a
+      // 24x12 supply label stole the 24x8 return beside it (Sage: 24x12 176 ft vs Kastriot's 62).
+      // a piece no longer than 1.25x its width is a stub. Stubs that chain (end to end, same width) into a longer piece are duct
+      // between fittings and stay; isolated ones are diffuser / VAV box outlines, hatch stripes or equipment and are dropped.
+      // Two perpendicular stubs sharing a center are a box outline whatever they touch.
+      var stubFt = 0;
+      pcs.forEach(function (p) { p.stub = p.len_ft * 12 < p.w_in * 1.25; });
+      pcs = pcs.filter(function (p) {
+        if (!p.stub) return true;
+        var box = pcs.some(function (q) { return q !== p && q.stub && Math.abs(q.cx - p.cx) <= 3 && Math.abs(q.cy - p.cy) <= 3 &&
+          Math.abs(q.ux * p.ux + q.uy * p.uy) < 0.3 && Math.abs(q.w_in - p.w_in) <= Math.max(2, p.w_in * 0.15); });
+        if (box) stubFt += p.len_ft;
+        return !box;
+      });
+      (function () {
+        var comp = pcs.map(function (_, i) { return i; });
+        function find(i) { while (comp[i] !== i) { comp[i] = comp[comp[i]]; i = comp[i]; } return i; }
+        var E = pcs.map(function (p) { return ends(p, ptft); });
+        for (var i = 0; i < pcs.length; i++) for (var j = i + 1; j < pcs.length; j++) {
+          var a = pcs[i], b = pcs[j]; if (Math.abs(a.w_in - b.w_in) > 1.6) continue;
+          var gap = Math.max(1, Math.max(a.w_in, b.w_in) / 12 * 1.6) * ptft, dmin = Infinity;
+          E[i].forEach(function (u) { E[j].forEach(function (v) { dmin = Math.min(dmin, hyp(u[0] - v[0], u[1] - v[1])); }); });
+          if (dmin <= gap) comp[find(i)] = find(j);
+        }
+        var solid = {}; pcs.forEach(function (p, i) { if (!p.stub || onLabel(p, labs, ptft)) solid[find(i)] = true; });
+        pcs = pcs.filter(function (p, i) { if (!p.stub || solid[find(i)]) return true; stubFt += p.len_ft; return false; });
+      })();
+      pcs.forEach(function (p) { var l = onLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.via = 'label'; } });
       propagate(pcs, ptft);
-      var wmax = Math.max.apply(null, labs.map(function (l) { return l.w; }).concat([6])) + 4;
+      pcs.forEach(function (p) { if (p.size) return; var l = nearLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.via = 'near'; } });
+      propagate(pcs, ptft);
+      // unlabeled pieces wider than any label on the sheet (+4") are shafts / equipment, not duct; wide unlabeled pieces that stay are reported for review
+      var wmax = Math.max.apply(null, labs.map(function (l) { return l.w; }).concat([6])) + 4, wideFt = 0;
       pcs = pcs.filter(function (p) { return p.size || p.w_in <= wmax; });
+      pcs.forEach(function (p) { if (!p.size && p.w_in > 36) wideFt += p.len_ft; });
       var depth = {};
       labs.forEach(function (l) { if (!l.round) { depth[l.w] = depth[l.w] || {}; depth[l.w][l.h] = (depth[l.w][l.h] || 0) + 1; } });
       pcs.forEach(function (p) {
@@ -249,7 +282,7 @@
         if (p.kind === 'single') sf += p.len_ft; else if (p.via === 'width') wf += p.len_ft;
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
-      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10,
+      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10,
         styles: keep, labels: labs.length, pieces: all.length,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2]]; }) };
@@ -260,8 +293,9 @@
       if (ux < -1e-9 || (Math.abs(ux) < 1e-9 && uy < 0)) { ux = -ux; uy = -uy; var t = x1; x1 = x2; x2 = t; t = y1; y1 = y2; y2 = t; }
       return [x1, y1, x2, y2, ux, uy, L, Math.atan2(uy, ux)];
     }
-    function findPairs(S, ptft) {
+    function findPairs(S, ptft, labs) {
       var ptin = ptft / 12, wmin = 5.5 * ptin, wmax = 74 * ptin, buckets = {};
+      labs = labs || [];
       S.forEach(function (s, i) { var d = Math.round(s[7] * 180 / Math.PI); (buckets[d] = buckets[d] || []).push(i); });
       var cand = [];
       for (var i = 0; i < S.length; i++) {
@@ -276,11 +310,17 @@
             var t1 = (b[0] - a[0]) * ux + (b[1] - a[1]) * uy, t2 = (b[2] - a[0]) * ux + (b[3] - a[1]) * uy;
             var lo = Math.max(0, Math.min(t1, t2)), hi = Math.min(a[6], Math.max(t1, t2));
             if (hi - lo < Math.max(0.8 * ptft, 0.5 * Math.min(a[6], b[6]))) return;
-            cand.push([ad, i, j, lo, hi, d]);
+            // rank: a gap that matches a size label within 25 ft, then walls that run the same extent, then the narrower gap —
+            // otherwise the 22" space between two parallel mains pairs first and both real ducts lose a wall
+            var w = ad / ptin, cl = [a[0] + ux * lo + nx * d / 2, a[1] + uy * lo + ny * d / 2, a[0] + ux * hi + nx * d / 2, a[1] + uy * hi + ny * d / 2], sc = 0;
+            for (var k = 0; k < labs.length; k++) { var l = labs[k];
+              if ((Math.abs(l.w - w) <= 2 || (!l.round && Math.abs(l.h - w) <= 2)) && ptSeg(l.cx, l.cy, cl) <= 12 * ptft) { sc += 2; break; } }
+            if ((hi - lo) >= 0.9 * Math.max(a[6], b[6])) sc += 1;
+            cand.push([ad, i, j, lo, hi, d, sc]);
           });
         });
       }
-      cand.sort(function (p, q) { return p[0] - q[0]; });
+      cand.sort(function (p, q) { return (q[6] - p[6]) || (p[0] - q[0]); });
       var used = S.map(function () { return []; }), pieces = [];
       function free(k, lo, hi) { return used[k].every(function (r) { return Math.min(hi, r[1]) - Math.max(lo, r[0]) <= 0.3 * (hi - lo); }); }
       cand.forEach(function (c) {
@@ -297,14 +337,38 @@
       return { pieces: pieces, used: used };
     }
     function sizeOf(l) { return l.round ? l.w + '"Ø' : l.w + 'x' + l.h; }
-    function looseLabel(p, labs, ptft) {
+    function looseLabel(p, labs, ptft, maxFt) {
       var best = null, bd = 1e9;
       labs.forEach(function (l) {
         if (Math.abs(l.w - p.w_in) > 2.5 && Math.abs(l.h - p.w_in) > 2.5) return;
         var d = hyp(l.cx - p.cx, l.cy - p.cy) / ptft;
         if (d < bd) { best = l; bd = d; }
       });
-      return best && bd <= 25 ? best : null;
+      return best && bd <= (maxFt || 25) ? best : null;
+    }
+    // nearest label of the same width within 25 ft — sideways distance counts triple, so a label beside the parallel duct loses to one along this run
+    function nearLabel(p, labs, ptft) {
+      var best = null, bd = 1e9;
+      labs.forEach(function (l) {
+        if (Math.abs(l.w - p.w_in) > 2.5 && Math.abs(l.h - p.w_in) > 2.5) return;
+        var dx = l.cx - p.cx, dy = l.cy - p.cy, along = Math.abs(dx * p.ux + dy * p.uy), perp = Math.abs(-dx * p.uy + dy * p.ux);
+        if (hyp(dx, dy) > 25 * ptft) return;
+        var d = along + 3 * perp; if (d < bd) { best = l; bd = d; }
+      });
+      return best;
+    }
+    // the label that sits on this piece: level with it along the run and within its walls or just outside them
+    function onLabel(p, labs, ptft) {
+      var best = null, bd = 1e9, half = p.len_ft * ptft / 2;
+      labs.forEach(function (l) {
+        if (Math.abs(l.w - p.w_in) > 2.5 && Math.abs(l.h - p.w_in) > 2.5) return;
+        var dx = l.cx - p.cx, dy = l.cy - p.cy, along = Math.abs(dx * p.ux + dy * p.uy), perp = Math.abs(-dx * p.uy + dy * p.ux);
+        if (along > half + 2 * ptft) return;
+        var lim = (p.w_in / 24) * ptft + 2.5 * ptft;     // half the width + 2.5 ft
+        if (perp > lim) return;
+        if (perp < bd) { best = l; bd = perp; }
+      });
+      return best;
     }
     function ends(p, ptft) { var h = p.len_ft * ptft / 2; return [[p.cx - p.ux * h, p.cy - p.uy * h], [p.cx + p.ux * h, p.cy + p.uy * h]]; }
     function propagate(pcs, ptft) {
