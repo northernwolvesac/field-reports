@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=278"></script>
-<script src="est-engine.js?v=278"></script>
-<script src="geo-takeoff.js?v=278"></script>
+<script src="est-totals.js?v=279"></script>
+<script src="est-engine.js?v=279"></script>
+<script src="geo-takeoff.js?v=279"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -727,7 +727,7 @@ var AE = (function() {
         }
         if (isRiserSheet(p) && res.geo_riser && res.geo_riser.total_ft > 0) {
           var rdata = await NWGeo.extract(page); rdata.wantPieces = true; var rr = await NWGeo.measureRisers(rdata);
-          if (rr && !rr.error && rr.xy) for (var q = 0; q < rr.xy.length; q++) { var rs = rr.xy[q]; if (rs.z === '?' || !(rs.ft > 0.5)) continue;
+          if (rr && !rr.error && rr.xy) for (var q = 0; q < rr.xy.length; q++) { var rs = rr.xy[q]; if (rs.z === '?' || !(rs.ft >= 0.3)) continue;
             var rl = await layerFor(rs.z + ' copper pipe & 1" insulation', 'pipework', 'Pipes', null, rs.z, false);
             rows.push(mk(rl, [V(rs.s[0], rs.s[1]), V(rs.s[2], rs.s[3])], rs.ft, null, { notes: 'riser — length from the floor elevations, not the drawing scale' })); }
         }
@@ -772,6 +772,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=278"></script>
+<script src="sw-register.js?v=279"></script>
 </body>
 </html>

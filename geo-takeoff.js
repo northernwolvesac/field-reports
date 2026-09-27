@@ -667,7 +667,7 @@
       var sizes = {}, total = 0, unsized = 0;
       segs.forEach(function (s, i) {
         if (!got[i]) { unsized += s.ft; return; }
-        if (s.ft < 1) return;
+        if (s.ft < 0.3) return;   // plant diagrams squeeze the elevation scale: pump-room stubs are only a foot or two each
         var k = pipeLabel(got[i].d) + (got[i].svc === 'CD' ? ' CD' : '');
         sizes[k] = (sizes[k] || 0) + s.ft; total += s.ft;
       });
