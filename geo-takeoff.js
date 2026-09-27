@@ -157,7 +157,7 @@
     var text = lines.map(function (l) {
       var c = [toPage(l, l.a0, l.p), toPage(l, l.a1, l.p), toPage(l, l.a0, l.p + l.h), toPage(l, l.a1, l.p + l.h)];
       var xs = c.map(function (q) { return q[0]; }), ys = c.map(function (q) { return q[1]; });
-      return { str: slashSize(l.str.trim()), x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys), x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys), dir: [l.dx, l.dy], _l: l };
+      return { str: l.str.trim(), x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys), x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys), dir: [l.dx, l.dy], _l: l };
     });
     // blocks: same direction, stacked within 1.8 line heights, overlapping along the text
     var blk = text.map(function (_, i) { return i; });
@@ -191,7 +191,7 @@
   function hasScale(s) { return M_SCALE_RE.test(s || ''); }
   function slashSize(s) {
     return String(s || '').replace(/(^|[^\d\/.-])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d\/"”])/g, function (m, pre, a, b) {
-      a = +a; b = +b; if (a < 4 || b < 4) return m;
+      a = +a; b = +b; if (a < 4 || b < 4 || a > 96 || b > 40) return m;   // duct depths stop at 40"; "24/72" is a sheet index
       if ((b === 4 || b === 8 || b === 16) && a < b) return m;           // 3/4, 1/8, 3/16 are fractions
       return pre + a + 'x' + b;
     });
