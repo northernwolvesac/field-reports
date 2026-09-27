@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=287"></script>
-<script src="est-engine.js?v=287"></script>
-<script src="geo-takeoff.js?v=287"></script>
+<script src="est-totals.js?v=288"></script>
+<script src="est-engine.js?v=288"></script>
+<script src="geo-takeoff.js?v=288"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -420,6 +420,7 @@ var AE = (function() {
     if (measuring || !window.NWGeo) return;
     var list = pages.filter(function(p) { return (isDuctPlan(p) && (all || !(p.result && p.result.geo))) || (isPipePlan(p) && (all || !(p.result && p.result.geo_pipe))) || (isRiserSheet(p) && (all || !(p.result && p.result.geo_riser))); });
     if (!list.length) return;
+    window.NW_HOLD_RELOAD = true;                      // a new app version must not reload the page mid-measurement
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
       var riser = isRiserSheet(p), pipes = !riser && isPipePlan(p) && !isDuctPlan(p);
@@ -454,7 +455,7 @@ var AE = (function() {
       await supabaseClient.from('ai_est_pages').update({ result: res }).eq('id', p.id);
       p.result = res;
     }
-    measuring = ''; render();
+    measuring = ''; window.NW_HOLD_RELOAD = false; render();
     if (!(session.result || {}).duct_spec) readDuctSpec();      // then read how the ducts must be built
     toast('Ducts / pipes measured on ' + list.length + ' sheet' + (list.length === 1 ? '' : 's') + ' — press “Price it”');
   }
@@ -489,7 +490,7 @@ var AE = (function() {
     p.status = 'error'; p.error = 'timed out';
   }
   async function runQueue(list) {
-    if (running) return; running = true; render();
+    if (running) return; running = true; window.NW_HOLD_RELOAD = true; render();
     var i = 0, done = 0;
     async function worker() {
       while (i < list.length) {
@@ -500,7 +501,7 @@ var AE = (function() {
     }
     function paint() { var el = $('main'); if (el) { var y = window.scrollY; render(); window.scrollTo(0, y); } }
     await Promise.all([worker(), worker(), worker()]);
-    running = false; await reload(); render();
+    running = false; window.NW_HOLD_RELOAD = false; await reload(); render();
     measureDucts(false);        // measure the new duct plans from their lines right away
     var bad = list.filter(function(p) { return p.status === 'error'; }).length;
     toast(bad ? bad + ' sheet(s) failed — press ↻ on them' : 'All sheets read ✓');
@@ -789,6 +790,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=287"></script>
+<script src="sw-register.js?v=288"></script>
 </body>
 </html>

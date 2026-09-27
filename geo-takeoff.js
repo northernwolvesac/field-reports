@@ -157,7 +157,7 @@
     var text = lines.map(function (l) {
       var c = [toPage(l, l.a0, l.p), toPage(l, l.a1, l.p), toPage(l, l.a0, l.p + l.h), toPage(l, l.a1, l.p + l.h)];
       var xs = c.map(function (q) { return q[0]; }), ys = c.map(function (q) { return q[1]; });
-      return { str: l.str.trim(), x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys), x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys), dir: [l.dx, l.dy], _l: l };
+      return { str: slashSize(l.str.trim()), x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys), x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys), dir: [l.dx, l.dy], _l: l };
     });
     // blocks: same direction, stacked within 1.8 line heights, overlapping along the text
     var blk = text.map(function (_, i) { return i; });
@@ -189,9 +189,16 @@
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
   function hasScale(s) { return M_SCALE_RE.test(s || ''); }
+  function slashSize(s) {
+    return String(s || '').replace(/(^|[^\d\/.-])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d\/"”])/g, function (m, pre, a, b) {
+      a = +a; b = +b; if (a < 4 || b < 4) return m;
+      if ((b === 4 || b === 8 || b === 16) && a < b) return m;           // 3/4, 1/8, 3/16 are fractions
+      return pre + a + 'x' + b;
+    });
+  }
   function normOcr(s) {
-    return String(s || '').replace(/[“”″]/g, '"').replace(/[‘’]/g, "'").replace(/[×*]/g, 'x').replace(/(\d)\s*[xX]\s*(\d)/g, '$1x$2')
-      .replace(/(\d)\s*"?\s*[øØoO0@Q](?![A-Za-z0-9])/g, '$1"Ø').replace(/\s+/g, ' ').trim();
+    return slashSize(String(s || '').replace(/[“”″]/g, '"').replace(/[‘’]/g, "'").replace(/[×*]/g, 'x').replace(/(\d)\s*[xX]\s*(\d)/g, '$1x$2')
+      .replace(/(\d)\s*"?\s*[øØoO0@Q](?![A-Za-z0-9])/g, '$1"Ø').replace(/\s+/g, ' ').trim());
   }
   // glyph boxes → words; boxes are [x0,y0,x1,y1] in PDF user space
   function clusterWords(glyphs, opts) {

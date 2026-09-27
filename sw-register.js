@@ -52,7 +52,7 @@
   // A new version took control of this page
   navigator.serviceWorker.addEventListener('controllerchange', function() {
     if (refreshing) return;
-    if (userEdited) { console.log('[sw-register] New version active — waiting for the user (unsaved input on this page)'); showUpdateBanner(); return; }
+    if (userEdited || window.NW_HOLD_RELOAD) { console.log('[sw-register] New version active — waiting for the user (unsaved input or work in progress on this page)'); showUpdateBanner(); return; }
     console.log('[sw-register] New version active — reloading...');
     reload();
   });
