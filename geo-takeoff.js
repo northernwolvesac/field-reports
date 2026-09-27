@@ -598,7 +598,7 @@
         }
       }
       // size labels beside the risers (text runs across the pipe, or along it)
-      var labs = [];
+      var labs = [], branchLabs = [];
       D.text.forEach(function (t) {
         var txt = t.str; if (/['’]/.test(txt) || txt.length > 34) return;
         var mm = PSIZE.exec(txt); if (!mm) return;
@@ -610,7 +610,7 @@
           var d = c.a < L.a0 ? L.a0 - c.a : c.a > L.a1 ? c.a - L.a1 : 0;
           return d <= 8 && Math.min(c.p1, L.p1) - Math.max(c.p0, L.p0) > 0.5 * (L.p1 - L.p0);
         });
-        if (!onBranch) labs.push(L);
+        if (!onBranch) labs.push(L); else branchLabs.push(L);
       });
       var got = {}, tol = 70;
       segs.forEach(function (s, i) {
@@ -635,6 +635,35 @@
           if (best && bd < 3) { got[i] = best; changed = true; }
         });
       }
+      // plant / pump-room stubs: short verticals without a label of their own take the size of the pipe they connect to —
+      // the labelled main drawn across (“6" CWS” along the header), or a labelled riser reached through the horizontal runs
+      var crossSize = {};
+      cross.forEach(function (c, ci) {
+        var best = null, bd = 30;   // the size is written just above / below the header line
+        branchLabs.concat(labs).forEach(function (l) { var d = Math.abs((l.a0 + l.a1) / 2 - c.a); if (d < bd && l.p1 > c.p0 - 4 && l.p0 < c.p1 + 4) { bd = d; best = l; } });
+        if (best) crossSize[ci] = best;
+      });
+      var near = function (u, v) { return Math.abs(u - v) <= 2; };
+      function touches(s, c) {   // vertical piece s ↔ cross line c: shared end, or a T on either body
+        var endOnCross = (near(s.a0, c.a) || near(s.a1, c.a)) && s.p >= c.p0 - 2 && s.p <= c.p1 + 2;
+        var crossEndOnSeg = (near(c.p0, s.p) || near(c.p1, s.p)) && c.a >= s.a0 - 2 && c.a <= s.a1 + 2;
+        return endOnCross || crossEndOnSeg;
+      }
+      var adj = {}; function link(x, y) { (adj[x] = adj[x] || []).push(y); (adj[y] = adj[y] || []).push(x); }
+      segs.forEach(function (s, i) { cross.forEach(function (c, ci) { if (touches(s, c)) link('s' + i, 'c' + ci); }); });
+      // collinear pieces bridge the gaps left by valve and equipment symbols (up to 30 pt)
+      segs.forEach(function (s, i) { segs.forEach(function (t, j) { if (j <= i) return; if (Math.abs(s.p - t.p) <= 1 && Math.max(0, t.a0 - s.a1, s.a0 - t.a1) <= 30) link('s' + i, 's' + j); }); });
+      cross.forEach(function (c, ci) { cross.forEach(function (d, di) { if (di <= ci) return; if (near(c.a, d.a) && Math.max(0, d.p0 - c.p1, c.p0 - d.p1) <= 30) link('c' + ci, 'c' + di); }); });
+      var queue = [], dist = {};
+      segs.forEach(function (s, i) { if (got[i]) { dist['s' + i] = 0; queue.push('s' + i); } });
+      cross.forEach(function (c, ci) { if (crossSize[ci]) { dist['c' + ci] = 0; queue.push('c' + ci); } });
+      var srcOf = {}; queue.forEach(function (k) { srcOf[k] = k[0] === 's' ? got[+k.slice(1)] : crossSize[+k.slice(1)]; });
+      while (queue.length) {
+        var cur = queue.shift();
+        (adj[cur] || []).forEach(function (nb) { if (dist[nb] != null) return; dist[nb] = dist[cur] + 1; srcOf[nb] = srcOf[cur]; queue.push(nb); });
+      }
+      var inherited = 0;
+      segs.forEach(function (s, i) { if (!got[i] && srcOf['s' + i] && dist['s' + i] <= 10) { got[i] = srcOf['s' + i]; inherited++; } });
       var sizes = {}, total = 0, unsized = 0;
       segs.forEach(function (s, i) {
         if (!got[i]) { unsized += s.ft; return; }
@@ -643,7 +672,7 @@
         sizes[k] = (sizes[k] || 0) + s.ft; total += s.ft;
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
-      return { sizes: sizes, total_ft: Math.round(total * 10) / 10, unsized_ft: Math.round(unsized), levels: runs.map(function (r) { return r.map(function (e) { return e.v; }); }), risers: true,
+      return { sizes: sizes, total_ft: Math.round(total * 10) / 10, unsized_ft: Math.round(unsized), inherited: inherited, levels: runs.map(function (r) { return r.map(function (e) { return e.v; }); }), risers: true,
         xy: D.wantPieces ? segs.map(function (s, i) { return { s: s.xy, z: got[i] ? pipeLabel(got[i].d) : '?', ft: Math.round(s.ft * 10) / 10 }; }) : undefined };
     }
     onmessage = function (e) {
