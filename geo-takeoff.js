@@ -247,24 +247,24 @@
       s.onload = res; s.onerror = function () { rej(new Error('tesseract.js failed to load')); }; document.head.appendChild(s);
     });
   }
-  // page: pdf.js page; D: from extract(); opts: { dpi, maxLetters, onProgress(done, total), pipes }
+  // page: pdf.js page; D: from extract(); opts: { dpi, maxLetters, onProgress(done, total) }
+  // word crops are composed ~30 per sheet and read with one Tesseract call (sparse text) — a background tab throttles every
+  // worker round-trip to ~1 s, so per-word calls would take 15+ minutes per drawing
   async function ocrLabels(page, D, opts) {
     opts = opts || {};
     var t0 = Date.now(), words = clusterWords(D.glyphs || [], { maxLetters: opts.maxLetters || 10 });
     if (!words.length) return { items: [], words: 0, secs: 0, text: '' };
     await loadTesseract();
     var worker = await Tesseract.createWorker('eng', 1, { logger: function () {} });
-    await worker.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789xX"\'øØ/-()SRAEOTYPUDNWVBFCGHKLMIJZ. ' });
+    await worker.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789xX"\'øØ/-()SRAEOTYPUDNWVBFCGHKLMIJZ. ' });
     var scale = (opts.dpi || 300) / 72, vp0 = page.getViewport({ scale: scale, rotation: 0 }), W = vp0.width, Hh = vp0.height;
-    var T = 2400, OV = 80, PAD = 2.5 * scale, M = 0.5 * scale, items = [], allText = [], done = 0, ocred = 0;
+    var T = 2400, OV = 80, PAD = 2.5 * scale, M = 0.5 * scale, crops = [];
     function px(vp, x, y) { return vp.convertToViewportPoint(x, y); }
-    function score(r) { return r.conf + (isSizeLabel(r.txt) || isPipeLabel(r.txt) ? 40 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
+    // 1. crop every word out of 300-dpi tiles, whitening everything outside its letter boxes, upright
     var pending = words.map(function (w, i) { return i; });
     for (var ty = 0; ty < Hh && pending.length; ty += T - OV) for (var tx = 0; tx < W && pending.length; tx += T - OV) {
       var vp = page.getViewport({ scale: scale, rotation: 0, offsetX: -tx, offsetY: -ty });
-      var cw = Math.min(T, Math.ceil(W - tx)), ch = Math.min(T, Math.ceil(Hh - ty));
-      // words whose padded box lies fully inside this tile
-      var mine = [];
+      var cw = Math.min(T, Math.ceil(W - tx)), ch = Math.min(T, Math.ceil(Hh - ty)), mine = [];
       pending = pending.filter(function (i) {
         var w = words[i], c = [px(vp, w.box[0], w.box[1]), px(vp, w.box[2], w.box[3])];
         var bx0 = Math.min(c[0][0], c[1][0]) - PAD, by0 = Math.min(c[0][1], c[1][1]) - PAD, bx1 = Math.max(c[0][0], c[1][0]) + PAD, by1 = Math.max(c[0][1], c[1][1]) + PAD;
@@ -278,8 +278,8 @@
       await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
       for (var k = 0; k < mine.length; k++) {
         var w = words[mine[k].i], b = mine[k].b, bw = Math.ceil(b[2] - b[0]), bh = Math.ceil(b[3] - b[1]);
+        if (bw < 2 || bh < 2) continue;
         var img = ctx.getImageData(Math.floor(b[0]), Math.floor(b[1]), bw, bh), d = img.data;
-        // whiten everything outside the letter boxes
         var lb = w.letters.map(function (L) { var c1 = px(vp, L[0], L[1]), c2 = px(vp, L[2], L[3]);
           return [Math.min(c1[0], c2[0]) - M - Math.floor(b[0]), Math.min(c1[1], c2[1]) - M - Math.floor(b[1]), Math.max(c1[0], c2[0]) + M - Math.floor(b[0]), Math.max(c1[1], c2[1]) + M - Math.floor(b[1])]; });
         for (var yy = 0; yy < bh; yy++) for (var xx = 0; xx < bw; xx++) {
@@ -287,29 +287,60 @@
           for (var q = 0; q < lb.length; q++) if (xx >= lb[q][0] && xx <= lb[q][2] && yy >= lb[q][1] && yy <= lb[q][3]) { inside = true; break; }
           if (!inside) { var o = (yy * bw + xx) * 4; d[o] = d[o + 1] = d[o + 2] = 255; }
         }
+        var tmpc = document.createElement('canvas'); tmpc.width = bw; tmpc.height = bh; tmpc.getContext('2d').putImageData(img, 0, 0);
         var crop = document.createElement('canvas');
-        if (w.orient === 'v') { crop.width = bh; crop.height = bw; var cc = crop.getContext('2d'); var tmpc = document.createElement('canvas'); tmpc.width = bw; tmpc.height = bh; tmpc.getContext('2d').putImageData(img, 0, 0); cc.translate(bh, 0); cc.rotate(Math.PI / 2); cc.drawImage(tmpc, 0, 0); }
-        else { crop.width = bw; crop.height = bh; crop.getContext('2d').putImageData(img, 0, 0); }
-        var reads = [];
-        for (var ang = 0; ang < 2; ang++) {
-          var rr = await worker.recognize(crop, ang ? { rotateAuto: false, rotateRadians: Math.PI } : {});
-          reads.push({ txt: normOcr(rr.data.text), conf: rr.data.confidence || 0 });
-          if (isSizeLabel(reads[ang].txt) && reads[ang].conf >= 80) break;
-        }
-        reads.sort(function (a, c) { return score(c) - score(a); });
-        var best = reads[0]; ocred++;
-        if (best.txt) allText.push(best.txt);
-        if ((isSizeLabel(best.txt) || isPipeLabel(best.txt)) && best.conf >= 40) {
-          var dir = w.orient === 'v' ? [0, 1] : [1, 0];
-          items.push({ str: best.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: dir, block: w.box.slice(), ocr: true, conf: Math.round(best.conf) });
-        }
-        done++;
-        if (opts.onProgress && (done % 15 === 0 || done === words.length)) opts.onProgress(done, words.length);
+        if (w.orient === 'v') { crop.width = bh; crop.height = bw; var cc = crop.getContext('2d'); cc.translate(bh, 0); cc.rotate(Math.PI / 2); cc.drawImage(tmpc, 0, 0); }
+        else { crop = tmpc; }
+        crops.push({ i: mine[k].i, c: crop });
       }
       canvas.width = canvas.height = 0;
     }
+    // 2. compose ~30 crops per sheet (rows), read once; then the same sheet with every crop turned 180°
+    var GAP = 24, SW = 2400, results = {}, done = 0;
+    function score(r) { return r.conf + (isSizeLabel(r.txt) || isPipeLabel(r.txt) ? 40 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
+    for (var s0 = 0; s0 < crops.length; s0 += 30) {
+      var batch = crops.slice(s0, s0 + 30), cells = [], x = GAP, y = GAP, rowH = 0;
+      batch.forEach(function (cr) {
+        var cwid = cr.c.width, chei = cr.c.height;
+        if (x + cwid + GAP > SW) { x = GAP; y += rowH + GAP; rowH = 0; }
+        cells.push({ i: cr.i, x: x, y: y, w: cwid, h: chei }); x += cwid + GAP; rowH = Math.max(rowH, chei);
+      });
+      var sheetH = y + rowH + GAP;
+      for (var flip = 0; flip < 2; flip++) {
+        var sheet = document.createElement('canvas'); sheet.width = SW; sheet.height = sheetH;
+        var sc = sheet.getContext('2d'); sc.fillStyle = '#fff'; sc.fillRect(0, 0, SW, sheetH);
+        cells.forEach(function (cell, idx) {
+          var cr = batch[idx].c;
+          if (!flip) sc.drawImage(cr, cell.x, cell.y);
+          else { sc.save(); sc.translate(cell.x + cell.w, cell.y + cell.h); sc.rotate(Math.PI); sc.drawImage(cr, 0, 0); sc.restore(); }
+        });
+        var rr = await worker.recognize(sheet);
+        var per = {};
+        (rr.data.words || []).forEach(function (wd) {
+          var cx = (wd.bbox.x0 + wd.bbox.x1) / 2, cy = (wd.bbox.y0 + wd.bbox.y1) / 2;
+          for (var ci = 0; ci < cells.length; ci++) { var cl = cells[ci];
+            if (cx >= cl.x - 4 && cx <= cl.x + cl.w + 4 && cy >= cl.y - 4 && cy <= cl.y + cl.h + 4) { (per[cl.i] = per[cl.i] || []).push({ t: wd.text, c: wd.confidence || 0, x: flip ? -wd.bbox.x0 : wd.bbox.x0 }); break; } }
+        });
+        cells.forEach(function (cl) {
+          var ws = (per[cl.i] || []).sort(function (a, b2) { return a.x - b2.x; });
+          var txt = normOcr(ws.map(function (q) { return q.t; }).join(' ')), conf = ws.length ? Math.min.apply(null, ws.map(function (q) { return q.c; })) : 0;
+          var r = { txt: txt, conf: conf, flip: flip }, prev = results[cl.i];
+          if (!prev || score(r) > score(prev)) results[cl.i] = r;
+        });
+        sheet.width = sheet.height = 0;
+      }
+      done += batch.length;
+      if (opts.onProgress) opts.onProgress(done, crops.length);
+    }
     await worker.terminate();
-    return { items: items, words: words.length, ocred: ocred, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' ') };
+    var items = [], allText = [];
+    Object.keys(results).forEach(function (i) {
+      var r = results[i], w = words[+i]; if (!r.txt) return;
+      allText.push(r.txt);
+      if ((isSizeLabel(r.txt) || isPipeLabel(r.txt)) && r.conf >= 40)
+        items.push({ str: r.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, conf: Math.round(r.conf) });
+    });
+    return { items: items, words: words.length, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' ') };
   }
 
   // ─── 2. geometry (runs inside a Web Worker) ───
