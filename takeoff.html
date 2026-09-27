@@ -11,8 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="supabase-config.js?v=174"></script>
 <script src="auth.js?v=174"></script>
-<script src="est-totals.js?v=269"></script>
-<script src="geo-takeoff.js?v=269"></script>
+<script src="est-totals.js?v=270"></script>
+<script src="geo-takeoff.js?v=270"></script>
 <style>
   html, body { height: 100%; margin: 0; }
   body { background: #f8fafc; color: #0f172a; overflow: hidden; display: flex; flex-direction: column; }
@@ -523,7 +523,7 @@ requireAuth().catch(function(){});
   // NWAC standard set (Kastriot's usual Procore layers) — rates from the catalog / Procore history
   var STANDARD = [
     ['Air Outlets', 'Diffuser', 'count', 'air_outlets'], ['Air Outlets', 'Linear diffuser', 'linear', 'air_outlets'], ['Air Outlets', 'Dampers', 'count', 'air_outlets'], ['Air Outlets', 'VAV Boxes', 'count', 'air_outlets'], ['Air Outlets', 'Thermostats', 'count', 'air_outlets'],
-    ['Services', 'Shop Drawings - Ductwork(floor)', 'count', 'services'], ['Services', 'Testing and balancing(floor)', 'count', 'services'], ['Services', 'Shop Drawings - Piping(floor)', 'count', 'services'], ['Services', 'Boomtruck 1/2 Day', 'count', 'services'], ['Services', 'Boomtruck Full Day', 'count', 'services'], ['Services', 'Crane', 'count', 'services'], ['Services', 'Man-lift, scafoldings', 'count', 'services'],
+    ['Services', 'Shop Drawings - Ductwork(floor)', 'count', 'services', 2500], ['Services', 'Testing and balancing(floor)', 'count', 'services', 2500], ['Services', 'Shop Drawings - Piping(floor)', 'count', 'services', 1300], ['Services', 'Boomtruck 1/2 Day', 'count', 'services'], ['Services', 'Boomtruck Full Day', 'count', 'services'], ['Services', 'Crane', 'count', 'services'], ['Services', 'Man-lift, scafoldings', 'count', 'services'],
     ['Equipment Install', 'Equipment 1-30lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 40-90lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 100 -190lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 200+ lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 600lb and up', 'count', 'equipment_install'],
     ['Demo', 'disconnect', 'count', 'disconnects'], ['Pipes', 'refrigerant lines (2 pipes) 2/ insulation', 'linear', 'pipework']
   ];
@@ -534,6 +534,7 @@ requireAuth().catch(function(){});
     for (var k = 0; k < STANDARD.length; k++) {
       var s = STANDARD[k]; if (have[s[1].toLowerCase()]) continue;
       var rate = await findRate(s[1]);
+      if (s[4] != null) { rate.cost = s[4]; rate.basis = 'NWAC standard ($' + s[4] + '/floor)'; }   // Shop Drawings and Testing Standards
       rows.push({ estimate_id: estimateId, group_name: s[0], name: s[1], takeoff_type: s[2], category: s[3], labor_crew_type: CAT_CREW[s[3]], unit: typeUnit(s[2]), unit_material_cost: rate.cost, unit_labor_hours: rate.hrs,
         catalog_item_id: rate.id || null, color: COLORS[(layers.length + i) % COLORS.length], symbol: ['circle', 'square', 'diamond', 'triangle', 'x'][i % 5], sort_order: layers.length + i, notes: rate.basis }); i++;
     }
@@ -743,7 +744,8 @@ requireAuth().catch(function(){});
     if (!scalePpf) { toast('Set the drawing scale first', 'error'); return; }
     draft.push(p); hover = null; redraw();
   }
-  function nextMarkNo(l) { var n = 0; allMeas.forEach(function(m) { if (m.layer_id === l.id && m.mark_no > n) n = m.mark_no; }); return n + 1; }
+  var markSeq = {};   // next mark number per layer, kept locally so quick clicks do not reuse a number while a save is in flight
+  function nextMarkNo(l) { var n = 0; allMeas.forEach(function(m) { if (m.layer_id === l.id && m.mark_no > n) n = m.mark_no; }); n = Math.max(n, markSeq[l.id] || 0) + 1; markSeq[l.id] = n; return n; }
   function finishDraft() {
     if (!scalePpf || draft.length < 2) { draft = []; redraw(); return; }
     if (tool === 'linear') saveMark({ tool_type: 'length', points: draft.slice(), computed_value: polyLen(draft) / scalePpf, computed_unit: 'ft', drops: draftDrops.length });
@@ -1021,6 +1023,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll };
 })();
 </script>
-<script src="sw-register.js?v=269"></script>
+<script src="sw-register.js?v=270"></script>
 </body>
 </html>
