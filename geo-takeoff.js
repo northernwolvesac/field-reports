@@ -229,19 +229,27 @@
     var used = new Uint8Array(letters.length), words = [];
     letters.forEach(function (a, i) {
       if (used[i]) return;
-      used[i] = 1; var grp = [a], orient = null, frontier = [a];
+      used[i] = 1; var grp = [a], orient = null, frontier = [a], tinyN = 0;
+      function isTiny(x) { var h = x[3] - x[1], w = x[2] - x[0]; return Math.max(h, w) < 2.5 && Math.min(h, w) < 1.2; }   // quote ticks, dots, degree signs
       while (frontier.length) {
         var g = frontier.pop(), hg = g[3] - g[1], wg = g[2] - g[0];
         var band = [Infinity, Infinity, -Infinity, -Infinity];
-        grp.forEach(function (x) { band[0] = Math.min(band[0], x[0]); band[1] = Math.min(band[1], x[1]); band[2] = Math.max(band[2], x[2]); band[3] = Math.max(band[3], x[3]); });
+        grp.forEach(function (x) { if (isTiny(x) && grp.length > 1) return; band[0] = Math.min(band[0], x[0]); band[1] = Math.min(band[1], x[1]); band[2] = Math.max(band[2], x[2]); band[3] = Math.max(band[3], x[3]); });
         var bh = band[3] - band[1], bw = band[2] - band[0];
         near(g).forEach(function (j) {
           if (used[j]) return;
           var b = letters[j], hb = b[3] - b[1], wb = b[2] - b[0], isH, isV;
-          if (Math.max(hg, wg) < 3 || Math.max(hb, wb) < 3) {
+          if (isTiny(b)) {
+            // a tick joins only close to the word band (few of them per word)
+            if (tinyN >= 3) return;
             var cyb = (b[1] + b[3]) / 2, cxb = (b[0] + b[2]) / 2;
-            isH = cyb >= band[1] - 0.5 * bh && cyb <= band[3] + 0.5 * bh && gapH(g, b) >= -0.3 * Math.min(wg, wb) && gapH(g, b) <= 0.9 * Math.max(bh, hb);
-            isV = cxb >= band[0] - 0.5 * bw && cxb <= band[2] + 0.5 * bw && gapV(g, b) >= -0.3 * Math.min(hg, hb) && gapV(g, b) <= 0.9 * Math.max(bw, wb);
+            isH = cyb >= band[1] - 0.3 * bh && cyb <= band[3] + 0.3 * bh && gapH(g, b) >= -0.3 * Math.min(wg, wb) && gapH(g, b) <= 0.6 * bh;
+            isV = cxb >= band[0] - 0.3 * bw && cxb <= band[2] + 0.3 * bw && gapV(g, b) >= -0.3 * Math.min(hg, hb) && gapV(g, b) <= 0.6 * bw;
+            if (isH || isV) tinyN++;
+          } else if (isTiny(g)) {
+            // continuing past a tick: the next letter must match the word band like a normal neighbour
+            isH = ovV(band, b) >= 0.5 * Math.min(hb, bh) && gapH(g, b) >= -0.3 * wb && gapH(g, b) <= 0.9 * Math.max(bh, hb) && Math.max(hb, bh) <= 2.2 * Math.min(hb, bh);
+            isV = ovH(band, b) >= 0.5 * Math.min(wb, bw) && gapV(g, b) >= -0.3 * hb && gapV(g, b) <= 0.9 * Math.max(bw, wb) && Math.max(wb, bw) <= 2.2 * Math.min(wb, bw);
           } else {
             isH = ovV(g, b) >= 0.5 * Math.min(hg, hb) && gapH(g, b) >= -0.3 * Math.min(wg, wb) && gapH(g, b) <= 0.9 * Math.max(hg, hb) && Math.max(hg, hb) <= 2.2 * Math.min(hg, hb);
             isV = ovH(g, b) >= 0.5 * Math.min(wg, wb) && gapV(g, b) >= -0.3 * Math.min(hg, hb) && gapV(g, b) <= 0.9 * Math.max(wg, wb) && Math.max(wg, wb) <= 2.2 * Math.min(wg, wb);
