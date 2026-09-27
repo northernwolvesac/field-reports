@@ -169,9 +169,14 @@
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {};
+    // an overall plan at a small scale that repeats what the enlarged plans show (Sky Zone: M1.0 at 3/32" vs M2.0 at 3/16") must not be measured twice
+    var enlargedPtft = 0, enlargedLabels = 0, ductDrops = false;
+    sheets.forEach(function (p) { var r = p.result, t = r.sheet_type || p.sheet_type || ''; if (t === 'enlarged' && r.geo && r.geo.total_ft > 0) { enlargedPtft = Math.max(enlargedPtft, r.geo.ptft || 0); enlargedLabels = Math.max(enlargedLabels, r.geo.labels || 0); } });
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
+      // "full size duct drop down from mechanical equipment on roof" — the drops are vertical and never appear as plan lines
+      if (!isDemo && /drop[^.]{0,40}(down|from)[^.]{0,80}roof|roof[^.]{0,60}drop/i.test(JSON.stringify([r.notes, r.scope_notes, r.questions, r.equipment].filter(Boolean)))) ductDrops = true;
       // every level with work counts for shop drawings / T&B — numbered floors plus ground, cellar, mezzanine, roof, penthouse
       var fl = String(r.floor || '').trim().toLowerCase().replace(/^(level|floor|flr\.?)\s*/, '').replace(/(st|nd|rd|th)\s*(floor|fl\.?)?$/, '');
       if (fl && !/^(specs|legend|schedule|details|controls|riser)$/.test(type) && (/^\d+$/.test(fl) || /^(g|gf|ground|lobby|ll|lower level|cellar|basement|b\d?|mezz\w*|roof|ph|penthouse)$/.test(fl))) floors[fl.replace(/^(gf|lobby)$/, 'ground').replace(/^g$/, 'ground')] = 1;
@@ -191,7 +196,7 @@
         var tag = norm(e.tag); if (!tag) return;
         if (type === 'schedule' || type === 'enlarged' || type === 'riser') {
           var s = sched[tag] = sched[tag] || { tag: tag, label: String(e.tag).trim(), qty: 0, sheets: [] };
-          ['type', 'manufacturer', 'model', 'capacity', 'weight_lb', 'furnished_by', 'electrical', 'notes', 'location'].forEach(function (k) { if (e[k] && !s[k]) s[k] = e[k]; });
+          ['type', 'manufacturer', 'model', 'capacity', 'cfm', 'weight_lb', 'furnished_by', 'electrical', 'notes', 'location'].forEach(function (k) { if (e[k] && !s[k]) s[k] = e[k]; });
           if (type === 'schedule') s.qty = Math.max(s.qty, Number(e.qty || 0));
           s.sheets.push(sh);
         } else if (!isDemo) {
@@ -202,6 +207,7 @@
           if (!q.type && e.type) q.type = e.type;
           if (!q.notes && e.notes) q.notes = e.notes;
           if (!q.weight_lb && e.weight_lb) q.weight_lb = e.weight_lb;
+          ['capacity', 'cfm', 'location'].forEach(function (k) { if (!q[k] && e[k]) q[k] = e[k]; });
         }
       });
       // a VAV / FPB schedule is the authoritative box count (plans repeat tags across sheet halves and ranges — Esquire: plans 71, schedule 43)
@@ -224,7 +230,10 @@
         });
         {
           var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
-          if (r.geo && r.geo.total_ft > 0) {
+          var coarseDup = type === 'duct_plan' && enlargedPtft > 0 && r.geo && r.geo.total_ft > 0 && (r.geo.ptft || 0) <= 0.6 * enlargedPtft &&
+            (r.geo.labels || 0) < 12 && enlargedLabels >= 3 * (r.geo.labels || 0);
+          if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
+          if (!coarseDup && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
             geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
             Object.keys(r.geo.sizes || {}).forEach(function (sz) {
@@ -235,7 +244,7 @@
               o.lf += r.geo.sizes[sz] * GEO_FITTINGS; o.sheets.push(sh); o.geo = true;
             });
           }
-          if (!(r.geo && r.geo.total_ft > 0)) (r.duct_runs || []).forEach(function (x) {
+          if (!coarseDup && !(r.geo && r.geo.total_ft > 0)) (r.duct_runs || []).forEach(function (x) {
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
             var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
@@ -278,7 +287,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), ductSheets: Object.keys(ductSheets), pipeSheets: Object.keys(pipeSheets), schedVav: Object.keys(schedVav).length, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), ductSheets: Object.keys(ductSheets), pipeSheets: Object.keys(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -339,6 +348,20 @@
       add('ductwork', d.size + ' duct — ' + (d.shape === 'round' ? DUCT_FAMILIES[famKey].round.replace(/acl/, 'ACL') : DUCT_FAMILIES[famKey].label) + ' — ' + Math.round(d.lf) + ' ft', d.lf, 'lf', r.cost, r.hrs,
         r.basis + (d.geo ? ' · measured from the drawing lines on ' + uniq(d.sheets).join(', ') + ' (+8% fittings)' : ' · AI estimate from ' + uniq(d.sheets).join(', ')),
         { flag: r.flag || null });
+    });
+    // rooftop units drop full-size supply and return ducts through the roof to a drop box — no plan line shows them (Kastriot, Sky Zone:
+    // 40x24 for 5–6,000 CFM, 48x14 for 8,750 CFM, ≈27 ft per unit). Sized at 1,000 fpm, 1.7:1 aspect, 2 drops × 14 ft per unit, flagged.
+    var dropTags = Object.keys(C.sched); Object.keys(C.planEq).forEach(function (t) { if (!C.sched[t]) dropTags.push(t); });
+    dropTags.sort().forEach(function (tag) {
+      var s = C.sched[tag] || C.planEq[tag], about = [s.type, s.notes, s.cfm, s.capacity, tag].join(' ').toLowerCase();
+      if (!/rooftop|\brtu\b|packaged unit|\bdoas\b/.test(about) || /\bvrf\b|condens|heat pump unit/.test(about)) return;
+      if (!(C.ductDrops || /drop/.test(about))) return;
+      var m = /(\d[\d,]{2,})\s*cfm/.exec(about), cfm = m ? +m[1].replace(/,/g, '') : 0, size = '24x12';
+      if (cfm) { var A = cfm / 1000 * 144, hh = Math.max(8, Math.round(Math.sqrt(A / 1.7) / 2) * 2), ww = Math.max(hh, Math.round(A / hh / 2) * 2); size = ww + 'x' + hh; }
+      var qty = Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1), lf = qty * 2 * 14, rd = ductRate(R, size, 'rect', famKey); ductFt += lf;
+      add('ductwork', size + ' duct — ' + (s.label || tag) + ' supply + return drops through the roof — ' + lf + ' ft', lf, 'lf', rd.cost, rd.hrs,
+        rd.basis + ' · 2 drops × 14 ft per unit, size from ' + (cfm ? cfm + ' CFM at 1,000 fpm' : 'a 24x12 default'),
+        { is_firm: false, flag: 'roof drops are not on the plan — 2 × 14 ft per unit budgeted; confirm the height and size' });
     });
     C.geoCheck.forEach(function (g) {
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
