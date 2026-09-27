@@ -252,7 +252,7 @@
   // worker round-trip to ~1 s, so per-word calls would take 15+ minutes per drawing
   async function ocrLabels(page, D, opts) {
     opts = opts || {};
-    var t0 = Date.now(), words = clusterWords(D.glyphs || [], { maxLetters: opts.maxLetters || 10 });
+    var t0 = Date.now(), words = clusterWords(D.glyphs || [], { maxLetters: opts.maxLetters || 10, minLetters: opts.minLetters || 2 });
     if (!words.length) return { items: [], words: 0, secs: 0, text: '' };
     await loadTesseract();
     var worker = await Tesseract.createWorker('eng', 1, { logger: function () {} });
@@ -273,27 +273,27 @@
       });
       if (!mine.length) continue;
       var canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
-      var ctx = canvas.getContext('2d', { willReadFrequently: true });
+      var ctx = canvas.getContext('2d');
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
       await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
       for (var k = 0; k < mine.length; k++) {
-        var w = words[mine[k].i], b = mine[k].b, bw = Math.ceil(b[2] - b[0]), bh = Math.ceil(b[3] - b[1]);
+        var w = words[mine[k].i], b = mine[k].b, bx = Math.floor(b[0]), by = Math.floor(b[1]), bw = Math.ceil(b[2] - b[0]), bh = Math.ceil(b[3] - b[1]);
         if (bw < 2 || bh < 2) continue;
-        var img = ctx.getImageData(Math.floor(b[0]), Math.floor(b[1]), bw, bh), d = img.data;
-        var lb = w.letters.map(function (L) { var c1 = px(vp, L[0], L[1]), c2 = px(vp, L[2], L[3]);
-          return [Math.min(c1[0], c2[0]) - M - Math.floor(b[0]), Math.min(c1[1], c2[1]) - M - Math.floor(b[1]), Math.max(c1[0], c2[0]) + M - Math.floor(b[0]), Math.max(c1[1], c2[1]) + M - Math.floor(b[1])]; });
-        for (var yy = 0; yy < bh; yy++) for (var xx = 0; xx < bw; xx++) {
-          var inside = false;
-          for (var q = 0; q < lb.length; q++) if (xx >= lb[q][0] && xx <= lb[q][2] && yy >= lb[q][1] && yy <= lb[q][3]) { inside = true; break; }
-          if (!inside) { var o = (yy * bw + xx) * 4; d[o] = d[o + 1] = d[o + 2] = 255; }
-        }
-        var tmpc = document.createElement('canvas'); tmpc.width = bw; tmpc.height = bh; tmpc.getContext('2d').putImageData(img, 0, 0);
-        var crop = document.createElement('canvas');
-        if (w.orient === 'v') { crop.width = bh; crop.height = bw; var cc = crop.getContext('2d'); cc.translate(bh, 0); cc.rotate(Math.PI / 2); cc.drawImage(tmpc, 0, 0); }
-        else { crop = tmpc; }
+        // copy only the letter boxes (clip) — everything else in the crop stays white
+        var tmpc = document.createElement('canvas'); tmpc.width = bw; tmpc.height = bh;
+        var tc = tmpc.getContext('2d'); tc.fillStyle = '#fff'; tc.fillRect(0, 0, bw, bh);
+        tc.save(); tc.beginPath();
+        w.letters.forEach(function (L) { var c1 = px(vp, L[0], L[1]), c2 = px(vp, L[2], L[3]);
+          var lx0 = Math.min(c1[0], c2[0]) - M - bx, ly0 = Math.min(c1[1], c2[1]) - M - by, lx1 = Math.max(c1[0], c2[0]) + M - bx, ly1 = Math.max(c1[1], c2[1]) + M - by;
+          tc.rect(lx0, ly0, lx1 - lx0, ly1 - ly0); });
+        tc.clip(); tc.drawImage(canvas, bx, by, bw, bh, 0, 0, bw, bh); tc.restore();
+        var crop = tmpc;
+        if (w.orient === 'v') { crop = document.createElement('canvas'); crop.width = bh; crop.height = bw; var cc = crop.getContext('2d'); cc.translate(bh, 0); cc.rotate(Math.PI / 2); cc.drawImage(tmpc, 0, 0); }
         crops.push({ i: mine[k].i, c: crop });
       }
       canvas.width = canvas.height = 0;
+      if (opts.onProgress) opts.onProgress(0, crops.length, 'cropping');
+      await new Promise(function (r) { setTimeout(r, 0); });
     }
     // 2. compose ~30 crops per sheet (rows), read once; then the same sheet with every crop turned 180°
     var GAP = 24, SW = 2400, results = {}, done = 0;
