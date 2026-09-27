@@ -505,10 +505,10 @@
       }
       // single-line ducts (round runs drawn as one thick line — BOSS Belmont) may sit in a style that has no wall pairs: chain them
       // from every dark solid style of comparable weight, walls of the paired styles still excluded
-      // only on single-line drawings (few paired feet per label — BOSS 5 ft/label vs 8–22 on double-line sets), otherwise the
+      // only on single-line drawings (labels sit beside single runs, not on wall pairs — BOSS 0 of 12 vs most on double-line sets), otherwise the
       // extra styles add flex runouts and equipment outlines that Procore takeoffs do not carry
       var S2 = S.slice(), used2 = fp.used.slice(), minW = Infinity; keep.forEach(function (k) { minW = Math.min(minW, +k.split('|')[1]); });
-      var pairFt = pcs.reduce(function (a, p) { return a + p.len_ft; }, 0), singleMode = labs.length > 0 && pairFt / labs.length < 7;
+      var onCnt = pcs.filter(function (p) { return p.via === 'label'; }).length, singleMode = labs.length > 0 && onCnt < 0.25 * labs.length;
       if (singleMode) Object.keys(bySty).forEach(function (key) {
         if (keep.indexOf(key) >= 0 || bySty[key].length < 40) return;
         var w = +key.split('|')[1]; if (w < Math.max(0.5, minW * 0.6)) return;
