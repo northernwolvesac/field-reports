@@ -405,7 +405,10 @@
 
     // 7. Services
     add('services', 'Ductwork shop drawings — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.ductSD, 0, 'Standard — $2,500/floor');
-    if (hasPipe) add('services', 'Piping shop drawings — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.pipeSD, 0, 'Standard — $1,300/floor (piping scope only)');
+    // piping shop drawings only on the floors that carry piping (Kastriot, 360 Lexington: piping SD on 1 of 3 floors)
+    var pipeFl = Math.min(floors, C.pipeFloors.length || floors);
+    if (hasPipe) add('services', 'Piping shop drawings — ' + pipeFl + ' floor' + (pipeFl > 1 ? 's' : ''), pipeFl, 'floor', STD.pipeSD, 0,
+      'Standard — $1,300/floor, floors with piping only' + (C.pipeFloors.length ? ' (' + C.pipeFloors.join(', ') + ')' : ''));
     if (!C.quotes.some(function (q) { return q.kind === 'tab'; }))
       add('services', 'Testing & balancing — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $2,500/floor');
     // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
