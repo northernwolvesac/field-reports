@@ -732,7 +732,12 @@
         var ids = chains[c], cnt = {}, majority = null;
         ids.forEach(function (i) { if (segSize[i]) cnt[segSize[i]] = (cnt[segSize[i]] || 0) + B[i][6]; });
         Object.keys(cnt).forEach(function (k) { if (majority === null || cnt[k] > cnt[majority]) majority = k; });
-        if (majority === null) return;                    // a bar network without a single label is a wall outline, not duct
+        if (majority === null) {
+          // no label on this network: it is duct only if it runs within 30 pt of a labelled bar (a branch whose elbow arc broke the
+          // chain); a network with no labelled bar anywhere near is a wall outline
+          var close = ids.some(function (i) { return B.some(function (o, j) { return segSize[j] && Math.min(ptSeg(B[i][0], B[i][1], o), ptSeg(B[i][2], B[i][3], o)) < 30; }); });
+          if (!close) return;
+        }
         ids.forEach(function (i) {
           var sz = segSize[i] || majority, via = segSize[i] ? 'label' : majority ? 'run' : 'default';
           if (!sz) {
