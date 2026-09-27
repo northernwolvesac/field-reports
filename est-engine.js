@@ -242,8 +242,8 @@
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
           var weakGeo = r.geo && r.geo.total_ft > 0 && (((r.geo.labels || 0) < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft) ||
             ((r.geo.labels || 0) < 20 && aiFt > 2 * r.geo.total_ft * GEO_FITTINGS));
-          if (weakGeo && !coarseDup) { geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: r.geo.labels || 0 }); coarseDup = true; }
-          if (!coarseDup && r.geo && r.geo.total_ft > 0) {
+          if (weakGeo && !coarseDup) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: r.geo.labels || 0 });
+          if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
             geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
             Object.keys(r.geo.sizes || {}).forEach(function (sz) {
@@ -254,7 +254,7 @@
               o.lf += r.geo.sizes[sz] * GEO_FITTINGS; o.sheets.push(sh); o.geo = true;
             });
           }
-          if (takeoffSheet && !coarseDup && !(r.geo && r.geo.total_ft > 0)) (r.duct_runs || []).forEach(function (x) {
+          if (takeoffSheet && !coarseDup && (weakGeo || !(r.geo && r.geo.total_ft > 0))) (r.duct_runs || []).forEach(function (x) {
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
             var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
