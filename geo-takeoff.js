@@ -76,7 +76,7 @@
       endSub(false);
       if (paint !== false && pathPts.length && pathPts.length <= 400) {
         var gb = bboxOf(pathPts), gw = gb[2] - gb[0], gh = gb[3] - gb[1];
-        var whiteFill = !stroke && Math.min(st.fill[0], st.fill[1], st.fill[2]) > 0.9;     // a label halo, not a glyph
+        var whiteFill = (paint === true || paint === 'both') && Math.min(st.fill[0], st.fill[1], st.fill[2]) > 0.9;     // a label halo, not a glyph
         if (!whiteFill && gw <= 22 && gh <= 22 && (gw >= 0.4 || gh >= 0.4)) glyphs.push([gb[0], gb[1], gb[2], gb[3]]);
       }
       pathPts = [];
@@ -133,8 +133,8 @@
             }
           }
           break;
-        case OPS.stroke: case OPS.closeStroke: case OPS.fillStroke: case OPS.eoFillStroke: case OPS.closeFillStroke: case OPS.closeEOFillStroke:
-          flush(true); break;
+        case OPS.stroke: case OPS.closeStroke: flush(true); break;
+        case OPS.fillStroke: case OPS.eoFillStroke: case OPS.closeFillStroke: case OPS.closeEOFillStroke: flush(true, 'both'); break;
         case OPS.fill: case OPS.eoFill: flush(false, true); break;
         case OPS.endPath: flush(false, false); break;
       }
