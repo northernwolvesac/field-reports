@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=273"></script>
-<script src="est-engine.js?v=273"></script>
-<script src="geo-takeoff.js?v=273"></script>
+<script src="est-totals.js?v=274"></script>
+<script src="est-engine.js?v=274"></script>
+<script src="geo-takeoff.js?v=274"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -654,17 +654,17 @@ var AE = (function() {
       if (lr.error) throw new Error(/does not exist|42P01/i.test(lr.error.message) ? 'run takeoff-v2-schema.sql in Supabase first' : lr.error.message);
       var layers = lr.data || [];
       // 1 · one takeoff drawing per session file (copied into the takeoff bucket once, matched by file name)
-      var ex = await supabaseClient.from('estimate_drawings').select('id,filename,page_count').eq('estimate_id', estId);
+      var ex = await supabaseClient.from('estimate_drawings').select('id,filename,page_count,page_meta').eq('estimate_id', estId);
       var have = {}; (ex.data || []).forEach(function(d) { have[d.filename] = d; });
       var fileIds = Array.from(new Set(list.map(function(p) { return p.file_id; }))), dwg = {};
       for (var fi = 0; fi < fileIds.length; fi++) {
         var f = files.find(function(x) { return x.id === fileIds[fi]; });
-        if (have[f.file_name]) { dwg[f.id] = have[f.file_name]; continue; }
+        var meta = {}; pages.forEach(function(p) { var r = p.result || {}; if (p.file_id === f.id && r.sheet_no) meta[String(p.page_no)] = { sheet: r.sheet_no }; });
+        if (have[f.file_name]) { dwg[f.id] = have[f.file_name]; await supabaseClient.from('estimate_drawings').update({ page_meta: Object.assign({}, have[f.file_name].page_meta || {}, meta) }).eq('id', have[f.file_name].id); continue; }
         bridging = 'Copying ' + f.file_name + '…'; render();
         var bytes = await fileBytes(f.id), path = estId + '/' + Date.now() + '_' + f.file_name.replace(/[^A-Za-z0-9._-]/g, '_');
         var up = await supabaseClient.storage.from('estimate-drawings').upload(path, new Blob([bytes], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false });
         if (up.error) throw new Error(up.error.message);
-        var meta = {}; pages.forEach(function(p) { var r = p.result || {}; if (p.file_id === f.id && r.sheet_no) meta[String(p.page_no)] = { sheet: r.sheet_no }; });
         var ins = await supabaseClient.from('estimate_drawings').insert({ estimate_id: estId, filename: f.file_name, storage_path: path, page_count: f.pages || 1, drawing_type: 'base', page_meta: meta, uploaded_by: me.id }).select().single();
         if (ins.error) throw new Error(ins.error.message);
         dwg[f.id] = ins.data;
@@ -752,6 +752,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=273"></script>
+<script src="sw-register.js?v=274"></script>
 </body>
 </html>

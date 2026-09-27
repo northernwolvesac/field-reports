@@ -11,8 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="supabase-config.js?v=174"></script>
 <script src="auth.js?v=174"></script>
-<script src="est-totals.js?v=273"></script>
-<script src="geo-takeoff.js?v=273"></script>
+<script src="est-totals.js?v=274"></script>
+<script src="geo-takeoff.js?v=274"></script>
 <style>
   html, body { height: 100%; margin: 0; }
   body { background: #f8fafc; color: #0f172a; overflow: hidden; display: flex; flex-direction: column; }
@@ -603,7 +603,8 @@ requireAuth().catch(function(){});
     drawings.forEach(function(d) { for (var p = 1; p <= (d.page_count || 1); p++) { var meta = (d.page_meta || {})[String(p)] || {}; plans.push({ drawing: d, page: p, sheet: meta.sheet || null, scale: meta.scale || null }); } });
     var ids = drawings.map(function(d) { return d.id; });
     allMeas = [];
-    if (ids.length) { var m = await supabaseClient.from('estimate_measurements').select('*').in('drawing_id', ids).order('created_at'); allMeas = m.data || []; }
+    // PostgREST returns at most 1,000 rows per request — an auto-measured set has thousands of marks, so page through
+    if (ids.length) for (var from = 0; ; from += 1000) { var m = await supabaseClient.from('estimate_measurements').select('*').in('drawing_id', ids).order('created_at').order('id').range(from, from + 999); if (m.error) { toast(m.error.message, 'error'); break; } allMeas = allMeas.concat(m.data || []); if (!m.data || m.data.length < 1000) break; }
     renderPlanSelect();
     if (plans.length && planIdx < 0) await openPlan(0);
     renderThumbs();
@@ -1181,6 +1182,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing };
 })();
 </script>
-<script src="sw-register.js?v=273"></script>
+<script src="sw-register.js?v=274"></script>
 </body>
 </html>
