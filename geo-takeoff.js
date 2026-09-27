@@ -176,8 +176,9 @@
   // ─── 2. geometry (runs inside a Web Worker) ───
   function workerMain() {
     // 24x12, 24"x12", 36X12Ø (flat oval), 12X6 SA BRANCH, 10x6 (TYP.), 8x6 UP
-    var SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:S\.?A\.?|R\.?A\.?|E\.?A\.?|O\.?A\.?)\b.{0,24})?\s*$/;
-    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*$/i;
+    var SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/;
+    // 8"ø, 14"ø S/A, 6"ø O/A (round with a service suffix)
+    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/i;
     var SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/g;
     function frac(s) { if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
     function hyp(a, b) { return Math.sqrt(a * a + b * b); }

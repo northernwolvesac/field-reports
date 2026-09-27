@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=281"></script>
-<script src="est-engine.js?v=281"></script>
-<script src="geo-takeoff.js?v=281"></script>
+<script src="est-totals.js?v=282"></script>
+<script src="est-engine.js?v=282"></script>
+<script src="geo-takeoff.js?v=282"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -405,7 +405,8 @@ var AE = (function() {
   var measuring = '';
   function isDuctPlan(p) {
     var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {};
-    return f.kind !== 'quote' && f.kind !== 'specs' && p.status === 'done' && (r.sheet_type === 'duct_plan' || (r.sheet_type === 'other' && /duct/i.test(r.sheet_title || '')));
+    return f.kind !== 'quote' && f.kind !== 'specs' && p.status === 'done' && (r.sheet_type === 'duct_plan' || (r.sheet_type === 'other' && /duct/i.test(r.sheet_title || '')) ||
+      (r.sheet_type === 'enlarged' && (r.duct_runs || []).length >= 3));
   }
   function isPipePlan(p) {
     var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {};
@@ -772,6 +773,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=281"></script>
+<script src="sw-register.js?v=282"></script>
 </body>
 </html>

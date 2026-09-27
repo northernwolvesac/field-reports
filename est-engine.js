@@ -168,7 +168,7 @@
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {};
+    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {};
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
@@ -204,6 +204,8 @@
           if (!q.weight_lb && e.weight_lb) q.weight_lb = e.weight_lb;
         }
       });
+      // a VAV / FPB schedule is the authoritative box count (plans repeat tags across sheet halves and ranges — Esquire: plans 71, schedule 43)
+      if (type === 'schedule') (r.air_devices || []).forEach(function (a) { if (/vav|fpb/i.test(a.type || '') && a.tag) expandTags(a.tag).forEach(function (t) { schedVav[norm(t)] = 1; }); });
       // quantities come from the floor plans only; enlarged plans, details, risers and controls repeat what the plans show
       var takeoffSheet = type === 'duct_plan' || type === 'pipe_plan' || (type === 'other' && /plan/i.test(r.sheet_title || '') && !/enlarged/i.test(r.sheet_title || ''));
       if (!isDemo && !takeoffSheet && ((r.duct_runs || []).length || (r.pipe_runs || []).length || (r.air_devices || []).length))
@@ -276,7 +278,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), ductSheets: Object.keys(ductSheets), pipeSheets: Object.keys(pipeSheets), wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), ductSheets: Object.keys(ductSheets), pipeSheets: Object.keys(pipeSheets), schedVav: Object.keys(schedVav).length, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -364,6 +366,25 @@
         r.basis + (p.riser ? ' · vertical pipe measured between the floor elevations on ' : p.geo ? ' · measured from the piping plan lines on ' : ' · AI estimate from ') + uniq(p.sheets).join(', '), { flag: r.flag || null });
     });
     if (C.wetTaps) add('pipework', 'Wet-tap connection' + (C.wetTaps > 1 ? 's' : ''), C.wetTaps, 'ea', STD.wetTap, 0, 'Standard — $10,000 per connection (sub)', { is_wet_tap: true, labor_crew_type: 'none' });
+    // VRF / split indoor units need a line set and a condensate drain even when the plans show no piping (Kastriot, Sky Zone: 307 ft
+    // refrigerant + 273 ft 1" copper for 12 indoor units) — budget 25 ft + 20 ft per unit, flagged
+    var vrfUnits = 0, refrigFt = 0;
+    Object.keys(C.pipe).forEach(function (k) { if (/refrig|rs\/rl|\brl\b|\brs\b/i.test(C.pipe[k].service || '')) refrigFt += C.pipe[k].lf || 0; });
+    var vrfTags = Object.keys(C.sched); Object.keys(C.planEq).forEach(function (t) { if (!C.sched[t]) vrfTags.push(t); });
+    vrfTags.forEach(function (tag) {
+      var s = C.sched[tag] || C.planEq[tag], about = ((s.type || '') + ' ' + (s.notes || '') + ' ' + tag).toLowerCase();
+      if (!/vrf|vrv|ductless|cassette|mini[- ]?split|split system|indoor unit|wall[- ]mounted unit/.test(about)) return;
+      if (/condens|outdoor|heat pump unit|rooftop|branch selector|\bbs-|\bcu-|existing|to remain/.test(about)) return;
+      vrfUnits += Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1);
+    });
+    if (vrfUnits && refrigFt < 10 * vrfUnits) {
+      hasPipe = true;
+      var rr = pipeRate(R, { service: 'refrigerant' }), cr = pipeRate(R, { size: '1"', material: 'copper', service: 'cd' }), needFt = vrfUnits * 25 - refrigFt;
+      add('pipework', 'Refrigerant line sets — ' + vrfUnits + ' VRF / split indoor unit' + (vrfUnits > 1 ? 's' : '') + ' (budget ' + Math.round(needFt) + ' ft)', needFt, 'lf', rr.cost, rr.hrs,
+        rr.basis + ' · budget 25 ft per indoor unit, no refrigerant piping read on the plans', { is_firm: false, flag: 'refrigerant piping not on the plans — 25 ft per indoor unit budgeted; confirm routing' });
+      add('pipework', 'Condensate 1" copper — ' + vrfUnits + ' VRF / split indoor unit' + (vrfUnits > 1 ? 's' : '') + ' (budget ' + vrfUnits * 20 + ' ft)', vrfUnits * 20, 'lf', cr.cost, cr.hrs,
+        cr.basis + ' · budget 20 ft per indoor unit', { is_firm: false });
+    }
 
     // 5. Equipment install (every scheduled unit we furnish or set; units shown only on plans too)
     var eqTags = Object.keys(C.sched);
@@ -411,7 +432,7 @@
     if (ao.fpb) add('air_outlets', 'Fan-powered boxes', ao.fpb, 'ea', 0, STD.fpb, 'Air Outlets Standards — 8 hr each');
 
     // standalone controls only when there is no BMS quote (Standalone Controls Standards)
-    var vavCount = Object.keys(C.devices).reduce(function (a, k) { return a + (C.devices[k].type === 'vav' || C.devices[k].type === 'fpb' ? C.devices[k].qty : 0); }, 0);
+    var vavCount = C.schedVav || Object.keys(C.devices).reduce(function (a, k) { return a + (C.devices[k].type === 'vav' || C.devices[k].type === 'fpb' ? C.devices[k].qty : 0); }, 0);
     if (!bms && vavCount) add('equipment', 'Standalone VAV controls (no BMS quote)', vavCount, 'ea', STD.vavControls + STD.thermostat + STD.tstatWiring, 1.6,
       'Standalone Controls — $1,000/VAV + thermostat $500 + wiring $50; 10/day install', { is_firm: false, flag: 'replace with BMS quote if one comes in' });
 
