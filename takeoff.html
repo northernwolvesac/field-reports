@@ -4,1643 +4,1009 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0696D7">
-<title>On-Screen Takeoff — Northern Wolves AC</title>
+<title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="supabase-config.js?v=174"></script>
 <script src="auth.js?v=174"></script>
+<script src="est-totals.js?v=265"></script>
+<script src="geo-takeoff.js?v=265"></script>
 <style>
-  html, body { height: 100%; margin: 0; overflow: hidden; }
-  body { display: flex; flex-direction: column; background: #1e293b; color: #fff; }
+  html, body { height: 100%; margin: 0; }
+  body { background: #f8fafc; color: #0f172a; overflow: hidden; display: flex; flex-direction: column; }
+  .bp-wrap { flex: none; background: #fff; }
+  .bp-crumb { padding: 10px 20px 2px; font-size: 12px; color: #64748b; }
+  .bp-crumb a { color: #0696D7; text-decoration: none; font-weight: 600; }
+  .bp-crumb a:hover { text-decoration: underline; }
+  .bp-title-row { display: flex; align-items: center; gap: 12px; padding: 2px 20px 8px; flex-wrap: wrap; }
+  .bp-title { flex: 1; font-size: 22px; font-weight: 800; color: #0f172a; min-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bp-stage { padding: 5px 11px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; border-radius: 12px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  .bp-tabs { display: flex; gap: 0; padding: 0 20px; border-bottom: 1px solid #e2e8f0; background: #fff; }
+  .bp-tab { padding: 10px 18px; font-size: 13px; font-weight: 600; color: #64748b; border-bottom: 3px solid transparent; text-decoration: none; display: inline-block; }
+  .bp-tab:hover { color: #0696D7; background: #f8fafc; }
+  .bp-tab.active { color: #0696D7; border-bottom-color: #0696D7; font-weight: 700; }
+  .btn-primary { background: linear-gradient(135deg,#0696D7,#0479B2); color: #fff; border: none; padding: 8px 14px; border-radius: 7px; font-weight: 700; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .btn-secondary { background: #fff; color: #0696D7; border: 1px solid #0696D7; padding: 7px 12px; border-radius: 7px; font-weight: 700; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .btn-secondary:hover { background: #f0f9ff; }
+  .btn-orange { background: linear-gradient(135deg,#f97316,#ea580c); color: #fff; border: none; padding: 8px 14px; border-radius: 7px; font-weight: 700; font-size: 12px; cursor: pointer; font-family: inherit; box-shadow: 0 2px 8px rgba(249,115,22,.3); }
+  .btn-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .btn-ghost { background: #fff; color: #334155; border: 1px solid #cbd5e1; padding: 6px 10px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-ghost:hover { background: #f1f5f9; }
+  .btn-ghost.on { background: #0696D7; color: #fff; border-color: #0696D7; }
+  button:disabled { opacity: .5; cursor: default; }
 
-  .tk-header {
-    background: #0f172a; padding: 8px 14px;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    border-bottom: 1px solid #334155;
-  }
-  .tk-header a.back {
-    color: #94a3b8; text-decoration: none; font-size: 20px; padding: 4px 8px;
-  }
-  .tk-header a.back:hover { color: #fff; }
-  .tk-header h1 { margin: 0; font-size: 15px; color: #fff; font-weight: 700; }
-  .tk-header select, .tk-header input {
-    background: #1e293b; color: #fff; border: 1px solid #475569;
-    padding: 5px 10px; border-radius: 6px; font-size: 12px;
-  }
-  .tk-header button {
-    padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700;
-    cursor: pointer; border: none;
-  }
-  .btn-primary { background: #0696D7; color: #fff; }
-  .btn-secondary { background: #334155; color: #fff; border: 1px solid #475569 !important; }
-  .btn-success { background: #10b981; color: #fff; }
-  .btn-danger  { background: #dc2626; color: #fff; }
-  .grow { flex: 1; }
+  /* ─── workspace ─── */
+  .tk-work { flex: 1; display: grid; grid-template-columns: 300px 1fr 300px; min-height: 0; border-top: 1px solid #e2e8f0; }
+  @media (max-width: 1100px) { .tk-work { grid-template-columns: 260px 1fr; } .tk-right { display: none; } }
+  @media (max-width: 760px)  { .tk-work { grid-template-columns: 1fr; } .tk-left { display: none; } }
+  .tk-left, .tk-right { background: #fff; overflow-y: auto; min-height: 0; }
+  .tk-left { border-right: 1px solid #e2e8f0; }
+  .tk-right { border-left: 1px solid #e2e8f0; }
+  .tk-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #e2e8f0; }
+  .panel-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: .4px; position: sticky; top: 0; background: #fff; z-index: 2; }
+  .panel-h .grow { flex: 1; }
+  .panel-h .cnt { color: #94a3b8; font-weight: 600; }
+  .search { margin: 8px 12px; }
+  .search input { width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 12px; font-family: inherit; }
 
-  .tk-main {
-    display: grid; grid-template-columns: 170px 1fr 300px;
-    flex: 1; overflow: hidden;
-  }
-  @media (max-width: 900px) {
-    .tk-main { grid-template-columns: 130px 1fr; }
-    .tk-sidebar-right { display: none; }
-  }
+  /* layer tree */
+  .grp { border-bottom: 1px solid #f1f5f9; }
+  .grp-h { display: flex; align-items: center; gap: 6px; padding: 7px 10px 7px 8px; font-size: 12px; font-weight: 700; color: #334155; background: #f8fafc; cursor: pointer; user-select: none; }
+  .grp-h .chev { width: 14px; color: #94a3b8; font-size: 11px; }
+  .grp-h .sum { margin-left: auto; font-size: 11px; color: #64748b; font-weight: 600; white-space: nowrap; }
+  .eye { cursor: pointer; color: #94a3b8; font-size: 13px; width: 18px; text-align: center; flex: none; }
+  .eye.off { color: #cbd5e1; }
+  .lay { display: flex; align-items: center; gap: 7px; padding: 6px 10px 6px 22px; font-size: 12px; color: #0f172a; cursor: pointer; border-left: 3px solid transparent; }
+  .lay:hover { background: #f8fafc; }
+  .lay.active { background: #eff8fd; border-left-color: #0696D7; }
+  .lay .sw { width: 13px; height: 13px; border-radius: 3px; flex: none; border: 1px solid rgba(0,0,0,.15); }
+  .lay .sw.linear { height: 4px; border-radius: 2px; }
+  .lay .sw.area { opacity: .6; }
+  .lay .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lay .qty { font-family: 'Courier New', monospace; font-size: 11px; color: #334155; white-space: nowrap; font-weight: 700; }
+  .lay .qty small { color: #94a3b8; font-weight: 400; }
+  .lay .more { color: #94a3b8; padding: 0 2px; visibility: hidden; }
+  .lay:hover .more { visibility: visible; }
+  .empty { padding: 24px 14px; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; }
 
-  /* Tool sidebar (left) */
-  .tk-tools {
-    background: #1e293b; padding: 12px 8px; overflow-y: auto;
-    border-right: 1px solid #334155;
-  }
-  .tk-tools h3 {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
-    color: #94a3b8; margin: 0 0 8px; padding: 0 6px;
-  }
-  .tool-btn {
-    display: flex; align-items: center; gap: 8px;
-    width: 100%; padding: 10px 12px; margin-bottom: 4px;
-    background: #334155; color: #fff; border: 1px solid transparent;
-    border-radius: 8px; font-size: 12px; font-weight: 600;
-    cursor: pointer; text-align: left;
-  }
-  .tool-btn:hover { background: #475569; }
-  .tool-btn.active {
-    background: #0696D7; border-color: #38bdf8;
-    box-shadow: 0 0 0 2px rgba(56,189,248,0.35);
-  }
-  .tool-btn .icon { font-size: 18px; }
-  .tool-hint {
-    font-size: 10px; color: #94a3b8; padding: 4px 8px 12px;
-    line-height: 1.3;
-  }
+  /* toolbar */
+  .tk-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: #fff; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+  .tk-toolbar select { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 12px; background: #fff; font-family: inherit; max-width: 260px; }
+  .tool { width: 34px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #cbd5e1; background: #fff; border-radius: 7px; cursor: pointer; font-size: 15px; color: #334155; }
+  .tool:hover { background: #f1f5f9; }
+  .tool.on { background: #0696D7; color: #fff; border-color: #0696D7; }
+  .sep { width: 1px; height: 22px; background: #e2e8f0; margin: 0 2px; }
+  .scale-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; padding: 5px 9px; border-radius: 7px; background: #dcfce7; color: #166534; border: 1px solid #86efac; cursor: pointer; }
+  .scale-chip.unset { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+  .zoomlbl { font-size: 11px; color: #64748b; min-width: 38px; text-align: center; }
 
-  /* Scale display */
-  .scale-badge {
-    margin-top: 12px; padding: 8px; background: #334155; border-radius: 6px;
-    font-size: 11px; color: #cbd5e1;
-  }
-  .scale-badge b { color: #fff; }
-  .scale-badge.unset { background: #7c2d12; color: #fed7aa; }
-
-  /* Layer legend */
-  .layer-row {
-    display: flex; align-items: center; gap: 6px;
-    padding: 4px 6px; font-size: 11px; color: #cbd5e1;
-    cursor: pointer;
-  }
-  .layer-row:hover { background: #334155; border-radius: 4px; }
-  .layer-swatch {
-    width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
-  }
-  .layer-row.active {
-    background: #0f766e; color: #fff; border-radius: 4px;
-  }
-
-  /* Canvas viewport (center) */
-  .tk-viewport {
-    background: #0f172a; position: relative; overflow: auto;
-    display: flex; align-items: flex-start; justify-content: center;
-    padding: 20px;
-  }
-  .canvas-wrap {
-    position: relative;
-    background: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.5);
-  }
-  #pdfCanvas, #compareCanvas, #overlayCanvas {
-    display: block;
-  }
-  #compareCanvas, #overlayCanvas {
-    position: absolute; top: 0; left: 0;
-  }
-  #compareCanvas { pointer-events: none; mix-blend-mode: multiply; opacity: 0.4; }
+  .tk-viewport { flex: 1; overflow: auto; position: relative; padding: 16px; }
+  .canvas-wrap { position: relative; background: #fff; box-shadow: 0 4px 24px rgba(15,23,42,.18); margin: 0 auto; width: max-content; }
+  #pdfCanvas, #compareCanvas, #overlayCanvas { display: block; }
+  #compareCanvas, #overlayCanvas { position: absolute; top: 0; left: 0; }
+  #compareCanvas { pointer-events: none; mix-blend-mode: multiply; opacity: .4; }
   #overlayCanvas { cursor: crosshair; }
-  #overlayCanvas.panning { cursor: grab; }
-  #overlayCanvas.panning-active { cursor: grabbing; }
-  .tk-empty-viewport {
-    color: #94a3b8; text-align: center; padding: 80px 20px;
-  }
-  .tk-empty-viewport .icon { font-size: 64px; opacity: 0.4; margin-bottom: 12px; }
+  #overlayCanvas.hand { cursor: grab; }
+  #overlayCanvas.grabbing { cursor: grabbing; }
+  #overlayCanvas.sel { cursor: default; }
+  .tk-empty { color: #64748b; text-align: center; padding: 80px 20px; font-size: 13px; }
+  .tk-empty .icon { font-size: 56px; opacity: .35; margin-bottom: 10px; }
+  .tk-status { padding: 5px 12px; font-size: 11px; color: #475569; background: #fff; border-top: 1px solid #e2e8f0; display: flex; gap: 14px; align-items: center; min-height: 18px; }
+  .tk-status b { color: #0f172a; }
+  .tk-status .kbd { font-family: 'Courier New', monospace; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0 5px; font-size: 10px; }
 
-  /* Measurements list (right) */
-  .tk-sidebar-right {
-    background: #1e293b; padding: 12px; overflow-y: auto;
-    border-left: 1px solid #334155;
-  }
-  .tk-sidebar-right h3 {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
-    color: #94a3b8; margin: 0 0 8px;
-  }
-  .meas-item {
-    background: #334155; padding: 8px 10px; margin-bottom: 6px;
-    border-radius: 6px; font-size: 12px; border-left: 3px solid #64748b;
-  }
-  .meas-item.length { border-left-color: #f59e0b; }
-  .meas-item.area   { border-left-color: #10b981; }
-  .meas-item.count  { border-left-color: #8b5cf6; }
-  .meas-item.scale  { border-left-color: #dc2626; }
-  .meas-item .top {
-    display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
-  }
-  .meas-item .val {
-    font-family: 'Courier New', monospace; font-weight: 700; color: #38bdf8;
-  }
-  .meas-item .lbl {
-    font-size: 11px; color: #cbd5e1; margin-bottom: 2px;
-  }
-  .meas-item .lay {
-    font-size: 10px; color: #94a3b8;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .meas-item .lay button {
-    padding: 2px 6px; font-size: 9px; background: #7f1d1d; color: #fecaca;
-    border: none; border-radius: 3px; cursor: pointer;
-  }
+  /* right panel */
+  .prop { padding: 10px 12px; font-size: 12px; }
+  .prop .row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dashed #f1f5f9; }
+  .prop .row span:first-child { color: #64748b; }
+  .prop .row b { font-family: 'Courier New', monospace; }
+  .prop .hd { font-weight: 800; font-size: 13px; margin: 4px 0 6px; display: flex; align-items: center; gap: 8px; }
+  .prop input, .prop select { padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; font-family: inherit; width: 90px; text-align: right; }
+  .prop .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tot { padding: 10px 12px; font-size: 12px; border-top: 1px solid #e2e8f0; }
+  .tot table { width: 100%; border-collapse: collapse; }
+  .tot td { padding: 3px 0; }
+  .tot td.n { text-align: right; font-family: 'Courier New', monospace; white-space: nowrap; }
+  .tot tr.g td { color: #334155; }
+  .tot tr.total td { border-top: 2px solid #0f172a; font-weight: 800; padding-top: 6px; font-size: 13px; }
 
-  /* Prompt / help footer */
-  .tk-hint {
-    position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
-    background: rgba(15,23,42,0.95); color: #fff;
-    padding: 8px 16px; border-radius: 8px; font-size: 12px;
-    border: 1px solid #38bdf8; z-index: 100;
-    pointer-events: none; max-width: 600px;
-  }
-
-  /* Modal — reused pattern */
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,.65);
-    display: none; align-items: flex-start; justify-content: center; padding: 24px 12px;
-    z-index: 200; overflow-y: auto;
-  }
+  /* modals */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; align-items: flex-start; justify-content: center; padding: 24px 12px; z-index: 200; overflow-y: auto; }
   .modal-overlay.open { display: flex; }
-  .modal-card {
-    background: #fff; color: #1e293b;
-    border-radius: 14px; width: 100%; max-width: 640px;
-    box-shadow: 0 20px 60px rgba(0,0,0,.5); padding: 20px 22px 24px;
-  }
-  .modal-card h2 { font-size: 18px; margin: 0 0 12px; }
-  .modal-card label {
-    display: block; font-size: 12px; font-weight: 700; color: #64748b;
-    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
-  }
-  .modal-card input, .modal-card select, .modal-card textarea {
-    width: 100%; padding: 10px 12px; font-size: 14px;
-    border: 1px solid #cbd5e1; border-radius: 7px; box-sizing: border-box;
-    font-family: inherit;
-  }
-  .modal-card .field { margin-bottom: 12px; }
-  .modal-actions {
-    display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end;
-  }
-
-  .toast {
-    position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
-    background: #1e293b; color: #fff; padding: 12px 18px; border-radius: 10px;
-    font-size: 13px; font-weight: 600; z-index: 300;
-    box-shadow: 0 8px 24px rgba(0,0,0,.5);
-    opacity: 0; transition: opacity .2s; border: 1px solid #38bdf8;
-  }
+  .modal-card { background: #fff; color: #0f172a; border-radius: 14px; width: 100%; max-width: 640px; box-shadow: 0 20px 60px rgba(0,0,0,.3); padding: 20px 22px 22px; }
+  .modal-card h2 { font-size: 17px; margin: 0 0 12px; }
+  .modal-card label { display: block; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+  .modal-card input, .modal-card select, .modal-card textarea { width: 100%; padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 7px; box-sizing: border-box; font-family: inherit; background: #fff; }
+  .modal-card .field { margin-bottom: 10px; }
+  .modal-card .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-card .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 14px; justify-content: flex-end; }
+  .hint { font-size: 11px; color: #64748b; margin-top: 3px; }
+  .cat-list { border: 1px solid #e2e8f0; border-radius: 8px; max-height: 240px; overflow: auto; margin-top: 6px; }
+  .cat-row { display: grid; grid-template-columns: 1fr 50px 70px 70px; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; align-items: center; }
+  .cat-row:hover { background: #eff8fd; }
+  .cat-row .p { font-size: 10px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cat-row .n { text-align: right; font-family: 'Courier New', monospace; }
+  .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+  .swatches span { width: 22px; height: 22px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
+  .swatches span.on { border-color: #0f172a; }
+  .banner { margin: 0; padding: 10px 20px; background: #fef3c7; border-bottom: 1px solid #fcd34d; color: #78350f; font-size: 13px; }
+  .banner code { background: #fff; padding: 1px 5px; border-radius: 4px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; z-index: 700; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: 1; }
-  .toast.success { border-color: #10b981; }
-  .toast.error   { border-color: #dc2626; }
+  .toast.success { background: #059669; }
+  .toast.error { background: #dc2626; }
+  .menu { position: absolute; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 220px; z-index: 60; display: none; }
+  .menu a { display: block; padding: 9px 14px; font-size: 13px; color: #334155; text-decoration: none; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+  .menu a:hover { background: #f8fafc; }
+  .menu a.danger { color: #991b1b; }
 </style>
 </head>
 <body>
 
-<!-- Bid Project 5-tab shell (visible only when ?est=<estimate>) -->
-<div id="bpShell" style="display:none;padding:8px 16px 0;background:#0f172a;border-bottom:1px solid #1e293b">
-  <div style="font-size:11px;color:#64748b;margin-bottom:4px">
-    <a href="bid-board.html" style="color:#38bdf8;text-decoration:none;font-weight:600">Bid Board</a>
-    <span style="color:#475569">›</span>
-    <a id="bpShellCrumb" href="#" style="color:#38bdf8;text-decoration:none;font-weight:600">Project</a>
-    <span style="color:#475569">›</span>
-    <span style="color:#e2e8f0;font-weight:600">Takeoff</span>
+<div class="bp-wrap">
+  <div class="bp-crumb"><a href="bid-board.html">Bid Board</a> <span style="color:#cbd5e1">›</span> <a id="crumbProject" href="#">Project</a> <span style="color:#cbd5e1">›</span> Takeoff</div>
+  <div class="bp-title-row">
+    <div class="bp-title" id="bpTitle">Takeoff</div>
+    <span class="bp-stage" id="bpStage" style="display:none"></span>
+    <span id="tkTotalChip" style="font-size:13px;font-weight:800;color:#0f172a;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px" title="Takeoff material + labor at the estimate's labor rate">$0</span>
+    <input type="file" id="uploadInput" accept="application/pdf" multiple style="display:none">
+    <button class="btn-secondary" id="uploadBtn">📤 Upload plans</button>
+    <button class="btn-orange" id="rollupBtn">📥 Roll up to Estimate</button>
   </div>
-  <div style="display:flex;gap:0">
-    <a id="bpTabOverview"   style="padding:8px 14px;color:#94a3b8;text-decoration:none;font-size:12px;font-weight:600;border-bottom:2px solid transparent">Overview</a>
-    <a id="bpTabDocuments"  style="padding:8px 14px;color:#94a3b8;text-decoration:none;font-size:12px;font-weight:600;border-bottom:2px solid transparent">Documents</a>
-    <a id="bpTabTakeoff"    style="padding:8px 14px;color:#38bdf8;text-decoration:none;font-size:12px;font-weight:700;border-bottom:2px solid #38bdf8">Takeoff</a>
-    <a id="bpTabEstimating" style="padding:8px 14px;color:#94a3b8;text-decoration:none;font-size:12px;font-weight:600;border-bottom:2px solid transparent">Estimating</a>
-    <a id="bpTabProposal"   style="padding:8px 14px;color:#94a3b8;text-decoration:none;font-size:12px;font-weight:600;border-bottom:2px solid transparent">Proposal</a>
+  <div class="bp-tabs">
+    <a class="bp-tab" id="tabOverview" href="#">Overview</a>
+    <a class="bp-tab" id="tabDocuments" href="#">Documents</a>
+    <a class="bp-tab active" href="#" onclick="return false">Takeoff</a>
+    <a class="bp-tab" id="tabEstimating" href="#">Estimating</a>
+    <a class="bp-tab" id="tabProposal" href="#">Proposal</a>
   </div>
 </div>
-<script>
-  (function(){
-    var q = new URLSearchParams(location.search);
-    var eid = q.get('est') || q.get('id');
-    if (!eid) return;
-    var shell = document.getElementById('bpShell');
-    shell.style.display = '';
-    document.getElementById('bpShellCrumb').href    = 'bid-project.html?id=' + eid;
-    document.getElementById('bpTabOverview').href   = 'bid-project.html?id=' + eid + '#overview';
-    document.getElementById('bpTabDocuments').href  = 'bid-project.html?id=' + eid + '#documents';
-    document.getElementById('bpTabTakeoff').href    = 'takeoff.html?est=' + eid;
-    document.getElementById('bpTabEstimating').href = 'estimating.html?est=' + eid;
-    document.getElementById('bpTabProposal').href   = 'bid-project.html?id=' + eid + '#proposal';
-  })();
-</script>
+<div class="banner" id="schemaBanner" style="display:none">Takeoff layers need one database update: run <code>takeoff-v2-schema.sql</code> (app folder) in Supabase → SQL Editor, then reload this page.</div>
 
-<div class="tk-header">
-  <a href="#" class="back" id="backBtn">← Back</a>
-  <h1 id="hdrTitle">On-Screen Takeoff</h1>
-
-  <select id="drawingSelect">
-    <option value="">— No drawings yet —</option>
-  </select>
-
-  <label style="font-size:12px;color:#94a3b8">
-    Page:
-    <select id="pageSelect" style="margin-left:4px">
-      <option value="1">1</option>
-    </select>
-  </label>
-
-  <input type="file" id="uploadInput" accept="application/pdf" style="display:none">
-  <button class="btn-primary" id="uploadBtn">📤 Upload PDF</button>
-
-  <label style="font-size:11px;color:#94a3b8;margin-left:12px">
-    Compare with:
-    <select id="compareSelect" style="margin-left:4px">
-      <option value="">— none —</option>
-    </select>
-  </label>
-  <label id="compareOpacityWrap" style="font-size:11px;color:#94a3b8;display:none">
-    Opacity:
-    <input type="range" id="compareOpacity" min="10" max="90" value="40" style="width:80px;vertical-align:middle">
-    <span id="compareOpacityLabel" style="min-width:32px;display:inline-block">40%</span>
-  </label>
-
-  <div class="grow"></div>
-
-  <button class="btn-secondary" id="zoomOutBtn" title="Zoom out">🔍−</button>
-  <span id="zoomLabel" style="color:#94a3b8;font-size:11px;min-width:44px;text-align:center">100%</span>
-  <button class="btn-secondary" id="zoomInBtn"  title="Zoom in">🔍+</button>
-  <button class="btn-secondary" id="zoomFitBtn" title="Fit to width">↔</button>
-
-  <button class="btn-secondary" id="exportBtn" title="Export marked-up PDF">🖼️ Export PDF</button>
-  <button class="btn-secondary" id="analyzeBtn" title="AI reads this drawing page and extracts equipment / scope / RFIs">🤖 Analyze page</button>
-  <button class="btn-secondary" id="undoBtn" title="Undo last measurement">↶ Undo</button>
-  <button class="btn-success"   id="rollupBtn">📥 Roll up to Estimate</button>
-</div>
-
-<div class="tk-main">
-  <!-- ─── TOOL SIDEBAR ─── -->
-  <div class="tk-tools">
-    <h3>Drawing Scale</h3>
-    <select id="scalePreset" style="width:100%;padding:8px 10px;background:#1e293b;color:#fff;border:1px solid #475569;border-radius:6px;font-size:12px;font-weight:600">
-      <option value="">— Choose scale —</option>
-    </select>
-    <div class="scale-badge unset" id="scaleBadge" style="margin-top:6px">Scale: <b>not set</b></div>
-    <button class="tool-btn" data-tool="scale" style="margin-top:6px">
-      <span class="icon">📏</span> Custom (2 clicks)
-    </button>
-    <div class="tool-hint">Prefer picking a common scale above. Only use custom on blown-up detail with no standard scale.</div>
-
-    <h3 style="margin-top:14px">Tools</h3>
-    <button class="tool-btn" data-tool="length">
-      <span class="icon">📐</span> Length
-    </button>
-    <div class="tool-hint">Click points along a run. <b>Double-click</b> or press <b>Enter</b> to finish.</div>
-
-    <button class="tool-btn" data-tool="area">
-      <span class="icon">🟦</span> Area
-    </button>
-    <div class="tool-hint">Click vertices of a polygon. Double-click to close & compute sq ft.</div>
-
-    <button class="tool-btn" data-tool="count">
-      <span class="icon">🔢</span> Count
-    </button>
-    <div class="tool-hint">Click each item to add a counter mark.</div>
-
-    <h3 style="margin-top:16px">Layer (category)</h3>
-    <div id="layerLegend"></div>
-  </div>
-
-  <!-- ─── PDF VIEWPORT ─── -->
-  <div class="tk-viewport" id="viewport">
-    <div class="tk-empty-viewport" id="emptyState">
-      <div class="icon">📄</div>
-      <p>No drawing loaded.<br>Upload a PDF to start marking a takeoff.</p>
+<div class="tk-work" id="work">
+  <!-- ─── LEFT: takeoff layers ─── -->
+  <aside class="tk-left">
+    <div class="panel-h">Takeoffs <span class="cnt" id="layerCount">(0)</span><span class="grow"></span>
+      <button class="btn-primary" id="newLayerBtn" style="padding:5px 9px">+ Layer</button>
+      <div style="position:relative"><button class="btn-ghost" id="layerMenuBtn" title="More">⋯</button>
+        <div class="menu" id="layerMenu" style="right:0;top:100%;margin-top:4px">
+          <a data-act="standard">⭐ Add NWAC standard layers</a>
+          <a data-act="auto">⚡ Auto-measure ducts &amp; pipes on this page</a>
+          <a data-act="group">📁 New group</a>
+          <a data-act="showall">👁 Show all layers</a>
+        </div></div>
     </div>
-    <div class="canvas-wrap" id="canvasWrap" style="display:none">
-      <canvas id="pdfCanvas"></canvas>
-      <canvas id="compareCanvas"></canvas>
-      <canvas id="overlayCanvas"></canvas>
-    </div>
-  </div>
+    <div class="search"><input type="search" id="layerSearch" placeholder="Search takeoffs"></div>
+    <div id="layerTree"><div class="empty">No takeoff layers yet.<br>Add a layer (a catalog item: duct size, pipe size, diffuser…) and start clicking on the plan.</div></div>
+  </aside>
 
-  <!-- ─── MEASUREMENTS LIST ─── -->
-  <div class="tk-sidebar-right">
-    <h3>Measurements on this page</h3>
-    <div id="measList"></div>
-    <div id="measTotals" style="margin-top:16px;padding:10px;background:#0f172a;border-radius:6px;font-size:12px;line-height:1.6"></div>
-  </div>
+  <!-- ─── CENTER: plan viewer ─── -->
+  <section class="tk-center">
+    <div class="tk-toolbar">
+      <button class="tool" id="prevPlan" title="Previous plan (PageUp)">◀</button>
+      <select id="planSelect"><option value="">— No plans yet —</option></select>
+      <button class="tool" id="nextPlan" title="Next plan (PageDown)">▶</button>
+      <span class="scale-chip unset" id="scaleChip" title="Drawing scale on this plan — click to change">Scale: not set</span>
+      <select id="scalePreset" style="max-width:130px" title="Pick the sheet's scale"><option value="">Set scale…</option></select>
+      <span class="sep"></span>
+      <button class="tool" data-tool="select"  title="Select / move marks (V)">↖</button>
+      <button class="tool" data-tool="pan"     title="Pan (H) — or hold Space / Alt and drag">✋</button>
+      <button class="tool" data-tool="count"   title="Count (C)">●</button>
+      <button class="tool" data-tool="linear"  title="Linear (L) — click points, Enter or double-click to finish, D adds a drop">📐</button>
+      <button class="tool" data-tool="area"    title="Area (A)">▰</button>
+      <button class="tool" data-tool="measure" title="Measure only, nothing saved (M)">📏</button>
+      <button class="tool" data-tool="note"    title="Note / annotation (N)">💬</button>
+      <span class="sep"></span>
+      <button class="tool" id="zoomOut" title="Zoom out (−)">−</button>
+      <span class="zoomlbl" id="zoomLabel">100%</span>
+      <button class="tool" id="zoomIn" title="Zoom in (+)">+</button>
+      <button class="tool" id="zoomFit" title="Fit width (0)">⤢</button>
+      <span class="sep"></span>
+      <button class="tool" id="undoBtn" title="Undo (Ctrl+Z)">↶</button>
+      <label style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:4px">Compare <select id="compareSelect" style="max-width:140px"><option value="">none</option></select></label>
+      <span class="grow" style="flex:1"></span>
+      <button class="btn-ghost" id="analyzeBtn" title="Claude reads this page: equipment schedule, scope notes, RFIs">🤖 Analyze</button>
+      <button class="btn-ghost" id="exportBtn" title="Export this page with the marks as PDF">🖨 Export</button>
+    </div>
+    <div class="tk-viewport" id="viewport">
+      <div class="tk-empty" id="emptyState"><div class="icon">📐</div>No plans loaded.<br>Upload the drawing set (PDF) to start the takeoff.</div>
+      <div class="canvas-wrap" id="canvasWrap" style="display:none">
+        <canvas id="pdfCanvas"></canvas><canvas id="compareCanvas"></canvas><canvas id="overlayCanvas"></canvas>
+      </div>
+    </div>
+    <div class="tk-status" id="status"><span id="statusHint">Pick a layer on the left, then click on the plan.</span><span class="grow" style="flex:1"></span><span id="statusPage"></span></div>
+  </section>
+
+  <!-- ─── RIGHT: properties + totals ─── -->
+  <aside class="tk-right">
+    <div class="panel-h">Properties</div>
+    <div class="prop" id="propPanel"><div class="empty">Select a layer or a mark.</div></div>
+    <div class="panel-h">Estimate totals</div>
+    <div class="tot" id="totals"></div>
+  </aside>
 </div>
 
-<div class="tk-hint" id="tkHint" style="display:none"></div>
 <div class="toast" id="toast"></div>
 
-<!-- ═══════════ Rollup modal ═══════════ -->
-<div class="modal-overlay" id="rollupModal">
-  <div class="modal-card">
-    <h2>Roll up measurements into estimate line items</h2>
-    <p style="font-size:12px;color:#64748b;margin:0 0 12px">
-      Each layer's measurements will be summed and inserted as a single line item in the estimate.
-      You can still adjust each line afterward.
-    </p>
-    <div id="rollupPreview" style="max-height:340px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px"></div>
-    <div class="field" style="margin-top:12px">
-      <label><input type="checkbox" id="rollupReplace" checked> Replace existing lines from prior takeoff roll-ups</label>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-secondary" id="rollupCancel">Cancel</button>
-      <button class="btn-primary"   id="rollupApply">Insert into estimate</button>
-    </div>
+<!-- ═══ Layer modal ═══ -->
+<div class="modal-overlay" id="layerModal"><div class="modal-card" style="max-width:720px">
+  <h2 id="layerTitle">New takeoff layer</h2>
+  <div class="field"><label>Cost catalog</label>
+    <input type="search" id="catSearch" placeholder="Search NWAC catalog — 12x8, copper 1-1/4, diffuser, shop drawings…">
+    <div class="cat-list" id="catList" style="display:none"></div>
+    <div class="hint" id="catHint">Pick an item to fill the name, unit, cost and labor from the Procore catalog (or type your own below).</div>
   </div>
-</div>
+  <div class="row">
+    <div class="field"><label>Layer name *</label><input type="text" id="lName" placeholder="e.g. 12x8 rectangular with 1&quot; ACL"></div>
+    <div class="field"><label>Group</label><input type="text" id="lGroup" list="groupList" placeholder="Default Group"><datalist id="groupList"></datalist></div>
+  </div>
+  <div class="row3">
+    <div class="field"><label>Takeoff type</label><select id="lType"><option value="count">Count (each)</option><option value="linear">Linear (ft)</option><option value="area">Area (sq ft)</option></select></div>
+    <div class="field"><label>Estimate category</label><select id="lCat">
+      <option value="ductwork">Ductwork</option><option value="pipework">Pipework</option><option value="air_outlets">Air Outlets &amp; devices</option>
+      <option value="equipment">Equipment</option><option value="equipment_install">Equipment Install</option><option value="services">Services</option><option value="disconnects">Disconnects / demo</option></select></div>
+    <div class="field"><label>Crew (workload)</label><select id="lCrew"><option value="sm">Sheet metal</option><option value="pipe">Pipe</option><option value="startup">Start-up</option><option value="other">Other</option><option value="none">None</option></select></div>
+  </div>
+  <div class="row3">
+    <div class="field"><label>Unit material $ <span id="lUnitLbl">/ ea</span></label><input type="number" step="0.001" id="lCost" value="0"></div>
+    <div class="field"><label>Unit labor (minutes)</label><input type="number" step="0.1" id="lLabMin" value="0"><div class="hint" id="lLabHint">= 0 h</div></div>
+    <div class="field"><label>Waste %</label><input type="number" step="0.1" id="lWaste" value="0"></div>
+  </div>
+  <div class="row3">
+    <div class="field"><label>Multiplier</label><input type="number" step="0.01" id="lMult" value="1"><div class="hint">count: each mark = N · linear: pipes per run</div></div>
+    <div class="field"><label>Drop length (ft)</label><input type="number" step="0.1" id="lDrop" value="0"><div class="hint">added per drop point (press D while drawing)</div></div>
+    <div class="field"><label>Labor factor</label><input type="number" step="0.01" id="lLabF" value="1"><div class="hint">× labor hours (site conditions)</div></div>
+  </div>
+  <div class="row3">
+    <div class="field"><label>Slope rise : run</label><div style="display:flex;gap:6px;align-items:center"><input type="number" step="0.1" id="lRise" value="0"><span>:</span><input type="number" step="0.1" id="lRun" value="12"></div></div>
+    <div class="field"><label>Extra quantity (not on plans)</label><input type="number" step="0.01" id="lExtra" value="0"></div>
+    <div class="field"><label>Line width</label><input type="number" step="1" min="1" max="12" id="lWidth" value="3"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label>Color</label><div class="swatches" id="lColors"></div><input type="hidden" id="lColor" value="#0696D7"></div>
+    <div class="field"><label>Symbol (count)</label><select id="lSymbol"><option value="circle">● Circle</option><option value="square">■ Square</option><option value="diamond">◆ Diamond</option><option value="triangle">▲ Triangle</option><option value="x">✕ Cross</option></select></div>
+  </div>
+  <div class="field"><label>Notes</label><input type="text" id="lNotes"></div>
+  <div class="modal-actions">
+    <button class="btn-danger" id="lDelete" style="margin-right:auto;display:none">🗑 Delete layer</button>
+    <button class="btn-ghost" id="lCancel">Cancel</button>
+    <button class="btn-primary" id="lSave">Save layer</button>
+  </div>
+</div></div>
 
-<!-- ═══════════ Edit measurement modal ═══════════ -->
-<div class="modal-overlay" id="editMeasModal">
-  <div class="modal-card" style="max-width:460px">
-    <h2>Edit measurement</h2>
-    <div id="editMeasSummary" style="background:#f1f5f9;padding:10px;border-radius:6px;font-size:12px;margin-bottom:12px;color:#334155"></div>
-    <div class="field">
-      <label>Label (optional)</label>
-      <input type="text" id="editMeasLabel" placeholder="e.g. Supply duct 12x8">
-    </div>
-    <div class="field">
-      <label>Layer / category</label>
-      <select id="editMeasLayer"></select>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-danger" id="editMeasDelete" style="margin-right:auto">🗑 Delete</button>
-      <button class="btn-secondary" id="editMeasCancel">Cancel</button>
-      <button class="btn-primary"   id="editMeasSave">Save</button>
-    </div>
-  </div>
-</div>
+<!-- ═══ Scale (custom, 2 clicks) ═══ -->
+<div class="modal-overlay" id="scaleModal"><div class="modal-card" style="max-width:420px">
+  <h2>Set drawing scale</h2>
+  <p style="font-size:13px;color:#64748b;margin:0 0 12px">The line you drew — how long is it in feet? (e.g. a dimension shown as 10'-0")</p>
+  <div class="field"><label>Real-world distance (feet)</label><input type="number" id="scaleFeet" step="0.01" placeholder="10.0"></div>
+  <div class="modal-actions"><button class="btn-ghost" id="scaleCancel">Cancel</button><button class="btn-primary" id="scaleSet">Set scale</button></div>
+</div></div>
 
-<!-- ═══════════ AI Analyze modal ═══════════ -->
-<div class="modal-overlay" id="analyzeModal">
-  <div class="modal-card" style="max-width:720px;max-height:88vh;overflow-y:auto">
-    <h2>🤖 Analyze this page</h2>
-    <p style="font-size:12px;color:#64748b;margin:0 0 12px">
-      Claude reads the current drawing page and pulls out structured data.
-      Choose what you want. One page → one call. Rough cost: $0.05–$0.15 per run.
-    </p>
-    <div class="field">
-      <label>What to extract</label>
-      <select id="analyzePromptType">
-        <option value="equipment">Equipment schedule + air outlet counts</option>
-        <option value="scope">Scope items from General/Keyed Notes (gap-hunter)</option>
-        <option value="rfi">Draft RFIs for real ambiguities</option>
-      </select>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-secondary" id="analyzeCancel">Cancel</button>
-      <button class="btn-primary"   id="analyzeRun">Run analysis</button>
-    </div>
-    <div id="analyzeStatus" style="margin-top:14px;font-size:12px;color:#64748b;display:none"></div>
-    <div id="analyzeResults" style="margin-top:14px;display:none"></div>
-  </div>
-</div>
+<!-- ═══ Note ═══ -->
+<div class="modal-overlay" id="noteModal"><div class="modal-card" style="max-width:420px">
+  <h2>Note</h2>
+  <div class="field"><label>Text</label><textarea id="noteText" rows="3"></textarea></div>
+  <div class="modal-actions"><button class="btn-ghost" id="noteCancel">Cancel</button><button class="btn-primary" id="noteSave">Add note</button></div>
+</div></div>
 
-<!-- ═══════════ Scale prompt modal ═══════════ -->
-<div class="modal-overlay" id="scaleModal">
-  <div class="modal-card" style="max-width:420px">
-    <h2>Set drawing scale</h2>
-    <p style="font-size:13px;color:#64748b;margin:0 0 12px">
-      You drew a line — what does it represent in feet? (e.g. a wall shown as 10'-0")
-    </p>
-    <div class="field">
-      <label>Real-world distance (feet)</label>
-      <input type="number" id="scaleFeet" step="0.01" placeholder="10.0" autofocus>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-secondary" id="scaleCancel">Cancel</button>
-      <button class="btn-primary"   id="scaleSet">Set scale</button>
-    </div>
-  </div>
-</div>
+<!-- ═══ Roll-up ═══ -->
+<div class="modal-overlay" id="rollupModal"><div class="modal-card" style="max-width:820px">
+  <h2>Roll up takeoff into estimate line items</h2>
+  <p style="font-size:12px;color:#64748b;margin:0 0 10px">One estimate line per layer, priced with the layer's unit cost and labor (waste and labor factor applied). Lines created by an earlier roll-up are replaced.</p>
+  <div id="rollupPreview" style="max-height:380px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px"></div>
+  <div class="modal-actions"><button class="btn-ghost" id="rollupCancel">Cancel</button><button class="btn-primary" id="rollupApply">Insert into estimate</button></div>
+</div></div>
+
+<!-- ═══ AI Analyze ═══ -->
+<div class="modal-overlay" id="analyzeModal"><div class="modal-card" style="max-width:720px;max-height:88vh;overflow-y:auto">
+  <h2>🤖 Analyze this page</h2>
+  <p style="font-size:12px;color:#64748b;margin:0 0 12px">Claude reads the current page and pulls out structured data. One page → one call, $0.05–0.15.</p>
+  <div class="field"><label>What to extract</label><select id="analyzePromptType">
+    <option value="equipment">Equipment schedule + air outlet counts</option><option value="scope">Scope items from General / Keyed Notes</option><option value="rfi">Draft RFIs for real ambiguities</option></select></div>
+  <div class="modal-actions"><button class="btn-ghost" id="analyzeCancel">Close</button><button class="btn-primary" id="analyzeRun">Run analysis</button></div>
+  <div id="analyzeStatus" style="margin-top:14px;font-size:12px;color:#64748b;display:none"></div>
+  <div id="analyzeResults" style="margin-top:14px;display:none"></div>
+</div></div>
 
 <script>
 requireAuth().catch(function(){});
 (function() {
   'use strict';
-
   var MGMT_ROLES = ['admin','manager','lead_pm','project_manager','apm'];
+  var CATS = { disconnects: 'Disconnects', equipment: 'Equipment', ductwork: 'Ductwork', pipework: 'Pipework', equipment_install: 'Equipment Install', air_outlets: 'Air Outlets', services: 'Services' };
+  var CAT_CREW = { ductwork: 'sm', pipework: 'pipe', air_outlets: 'sm', equipment_install: 'sm', disconnects: 'sm', equipment: 'none', services: 'none' };
+  var COLORS = ['#0696D7','#f59e0b','#10b981','#8b5cf6','#ec4899','#ef4444','#14b8a6','#f97316','#6366f1','#84cc16','#0f172a','#a16207'];
+  // scale presets: PDF points per foot = paper inches per foot × 72
+  var SCALE_PRESETS = [];
+  [['1/16"',1/16],['3/32"',3/32],['1/8"',1/8],['3/16"',3/16],['1/4"',1/4],['3/8"',3/8],['1/2"',1/2],['3/4"',3/4],['1"',1],['1 1/2"',1.5],['3"',3]].forEach(function(p) { SCALE_PRESETS.push({ label: p[0] + ' = 1\'', ppf: p[1] * 72, group: 'Architectural' }); });
+  [10,20,30,40,50,60,100].forEach(function(n) { SCALE_PRESETS.push({ label: '1" = ' + n + '\'', ppf: 72 / n, group: 'Engineering' }); });
+  var SCALE_RE = /(\d+(?:\s*\/\s*\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0?\s*["”]?/g;
+  var SHEET_RE = /\b([A-Z]{1,2}-?\d{3}(?:\.\d{1,2})?)\b/g;
 
-  // Common architectural + engineering drawing scales.
-  // Formula: PDF points/foot = (inches_on_paper) × 72 pt/inch
-  //          because 1 PDF pt = 1/72 inch and points on canvas are stored in PDF native coords.
-  var SCALE_PRESETS = [
-    // ── Architectural (paper" = 1 foot) ──
-    { group: 'Architectural', label: '1/128" = 1\'',  ptsPerFoot: (1/128) * 72 },
-    { group: 'Architectural', label: '1/64" = 1\'',   ptsPerFoot: (1/64)  * 72 },
-    { group: 'Architectural', label: '1/32" = 1\'',   ptsPerFoot: (1/32)  * 72 },
-    { group: 'Architectural', label: '1/16" = 1\'',   ptsPerFoot: (1/16)  * 72 },
-    { group: 'Architectural', label: '3/32" = 1\'',   ptsPerFoot: (3/32)  * 72 },
-    { group: 'Architectural', label: '1/8" = 1\'',    ptsPerFoot: (1/8)   * 72 },
-    { group: 'Architectural', label: '3/16" = 1\'',   ptsPerFoot: (3/16)  * 72 },
-    { group: 'Architectural', label: '1/4" = 1\'',    ptsPerFoot: (1/4)   * 72 },
-    { group: 'Architectural', label: '3/8" = 1\'',    ptsPerFoot: (3/8)   * 72 },
-    { group: 'Architectural', label: '1/2" = 1\'',    ptsPerFoot: (1/2)   * 72 },
-    { group: 'Architectural', label: '3/4" = 1\'',    ptsPerFoot: (3/4)   * 72 },
-    { group: 'Architectural', label: '1" = 1\'',      ptsPerFoot: 72 },
-    { group: 'Architectural', label: '1 1/2" = 1\'',  ptsPerFoot: 1.5 * 72 },
-    { group: 'Architectural', label: '3" = 1\'',      ptsPerFoot: 3   * 72 },
-    // ── Engineering (1 inch = N feet) ──
-    { group: 'Engineering',   label: '1" = 10\'',     ptsPerFoot: 72 / 10 },
-    { group: 'Engineering',   label: '1" = 20\'',     ptsPerFoot: 72 / 20 },
-    { group: 'Engineering',   label: '1" = 30\'',     ptsPerFoot: 72 / 30 },
-    { group: 'Engineering',   label: '1" = 40\'',     ptsPerFoot: 72 / 40 },
-    { group: 'Engineering',   label: '1" = 50\'',     ptsPerFoot: 72 / 50 },
-    { group: 'Engineering',   label: '1" = 60\'',     ptsPerFoot: 72 / 60 },
-    { group: 'Engineering',   label: '1" = 100\'',    ptsPerFoot: 72 / 100 }
-  ];
+  var params = new URLSearchParams(location.search);
+  var estimateId = params.get('est') || params.get('id');
+  if (!estimateId) alert('Missing ?est=<estimate id>');
 
-  var LAYERS = [
-    { key: 'ductwork',          label: 'Ductwork',          color: '#f59e0b' },
-    { key: 'pipework',          label: 'Pipework',          color: '#0696D7' },
-    { key: 'air_outlets',       label: 'Air Outlets',       color: '#10b981' },
-    { key: 'equipment',         label: 'Equipment',         color: '#8b5cf6' },
-    { key: 'equipment_install', label: 'Equipment Install', color: '#ec4899' },
-    { key: 'services',          label: 'Services',          color: '#64748b' },
-    { key: 'disconnects',       label: 'Disconnects',       color: '#dc2626' }
-  ];
-
-  var params = new URLSearchParams(window.location.search);
-  var estimateId = params.get('est');
-  if (!estimateId) { alert('Missing ?est=<id> in URL'); }
-
-  var currentUserId = null, canEdit = false;
-  var currentEstimate = null;
-  var drawings = [], currentDrawing = null;
-  var currentPage = 1;
-  var pdfDoc = null, pdfPage = null;
-  var pdfCanvas, overlayCanvas, pdfCtx, overlayCtx;
-  var currentTool = null;   // 'scale' | 'length' | 'area' | 'count'
-  var currentLayer = 'ductwork';
-  var measurements = [];    // in-memory copy for current drawing+page
-  var scalePxPerFoot = null;
-  var renderScale = 1;      // PDF.js render scale (viewport-to-css)
-  var zoomFactor = 1;       // user-controlled zoom multiplier applied over fit-to-width base
-  var layerVisibility = {}; // { layerKey: boolean }  — all visible by default
-  var compareDrawingId = null;   // id of the drawing overlaid on top of the current one
-  var compareDoc = null;
-  var compareCanvas = null, compareCtx = null;
-  var panState = null;      // { startX, startY, scrollLeft, scrollTop } while dragging with Alt / middle-button
-
-  // In-progress drawing state
-  var draftPoints = [];     // array of [x, y] in PDF coords for the tool currently in use
+  var me = { id: null, canEdit: false }, est = null, schemaOk = true, catalogOk = true;
+  var drawings = [], plans = [], planIdx = -1, layers = [], groupsOpen = {}, allMeas = [], meas = [];
+  var pdfDocs = {}, pdfPage = null, pdfCanvas, overlayCanvas, ctx, renderScale = 1, zoom = 1, viewport1 = null;
+  var tool = 'select', activeLayerId = null, selectedId = null, draft = [], draftDrops = [], hover = null, measureLine = null, panState = null, dragState = null, undoStack = [];
+  var scalePpf = null, scaleLabel = null, compareDoc = null, layerFilter = '', laborRate = 60;
+  var $ = function(id) { return document.getElementById(id); };
 
   init();
-
   async function init() {
     try {
-      var u = await supabaseClient.auth.getUser();
-      if (u && u.data && u.data.user) currentUserId = u.data.user.id;
-      var prof = await supabaseClient.from('profiles').select('role').eq('id', currentUserId).maybeSingle();
-      if (prof.data) canEdit = MGMT_ROLES.indexOf(prof.data.role) >= 0;
-    } catch(e){ console.warn(e); }
-
+      var u = await supabaseClient.auth.getUser(); me.id = u.data.user.id;
+      var p = await supabaseClient.from('profiles').select('role').eq('id', me.id).maybeSingle();
+      me.canEdit = !!(p.data && MGMT_ROLES.indexOf(p.data.role) >= 0);
+    } catch (e) { console.warn(e); }
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-    document.getElementById('backBtn').setAttribute('href', 'estimating.html?est=' + estimateId);
-
-    // Load estimate name
-    var est = await supabaseClient.from('estimates').select('id, name, quote_number').eq('id', estimateId).maybeSingle();
-    if (est.data) {
-      currentEstimate = est.data;
-      document.getElementById('hdrTitle').textContent =
-        (est.data.quote_number ? '#' + est.data.quote_number + ' · ' : '') + est.data.name;
-    }
-
-    populateScalePresets();
-    renderLayerLegend();
-    bindEvents();
+    ['tabOverview', 'tabDocuments', 'tabEstimating', 'tabProposal', 'crumbProject'].forEach(function(id) {
+      $(id).href = id === 'tabEstimating' ? 'estimating.html?est=' + estimateId : id === 'tabDocuments' ? 'project-files.html?estimate=' + estimateId :
+        'bid-project.html?id=' + estimateId + (id === 'tabProposal' ? '#proposal' : '#overview');
+    });
+    var e = await supabaseClient.from('estimates').select('id,name,quote_number,status,labor_rate,is_ofci,overhead_pct,miscellaneous_pct,tax_rate,client_name').eq('id', estimateId).maybeSingle();
+    if (e.data) { est = e.data; laborRate = Number(est.labor_rate || 60); $('bpTitle').textContent = (est.quote_number ? '#' + est.quote_number + ' · ' : '') + est.name; $('crumbProject').textContent = est.name;
+      $('bpStage').textContent = est.status || 'draft'; $('bpStage').style.display = ''; document.title = 'Takeoff — ' + est.name; }
+    fillScalePresets(); buildColorSwatches(); bindEvents(); fitHeight();
+    await loadLayers();
     await loadDrawings();
+    renderAll();
   }
+  function fitHeight() { var w = $('work'); w.style.height = Math.max(400, window.innerHeight - w.getBoundingClientRect().top) + 'px'; }
+  window.addEventListener('resize', function() { fitHeight(); if (pdfPage) renderPage(); });
 
-  function populateScalePresets() {
-    var sel = document.getElementById('scalePreset');
-    // Group by architectural / engineering
-    var groups = {};
-    SCALE_PRESETS.forEach(function(p, idx) {
-      (groups[p.group] = groups[p.group] || []).push({ idx: idx, p: p });
-    });
-    Object.keys(groups).forEach(function(gName) {
-      var og = document.createElement('optgroup');
-      og.label = gName;
-      groups[gName].forEach(function(item) {
-        var o = document.createElement('option');
-        o.value = String(item.idx);
-        o.textContent = item.p.label;
-        og.appendChild(o);
+  // ═══════════════════════ layers ═══════════════════════
+  async function loadLayers() {
+    var r = await supabaseClient.from('estimate_takeoff_layers').select('*').eq('estimate_id', estimateId).order('sort_order').order('created_at');
+    if (r.error) { if (/estimate_takeoff_layers|42P01|does not exist/i.test(r.error.message)) { schemaOk = false; $('schemaBanner').style.display = ''; } layers = []; return; }
+    layers = r.data || [];
+    layers.forEach(function(l) { if (groupsOpen[l.group_name] === undefined) groupsOpen[l.group_name] = true; });
+  }
+  function layerById(id) { return layers.find(function(l) { return l.id === id; }); }
+  function typeUnit(t) { return t === 'linear' ? 'ft' : t === 'area' ? 'sqft' : 'ea'; }
+  // quantity of one mark for its layer (after multiplier, slope, drops, deduct)
+  function markQty(m, l) {
+    if (!l || m.tool_type === 'scale' || m.tool_type === 'note' || m.tool_type === 'measure') return 0;
+    var v = Number(m.computed_value || 0), sgn = m.deduct ? -1 : 1;
+    if (l.takeoff_type === 'linear' || m.tool_type === 'length') {
+      var rise = Number(l.rise || 0), run = Number(l.run || 12), slope = (rise && run) ? Math.sqrt(1 + (rise / run) * (rise / run)) : 1;
+      v = v * slope + Number(m.drops || 0) * Number(l.drop_length_ft || 0);
+      return sgn * v * Number(l.multiplier || 1);
+    }
+    if (l.takeoff_type === 'count' || m.tool_type === 'count') return sgn * v * Number(l.multiplier || 1);
+    return sgn * v;
+  }
+  function layerTotals(l) {
+    var qty = Number(l.extra_count || 0), marks = 0, pages = {};
+    allMeas.forEach(function(m) { if (m.layer_id !== l.id) return; qty += markQty(m, l); marks++; pages[m.drawing_id + ':' + m.page_number] = 1; });
+    var matQty = qty * (1 + Number(l.waste_pct || 0) / 100);
+    var mat = matQty * Number(l.unit_material_cost || 0), hrs = qty * Number(l.unit_labor_hours || 0) * Number(l.labor_factor || 1);
+    return { qty: qty, marks: marks, pages: Object.keys(pages).length, mat: mat, hrs: hrs, labor: hrs * laborRate, total: mat + hrs * laborRate };
+  }
+  function pageQty(l) { var q = 0; meas.forEach(function(m) { if (m.layer_id === l.id) q += markQty(m, l); }); return q; }
+  function fmtQty(q, unit) { return (unit === 'ea' ? Math.round(q * 100) / 100 : (Math.round(q * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })) + ' ' + (unit === 'sqft' ? 'sf' : unit); }
+  function fmtMoney(v) { return '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+
+  function renderLayerTree() {
+    var host = $('layerTree'), groups = {}, order = [];
+    var f = layerFilter.toLowerCase();
+    layers.forEach(function(l) { if (f && l.name.toLowerCase().indexOf(f) < 0 && l.group_name.toLowerCase().indexOf(f) < 0) return; if (!groups[l.group_name]) { groups[l.group_name] = []; order.push(l.group_name); } groups[l.group_name].push(l); });
+    // legacy marks without a layer show under their category
+    var legacy = {};
+    allMeas.forEach(function(m) { if (!m.layer_id && m.layer_category && m.tool_type !== 'scale') legacy[m.layer_category] = (legacy[m.layer_category] || 0) + 1; });
+    $('layerCount').textContent = '(' + layers.length + ')';
+    if (!layers.length && !Object.keys(legacy).length) { host.innerHTML = '<div class="empty">No takeoff layers yet.<br>Add a layer (a catalog item: duct size, pipe size, diffuser…) and start clicking on the plan.<br><br><button class="btn-secondary" id="stdBtn">⭐ Add NWAC standard layers</button></div>';
+      var sb = $('stdBtn'); if (sb) sb.onclick = addStandardLayers; return; }
+    order.sort(function(a, b) { return (a === 'Default Group' ? -1 : b === 'Default Group' ? 1 : a.localeCompare(b)); });
+    var html = '';
+    order.forEach(function(g) {
+      var ls = groups[g], open = groupsOpen[g] !== false, gt = { mat: 0, labor: 0 }, allVis = ls.every(function(l) { return l.is_visible !== false; });
+      ls.forEach(function(l) { var t = layerTotals(l); gt.mat += t.mat; gt.labor += t.labor; });
+      html += '<div class="grp"><div class="grp-h" data-grp="' + esc(g) + '"><span class="chev">' + (open ? '▾' : '▸') + '</span><span class="eye' + (allVis ? '' : ' off') + '" data-geye="' + esc(g) + '" title="Show / hide group">' + (allVis ? '👁' : '⊘') + '</span><span>' + esc(g) + '</span><span class="cnt" style="font-weight:600">' + ls.length + '</span><span class="sum">' + fmtMoney(gt.mat + gt.labor) + '</span></div>';
+      if (open) ls.forEach(function(l) {
+        var t = layerTotals(l), unit = typeUnit(l.takeoff_type), pq = pdfPage ? pageQty(l) : 0;
+        html += '<div class="lay' + (l.id === activeLayerId ? ' active' : '') + '" data-lay="' + l.id + '" style="' + (l.is_visible === false ? 'opacity:.45' : '') + '">' +
+          '<span class="eye' + (l.is_visible === false ? ' off' : '') + '" data-eye="' + l.id + '">' + (l.is_visible === false ? '⊘' : '👁') + '</span>' +
+          '<span class="sw ' + l.takeoff_type + '" style="background:' + l.color + '"></span><span class="nm" title="' + esc(l.name) + '">' + esc(l.name) + '</span>' +
+          '<span class="qty" title="Total on all plans' + (pdfPage ? ' · this plan: ' + fmtQty(pq, unit) : '') + '">' + fmtQty(t.qty, unit) + (pdfPage && pq ? ' <small>(' + fmtQty(pq, unit).split(' ')[0] + ')</small>' : '') + '</span>' +
+          '<span class="more" data-edit="' + l.id + '" title="Edit layer">✎</span></div>';
       });
-      sel.appendChild(og);
+      html += '</div>';
     });
+    Object.keys(legacy).forEach(function(c) { html += '<div class="grp"><div class="lay" data-lay="legacy:' + c + '"><span class="sw" style="background:#94a3b8"></span><span class="nm">Legacy marks — ' + CATS[c] + '</span><span class="qty">' + legacy[c] + '</span></div></div>'; });
+    host.innerHTML = html;
+    host.querySelectorAll('[data-grp]').forEach(function(el) { el.addEventListener('click', function(e) { if (e.target.hasAttribute('data-geye')) return; var g = el.getAttribute('data-grp'); groupsOpen[g] = groupsOpen[g] === false; renderLayerTree(); }); });
+    host.querySelectorAll('[data-geye]').forEach(function(el) { el.addEventListener('click', async function(e) { e.stopPropagation(); var g = el.getAttribute('data-geye'), ls = layers.filter(function(l) { return l.group_name === g; }), vis = !ls.every(function(l) { return l.is_visible !== false; }); ls.forEach(function(l) { l.is_visible = vis; }); renderLayerTree(); redraw(); await supabaseClient.from('estimate_takeoff_layers').update({ is_visible: vis }).in('id', ls.map(function(l) { return l.id; })); }); });
+    host.querySelectorAll('[data-eye]').forEach(function(el) { el.addEventListener('click', async function(e) { e.stopPropagation(); var l = layerById(el.getAttribute('data-eye')); l.is_visible = l.is_visible === false; renderLayerTree(); redraw(); await supabaseClient.from('estimate_takeoff_layers').update({ is_visible: l.is_visible }).eq('id', l.id); }); });
+    host.querySelectorAll('[data-edit]').forEach(function(el) { el.addEventListener('click', function(e) { e.stopPropagation(); openLayerModal(el.getAttribute('data-edit')); }); });
+    host.querySelectorAll('[data-lay]').forEach(function(el) { el.addEventListener('click', function() { selectLayer(el.getAttribute('data-lay')); }); el.addEventListener('dblclick', function() { if (el.getAttribute('data-lay').indexOf('legacy:') < 0) openLayerModal(el.getAttribute('data-lay')); }); });
+  }
+  function selectLayer(id) {
+    activeLayerId = id; selectedId = null; draft = []; draftDrops = [];
+    var l = layerById(id);
+    if (l) { setTool(l.takeoff_type === 'linear' ? 'linear' : l.takeoff_type === 'area' ? 'area' : 'count'); if (l.is_visible === false) { l.is_visible = true; supabaseClient.from('estimate_takeoff_layers').update({ is_visible: true }).eq('id', l.id).then(function() {}); } }
+    renderLayerTree(); renderProps(); redraw();
   }
 
-  function renderLayerLegend() {
-    var host = document.getElementById('layerLegend');
-    host.innerHTML = LAYERS.map(function(l) {
-      var visible = layerVisibility[l.key] !== false;   // default true
-      return '<div class="layer-row' + (l.key === currentLayer ? ' active' : '') + '" data-lay="' + l.key + '">' +
-        '<span class="layer-swatch" style="background:' + l.color + (visible ? '' : ';opacity:0.3') + '"></span>' +
-        '<span style="flex:1' + (visible ? '' : ';opacity:0.4;text-decoration:line-through') + '">' + l.label + '</span>' +
-        '<span data-toggle="' + l.key + '" style="cursor:pointer;padding:0 4px;font-size:14px" title="Show/hide layer">' + (visible ? '👁' : '⊘') + '</span>' +
-      '</div>';
-    }).join('');
-    host.querySelectorAll('[data-lay]').forEach(function(el) {
-      el.addEventListener('click', function(e) {
-        if (e.target.hasAttribute('data-toggle')) return;   // eye click handled separately
-        currentLayer = el.getAttribute('data-lay');
-        renderLayerLegend();
-      });
-    });
-    host.querySelectorAll('[data-toggle]').forEach(function(el) {
-      el.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var k = el.getAttribute('data-toggle');
-        layerVisibility[k] = layerVisibility[k] === false ? true : false;
-        renderLayerLegend();
-        redrawOverlay();
-      });
-    });
+  // ─── layer modal ───
+  var editingLayerId = null, catRows = [];
+  function buildColorSwatches() { $('lColors').innerHTML = COLORS.map(function(c) { return '<span style="background:' + c + '" data-c="' + c + '"></span>'; }).join('');
+    $('lColors').querySelectorAll('span').forEach(function(s) { s.addEventListener('click', function() { $('lColor').value = s.getAttribute('data-c'); markColor(); }); }); }
+  function markColor() { $('lColors').querySelectorAll('span').forEach(function(s) { s.classList.toggle('on', s.getAttribute('data-c') === $('lColor').value); }); }
+  function openLayerModal(id, preset) {
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    if (!schemaOk) { toast('Run takeoff-v2-schema.sql first', 'error'); return; }
+    editingLayerId = id || null;
+    var l = id ? layerById(id) : Object.assign({ name: '', group_name: (preset && preset.group_name) || 'Default Group', takeoff_type: 'count', category: 'air_outlets', labor_crew_type: 'sm', unit_material_cost: 0, unit_labor_hours: 0, waste_pct: 0, multiplier: 1, drop_length_ft: 0, labor_factor: 1, rise: 0, run: 12, extra_count: 0, line_width: 3, color: COLORS[layers.length % COLORS.length], symbol: 'circle', notes: '' }, preset || {});
+    $('layerTitle').textContent = id ? 'Edit takeoff layer' : 'New takeoff layer';
+    $('lDelete').style.display = id ? '' : 'none';
+    $('lName').value = l.name; $('lGroup').value = l.group_name; $('lType').value = l.takeoff_type; $('lCat').value = l.category; $('lCrew').value = l.labor_crew_type;
+    $('lCost').value = l.unit_material_cost; $('lLabMin').value = Math.round(Number(l.unit_labor_hours || 0) * 60 * 100) / 100; $('lWaste').value = l.waste_pct; $('lMult').value = l.multiplier;
+    $('lDrop').value = l.drop_length_ft; $('lLabF').value = l.labor_factor; $('lRise').value = l.rise; $('lRun').value = l.run; $('lExtra').value = l.extra_count; $('lWidth').value = l.line_width;
+    $('lColor').value = l.color; $('lSymbol').value = l.symbol; $('lNotes').value = l.notes || ''; $('catSearch').value = ''; $('catList').style.display = 'none';
+    $('groupList').innerHTML = uniq(layers.map(function(x) { return x.group_name; }).concat(['Default Group', 'Air Outlets', 'Services', 'Equipment', 'Pipes'])).map(function(g) { return '<option value="' + esc(g) + '">'; }).join('');
+    markColor(); labHint(); unitLbl();
+    openModal('layerModal'); setTimeout(function() { (id ? $('lName') : $('catSearch')).focus(); }, 50);
+  }
+  function labHint() { $('lLabHint').textContent = '= ' + (Math.round(Number($('lLabMin').value || 0) / 60 * 1000) / 1000) + ' h per ' + typeUnit($('lType').value); }
+  function unitLbl() { $('lUnitLbl').textContent = '/ ' + typeUnit($('lType').value); }
+  async function saveLayer() {
+    var name = $('lName').value.trim(); if (!name) { toast('Layer name is required', 'error'); return; }
+    var row = { estimate_id: estimateId, name: name, group_name: $('lGroup').value.trim() || 'Default Group', takeoff_type: $('lType').value, category: $('lCat').value, labor_crew_type: $('lCrew').value,
+      unit: typeUnit($('lType').value), unit_material_cost: num('lCost'), unit_labor_hours: Math.round(num('lLabMin') / 60 * 10000) / 10000, waste_pct: num('lWaste'), multiplier: num('lMult') || 1,
+      drop_length_ft: num('lDrop'), labor_factor: num('lLabF') || 1, rise: num('lRise'), run: num('lRun') || 12, extra_count: num('lExtra'), line_width: num('lWidth') || 3,
+      color: $('lColor').value, symbol: $('lSymbol').value, notes: $('lNotes').value.trim() || null, catalog_item_id: $('lName').getAttribute('data-cat') ? Number($('lName').getAttribute('data-cat')) : null };
+    if (editingLayerId) { var cur = layerById(editingLayerId); if (cur && cur.catalog_item_id && !row.catalog_item_id) row.catalog_item_id = cur.catalog_item_id; }
+    var r = editingLayerId ? await supabaseClient.from('estimate_takeoff_layers').update(row).eq('id', editingLayerId).select().single()
+                           : await supabaseClient.from('estimate_takeoff_layers').insert(Object.assign(row, { sort_order: layers.length })).select().single();
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    if (editingLayerId) layers = layers.map(function(l) { return l.id === editingLayerId ? r.data : l; }); else { layers.push(r.data); activeLayerId = r.data.id; groupsOpen[r.data.group_name] = true; }
+    // marks keep the layer colour for the overlay
+    if (editingLayerId) { allMeas.forEach(function(m) { if (m.layer_id === editingLayerId) { m.color = r.data.color; m.layer_category = r.data.category; } }); supabaseClient.from('estimate_measurements').update({ color: r.data.color, layer_category: r.data.category }).eq('layer_id', editingLayerId).then(function() {}); }
+    $('lName').removeAttribute('data-cat');
+    closeModal('layerModal'); selectLayer(activeLayerId); renderAll();
+  }
+  async function deleteLayer() {
+    var l = layerById(editingLayerId); if (!l) return;
+    var n = allMeas.filter(function(m) { return m.layer_id === l.id; }).length;
+    if (!confirm('Delete layer "' + l.name + '"' + (n ? ' and its ' + n + ' marks' : '') + '?')) return;
+    var r = await supabaseClient.from('estimate_takeoff_layers').delete().eq('id', l.id);
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    layers = layers.filter(function(x) { return x.id !== l.id; }); allMeas = allMeas.filter(function(m) { return m.layer_id !== l.id; }); meas = meas.filter(function(m) { return m.layer_id !== l.id; });
+    if (activeLayerId === l.id) activeLayerId = null;
+    closeModal('layerModal'); renderAll();
   }
 
-  function bindEvents() {
-    document.getElementById('uploadBtn').addEventListener('click', function() {
-      document.getElementById('uploadInput').click();
-    });
-    document.getElementById('uploadInput').addEventListener('change', uploadPdf);
-    document.getElementById('drawingSelect').addEventListener('change', function() {
-      var id = this.value;
-      if (id) loadDrawing(id);
-    });
-    document.getElementById('pageSelect').addEventListener('change', function() {
-      currentPage = parseInt(this.value, 10) || 1;
-      if (pdfDoc) renderPage();
-    });
-    document.querySelectorAll('.tool-btn').forEach(function(b) {
-      b.addEventListener('click', function() {
-        selectTool(b.getAttribute('data-tool'));
-      });
-    });
-    document.getElementById('scalePreset').addEventListener('change', applyPresetScale);
-    // Compare overlay picker
-    document.getElementById('compareSelect').addEventListener('change', function() {
-      compareDrawingId = this.value || null;
-      document.getElementById('compareOpacityWrap').style.display = compareDrawingId ? '' : 'none';
-      loadCompareDrawing();
-    });
-    document.getElementById('compareOpacity').addEventListener('input', function() {
-      var v = parseInt(this.value, 10);
-      document.getElementById('compareOpacityLabel').textContent = v + '%';
-      var cc = document.getElementById('compareCanvas');
-      if (cc) cc.style.opacity = (v / 100).toFixed(2);
-    });
-    document.getElementById('undoBtn').addEventListener('click', undoLast);
-    document.getElementById('rollupBtn').addEventListener('click', openRollup);
-    // Zoom controls
-    document.getElementById('zoomInBtn').addEventListener('click', function() { setZoom(zoomFactor * 1.25); });
-    document.getElementById('zoomOutBtn').addEventListener('click', function() { setZoom(zoomFactor / 1.25); });
-    document.getElementById('zoomFitBtn').addEventListener('click', function() { setZoom(1); });
-    // Export PDF
-    document.getElementById('exportBtn').addEventListener('click', exportMarkedPdf);
-    // AI Analyze
-    document.getElementById('analyzeBtn').addEventListener('click', openAnalyze);
-    document.getElementById('analyzeCancel').addEventListener('click', function() { closeModal('analyzeModal'); });
-    document.getElementById('analyzeRun').addEventListener('click', runAnalyze);
-    // Edit measurement modal
-    document.getElementById('editMeasCancel').addEventListener('click', function() { closeModal('editMeasModal'); });
-    document.getElementById('editMeasSave').addEventListener('click', saveMeasEdit);
-    document.getElementById('editMeasDelete').addEventListener('click', deleteMeasFromModal);
-    // Populate edit modal's layer dropdown
-    var eSel = document.getElementById('editMeasLayer');
-    LAYERS.forEach(function(l) {
-      var o = document.createElement('option'); o.value = l.key; o.textContent = l.label; eSel.appendChild(o);
-    });
+  // ─── catalog search (est_catalog_items, falls back to est_norms) ───
+  var catTimer = null;
+  async function searchCatalog(q) {
+    q = q.trim(); var list = $('catList'); if (q.length < 2) { list.style.display = 'none'; return; }
+    var rows = [];
+    if (catalogOk) {
+      var r = await supabaseClient.from('est_catalog_items').select('id,name,folder_path,unit,unit_cost,unit_labor_min,waste_pct,nw_category,takeoff_type,is_custom').ilike('name', '%' + q.replace(/\s+/g, '%') + '%').order('is_custom', { ascending: false }).order('name').limit(40);
+      if (r.error) { if (/est_catalog_items|42P01|does not exist/i.test(r.error.message)) catalogOk = false; } else rows = (r.data || []).map(function(x) { return { id: x.id, name: x.name, path: x.folder_path || '', unit: x.unit || '', cost: Number(x.unit_cost || 0), min: Number(x.unit_labor_min || 0), waste: Number(x.waste_pct || 0), cat: x.nw_category, type: x.takeoff_type, src: 'catalog' }; });
+    }
+    if (!rows.length) {
+      var n = await supabaseClient.from('est_norms').select('item,kind,unit,unit_cost,labor_hrs,projects').ilike('item', '%' + q.replace(/\s+/g, '%') + '%').order('projects', { ascending: false }).limit(40);
+      rows = (n.data || []).map(function(x) { return { id: null, name: x.item, path: 'NWAC Procore rates · ' + x.kind + ' · ' + x.projects + ' jobs', unit: x.unit || '', cost: Number(x.unit_cost || 0), min: Number(x.labor_hrs || 0) * 60, waste: 0, cat: guessCat(x.item + ' ' + x.kind), type: /ft/i.test(x.unit || '') ? 'linear' : 'count', src: 'norms' }; });
+    }
+    catRows = rows;
+    list.innerHTML = rows.length ? rows.map(function(x, i) { return '<div class="cat-row" data-i="' + i + '"><div><div>' + esc(x.name) + '</div><div class="p">' + esc(x.path) + '</div></div><div class="n">' + esc(x.unit) + '</div><div class="n">$' + x.cost.toFixed(2) + '</div><div class="n">' + (Math.round(x.min * 10) / 10) + ' min</div></div>'; }).join('') : '<div class="cat-row" style="grid-template-columns:1fr;color:#94a3b8">Nothing found — type the name and rates by hand.</div>';
+    list.style.display = '';
+    list.querySelectorAll('[data-i]').forEach(function(el) { el.addEventListener('click', function() { pickCatalog(catRows[+el.getAttribute('data-i')]); }); });
+  }
+  function pickCatalog(x) {
+    $('lName').value = x.name; if (x.id) $('lName').setAttribute('data-cat', x.id); else $('lName').removeAttribute('data-cat');
+    $('lType').value = x.type || (/ft/i.test(x.unit) ? 'linear' : 'count'); $('lCat').value = x.cat || guessCat(x.name); $('lCrew').value = CAT_CREW[$('lCat').value] || 'sm';
+    $('lCost').value = x.cost; $('lLabMin').value = Math.round(x.min * 100) / 100; $('lWaste').value = x.waste || 0;
+    if (/linear diffuser/i.test(x.name)) $('lType').value = 'linear';
+    if (!$('lGroup').value || $('lGroup').value === 'Default Group') $('lGroup').value = defaultGroup($('lCat').value, x.name);
+    $('catList').style.display = 'none'; $('catSearch').value = ''; labHint(); unitLbl();
+  }
+  function guessCat(s) {
+    s = s.toLowerCase();
+    if (/disconnect|demo\b|removal/.test(s)) return 'disconnects';
+    if (/shop drawing|balancing|boomtruck|boom truck|crane|man-lift|manlift|scaffold|rigging|permit/.test(s)) return 'services';
+    if (/equipment \d|\d+ ?lb|equipment install/.test(s)) return 'equipment_install';
+    if (/diffuser|grille|register|damper|vav|louver|thermostat|sensor|air outlet|air device|fsd|smoke det/.test(s)) return 'air_outlets';
+    if (/duct|acl|rectangular|round\/oval|oval|spiral|r6|r8|liner/.test(s)) return 'ductwork';
+    if (/pipe|copper|pvc|cpvc|refrigerant|condensate|black iron|b-vent|steel|wet-tap|wet tap/.test(s)) return 'pipework';
+    return 'equipment';
+  }
+  function defaultGroup(cat, name) { return cat === 'ductwork' ? 'Default Group' : cat === 'pipework' ? 'Pipes' : cat === 'air_outlets' ? 'Air Outlets' : cat === 'services' ? 'Services' : cat === 'equipment_install' ? 'Equipment Install' : cat === 'disconnects' ? 'Demo' : 'Equipment'; }
 
-    // Modal buttons
-    document.getElementById('rollupCancel').addEventListener('click', function() { closeModal('rollupModal'); });
-    document.getElementById('rollupApply').addEventListener('click', applyRollup);
-    document.getElementById('scaleCancel').addEventListener('click', function() {
-      closeModal('scaleModal'); draftPoints = []; redrawOverlay();
-    });
-    document.getElementById('scaleSet').addEventListener('click', applyScale);
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
-      if (document.querySelector('.modal-overlay.open')) return;   // ignore in modals
-      if (e.key === 'Enter' && (currentTool === 'length' || currentTool === 'area') && draftPoints.length >= 2) {
-        finishDraft();
-      } else if (e.key === 'Escape') {
-        draftPoints = []; redrawOverlay();
-      } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault(); undoLast();
-      }
-    });
+  // NWAC standard set (Kastriot's usual Procore layers) — rates from the catalog / Procore history
+  var STANDARD = [
+    ['Air Outlets', 'Diffuser', 'count', 'air_outlets'], ['Air Outlets', 'Linear diffuser', 'linear', 'air_outlets'], ['Air Outlets', 'Dampers', 'count', 'air_outlets'], ['Air Outlets', 'VAV Boxes', 'count', 'air_outlets'], ['Air Outlets', 'Thermostats', 'count', 'air_outlets'],
+    ['Services', 'Shop Drawings - Ductwork(floor)', 'count', 'services'], ['Services', 'Testing and balancing(floor)', 'count', 'services'], ['Services', 'Shop Drawings - Piping(floor)', 'count', 'services'], ['Services', 'Boomtruck 1/2 Day', 'count', 'services'], ['Services', 'Boomtruck Full Day', 'count', 'services'], ['Services', 'Crane', 'count', 'services'], ['Services', 'Man-lift, scafoldings', 'count', 'services'],
+    ['Equipment Install', 'Equipment 1-30lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 40-90lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 100 -190lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 200+ lb', 'count', 'equipment_install'], ['Equipment Install', 'Equipment 600lb and up', 'count', 'equipment_install'],
+    ['Demo', 'disconnect', 'count', 'disconnects'], ['Pipes', 'refrigerant lines (2 pipes) 2/ insulation', 'linear', 'pipework']
+  ];
+  async function addStandardLayers() {
+    if (!me.canEdit || !schemaOk) { toast(schemaOk ? 'Read-only' : 'Run takeoff-v2-schema.sql first', 'error'); return; }
+    var have = {}; layers.forEach(function(l) { have[l.name.toLowerCase()] = 1; });
+    var rows = [], i = 0;
+    for (var k = 0; k < STANDARD.length; k++) {
+      var s = STANDARD[k]; if (have[s[1].toLowerCase()]) continue;
+      var rate = await findRate(s[1]);
+      rows.push({ estimate_id: estimateId, group_name: s[0], name: s[1], takeoff_type: s[2], category: s[3], labor_crew_type: CAT_CREW[s[3]], unit: typeUnit(s[2]), unit_material_cost: rate.cost, unit_labor_hours: rate.hrs,
+        catalog_item_id: rate.id || null, color: COLORS[(layers.length + i) % COLORS.length], symbol: ['circle', 'square', 'diamond', 'triangle', 'x'][i % 5], sort_order: layers.length + i, notes: rate.basis }); i++;
+    }
+    if (!rows.length) { toast('Standard layers are already here'); return; }
+    var r = await supabaseClient.from('estimate_takeoff_layers').insert(rows).select();
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    layers = layers.concat(r.data); r.data.forEach(function(l) { groupsOpen[l.group_name] = true; });
+    toast('✅ ' + r.data.length + ' standard layers added', 'success'); renderAll();
+  }
+  // exact-name rate: catalog first, then NWAC Procore history (est_norms)
+  async function findRate(name) {
+    if (catalogOk) { var c = await supabaseClient.from('est_catalog_items').select('id,unit_cost,unit_labor_min,waste_pct').ilike('name', name).order('is_custom', { ascending: false }).limit(1).maybeSingle();
+      if (c.error && /est_catalog_items|42P01|does not exist/i.test(c.error.message)) catalogOk = false; else if (c.data) return { id: c.data.id, cost: Number(c.data.unit_cost || 0), hrs: Number(c.data.unit_labor_min || 0) / 60, waste: Number(c.data.waste_pct || 0), basis: 'Procore catalog' }; }
+    var n = await supabaseClient.from('est_norms').select('unit_cost,labor_hrs,projects').ilike('item', name).order('projects', { ascending: false }).limit(1).maybeSingle();
+    if (n.data) return { id: null, cost: Number(n.data.unit_cost || 0), hrs: Number(n.data.labor_hrs || 0), waste: 0, basis: 'NWAC Procore rate (' + n.data.projects + ' jobs)' };
+    return { id: null, cost: 0, hrs: 0, waste: 0, basis: 'no rate found — set by hand' };
   }
 
-  function selectTool(t) {
-    currentTool = t;
-    draftPoints = [];
-    document.querySelectorAll('.tool-btn').forEach(function(b) {
-      b.classList.toggle('active', b.getAttribute('data-tool') === t);
-    });
-    showHint(
-      t === 'scale'  ? '📏 Click 2 points on a known distance, then type the real feet.' :
-      t === 'length' ? '📐 Click points along the run. Double-click or press Enter to finish.' :
-      t === 'area'   ? '🟦 Click polygon vertices. Double-click to close and compute sq ft.' :
-      t === 'count'  ? '🔢 Each click adds a counter marker. Click Undo to remove the last one.' :
-      ''
-    );
-    redrawOverlay();
-  }
-
-  function showHint(msg) {
-    var h = document.getElementById('tkHint');
-    if (!msg) { h.style.display = 'none'; return; }
-    h.textContent = msg;
-    h.style.display = '';
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  //   DRAWINGS — upload / list / load
-  // ══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════ drawings / plans ═══════════════════════
   async function loadDrawings() {
-    var r = await supabaseClient.from('estimate_drawings')
-      .select('*').eq('estimate_id', estimateId).order('created_at', { ascending: true });
-    drawings = r.data || [];
-    var sel = document.getElementById('drawingSelect');
-    var cmp = document.getElementById('compareSelect');
-    sel.innerHTML = drawings.length
-      ? drawings.map(function(d) { return '<option value="' + d.id + '">' + escHtml(d.filename) + ' (' + d.page_count + ' pg)</option>'; }).join('')
-      : '<option value="">— No drawings yet —</option>';
-    cmp.innerHTML = '<option value="">— none —</option>' +
-      drawings.map(function(d) { return '<option value="' + d.id + '">' + escHtml(d.filename) + '</option>'; }).join('');
-    if (drawings.length) {
-      sel.value = drawings[0].id;
-      loadDrawing(drawings[0].id);
-    }
+    var r = await supabaseClient.from('estimate_drawings').select('*').eq('estimate_id', estimateId).order('created_at');
+    drawings = r.data || []; plans = [];
+    drawings.forEach(function(d) { for (var p = 1; p <= (d.page_count || 1); p++) { var meta = (d.page_meta || {})[String(p)] || {}; plans.push({ drawing: d, page: p, sheet: meta.sheet || null, scale: meta.scale || null }); } });
+    var ids = drawings.map(function(d) { return d.id; });
+    allMeas = [];
+    if (ids.length) { var m = await supabaseClient.from('estimate_measurements').select('*').in('drawing_id', ids).order('created_at'); allMeas = m.data || []; }
+    renderPlanSelect();
+    if (plans.length && planIdx < 0) await openPlan(0);
   }
-
-  async function loadCompareDrawing() {
-    var cCanvas = document.getElementById('compareCanvas');
-    if (!compareDrawingId) {
-      compareDoc = null;
-      if (cCanvas) { cCanvas.width = 0; cCanvas.height = 0; }
-      return;
-    }
-    if (compareDrawingId === (currentDrawing && currentDrawing.id)) {
-      showToast('Compare drawing must be different from the current one', 'error');
-      document.getElementById('compareSelect').value = '';
-      compareDrawingId = null;
-      return;
-    }
-    var dwg = drawings.find(function(d) { return d.id === compareDrawingId; });
-    if (!dwg) return;
-    var signed = await supabaseClient.storage.from('estimate-drawings').createSignedUrl(dwg.storage_path, 3600);
-    if (signed.error) { showToast('Could not open compare PDF: ' + signed.error.message, 'error'); return; }
-    compareDoc = await pdfjsLib.getDocument(signed.data.signedUrl).promise;
-    await renderComparePage();
+  function planLabel(p) { return (p.sheet ? p.sheet + ' — ' : '') + p.drawing.filename.replace(/\.pdf$/i, '') + ' · p' + p.page + (p.drawing.page_count > 1 ? '/' + p.drawing.page_count : ''); }
+  function renderPlanSelect() {
+    var sel = $('planSelect'), cmp = $('compareSelect');
+    sel.innerHTML = plans.length ? plans.map(function(p, i) { return '<option value="' + i + '">' + esc(planLabel(p)) + '</option>'; }).join('') : '<option value="">— No plans yet —</option>';
+    if (planIdx >= 0) sel.value = String(planIdx);
+    cmp.innerHTML = '<option value="">none</option>' + plans.map(function(p, i) { return '<option value="' + i + '">' + esc(planLabel(p)) + '</option>'; }).join('');
   }
-
-  async function renderComparePage() {
-    if (!compareDoc || !pdfPage) return;
-    var cCanvas = document.getElementById('compareCanvas');
-    var pageNo = Math.min(currentPage, compareDoc.numPages);
-    var cPage = await compareDoc.getPage(pageNo);
-    // Render at same width as the base page so both align on-screen
-    var v1 = cPage.getViewport({ scale: 1 });
-    var basePxWide = pdfCanvas.width;
-    var scale = basePxWide / v1.width;
-    var viewport = cPage.getViewport({ scale: scale });
-    cCanvas.width  = pdfCanvas.width;
-    cCanvas.height = pdfCanvas.height;
-    compareCtx = cCanvas.getContext('2d');
-    compareCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
-    await cPage.render({ canvasContext: compareCtx, viewport: viewport }).promise;
+  async function getDoc(d) {
+    if (pdfDocs[d.id]) return pdfDocs[d.id];
+    var s = await supabaseClient.storage.from('estimate-drawings').createSignedUrl(d.storage_path, 3600);
+    if (s.error) throw new Error(s.error.message);
+    pdfDocs[d.id] = await pdfjsLib.getDocument(s.data.signedUrl).promise; return pdfDocs[d.id];
   }
-
-  async function uploadPdf(ev) {
-    var file = ev.target.files && ev.target.files[0];
-    if (!file) return;
-    if (!canEdit) { showToast('Read-only', 'error'); return; }
-
-    showToast('Uploading ' + file.name + '…');
-
-    // Upload to Storage
-    var path = estimateId + '/' + Date.now() + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
-    var up = await supabaseClient.storage.from('estimate-drawings').upload(path, file, {
-      cacheControl: '3600', upsert: false, contentType: 'application/pdf'
-    });
-    if (up.error) { showToast('Upload failed: ' + up.error.message, 'error'); return; }
-
-    // Load PDF locally to get page count
-    var buf = await file.arrayBuffer();
-    var tmpDoc = await pdfjsLib.getDocument({ data: buf }).promise;
-    var pageCount = tmpDoc.numPages;
-
-    // Insert row
-    var ins = await supabaseClient.from('estimate_drawings').insert({
-      estimate_id:  estimateId,
-      filename:     file.name,
-      storage_path: path,
-      page_count:   pageCount,
-      drawing_type: 'base',
-      uploaded_by:  currentUserId
-    }).select().single();
-    if (ins.error) { showToast('Insert failed: ' + ins.error.message, 'error'); return; }
-
-    ev.target.value = '';
-    showToast('✅ Uploaded ' + file.name + ' (' + pageCount + ' pages)', 'success');
-    await loadDrawings();
-    document.getElementById('drawingSelect').value = ins.data.id;
-    loadDrawing(ins.data.id);
-  }
-
-  async function loadDrawing(drawingId) {
-    var dwg = drawings.find(function(d) { return d.id === drawingId; });
-    if (!dwg) return;
-    currentDrawing = dwg;
-    currentPage = 1;
-
-    // Page selector
-    var pageSel = document.getElementById('pageSelect');
-    pageSel.innerHTML = '';
-    for (var p = 1; p <= dwg.page_count; p++) {
-      var o = document.createElement('option'); o.value = p; o.textContent = p;
-      pageSel.appendChild(o);
-    }
-
-    // Fetch signed URL for PDF
-    var signed = await supabaseClient.storage.from('estimate-drawings').createSignedUrl(dwg.storage_path, 3600);
-    if (signed.error) { showToast('Could not open PDF: ' + signed.error.message, 'error'); return; }
-
-    pdfDoc = await pdfjsLib.getDocument(signed.data.signedUrl).promise;
+  async function openPlan(i) {
+    if (i < 0 || i >= plans.length) return;
+    planIdx = i; $('planSelect').value = String(i); selectedId = null; draft = []; draftDrops = []; measureLine = null;
+    var p = plans[i];
+    try { var doc = await getDoc(p.drawing); pdfPage = await doc.getPage(p.page); } catch (e) { toast('Could not open the plan: ' + e.message, 'error'); return; }
+    viewport1 = pdfPage.getViewport({ scale: 1 });
+    meas = allMeas.filter(function(m) { return m.drawing_id === p.drawing.id && m.page_number === p.page; });
+    loadScale();
     await renderPage();
-    await loadMeasurements();
+    if (!p.sheet || (!scalePpf && !p.scaleChecked)) detectPageMeta(p);
+    renderLayerTree(); renderProps(); updateStatus();
   }
+  // sheet number + scale from the page text — auto-applies the scale when the sheet states it
+  async function detectPageMeta(p) {
+    p.scaleChecked = true;
+    try {
+      var tc = await pdfPage.getTextContent(), txt = tc.items.map(function(t) { return t.str; }).join(' ');
+      var found = {}, m; SCALE_RE.lastIndex = 0;
+      while ((m = SCALE_RE.exec(txt))) { var f = frac(m[1]); found[f] = (found[f] || 0) + 1; }
+      var best = null; Object.keys(found).forEach(function(k) { if (!best || found[k] > found[best]) best = k; });
+      var sheets = {}, s; SHEET_RE.lastIndex = 0;
+      while ((s = SHEET_RE.exec(txt))) sheets[s[1]] = (sheets[s[1]] || 0) + 1;
+      var sheet = Object.keys(sheets).sort(function(a, b) { return sheets[b] - sheets[a]; })[0] || null;
+      var meta = Object.assign({}, p.drawing.page_meta || {}); meta[String(p.page)] = Object.assign({}, meta[String(p.page)] || {}, { sheet: sheet, scale: best ? String(best) : null });
+      p.sheet = sheet; p.drawing.page_meta = meta;
+      supabaseClient.from('estimate_drawings').update({ page_meta: meta }).eq('id', p.drawing.id).then(function() {});
+      if (best && !scalePpf && me.canEdit) { var preset = SCALE_PRESETS.find(function(x) { return Math.abs(x.ppf - Number(best) * 72) < 0.01; }); await setPresetScale(preset || { label: best + '" = 1\'', ppf: Number(best) * 72 }, true); }
+      renderPlanSelect();
+    } catch (e) { console.warn('page meta', e); }
+  }
+  function frac(s) { s = s.replace(/\s+/g, ''); if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
 
   async function renderPage() {
-    if (!pdfDoc) return;
-    document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('canvasWrap').style.display = '';
-    pdfPage = await pdfDoc.getPage(currentPage);
-
-    // Fit to viewport width, then apply user zoom
-    var viewport = document.getElementById('viewport');
-    var maxW = viewport.clientWidth - 40;
-    var v1 = pdfPage.getViewport({ scale: 1 });
-    var fitScale = Math.min(2.5, maxW / v1.width);
-    renderScale = fitScale * zoomFactor;
-    var viewport2 = pdfPage.getViewport({ scale: renderScale });
-
-    pdfCanvas = document.getElementById('pdfCanvas');
-    overlayCanvas = document.getElementById('overlayCanvas');
-    pdfCanvas.width = overlayCanvas.width = Math.floor(viewport2.width);
-    pdfCanvas.height = overlayCanvas.height = Math.floor(viewport2.height);
-    pdfCtx = pdfCanvas.getContext('2d');
-    overlayCtx = overlayCanvas.getContext('2d');
-
-    await pdfPage.render({ canvasContext: pdfCtx, viewport: viewport2 }).promise;
-    // Match compare canvas size to base + re-render compare page if enabled
-    var cCanvas = document.getElementById('compareCanvas');
-    cCanvas.width = pdfCanvas.width;
-    cCanvas.height = pdfCanvas.height;
-    if (compareDoc) await renderComparePage();
-    bindOverlayEvents();
-    redrawOverlay();
-    document.getElementById('zoomLabel').textContent = Math.round(zoomFactor * 100) + '%';
+    if (!pdfPage) return;
+    $('emptyState').style.display = 'none'; $('canvasWrap').style.display = '';
+    var vp = $('viewport'), maxW = vp.clientWidth - 32, fit = maxW / viewport1.width;
+    renderScale = Math.min(fit * zoom, 8000 / Math.max(viewport1.width, viewport1.height));
+    var v = pdfPage.getViewport({ scale: renderScale });
+    pdfCanvas = $('pdfCanvas'); overlayCanvas = $('overlayCanvas');
+    pdfCanvas.width = overlayCanvas.width = Math.floor(v.width); pdfCanvas.height = overlayCanvas.height = Math.floor(v.height);
+    ctx = overlayCanvas.getContext('2d');
+    await pdfPage.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: v }).promise;
+    var cc = $('compareCanvas'); cc.width = pdfCanvas.width; cc.height = pdfCanvas.height;
+    if (compareDoc) await renderCompare();
+    bindOverlay(); redraw();
+    $('zoomLabel').textContent = Math.round(zoom * 100) + '%';
+  }
+  async function renderCompare() {
+    var i = +$('compareSelect').value; if (isNaN(i) || !plans[i] || !pdfPage) { compareDoc = null; return; }
+    var p = plans[i], doc = await getDoc(p.drawing), pg = await doc.getPage(p.page), v1 = pg.getViewport({ scale: 1 });
+    var v = pg.getViewport({ scale: pdfCanvas.width / v1.width }), cc = $('compareCanvas'), c2 = cc.getContext('2d');
+    c2.clearRect(0, 0, cc.width, cc.height); await pg.render({ canvasContext: c2, viewport: v }).promise;
+  }
+  async function setZoom(z, cx, cy) {
+    var vp = $('viewport'), before = renderScale, sx = vp.scrollLeft, sy = vp.scrollTop;
+    zoom = Math.max(.2, Math.min(8, z));
+    await renderPage();
+    var k = renderScale / before;
+    if (cx != null) { vp.scrollLeft = (sx + cx) * k - cx; vp.scrollTop = (sy + cy) * k - cy; }
   }
 
-  async function setZoom(newFactor) {
-    zoomFactor = Math.max(0.25, Math.min(4, newFactor));
-    if (pdfDoc) await renderPage();
+  // ─── scale ───
+  function fillScalePresets() { var sel = $('scalePreset'), g = {}; SCALE_PRESETS.forEach(function(p, i) { (g[p.group] = g[p.group] || []).push('<option value="' + i + '">' + esc(p.label) + '</option>'); });
+    Object.keys(g).forEach(function(k) { sel.innerHTML += '<optgroup label="' + k + '">' + g[k].join('') + '</optgroup>'; }); sel.innerHTML += '<optgroup label="Custom"><option value="custom">Two clicks on a known dimension…</option></optgroup>'; }
+  function loadScale() {
+    var sm = meas.filter(function(m) { return m.tool_type === 'scale'; }).pop();
+    scalePpf = sm ? Number(sm.scale_pixels_per_foot) : null; scaleLabel = sm ? (sm.label || 'Custom') : null;
+    var chip = $('scaleChip'); chip.classList.toggle('unset', !scalePpf); chip.textContent = scalePpf ? 'Scale: ' + scaleLabel : 'Scale: not set';
+    $('scalePreset').value = '';
+  }
+  async function setPresetScale(preset, auto) {
+    if (!pdfPage || !me.canEdit) return;
+    var p = plans[planIdx];
+    var row = { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'scale', points: [[0, 0]], label: preset.label + (auto ? ' (auto)' : ''), computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: preset.ppf, color: '#dc2626', notes: (auto ? 'Read from the sheet' : 'Picked') + ': ' + preset.label };
+    var r = await supabaseClient.from('estimate_measurements').insert(row).select().single();
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    allMeas.push(r.data); meas.push(r.data);
+    await recomputeScaled(preset.ppf); loadScale(); redraw(); renderAll();
+    if (!auto) toast('Scale ' + preset.label, 'success');
+  }
+  async function recomputeScaled(ppf) {
+    for (var i = 0; i < meas.length; i++) { var m = meas[i]; if (m.tool_type !== 'length' && m.tool_type !== 'area') continue;
+      m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / ppf : polyArea(m.points) / (ppf * ppf); m.scale_pixels_per_foot = ppf;
+      await supabaseClient.from('estimate_measurements').update({ computed_value: m.computed_value, scale_pixels_per_foot: ppf }).eq('id', m.id); }
+  }
+  async function applyCustomScale() {
+    var ft = Number($('scaleFeet').value || 0); if (ft <= 0 || draft.length < 2) { toast('Enter the distance in feet', 'error'); return; }
+    var ppf = dist(draft[0], draft[1]) / ft; var p = plans[planIdx];
+    var r = await supabaseClient.from('estimate_measurements').insert({ drawing_id: p.drawing.id, page_number: p.page, tool_type: 'scale', points: draft.slice(), label: 'Custom (' + ft + ' ft)', computed_value: ft, computed_unit: 'ft', scale_pixels_per_foot: ppf, color: '#dc2626' }).select().single();
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    allMeas.push(r.data); meas.push(r.data); draft = []; closeModal('scaleModal');
+    await recomputeScaled(ppf); loadScale(); setTool('select'); redraw(); renderAll();
   }
 
-  function bindOverlayEvents() {
-    overlayCanvas.onclick = onOverlayClick;
-    overlayCanvas.ondblclick = onOverlayDblClick;
-    overlayCanvas.onmousemove = onOverlayMove;
-    overlayCanvas.onmousedown = onOverlayMouseDown;
-    overlayCanvas.onmouseup   = onOverlayMouseUp;
-    overlayCanvas.onmouseleave = onOverlayMouseUp;
-    overlayCanvas.oncontextmenu = function(e) { if (e.altKey || e.button === 1) e.preventDefault(); };
+  // ═══════════════════════ tools & drawing ═══════════════════════
+  function setTool(t) { tool = t; draft = []; draftDrops = []; measureLine = null; document.querySelectorAll('[data-tool]').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-tool') === t); });
+    if (overlayCanvas) { overlayCanvas.classList.toggle('hand', t === 'pan'); overlayCanvas.classList.toggle('sel', t === 'select'); } updateStatus(); redraw(); }
+  function updateStatus() {
+    var l = layerById(activeLayerId), h = $('statusHint');
+    var hints = { select: 'Click a mark to select it, drag its points to move, <span class="kbd">Del</span> deletes.', pan: 'Drag to pan. <span class="kbd">Space</span>/<span class="kbd">Alt</span> + drag works with any tool.',
+      count: 'Click each item' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first') + '. <span class="kbd">Shift</span>+click removes.',
+      linear: 'Click points along the run' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first') + '. <span class="kbd">Enter</span>/double-click finishes, <span class="kbd">D</span> adds a drop at the last point, <span class="kbd">Shift</span> locks 90°, <span class="kbd">Backspace</span> removes a point.',
+      area: 'Click the corners' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first') + '. <span class="kbd">Enter</span>/double-click closes.',
+      measure: 'Click two points to read a distance. Nothing is saved.', note: 'Click where the note goes.' };
+    h.innerHTML = (!scalePpf && pdfPage && tool !== 'count' && tool !== 'note' && tool !== 'select' && tool !== 'pan') ? '<b style="color:#991b1b">Set the scale first</b> — pick it from the list next to the plan name.' : (hints[tool] || '');
+    $('statusPage').textContent = pdfPage ? (plans[planIdx].sheet ? plans[planIdx].sheet + ' · ' : '') + meas.filter(function(m) { return m.tool_type !== 'scale'; }).length + ' marks on this plan' : '';
   }
-
-  function onOverlayMouseDown(e) {
-    // Alt+left OR middle mouse = pan
-    if (e.altKey || e.button === 1) {
-      e.preventDefault();
-      var vp = document.getElementById('viewport');
-      panState = {
-        startX:     e.clientX,
-        startY:     e.clientY,
-        scrollLeft: vp.scrollLeft,
-        scrollTop:  vp.scrollTop
-      };
-      overlayCanvas.classList.add('panning-active');
+  function bindOverlay() {
+    overlayCanvas.onmousedown = onDown; overlayCanvas.onmousemove = onMove; overlayCanvas.onmouseup = onUp; overlayCanvas.onmouseleave = onUp;
+    overlayCanvas.ondblclick = function(e) { e.preventDefault(); if ((tool === 'linear' || tool === 'area') && draft.length >= 2) finishDraft(); };
+    overlayCanvas.oncontextmenu = function(e) { e.preventDefault(); if (draft.length >= 2) finishDraft(); else { draft = []; redraw(); } };
+    overlayCanvas.onclick = onClick;
+    $('viewport').onwheel = function(e) { if (e.ctrlKey || e.metaKey) { e.preventDefault(); var r = $('viewport').getBoundingClientRect(); setZoom(zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX - r.left, e.clientY - r.top); } };
+  }
+  function pt(e) { var r = overlayCanvas.getBoundingClientRect(); return [(e.clientX - r.left) * (overlayCanvas.width / r.width) / renderScale, (e.clientY - r.top) * (overlayCanvas.height / r.height) / renderScale]; }
+  function ortho(p) { if (!draft.length) return p; var a = draft[draft.length - 1]; return Math.abs(p[0] - a[0]) > Math.abs(p[1] - a[1]) ? [p[0], a[1]] : [a[0], p[1]]; }
+  var spaceDown = false;
+  function onDown(e) {
+    if (e.button === 1 || e.altKey || spaceDown || tool === 'pan') { e.preventDefault(); var vp = $('viewport'); panState = { x: e.clientX, y: e.clientY, l: vp.scrollLeft, t: vp.scrollTop }; overlayCanvas.classList.add('grabbing'); return; }
+    if (tool === 'select' && me.canEdit && e.button === 0) {
+      var h = hitTest(pt(e)); if (h) { selectedId = h.m.id; dragState = { id: h.m.id, vertex: h.vertex, start: pt(e), orig: JSON.parse(JSON.stringify(h.m.points)), moved: false }; renderProps(); redraw(); }
+      else { selectedId = null; renderProps(); redraw(); }
     }
   }
-
-  function onOverlayMouseUp() {
-    if (panState) {
-      panState = null;
-      overlayCanvas.classList.remove('panning-active');
+  function onMove(e) {
+    if (panState) { var vp = $('viewport'); vp.scrollLeft = panState.l - (e.clientX - panState.x); vp.scrollTop = panState.t - (e.clientY - panState.y); return; }
+    var p = pt(e);
+    if (dragState) { var m = meas.find(function(x) { return x.id === dragState.id; }); if (!m) return; dragState.moved = true;
+      var dx = p[0] - dragState.start[0], dy = p[1] - dragState.start[1];
+      if (dragState.vertex != null) { m.points[dragState.vertex] = [dragState.orig[dragState.vertex][0] + dx, dragState.orig[dragState.vertex][1] + dy]; }
+      else m.points = dragState.orig.map(function(q) { return [q[0] + dx, q[1] + dy]; });
+      redraw(); return; }
+    if (tool === 'measure' && measureLine && measureLine.length === 1) { hover = p; redraw(); return; }
+    if (draft.length) { hover = e.shiftKey ? ortho(p) : p; redraw(); }
+  }
+  async function onUp(e) {
+    if (panState) { panState = null; overlayCanvas.classList.remove('grabbing'); }
+    if (dragState) { var d = dragState; dragState = null; var m = meas.find(function(x) { return x.id === d.id; });
+      if (m && d.moved) { var before = d.orig; if (m.tool_type === 'length') m.computed_value = scalePpf ? polyLen(m.points) / scalePpf : 0; if (m.tool_type === 'area') m.computed_value = scalePpf ? polyArea(m.points) / (scalePpf * scalePpf) : 0;
+        var r = await supabaseClient.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); if (r.error) toast(r.error.message, 'error'); else undoStack.push({ type: 'move', id: m.id, points: before, value: m.computed_value }); renderAll(); } }
+  }
+  function onClick(e) {
+    if (e.altKey || spaceDown || tool === 'pan' || tool === 'select') return;
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    var p = e.shiftKey && draft.length ? ortho(pt(e)) : pt(e);
+    if (tool === 'measure') { if (!measureLine || measureLine.length === 2) measureLine = [p]; else measureLine.push(p); redraw(); return; }
+    if (tool === 'scale') { draft.push(p); if (draft.length === 2) { $('scaleFeet').value = ''; openModal('scaleModal'); setTimeout(function() { $('scaleFeet').focus(); }, 50); } redraw(); return; }
+    if (tool === 'note') { draft = [p]; $('noteText').value = ''; openModal('noteModal'); setTimeout(function() { $('noteText').focus(); }, 50); return; }
+    var l = layerById(activeLayerId); if (!l) { toast('Pick a takeoff layer first (left panel)', 'error'); return; }
+    if (tool === 'count') {
+      if (e.shiftKey) { var h = hitTest(p); if (h && h.m.layer_id === l.id) deleteMark(h.m.id); return; }
+      saveMark({ tool_type: 'count', points: [p], computed_value: 1, computed_unit: 'ea', mark_no: nextMarkNo(l) }); return;
     }
+    if (!scalePpf) { toast('Set the drawing scale first', 'error'); return; }
+    draft.push(p); hover = null; redraw();
   }
-
-  function pdfCoordFromEvent(e) {
-    var rect = overlayCanvas.getBoundingClientRect();
-    var x = (e.clientX - rect.left) * (overlayCanvas.width / rect.width);
-    var y = (e.clientY - rect.top)  * (overlayCanvas.height / rect.height);
-    // Store in PDF (unscaled) coords so we can render at any zoom later
-    return [x / renderScale, y / renderScale];
-  }
-
-  function onOverlayClick(e) {
-    if (e.altKey || panState) return;   // pan drag — ignore click
-    if (!currentTool || !canEdit) return;
-    var p = pdfCoordFromEvent(e);
-    if (currentTool === 'count') {
-      saveMeasurement({ tool_type: 'count', points: [p], computed_value: 1, computed_unit: 'ea' });
-    } else {
-      draftPoints.push(p);
-      // For scale + length + area, allow accumulating; finish via dblclick / Enter
-      if (currentTool === 'scale' && draftPoints.length === 2) {
-        // Prompt for real-world feet
-        redrawOverlay();
-        document.getElementById('scaleFeet').value = '';
-        openModal('scaleModal');
-        return;
-      }
-      redrawOverlay();
-    }
-  }
-
-  function onOverlayDblClick(e) {
-    if (!currentTool || !canEdit) return;
-    if ((currentTool === 'length' || currentTool === 'area') && draftPoints.length >= 2) {
-      finishDraft();
-    }
-  }
-
-  var hoverPoint = null;
-  function onOverlayMove(e) {
-    // Show grab cursor when Alt is held
-    if (e.altKey && !panState) overlayCanvas.classList.add('panning');
-    else if (!panState)        overlayCanvas.classList.remove('panning');
-
-    if (panState) {
-      var vp = document.getElementById('viewport');
-      vp.scrollLeft = panState.scrollLeft - (e.clientX - panState.startX);
-      vp.scrollTop  = panState.scrollTop  - (e.clientY - panState.startY);
-      return;
-    }
-    if (!currentTool || draftPoints.length === 0) return;
-    hoverPoint = pdfCoordFromEvent(e);
-    redrawOverlay();
-  }
-
+  function nextMarkNo(l) { var n = 0; allMeas.forEach(function(m) { if (m.layer_id === l.id && m.mark_no > n) n = m.mark_no; }); return n + 1; }
   function finishDraft() {
-    if (currentTool === 'length') {
-      var totalPx = 0;
-      for (var i = 1; i < draftPoints.length; i++) {
-        var a = draftPoints[i-1], b = draftPoints[i];
-        totalPx += Math.hypot(b[0]-a[0], b[1]-a[1]);
-      }
-      var ft = scalePxPerFoot ? totalPx / scalePxPerFoot : 0;
-      saveMeasurement({ tool_type: 'length', points: draftPoints.slice(), computed_value: ft, computed_unit: 'ft' });
-    } else if (currentTool === 'area') {
-      // Shoelace
-      var areaPx = 0;
-      var pts = draftPoints;
-      for (var j = 0, n = pts.length; j < n; j++) {
-        var pA = pts[j], pB = pts[(j+1) % n];
-        areaPx += (pA[0] * pB[1]) - (pB[0] * pA[1]);
-      }
-      areaPx = Math.abs(areaPx) / 2;
-      var sqft = scalePxPerFoot ? areaPx / (scalePxPerFoot * scalePxPerFoot) : 0;
-      saveMeasurement({ tool_type: 'area', points: draftPoints.slice(), computed_value: sqft, computed_unit: 'sqft' });
-    }
-    draftPoints = [];
-    hoverPoint = null;
-    redrawOverlay();
+    if (!scalePpf || draft.length < 2) { draft = []; redraw(); return; }
+    if (tool === 'linear') saveMark({ tool_type: 'length', points: draft.slice(), computed_value: polyLen(draft) / scalePpf, computed_unit: 'ft', drops: draftDrops.length });
+    else if (tool === 'area') { if (draft.length < 3) { draft = []; redraw(); return; } saveMark({ tool_type: 'area', points: draft.slice(), computed_value: polyArea(draft) / (scalePpf * scalePpf), computed_unit: 'sqft' }); }
+    draft = []; draftDrops = []; hover = null; redraw();
   }
-
-  async function applyScale() {
-    var feet = Number(document.getElementById('scaleFeet').value || 0);
-    if (feet <= 0) { showToast('Enter positive feet', 'error'); return; }
-    var pxDist = Math.hypot(draftPoints[1][0]-draftPoints[0][0], draftPoints[1][1]-draftPoints[0][1]);
-    scalePxPerFoot = pxDist / feet;
-    currentScaleLabel = 'Custom (' + feet + ' ft measured)';
-    document.getElementById('scalePreset').value = '';   // clear preset selector
-    // Recompute existing lengths/areas on this page with the new scale
-    await recomputeAllOnPage();
-    // Persist the scale as a "scale" measurement so it survives refresh
-    await saveMeasurement({
-      tool_type: 'scale',
-      points: draftPoints.slice(),
-      label: currentScaleLabel,
-      computed_value: feet,
-      computed_unit: 'ft'
-    });
-    draftPoints = [];
-    closeModal('scaleModal');
-    updateScaleBadge();
-    redrawOverlay();
-  }
-
-  var currentScaleLabel = null;   // e.g. "1/4\" = 1'"  or  "Custom"
-
-  function updateScaleBadge() {
-    var badge = document.getElementById('scaleBadge');
-    if (scalePxPerFoot) {
-      badge.classList.remove('unset');
-      var lbl = currentScaleLabel || 'Custom';
-      badge.innerHTML = 'Scale: <b>' + escHtml(lbl) + '</b><br><span style="font-size:10px;color:#94a3b8">' + scalePxPerFoot.toFixed(3) + ' pt/ft</span>';
-    } else {
-      badge.classList.add('unset');
-      badge.innerHTML = 'Scale: <b>not set</b><br><span style="font-size:10px">Pick a scale above ↑</span>';
-    }
-  }
-
-  async function applyPresetScale() {
-    var idx = parseInt(document.getElementById('scalePreset').value, 10);
-    if (isNaN(idx)) return;
-    var preset = SCALE_PRESETS[idx];
-    if (!preset) return;
-    if (!currentDrawing) { showToast('Load a drawing first', 'error'); return; }
-    if (!canEdit) { showToast('Read-only', 'error'); return; }
-
-    scalePxPerFoot = preset.ptsPerFoot;
-    currentScaleLabel = preset.label;
-
-    // Save as scale measurement (points=[[0,0]] anchor, label carries the ratio name)
-    var m = {
-      drawing_id:            currentDrawing.id,
-      page_number:           currentPage,
-      tool_type:             'scale',
-      points:                [[0, 0]],
-      label:                 preset.label,
-      computed_value:        1,
-      computed_unit:         'ft',
-      scale_pixels_per_foot: preset.ptsPerFoot,
-      color:                 '#dc2626',
-      notes:                 'Common ' + preset.group + ' scale: ' + preset.label
-    };
+  async function saveMark(m) {
+    var l = layerById(activeLayerId), p = plans[planIdx];
+    m.drawing_id = p.drawing.id; m.page_number = p.page; m.layer_id = l ? l.id : null; m.layer_category = l ? l.category : null; m.color = l ? l.color : '#0696D7'; m.scale_pixels_per_foot = scalePpf;
+    if (!schemaOk) { delete m.layer_id; delete m.drops; delete m.mark_no; m.layer_category = (l && l.category) || 'ductwork'; }
     var r = await supabaseClient.from('estimate_measurements').insert(m).select().single();
-    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
-    measurements.push(r.data);
-
-    await recomputeAllOnPage();
-    updateScaleBadge();
-    redrawOverlay();
-    renderMeasList();
-    showToast('✅ Scale set to ' + preset.label, 'success');
+    if (r.error) { toast('Save failed: ' + r.error.message, 'error'); return; }
+    allMeas.push(r.data); meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); renderAll();
   }
-
-  async function recomputeAllOnPage() {
-    // Recompute length + area measurements based on new scale
-    var updates = [];
-    measurements.forEach(function(m) {
-      if (m.tool_type === 'length') {
-        var totalPx = 0;
-        for (var i = 1; i < m.points.length; i++) {
-          var a = m.points[i-1], b = m.points[i];
-          totalPx += Math.hypot(b[0]-a[0], b[1]-a[1]);
-        }
-        m.computed_value = totalPx / scalePxPerFoot;
-        m.scale_pixels_per_foot = scalePxPerFoot;
-        updates.push(m);
-      } else if (m.tool_type === 'area') {
-        var areaPx = 0;
-        var pts = m.points;
-        for (var j = 0, n = pts.length; j < n; j++) {
-          var pA = pts[j], pB = pts[(j+1) % n];
-          areaPx += (pA[0] * pB[1]) - (pB[0] * pA[1]);
-        }
-        areaPx = Math.abs(areaPx) / 2;
-        m.computed_value = areaPx / (scalePxPerFoot * scalePxPerFoot);
-        m.scale_pixels_per_foot = scalePxPerFoot;
-        updates.push(m);
-      }
-    });
-    for (var i = 0; i < updates.length; i++) {
-      await supabaseClient.from('estimate_measurements').update({
-        computed_value: updates[i].computed_value,
-        scale_pixels_per_foot: updates[i].scale_pixels_per_foot
-      }).eq('id', updates[i].id);
-    }
-    renderMeasList();
+  async function saveNote() {
+    var t = $('noteText').value.trim(); if (!t || !draft.length) { closeModal('noteModal'); return; }
+    var p = plans[planIdx];
+    var r = await supabaseClient.from('estimate_measurements').insert({ drawing_id: p.drawing.id, page_number: p.page, tool_type: 'note', points: [draft[0]], label: t, computed_value: 0, computed_unit: null, color: '#f59e0b' }).select().single();
+    closeModal('noteModal'); draft = [];
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    allMeas.push(r.data); meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); renderAll();
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  //   MEASUREMENTS — CRUD + render
-  // ══════════════════════════════════════════════════════════════════════════
-  async function loadMeasurements() {
-    var r = await supabaseClient.from('estimate_measurements')
-      .select('*').eq('drawing_id', currentDrawing.id).eq('page_number', currentPage)
-      .order('created_at');
-    measurements = r.data || [];
-    // Find latest scale on this page
-    var scaleM = measurements.filter(function(m) { return m.tool_type === 'scale'; }).pop();
-    scalePxPerFoot = scaleM ? Number(scaleM.scale_pixels_per_foot) : null;
-    currentScaleLabel = scaleM ? (scaleM.label || 'Custom') : null;
-    // Restore dropdown to matching preset if any
-    var sel = document.getElementById('scalePreset');
-    sel.value = '';
-    if (scaleM && scaleM.label) {
-      for (var i = 0; i < SCALE_PRESETS.length; i++) {
-        if (SCALE_PRESETS[i].label === scaleM.label) { sel.value = String(i); break; }
-      }
-    }
-    updateScaleBadge();
-    redrawOverlay();
-    renderMeasList();
-  }
-
-  async function saveMeasurement(m) {
-    var layerMeta = LAYERS.find(function(l) { return l.key === currentLayer; }) || LAYERS[0];
-    m.drawing_id = currentDrawing.id;
-    m.page_number = currentPage;
-    m.layer_category = m.tool_type === 'scale' ? null : currentLayer;
-    m.color = m.tool_type === 'scale' ? '#dc2626' : layerMeta.color;
-    m.scale_pixels_per_foot = m.tool_type === 'scale'
-      ? (m.points[1] && m.points[0]
-         ? Math.hypot(m.points[1][0]-m.points[0][0], m.points[1][1]-m.points[0][1]) / m.computed_value
-         : null)
-      : scalePxPerFoot;
-    var r = await supabaseClient.from('estimate_measurements').insert(m).select().single();
-    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
-    measurements.push(r.data);
-    if (m.tool_type === 'scale') {
-      scalePxPerFoot = r.data.scale_pixels_per_foot;
-    }
-    renderMeasList();
-  }
-
-  async function deleteMeasurement(id) {
-    if (!confirm('Delete this measurement?')) return;
+  async function deleteMark(id, silent) {
+    var m = meas.find(function(x) { return x.id === id; }); if (!m) return;
     var r = await supabaseClient.from('estimate_measurements').delete().eq('id', id);
-    if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
-    measurements = measurements.filter(function(m) { return m.id !== id; });
-    var scaleM = measurements.filter(function(m) { return m.tool_type === 'scale'; }).pop();
-    scalePxPerFoot = scaleM ? Number(scaleM.scale_pixels_per_foot) : null;
-    updateScaleBadge();
-    redrawOverlay();
-    renderMeasList();
+    if (r.error) { toast(r.error.message, 'error'); return; }
+    if (!silent) undoStack.push({ type: 'delete', row: m });
+    allMeas = allMeas.filter(function(x) { return x.id !== id; }); meas = meas.filter(function(x) { return x.id !== id; });
+    if (selectedId === id) selectedId = null; renderAll();
+  }
+  async function undo() {
+    if (draft.length) { draft.pop(); redraw(); return; }
+    var u = undoStack.pop(); if (!u) return;
+    if (u.type === 'add') { await deleteMark(u.id, true); }
+    else if (u.type === 'delete') { var row = Object.assign({}, u.row); delete row.id; delete row.created_at; delete row.updated_at; var r = await supabaseClient.from('estimate_measurements').insert(row).select().single(); if (!r.error) { allMeas.push(r.data); if (r.data.drawing_id === plans[planIdx].drawing.id && r.data.page_number === plans[planIdx].page) meas.push(r.data); } renderAll(); }
+    else if (u.type === 'move') { var m = allMeas.find(function(x) { return x.id === u.id; }); if (m) { m.points = u.points; m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value; await supabaseClient.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); } renderAll(); }
+  }
+  // hit test in PDF units: vertex within 7 px, segment within 5 px, polygon inside, count symbol within 10 px
+  function hitTest(p) {
+    var tolV = 7 / renderScale, tolS = 5 / renderScale, best = null;
+    for (var i = meas.length - 1; i >= 0; i--) { var m = meas[i]; if (m.tool_type === 'scale' && m.points.length < 2) continue; var l = layerById(m.layer_id); if (l && l.is_visible === false) continue;
+      var pts = m.points;
+      for (var k = 0; k < pts.length; k++) if (dist(p, pts[k]) <= (m.tool_type === 'count' || m.tool_type === 'note' ? 12 / renderScale : tolV)) return { m: m, vertex: (m.tool_type === 'count' || m.tool_type === 'note') ? null : k };
+      if (m.tool_type === 'length' || m.tool_type === 'scale') { for (var j = 1; j < pts.length; j++) if (segDist(p, pts[j - 1], pts[j]) <= tolS) best = best || { m: m, vertex: null }; }
+      if (m.tool_type === 'area' && inPoly(p, pts)) best = best || { m: m, vertex: null }; }
+    return best;
   }
 
-  async function undoLast() {
-    if (draftPoints.length) {
-      draftPoints.pop();
-      redrawOverlay();
-      return;
-    }
-    if (!measurements.length) return;
-    var last = measurements[measurements.length - 1];
-    await deleteMeasurement(last.id);
+  // ─── overlay drawing ───
+  function redraw() {
+    if (!ctx) return; ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    meas.forEach(function(m) { var l = layerById(m.layer_id); if (l && l.is_visible === false) return; drawMark(m, l, m.id === selectedId); });
+    var l = layerById(activeLayerId), col = tool === 'scale' ? '#dc2626' : (l ? l.color : '#0696D7');
+    if (draft.length) { var pts = draft.map(S); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      if (hover) { var h = S(hover); ctx.lineTo(h[0], h[1]); } if (tool === 'area' && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); pts.forEach(function(q) { dot(q, col); });
+      draftDrops.forEach(function(di) { if (pts[di]) glyph(pts[di], '▼', col); });
+      if (scalePpf && tool !== 'scale') { var v = tool === 'area' ? (pts.length > 2 ? polyArea(draft.concat(hover ? [hover] : [])) / (scalePpf * scalePpf) : 0) : polyLen(draft.concat(hover ? [hover] : [])) / scalePpf; var lp = hover ? S(hover) : pts[pts.length - 1]; label([lp[0] + 14, lp[1] - 14], tool === 'area' ? v.toFixed(0) + ' sf' : v.toFixed(1) + ' ft', col); } }
+    if (measureLine) { var a = S(measureLine[0]), b = measureLine[1] ? S(measureLine[1]) : (hover ? S(hover) : null); if (b) { ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); var ft = scalePpf ? dist(measureLine[0], measureLine[1] || hover) / scalePpf : 0; label([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], scalePpf ? ftIn(ft) : 'no scale', '#0f172a'); } dot(a, '#0f172a'); }
   }
-
-  function renderMeasList() {
-    var host = document.getElementById('measList');
-    if (!measurements.length) {
-      host.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:8px">No measurements yet on this page.</div>';
-    } else {
-      host.innerHTML = measurements.map(function(m) {
-        var lay = LAYERS.find(function(l) { return l.key === m.layer_category; });
-        var v = Number(m.computed_value || 0);
-        var valText = m.tool_type === 'scale'
-          ? (m.label || fmtVal(v, m.computed_unit))
-          : fmtVal(v, m.computed_unit);
-        return '<div class="meas-item ' + m.tool_type + '" data-edit="' + m.id + '" style="cursor:pointer" title="Click to edit">' +
-          '<div class="top">' +
-            '<span>' + toolIcon(m.tool_type) + ' ' + m.tool_type + '</span>' +
-            '<span class="val">' + escHtml(valText) + '</span>' +
-          '</div>' +
-          (m.tool_type !== 'scale' && m.label ? '<div class="lbl">' + escHtml(m.label) + '</div>' : '') +
-          '<div class="lay">' +
-            (lay ? '<span style="display:flex;align-items:center;gap:4px"><span class="layer-swatch" style="background:' + lay.color + '"></span>' + lay.label + '</span>' : '<span>—</span>') +
-            (canEdit ? '<button data-del="' + m.id + '">✕</button>' : '') +
-          '</div>' +
-        '</div>';
-      }).join('');
-      host.querySelectorAll('[data-del]').forEach(function(b) {
-        b.addEventListener('click', function(e) {
-          e.stopPropagation();
-          deleteMeasurement(b.getAttribute('data-del'));
-        });
-      });
-      host.querySelectorAll('[data-edit]').forEach(function(el) {
-        el.addEventListener('click', function() { openEditMeasModal(el.getAttribute('data-edit')); });
-      });
-    }
-    renderMeasTotals();
+  function S(p) { return [p[0] * renderScale, p[1] * renderScale]; }
+  function drawMark(m, l, sel) {
+    var col = (l && l.color) || m.color || '#0696D7', pts = m.points.map(S), lw = (l ? Number(l.line_width || 3) : 2);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = sel ? lw + 2 : lw; ctx.setLineDash(m.deduct ? [8, 5] : []);
+    if (m.tool_type === 'count') { symbol(pts[0], l ? l.symbol : 'circle', col, sel, m.mark_no); }
+    else if (m.tool_type === 'note') { ctx.setLineDash([]); ctx.fillStyle = '#fef3c7'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5; var w = Math.min(260, ctx.measureText(m.label || '').width + 16); ctx.font = '11px Arial'; w = Math.min(260, ctx.measureText(m.label || '').width + 16);
+      ctx.fillRect(pts[0][0], pts[0][1] - 20, w, 22); ctx.strokeRect(pts[0][0], pts[0][1] - 20, w, 22); ctx.fillStyle = '#78350f'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText((m.label || '').slice(0, 48), pts[0][0] + 8, pts[0][1] - 9); }
+    else if (m.tool_type === 'length' || m.tool_type === 'scale') { if (m.tool_type === 'scale' && pts.length < 2) return; if (m.tool_type === 'scale') { ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 3; }
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); ctx.setLineDash([]);
+      if (sel || pts.length <= 12) pts.forEach(function(q) { dot(q, m.tool_type === 'scale' ? '#dc2626' : col, sel); });
+      var mid = midOf(pts), v = Number(m.computed_value || 0); label(mid, (m.deduct ? '−' : '') + (m.tool_type === 'scale' ? (m.label || '') : ftIn(v + (l ? Number(m.drops || 0) * Number(l.drop_length_ft || 0) : 0))) + (m.drops ? ' +' + m.drops + '▼' : ''), m.tool_type === 'scale' ? '#dc2626' : col); }
+    else if (m.tool_type === 'area') { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]); ctx.closePath(); ctx.globalAlpha = sel ? .35 : .2; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke(); ctx.setLineDash([]);
+      if (sel) pts.forEach(function(q) { dot(q, col, true); }); label(centroid(pts), (m.deduct ? '−' : '') + Number(m.computed_value || 0).toFixed(0) + ' sf', col); }
   }
-
-  function renderMeasTotals() {
-    // Aggregate per layer × unit
-    var agg = {};
-    measurements.forEach(function(m) {
-      if (m.tool_type === 'scale') return;
-      var lay = m.layer_category || 'other';
-      var key = lay + '|' + m.computed_unit;
-      if (!agg[key]) agg[key] = { layer: lay, unit: m.computed_unit, total: 0, count: 0 };
-      agg[key].total += Number(m.computed_value || 0);
-      agg[key].count += 1;
-    });
-    var html = '<b style="color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Totals</b><br>';
-    if (!Object.keys(agg).length) {
-      html += '<span style="color:#64748b">nothing yet</span>';
-    } else {
-      Object.values(agg).forEach(function(a) {
-        var lay = LAYERS.find(function(l) { return l.key === a.layer; });
-        html += '<div>' + (lay ? lay.label : a.layer) + ': <b style="color:#38bdf8">' +
-          fmtVal(a.total, a.unit) + '</b> <span style="color:#64748b">(' + a.count + ' marks)</span></div>';
-      });
-    }
-    document.getElementById('measTotals').innerHTML = html;
+  function symbol(p, sym, col, sel, no) {
+    var r = sel ? 10 : 8; ctx.setLineDash([]); ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath();
+    if (sym === 'square') ctx.rect(p[0] - r, p[1] - r, 2 * r, 2 * r);
+    else if (sym === 'diamond') { ctx.moveTo(p[0], p[1] - r * 1.2); ctx.lineTo(p[0] + r * 1.2, p[1]); ctx.lineTo(p[0], p[1] + r * 1.2); ctx.lineTo(p[0] - r * 1.2, p[1]); ctx.closePath(); }
+    else if (sym === 'triangle') { ctx.moveTo(p[0], p[1] - r * 1.2); ctx.lineTo(p[0] + r * 1.15, p[1] + r); ctx.lineTo(p[0] - r * 1.15, p[1] + r); ctx.closePath(); }
+    else if (sym === 'x') { ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.moveTo(p[0] - r, p[1] - r); ctx.lineTo(p[0] + r, p[1] + r); ctx.moveTo(p[0] + r, p[1] - r); ctx.lineTo(p[0] - r, p[1] + r); ctx.stroke(); if (sel) { ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1; ctx.strokeRect(p[0] - r - 3, p[1] - r - 3, 2 * r + 6, 2 * r + 6); } return; }
+    else ctx.arc(p[0], p[1], r, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke(); if (sel) { ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1; ctx.stroke(); }
+    if (no) { ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(no), p[0], p[1] + (sym === 'triangle' ? 3 : 0)); }
   }
+  function dot(p, col, big) { ctx.setLineDash([]); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0], p[1], big ? 5 : 3.5, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke(); }
+  function glyph(p, t, col) { ctx.fillStyle = col; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(t, p[0], p[1] - 6); }
+  function label(p, text, col) { ctx.setLineDash([]); ctx.font = 'bold 11px Arial'; var w = ctx.measureText(text).width + 8; ctx.fillStyle = col; ctx.globalAlpha = .92; ctx.fillRect(p[0] - w / 2, p[1] - 8, w, 16); ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, p[0], p[1]); }
+  function ftIn(ft) { var f = Math.floor(ft), i = Math.round((ft - f) * 12); if (i === 12) { f++; i = 0; } return f + '\'' + (i ? '-' + i + '"' : '') + ' (' + ft.toFixed(1) + ')'; }
 
-  function toolIcon(t) {
-    return { scale: '📏', length: '📐', area: '🟦', count: '🔢' }[t] || '•';
+  // ═══════════════════════ properties + totals ═══════════════════════
+  function renderProps() {
+    var host = $('propPanel'), m = selectedId ? meas.find(function(x) { return x.id === selectedId; }) : null;
+    if (m) { var l = layerById(m.layer_id), q = markQty(m, l), unit = l ? typeUnit(l.takeoff_type) : (m.computed_unit || '');
+      host.innerHTML = '<div class="hd"><span class="sw" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + ((l && l.color) || m.color) + '"></span>' + esc(l ? l.name : (m.tool_type === 'note' ? 'Note' : m.tool_type === 'scale' ? 'Scale' : 'Legacy mark')) + '</div>' +
+        (m.tool_type === 'note' ? '<div class="row"><span>Text</span><b style="font-family:inherit">' + esc(m.label || '') + '</b></div>' : '') +
+        (m.tool_type !== 'note' && m.tool_type !== 'scale' ? '<div class="row"><span>Measured</span><b>' + (m.tool_type === 'count' ? '1 mark' : m.tool_type === 'area' ? Number(m.computed_value).toFixed(1) + ' sf' : ftIn(Number(m.computed_value))) + '</b></div>' +
+          '<div class="row"><span>Counts as</span><b>' + fmtQty(q, unit) + '</b></div>' +
+          (m.tool_type === 'length' && l ? '<div class="row"><span>Drops (× ' + Number(l.drop_length_ft || 0) + ' ft)</span><input type="number" min="0" step="1" id="pDrops" value="' + Number(m.drops || 0) + '"></div>' : '') +
+          '<div class="row"><span>Deduct (negative)</span><input type="checkbox" id="pDeduct" style="width:auto"' + (m.deduct ? ' checked' : '') + '></div>' +
+          '<div class="row"><span>Label</span><input type="text" id="pLabel" style="text-align:left;width:130px" value="' + esc(m.label || '') + '"></div>' +
+          '<div class="row"><span>Layer</span><select id="pLayer" style="width:140px">' + layers.map(function(x) { return '<option value="' + x.id + '"' + (x.id === m.layer_id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>' : '') +
+        '<div class="actions"><button class="btn-ghost" id="pSave">Save</button><button class="btn-danger" id="pDel">🗑 Delete</button></div>';
+      $('pDel').onclick = function() { deleteMark(m.id); };
+      $('pSave').onclick = async function() { var patch = { label: ($('pLabel') ? $('pLabel').value.trim() : m.label) || null };
+        if ($('pDrops')) patch.drops = Math.max(0, parseInt($('pDrops').value, 10) || 0); if ($('pDeduct')) patch.deduct = $('pDeduct').checked;
+        if ($('pLayer') && $('pLayer').value !== m.layer_id) { var nl = layerById($('pLayer').value); patch.layer_id = nl.id; patch.layer_category = nl.category; patch.color = nl.color; }
+        var r = await supabaseClient.from('estimate_measurements').update(patch).eq('id', m.id); if (r.error) { toast(r.error.message, 'error'); return; } Object.assign(m, patch); renderAll(); toast('Saved', 'success'); };
+      return; }
+    var L = layerById(activeLayerId);
+    if (!L) { host.innerHTML = '<div class="empty">Select a layer or a mark.</div>'; return; }
+    var t = layerTotals(L), unit = typeUnit(L.takeoff_type);
+    host.innerHTML = '<div class="hd"><span class="sw" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + L.color + '"></span>' + esc(L.name) + '</div>' +
+      '<div class="row"><span>Group</span><b style="font-family:inherit">' + esc(L.group_name) + '</b></div><div class="row"><span>Type · category</span><b style="font-family:inherit">' + L.takeoff_type + ' · ' + CATS[L.category] + '</b></div>' +
+      (pdfPage ? '<div class="row"><span>This plan</span><b>' + fmtQty(pageQty(L), unit) + '</b></div>' : '') +
+      '<div class="row"><span>All plans (' + t.marks + ' marks, ' + t.pages + ' plans)</span><b>' + fmtQty(t.qty, unit) + '</b></div>' +
+      '<div class="row"><span>Unit material</span><b>$' + Number(L.unit_material_cost).toFixed(2) + ' /' + unit + (L.waste_pct ? ' +' + L.waste_pct + '% waste' : '') + '</b></div>' +
+      '<div class="row"><span>Unit labor</span><b>' + (Math.round(Number(L.unit_labor_hours) * 60 * 10) / 10) + ' min /' + unit + (Number(L.labor_factor) !== 1 ? ' ×' + L.labor_factor : '') + '</b></div>' +
+      (Number(L.multiplier) !== 1 ? '<div class="row"><span>Multiplier</span><b>×' + L.multiplier + '</b></div>' : '') + (Number(L.drop_length_ft) ? '<div class="row"><span>Drop length</span><b>' + L.drop_length_ft + ' ft</b></div>' : '') +
+      '<div class="row"><span>Material</span><b>' + fmtMoney(t.mat) + '</b></div><div class="row"><span>Labor</span><b>' + t.hrs.toFixed(1) + ' h · ' + fmtMoney(t.labor) + '</b></div><div class="row"><span>Total</span><b>' + fmtMoney(t.total) + '</b></div>' +
+      '<div class="actions"><button class="btn-ghost" id="pEdit">✎ Edit layer</button><button class="btn-ghost" id="pDup">⧉ Duplicate</button></div>';
+    $('pEdit').onclick = function() { openLayerModal(L.id); };
+    $('pDup').onclick = function() { var c = Object.assign({}, L); delete c.id; delete c.created_at; delete c.updated_at; c.name = L.name + ' (copy)'; openLayerModal(null, c); };
   }
-
-  function fmtVal(v, unit) {
-    v = Number(v || 0);
-    if (unit === 'ea') return v.toFixed(0) + ' ea';
-    if (unit === 'sqft') return v.toFixed(1) + ' sq ft';
-    return v.toFixed(2) + ' ft';
+  function renderTotals() {
+    var g = {}, gm = 0, gh = 0;
+    layers.forEach(function(l) { var t = layerTotals(l); var k = l.group_name; g[k] = g[k] || { mat: 0, hrs: 0 }; g[k].mat += t.mat; g[k].hrs += t.hrs; gm += t.mat; gh += t.hrs; });
+    var html = '<table>' + Object.keys(g).sort().map(function(k) { return '<tr class="g"><td>' + esc(k) + '</td><td class="n">' + fmtMoney(g[k].mat) + '</td><td class="n">' + g[k].hrs.toFixed(0) + ' h</td></tr>'; }).join('') +
+      '<tr><td>Material</td><td class="n" colspan="2">' + fmtMoney(gm) + '</td></tr><tr><td>Labor ' + gh.toFixed(0) + ' h × $' + laborRate + '</td><td class="n" colspan="2">' + fmtMoney(gh * laborRate) + '</td></tr>' +
+      '<tr class="total"><td>Takeoff total</td><td class="n" colspan="2">' + fmtMoney(gm + gh * laborRate) + '</td></tr></table>' +
+      '<div style="margin-top:8px;font-size:11px;color:#64748b">Before overhead, misc and tax — those are applied on the <a href="estimating.html?est=' + estimateId + '" style="color:#0696D7">Estimating</a> page after roll-up.</div>';
+    $('totals').innerHTML = html; $('tkTotalChip').textContent = fmtMoney(gm + gh * laborRate);
   }
+  function renderAll() { renderLayerTree(); renderProps(); renderTotals(); updateStatus(); redraw(); }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  //   Overlay rendering
-  // ══════════════════════════════════════════════════════════════════════════
-  function redrawOverlay() {
-    if (!overlayCtx) return;
-    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-    // Persisted measurements — skip hidden layers (scale always shown)
-    measurements.forEach(function(m) {
-      if (m.tool_type !== 'scale' && layerVisibility[m.layer_category] === false) return;
-      drawMeasurement(m);
-    });
-
-    // Draft in progress
-    if (draftPoints.length) {
-      var lay = LAYERS.find(function(l) { return l.key === currentLayer; }) || LAYERS[0];
-      var color = currentTool === 'scale' ? '#dc2626' : lay.color;
-      overlayCtx.strokeStyle = color;
-      overlayCtx.fillStyle   = color;
-      overlayCtx.lineWidth = 2;
-      overlayCtx.setLineDash([6, 4]);
-      overlayCtx.beginPath();
-      var pts = draftPoints.map(function(p) { return [p[0] * renderScale, p[1] * renderScale]; });
-      overlayCtx.moveTo(pts[0][0], pts[0][1]);
-      for (var i = 1; i < pts.length; i++) overlayCtx.lineTo(pts[i][0], pts[i][1]);
-      if (hoverPoint) {
-        var h = [hoverPoint[0] * renderScale, hoverPoint[1] * renderScale];
-        overlayCtx.lineTo(h[0], h[1]);
-      }
-      overlayCtx.stroke();
-      overlayCtx.setLineDash([]);
-      pts.forEach(function(p) { drawDot(p, color); });
-    }
+  // ═══════════════════════ roll-up ═══════════════════════
+  var rollupRows = [];
+  function openRollup() {
+    rollupRows = layers.map(function(l) { var t = layerTotals(l); return { l: l, t: t, qty: Math.round(t.qty * 100) / 100, mat: Number(l.unit_material_cost) * (1 + Number(l.waste_pct || 0) / 100), hrs: Number(l.unit_labor_hours) * Number(l.labor_factor || 1) }; }).filter(function(r) { return r.qty !== 0; });
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:6px 8px">Layer</th><th style="text-align:left;padding:6px 8px">Category</th><th style="text-align:right;padding:6px 8px">Qty</th><th style="text-align:right;padding:6px 8px">Unit $</th><th style="text-align:right;padding:6px 8px">Unit h</th><th style="text-align:right;padding:6px 8px">Total</th></tr></thead><tbody>';
+    rollupRows.forEach(function(r) { html += '<tr style="border-top:1px solid #f1f5f9"><td style="padding:6px 8px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + r.l.color + ';margin-right:6px"></span>' + esc(r.l.name) + '</td><td style="padding:6px 8px;color:#64748b">' + CATS[r.l.category] + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + fmtQty(r.qty, typeUnit(r.l.takeoff_type)) + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + r.mat.toFixed(2) + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + r.hrs.toFixed(3) + '</td><td style="padding:6px 8px;text-align:right;font-family:monospace">' + fmtMoney(r.t.total) + '</td></tr>'; });
+    html += '</tbody></table>' + (rollupRows.length ? '' : '<div style="padding:20px;text-align:center;color:#64748b">Nothing measured yet.</div>');
+    $('rollupPreview').innerHTML = html; openModal('rollupModal');
   }
-
-  function drawMeasurement(m) {
-    var color = m.color || '#f59e0b';
-    var pts = m.points.map(function(p) { return [p[0] * renderScale, p[1] * renderScale]; });
-    overlayCtx.strokeStyle = color;
-    overlayCtx.fillStyle   = color;
-    overlayCtx.lineWidth = m.tool_type === 'scale' ? 3 : 2;
-
-    if (m.tool_type === 'count') {
-      drawCountMark(pts[0], color);
-    } else if (m.tool_type === 'scale' || m.tool_type === 'length') {
-      // Preset scales are stored as a single anchor point → skip drawing entirely
-      if (m.tool_type === 'scale' && pts.length < 2) return;
-      overlayCtx.beginPath();
-      overlayCtx.moveTo(pts[0][0], pts[0][1]);
-      for (var i = 1; i < pts.length; i++) overlayCtx.lineTo(pts[i][0], pts[i][1]);
-      overlayCtx.stroke();
-      pts.forEach(function(p) { drawDot(p, color); });
-      // Label at midpoint
-      var mid = midOf(pts);
-      var lbl = m.tool_type === 'scale' ? (m.label || fmtVal(m.computed_value, m.computed_unit))
-                                        : fmtVal(m.computed_value, m.computed_unit);
-      drawLabel(mid, lbl, color);
-    } else if (m.tool_type === 'area') {
-      overlayCtx.beginPath();
-      overlayCtx.moveTo(pts[0][0], pts[0][1]);
-      for (var j = 1; j < pts.length; j++) overlayCtx.lineTo(pts[j][0], pts[j][1]);
-      overlayCtx.closePath();
-      overlayCtx.globalAlpha = 0.25; overlayCtx.fill(); overlayCtx.globalAlpha = 1;
-      overlayCtx.stroke();
-      var c = centroid(pts);
-      drawLabel(c, fmtVal(m.computed_value, m.computed_unit), color);
-    }
-  }
-
-  function drawDot(p, color) {
-    overlayCtx.fillStyle = color;
-    overlayCtx.beginPath();
-    overlayCtx.arc(p[0], p[1], 4, 0, Math.PI * 2);
-    overlayCtx.fill();
-    overlayCtx.strokeStyle = '#fff'; overlayCtx.lineWidth = 1;
-    overlayCtx.stroke();
-  }
-
-  function drawCountMark(p, color) {
-    overlayCtx.fillStyle = color;
-    overlayCtx.beginPath();
-    overlayCtx.arc(p[0], p[1], 8, 0, Math.PI * 2);
-    overlayCtx.fill();
-    overlayCtx.strokeStyle = '#fff'; overlayCtx.lineWidth = 2; overlayCtx.stroke();
-    overlayCtx.fillStyle = '#fff';
-    overlayCtx.font = 'bold 10px Arial';
-    overlayCtx.textAlign = 'center'; overlayCtx.textBaseline = 'middle';
-    overlayCtx.fillText('•', p[0], p[1]);
-  }
-
-  function drawLabel(p, text, color) {
-    overlayCtx.font = 'bold 11px Arial';
-    var w = overlayCtx.measureText(text).width + 8;
-    overlayCtx.fillStyle = color; overlayCtx.globalAlpha = 0.9;
-    overlayCtx.fillRect(p[0] - w/2, p[1] - 8, w, 16);
-    overlayCtx.globalAlpha = 1;
-    overlayCtx.fillStyle = '#fff';
-    overlayCtx.textAlign = 'center'; overlayCtx.textBaseline = 'middle';
-    overlayCtx.fillText(text, p[0], p[1]);
-  }
-
-  function midOf(pts) {
-    if (pts.length < 2) return pts[0];
-    var i = Math.floor(pts.length / 2);
-    return [(pts[i-1][0] + pts[i][0])/2, (pts[i-1][1] + pts[i][1])/2];
-  }
-  function centroid(pts) {
-    var x = 0, y = 0;
-    pts.forEach(function(p) { x += p[0]; y += p[1]; });
-    return [x / pts.length, y / pts.length];
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  //   EDIT MEASUREMENT — label + layer
-  // ══════════════════════════════════════════════════════════════════════════
-  var editingMeasId = null;
-
-  function openEditMeasModal(id) {
-    if (!canEdit) { showToast('Read-only', 'error'); return; }
-    var m = measurements.find(function(x) { return x.id === id; });
-    if (!m) return;
-    editingMeasId = id;
-    document.getElementById('editMeasSummary').innerHTML =
-      '<b>' + toolIcon(m.tool_type) + ' ' + m.tool_type + '</b> · ' +
-      (m.tool_type === 'scale'
-        ? escHtml(m.label || fmtVal(m.computed_value, m.computed_unit))
-        : fmtVal(m.computed_value, m.computed_unit));
-    document.getElementById('editMeasLabel').value  = m.label || '';
-    document.getElementById('editMeasLayer').value  = m.layer_category || 'ductwork';
-    // Scale measurements don't have a layer
-    document.getElementById('editMeasLayer').disabled = (m.tool_type === 'scale');
-    openModal('editMeasModal');
-  }
-
-  async function saveMeasEdit() {
-    if (!editingMeasId) return;
-    var patch = {
-      label:          document.getElementById('editMeasLabel').value.trim() || null,
-      layer_category: document.getElementById('editMeasLayer').value
-    };
-    // Update local color to match new layer
-    var lay = LAYERS.find(function(l) { return l.key === patch.layer_category; });
-    if (lay) patch.color = lay.color;
-    var r = await supabaseClient.from('estimate_measurements').update(patch).eq('id', editingMeasId);
-    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
-    // Update in-memory record
-    measurements = measurements.map(function(m) {
-      return m.id === editingMeasId ? Object.assign({}, m, patch) : m;
-    });
-    closeModal('editMeasModal');
-    editingMeasId = null;
-    redrawOverlay();
-    renderMeasList();
-  }
-
-  async function deleteMeasFromModal() {
-    if (!editingMeasId) return;
-    if (!confirm('Delete this measurement?')) return;
-    var r = await supabaseClient.from('estimate_measurements').delete().eq('id', editingMeasId);
-    if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
-    measurements = measurements.filter(function(m) { return m.id !== editingMeasId; });
-    var scaleM = measurements.filter(function(m) { return m.tool_type === 'scale'; }).pop();
-    scalePxPerFoot   = scaleM ? Number(scaleM.scale_pixels_per_foot) : null;
-    currentScaleLabel = scaleM ? (scaleM.label || 'Custom') : null;
-    updateScaleBadge();
-    closeModal('editMeasModal');
-    editingMeasId = null;
-    redrawOverlay();
-    renderMeasList();
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  //   EXPORT — marked-up PDF (current page + overlay flattened)
-  // ══════════════════════════════════════════════════════════════════════════
-  function exportMarkedPdf() {
-    if (!pdfDoc) { showToast('Load a drawing first', 'error'); return; }
-    if (!window.jspdf || !window.jspdf.jsPDF) { showToast('PDF library not loaded', 'error'); return; }
-    // Composite pdf canvas + overlay canvas onto a temporary canvas
-    var w = pdfCanvas.width, h = pdfCanvas.height;
-    var merge = document.createElement('canvas');
-    merge.width = w; merge.height = h;
-    var ctx = merge.getContext('2d');
-    ctx.drawImage(pdfCanvas, 0, 0);
-    ctx.drawImage(overlayCanvas, 0, 0);
-    var img = merge.toDataURL('image/jpeg', 0.92);
-
-    var jsPDF = window.jspdf.jsPDF;
-    // Match orientation to canvas aspect ratio, letter size
-    var isLandscape = w > h;
-    var doc = new jsPDF({ unit: 'pt', format: 'letter', orientation: isLandscape ? 'landscape' : 'portrait' });
-    var pageW = isLandscape ? 792 : 612;
-    var pageH = isLandscape ? 612 : 792;
-    // Fit image with 24pt margin
-    var m = 24;
-    var maxW = pageW - 2 * m, maxH = pageH - 2 * m - 40;
-    var ratio = Math.min(maxW / w, maxH / h);
-    var iw = w * ratio, ih = h * ratio;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(11, 61, 102);
-    doc.text('Northern Wolves AC — On-Screen Takeoff', m, m + 4);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(80, 80, 80);
-    doc.text(
-      (currentEstimate ? '#' + (currentEstimate.quote_number || '') + '  ' + currentEstimate.name + '  ·  ' : '') +
-      (currentDrawing ? currentDrawing.filename + '  ·  page ' + currentPage + ' of ' + currentDrawing.page_count : '') +
-      (currentScaleLabel ? '  ·  Scale: ' + currentScaleLabel : ''),
-      m, m + 18
-    );
-    doc.addImage(img, 'JPEG', (pageW - iw) / 2, m + 30, iw, ih);
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text('Generated ' + new Date().toLocaleString('en-US'), m, pageH - 12);
-
-    var safeName = (currentDrawing.filename || 'drawing').replace(/\.pdf$/i, '').replace(/[^A-Za-z0-9._-]/g, '_');
-    doc.save('takeoff.' + safeName + '.p' + currentPage + '.pdf');
-    showToast('✅ PDF exported', 'success');
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  //   ROLL-UP → Estimate line items
-  // ══════════════════════════════════════════════════════════════════════════
-  async function openRollup() {
-    // Aggregate across ALL drawings + ALL pages, not just current
-    var allDrawingIds = drawings.map(function(d) { return d.id; });
-    if (!allDrawingIds.length) { showToast('No drawings yet', 'error'); return; }
-    var r = await supabaseClient.from('estimate_measurements')
-      .select('*').in('drawing_id', allDrawingIds);
-    var all = r.data || [];
-    var agg = {};
-    all.forEach(function(m) {
-      if (m.tool_type === 'scale') return;
-      var key = (m.layer_category || 'other') + '|' + m.computed_unit;
-      if (!agg[key]) agg[key] = { layer: m.layer_category, unit: m.computed_unit, total: 0, count: 0 };
-      agg[key].total += Number(m.computed_value || 0);
-      agg[key].count += 1;
-    });
-    var rows = Object.values(agg);
-    if (!rows.length) {
-      document.getElementById('rollupPreview').innerHTML =
-        '<div style="padding:20px;text-align:center;color:#64748b">No measurements to roll up yet.</div>';
-    } else {
-      var html = '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
-        '<thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">Category</th><th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">Quantity</th><th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">Marks</th></tr></thead><tbody>';
-      rows.forEach(function(a) {
-        var lay = LAYERS.find(function(l) { return l.key === a.layer; });
-        html += '<tr><td style="padding:6px">' +
-          (lay ? '<span class="layer-swatch" style="background:' + lay.color + ';display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle;margin-right:4px"></span>' + lay.label : (a.layer || '—')) +
-          '</td><td style="padding:6px;text-align:right;font-family:monospace">' + fmtVal(a.total, a.unit) + '</td>' +
-          '<td style="padding:6px;text-align:right;color:#64748b">' + a.count + '</td></tr>';
-      });
-      html += '</tbody></table>';
-      document.getElementById('rollupPreview').innerHTML = html;
-    }
-    openModal('rollupModal');
-    document.getElementById('rollupApply').setAttribute('data-rows', JSON.stringify(rows));
-  }
-
   async function applyRollup() {
-    var rows = JSON.parse(document.getElementById('rollupApply').getAttribute('data-rows') || '[]');
-    if (!rows.length) { closeModal('rollupModal'); return; }
-    var replace = document.getElementById('rollupReplace').checked;
-
-    if (replace) {
-      // Delete lines previously created by roll-up (tagged in notes)
-      await supabaseClient.from('estimate_line_items').delete()
-        .eq('estimate_id', estimateId).like('notes', '%[from PDF takeoff]');
-    }
-
-    // Determine sort_order start
-    var existing = await supabaseClient.from('estimate_line_items').select('sort_order')
-      .eq('estimate_id', estimateId).order('sort_order', { ascending: false }).limit(1).maybeSingle();
-    var sortOrder = (existing && existing.data ? existing.data.sort_order : 0) + 1;
-
-    var inserts = rows.map(function(a) {
-      var cat = a.layer || 'services';
-      var crew = (cat === 'pipework') ? 'pipe' :
-                 (cat === 'equipment') ? 'none' :
-                 (cat === 'services') ? 'none' : 'sm';
-      // Represent as unit=qty × mat=$0 × hrs=0 stub, so PM fills rate later — OR:
-      // Prefer: qty = total, unit = computed_unit, and label describes measurement source.
-      return {
-        estimate_id: estimateId,
-        category:    cat,
-        description: 'From PDF takeoff — ' + (LAYERS.find(function(l){return l.key===a.layer;})||{label:a.layer||'other'}).label,
-        quantity:    Math.round(a.total * 100) / 100,
-        unit:        a.unit,
-        unit_material_cost: 0,
-        unit_labor_hours:   0,
-        labor_crew_type:    crew,
-        sort_order:  sortOrder++,
-        notes:       'Auto-generated from ' + a.count + ' PDF measurements — [from PDF takeoff]'
-      };
-    });
-
-    var ins = await supabaseClient.from('estimate_line_items').insert(inserts);
-    if (ins.error) { showToast('Roll-up failed: ' + ins.error.message, 'error'); return; }
-    closeModal('rollupModal');
-    showToast('✅ ' + inserts.length + ' line items created — open the estimate to price them.', 'success');
+    if (!me.canEdit) return; if (!rollupRows.length) { closeModal('rollupModal'); return; }
+    var b = $('rollupApply'); b.disabled = true;
+    await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estimateId).like('notes', '%[from PDF takeoff]%');
+    var ex = await supabaseClient.from('estimate_line_items').select('sort_order').eq('estimate_id', estimateId).order('sort_order', { ascending: false }).limit(1).maybeSingle();
+    var so = (ex.data ? ex.data.sort_order : 0) + 1;
+    var rows = rollupRows.map(function(r) { return { estimate_id: estimateId, category: r.l.category, description: r.l.name + (r.l.group_name !== 'Default Group' ? ' (' + r.l.group_name + ')' : ''), quantity: r.qty, unit: typeUnit(r.l.takeoff_type) === 'sqft' ? 'sf' : typeUnit(r.l.takeoff_type) === 'ft' ? 'lf' : 'ea',
+      unit_material_cost: Math.round(r.mat * 10000) / 10000, unit_labor_hours: Math.round(r.hrs * 10000) / 10000, labor_crew_type: r.l.labor_crew_type, is_firm: true, is_wet_tap: /wet[- ]?tap/i.test(r.l.name), sort_order: so++,
+      notes: 'Takeoff: ' + r.t.marks + ' marks on ' + r.t.pages + ' plan(s)' + (r.l.extra_count ? ' + ' + r.l.extra_count + ' by hand' : '') + (r.l.waste_pct ? ', ' + r.l.waste_pct + '% waste' : '') + (Number(r.l.labor_factor) !== 1 ? ', labor ×' + r.l.labor_factor : '') + ' [from PDF takeoff]' }; });
+    var ins = await supabaseClient.from('estimate_line_items').insert(rows); b.disabled = false;
+    if (ins.error) { toast('Roll-up failed: ' + ins.error.message, 'error'); return; }
+    closeModal('rollupModal'); toast('✅ ' + rows.length + ' estimate lines written — open Estimating to see the totals', 'success');
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  //   AI Analyze
-  // ══════════════════════════════════════════════════════════════════════════
-  function openAnalyze() {
-    if (!pdfCanvas || !pdfDoc) {
-      showToast('Load a drawing first', 'error'); return;
-    }
-    document.getElementById('analyzeStatus').style.display = 'none';
-    document.getElementById('analyzeResults').style.display = 'none';
-    document.getElementById('analyzeResults').innerHTML = '';
-    openModal('analyzeModal');
-  }
-
-  async function runAnalyze() {
-    var promptType = document.getElementById('analyzePromptType').value;
-    var status = document.getElementById('analyzeStatus');
-    var results = document.getElementById('analyzeResults');
-    var runBtn = document.getElementById('analyzeRun');
-    runBtn.disabled = true;
-    status.style.display = ''; status.style.color = '#64748b';
-    status.textContent = '⏳ Rendering page for Claude…';
-    results.style.display = 'none'; results.innerHTML = '';
-
+  // ═══════════════════════ auto-measure (geo-takeoff.js) ═══════════════════════
+  async function autoMeasure() {
+    if (!me.canEdit || !schemaOk) { toast(schemaOk ? 'Read-only' : 'Run takeoff-v2-schema.sql first', 'error'); return; }
+    if (!pdfPage || !window.NWGeo) { toast('Open a plan first', 'error'); return; }
+    if (!confirm('Measure every duct and pipe line on this plan from the drawing geometry and add them as marks? Existing auto-marks on this plan are replaced.')) return;
+    toast('Reading the drawing geometry…');
     try {
-      // Convert current pdfCanvas → JPEG base64 (drop the data: prefix)
-      var b64 = pdfCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-      status.textContent = '🤖 Claude is reading the drawing (10–40 seconds)…';
-
-      var drawingNo = currentDrawing && (currentDrawing.drawing_no || currentDrawing.file_name) || '';
-      var projName  = currentEstimate ? (currentEstimate.name || '') : '';
-
-      var res = await supabaseClient.functions.invoke('analyze-drawing', {
-        body: {
-          image_base64: b64,
-          prompt_type:  promptType,
-          drawing_no:   drawingNo,
-          project_name: projName
-        }
-      });
-
-      if (res.error) {
-        // supabase-js returns error.context.status for HTTP errors
-        var msg = res.error.message || 'invoke failed';
-        if (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('404') >= 0) {
-          msg = 'Edge Function not deployed. See supabase/functions/analyze-drawing/README.md — deploy in Supabase Dashboard.';
-        }
-        status.style.color = '#dc2626';
-        status.textContent = '❌ ' + msg;
-        return;
-      }
-      var data = res.data || {};
-      if (!data.ok) {
-        status.style.color = '#dc2626';
-        status.textContent = '❌ ' + (data.error || 'analysis failed');
-        return;
-      }
-      status.textContent = '✅ Done (' + (data.model || 'claude') + ').';
-      renderAnalyzeResults(promptType, data.extracted, data.raw_text);
-      results.style.display = '';
-    } catch (e) {
-      status.style.color = '#dc2626';
-      status.textContent = '❌ ' + (e && e.message || e);
-    } finally {
-      runBtn.disabled = false;
-    }
+      var p = plans[planIdx], data = await NWGeo.extract(pdfPage); data.wantPieces = true;
+      var d = await NWGeo.measure(data), pipeData = await NWGeo.extract(pdfPage); pipeData.wantPieces = true; var pp = await NWGeo.measurePipes(pipeData);
+      var old = meas.filter(function(m) { return m.label === 'auto'; }); for (var k = 0; k < old.length; k++) await deleteMark(old[k].id, true);
+      var rows = [], made = 0;
+      async function layerFor(name, cat, group) { var l = layers.find(function(x) { return x.name.toLowerCase() === name.toLowerCase(); }); if (l) return l;
+        var rate = await findRate(name); var r = await supabaseClient.from('estimate_takeoff_layers').insert({ estimate_id: estimateId, group_name: group, name: name, takeoff_type: 'linear', category: cat, labor_crew_type: cat === 'pipework' ? 'pipe' : 'sm', unit: 'ft', unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id || null, color: COLORS[layers.length % COLORS.length], sort_order: layers.length, notes: rate.basis }).select().single();
+        if (r.error) throw new Error(r.error.message); layers.push(r.data); groupsOpen[group] = true; made++; return r.data; }
+      function V(x, y) { var q = viewport1.convertToViewportPoint(x, y); return [q[0], q[1]]; }
+      if (d && !d.error && d.xy) { var ptft = d.ptft;
+        for (var i = 0; i < d.xy.length; i++) { var pc = d.xy[i], sz = String(pc.size || ''), round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x');
+          var name = round ? dim[0] + 'x' + dim[0] + ' round/oval with 1" ACL' : sz + ' rectangular with 1" ACL'; var l = await layerFor(name, 'ductwork', 'Default Group'); var pts = [];
+          if (pc.k === 'd') { var h = pc.len * ptft / 2; pts = [V(pc.cx - pc.ux * h, pc.cy - pc.uy * h), V(pc.cx + pc.ux * h, pc.cy + pc.uy * h)]; rows.push(mk(l, pts, pc.len)); }
+          else (pc.segs || []).forEach(function(s) { var q = [V(s[0], s[1]), V(s[2], s[3])]; rows.push(mk(l, q, Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft)); }); } }
+      if (pp && !pp.error && pp.xy) { for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
+          var pname = size + ' copper pipe & 1" insulation'; var pl = await layerFor(cd ? size + ' condensate drain' : pname, 'pipework', 'Pipes'); rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / pp.ptft)); } }
+      function mk(l, pts, ft) { return { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: (d && d.ptft) || (pp && pp.ptft) || scalePpf, label: 'auto' }; }
+      for (var c = 0; c < rows.length; c += 200) { var ins = await supabaseClient.from('estimate_measurements').insert(rows.slice(c, c + 200)).select(); if (ins.error) throw new Error(ins.error.message); allMeas = allMeas.concat(ins.data); meas = meas.concat(ins.data); }
+      if (!scalePpf && ((d && d.ptft) || (pp && pp.ptft))) { var ppf = (d && d.ptft) || pp.ptft; var preset = SCALE_PRESETS.find(function(x) { return Math.abs(x.ppf - ppf) < 0.01; }); if (preset) await setPresetScale(preset, true); }
+      toast('⚡ ' + rows.length + ' runs measured' + (made ? ', ' + made + ' layers added' : '') + (d && d.error ? ' · ducts: ' + d.error : '') + (pp && pp.error ? ' · pipes: ' + pp.error : ''), 'success'); renderAll();
+    } catch (e) { toast('Auto-measure failed: ' + e.message, 'error'); }
   }
 
-  function renderAnalyzeResults(kind, ex, rawText) {
-    var host = document.getElementById('analyzeResults');
-    if (!ex) {
-      host.innerHTML =
-        '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px;font-size:12px;color:#78350f">' +
-        '⚠ Claude returned text but no valid JSON. Raw response:</div>' +
-        '<pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap">' +
-        escHtml(rawText || '') + '</pre>';
-      return;
-    }
-    var html = '';
-    if (kind === 'equipment') {
-      if (Array.isArray(ex.equipment_schedule) && ex.equipment_schedule.length) {
-        html += '<h3 style="margin:6px 0 6px;font-size:13px;color:#1e293b">Equipment schedule</h3>' +
-          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
-          '<thead><tr style="background:#f1f5f9"><th style="text-align:left;padding:6px">Tag</th><th style="text-align:left;padding:6px">#</th><th style="text-align:left;padding:6px">Mfr / Model</th><th style="text-align:left;padding:6px">Capacity / Weight</th></tr></thead><tbody>';
-        ex.equipment_schedule.forEach(function(e) {
-          html += '<tr style="border-bottom:1px solid #e2e8f0">' +
-            '<td style="padding:6px;font-weight:600">' + escHtml(e.tag || '') + '</td>' +
-            '<td style="padding:6px">' + escHtml(e.count != null ? String(e.count) : '') + '</td>' +
-            '<td style="padding:6px">' + escHtml((e.manufacturer || '') + (e.model ? ' · ' + e.model : '')) + '</td>' +
-            '<td style="padding:6px">' + escHtml((e.capacity || '') + (e.weight_lb ? ' · ' + e.weight_lb + ' lb' : '')) + '</td>' +
-            '</tr>';
-        });
-        html += '</tbody></table>';
-      }
-      if (Array.isArray(ex.air_outlets) && ex.air_outlets.length) {
-        html += '<h3 style="margin:14px 0 6px;font-size:13px;color:#1e293b">Air outlets / countables</h3>' +
-          '<ul style="font-size:12px;margin:0;padding-left:18px;color:#334155">' +
-          ex.air_outlets.map(function(a) {
-            return '<li>' + escHtml((a.type || '') + (a.size ? ' · ' + a.size : '')) + ' — <b>' + escHtml(String(a.count != null ? a.count : '?')) + '</b></li>';
-          }).join('') + '</ul>';
-      }
-      if (ex.refrigerant) html += '<div style="margin-top:10px;font-size:12px"><b>Refrigerant:</b> ' + escHtml(ex.refrigerant) + '</div>';
-      if (ex.notes)       html += '<div style="margin-top:6px;font-size:12px;color:#64748b"><b>Notes:</b> ' + escHtml(ex.notes) + '</div>';
-    } else if (kind === 'scope') {
-      if (Array.isArray(ex.scope_items) && ex.scope_items.length) {
-        html += '<h3 style="margin:6px 0 6px;font-size:13px;color:#1e293b">Scope items</h3><ul style="font-size:12px;padding-left:18px;margin:0;color:#334155">';
-        ex.scope_items.forEach(function(s) {
-          html += '<li style="margin-bottom:6px">' +
-            (s.typical_gap ? '<span style="background:#fef3c7;color:#78350f;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-right:6px">TYPICAL GAP</span>' : '') +
-            '<b>' + escHtml(s.source || '') + ':</b> ' + escHtml(s.description || '') +
-            (s.notes ? ' <span style="color:#64748b">— ' + escHtml(s.notes) + '</span>' : '') +
-            '</li>';
-        });
-        html += '</ul>';
-      }
-      if (Array.isArray(ex.exclusion_flags) && ex.exclusion_flags.length) {
-        html += '<h3 style="margin:14px 0 6px;font-size:13px;color:#dc2626">Exclusion flags</h3><ul style="font-size:12px;padding-left:18px;margin:0;color:#334155">';
-        ex.exclusion_flags.forEach(function(f) {
-          html += '<li><b>' + escHtml(f.item || '') + ':</b> ' + escHtml(f.reason || '') + '</li>';
-        });
-        html += '</ul>';
-      }
-    } else if (kind === 'rfi') {
-      if (Array.isArray(ex.rfis) && ex.rfis.length) {
-        ex.rfis.forEach(function(r, i) {
-          var colors = { high: '#dc2626', medium: '#f59e0b', low: '#64748b' };
-          var c = colors[r.priority] || '#64748b';
-          html += '<div style="border-left:3px solid ' + c + ';background:#f8fafc;padding:10px;margin-bottom:8px;border-radius:0 6px 6px 0">' +
-            '<div style="font-weight:700;font-size:12px;color:#1e293b">RFI #' + (i + 1) + ' — ' + escHtml(r.topic || '') +
-            (r.priority ? ' <span style="color:' + c + ';font-size:10px;text-transform:uppercase;margin-left:4px">' + r.priority + '</span>' : '') +
-            '</div>' +
-            '<div style="font-size:12px;color:#334155;margin-top:4px">' + escHtml(r.question || '') + '</div>' +
-            (r.sheet_ref ? '<div style="font-size:11px;color:#64748b;margin-top:2px">Sheet ref: ' + escHtml(r.sheet_ref) + '</div>' : '') +
-            '</div>';
-        });
-      } else {
-        html += '<div style="font-size:12px;color:#64748b">No RFIs flagged.</div>';
-      }
-    }
-    if (ex.confidence) html += '<div style="margin-top:10px;font-size:11px;color:#64748b">Claude self-reported confidence: <b>' + escHtml(ex.confidence) + '</b></div>';
-    if (!html) html = '<div style="font-size:12px;color:#64748b">Empty result. Raw:<br><pre style="background:#f8fafc;padding:8px;border-radius:6px;font-size:11px;overflow:auto">' + escHtml(JSON.stringify(ex, null, 2)) + '</pre></div>';
-    host.innerHTML = html;
+  // ═══════════════════════ upload / export / analyze ═══════════════════════
+  async function uploadPdfs(ev) {
+    var files = Array.prototype.slice.call(ev.target.files || []); if (!files.length) return; if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    for (var i = 0; i < files.length; i++) { var file = files[i]; toast('Uploading ' + file.name + '…');
+      var path = estimateId + '/' + Date.now() + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+      var up = await supabaseClient.storage.from('estimate-drawings').upload(path, file, { cacheControl: '3600', upsert: false, contentType: 'application/pdf' });
+      if (up.error) { toast('Upload failed: ' + up.error.message, 'error'); continue; }
+      var tmp = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+      var ins = await supabaseClient.from('estimate_drawings').insert({ estimate_id: estimateId, filename: file.name, storage_path: path, page_count: tmp.numPages, drawing_type: 'base', uploaded_by: me.id }).select().single();
+      if (ins.error) { toast(ins.error.message, 'error'); continue; } }
+    ev.target.value = ''; var n = plans.length; await loadDrawings(); if (plans.length > n) await openPlan(n); toast('✅ Plans uploaded', 'success'); renderAll();
+  }
+  function exportPdf() {
+    if (!pdfPage) { toast('Open a plan first', 'error'); return; }
+    var w = pdfCanvas.width, h = pdfCanvas.height, merge = document.createElement('canvas'); merge.width = w; merge.height = h; var c = merge.getContext('2d'); c.drawImage(pdfCanvas, 0, 0); c.drawImage(overlayCanvas, 0, 0);
+    var img = merge.toDataURL('image/jpeg', .9), J = window.jspdf.jsPDF, land = w > h, doc = new J({ unit: 'pt', format: 'letter', orientation: land ? 'landscape' : 'portrait' }), pw = land ? 792 : 612, ph = land ? 612 : 792, m = 24, ratio = Math.min((pw - 2 * m) / w, (ph - 2 * m - 40) / h);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(17, 19, 24); doc.text('Northern Wolves Air Conditioning — Takeoff', m, m + 4);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text((est ? '#' + (est.quote_number || '') + '  ' + est.name + '  ·  ' : '') + planLabel(plans[planIdx]) + (scaleLabel ? '  ·  Scale ' + scaleLabel : ''), m, m + 18);
+    doc.addImage(img, 'JPEG', (pw - w * ratio) / 2, m + 30, w * ratio, h * ratio); doc.setFontSize(7); doc.setTextColor(150, 150, 150); doc.text('Generated ' + new Date().toLocaleString('en-US'), m, ph - 12);
+    doc.save('takeoff.' + (plans[planIdx].sheet || 'p' + plans[planIdx].page) + '.pdf');
+  }
+  async function runAnalyze() {
+    var kind = $('analyzePromptType').value, st = $('analyzeStatus'), res = $('analyzeResults'), btn = $('analyzeRun'); btn.disabled = true; st.style.display = ''; st.style.color = '#64748b'; st.textContent = '🤖 Claude is reading the drawing (10–40 s)…'; res.style.display = 'none';
+    try { var b64 = pdfCanvas.toDataURL('image/jpeg', .85).split(',')[1];
+      var r = await supabaseClient.functions.invoke('analyze-drawing', { body: { image_base64: b64, prompt_type: kind, drawing_no: plans[planIdx].sheet || '', project_name: est ? est.name : '' } });
+      if (r.error) throw new Error(r.error.message || 'invoke failed'); var data = r.data || {}; if (!data.ok) throw new Error(data.error || 'analysis failed');
+      st.textContent = '✅ Done (' + (data.model || 'claude') + ').'; res.innerHTML = '<pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:11px;max-height:400px;overflow:auto;white-space:pre-wrap">' + esc(JSON.stringify(data.extracted || data.raw_text, null, 2)) + '</pre>'; res.style.display = '';
+    } catch (e) { st.style.color = '#dc2626'; st.textContent = '❌ ' + (e.message || e); } finally { btn.disabled = false; }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  //   Helpers
-  // ══════════════════════════════════════════════════════════════════════════
-  function openModal(id)  { document.getElementById(id).classList.add('open'); }
-  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-  function showToast(msg, kind) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast show' + (kind ? ' ' + kind : '');
-    setTimeout(function() { t.classList.remove('show'); }, 3500);
+  // ═══════════════════════ events ═══════════════════════
+  function bindEvents() {
+    $('uploadBtn').onclick = function() { $('uploadInput').click(); }; $('uploadInput').onchange = uploadPdfs;
+    $('rollupBtn').onclick = openRollup; $('rollupCancel').onclick = function() { closeModal('rollupModal'); }; $('rollupApply').onclick = applyRollup;
+    $('newLayerBtn').onclick = function() { openLayerModal(null); }; $('lCancel').onclick = function() { closeModal('layerModal'); }; $('lSave').onclick = saveLayer; $('lDelete').onclick = deleteLayer;
+    $('lLabMin').oninput = labHint; $('lType').onchange = function() { labHint(); unitLbl(); };
+    $('catSearch').oninput = function() { clearTimeout(catTimer); var q = this.value; catTimer = setTimeout(function() { searchCatalog(q); }, 220); };
+    $('layerSearch').oninput = function() { layerFilter = this.value; renderLayerTree(); };
+    $('layerMenuBtn').onclick = function(e) { e.stopPropagation(); var m = $('layerMenu'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; };
+    document.addEventListener('click', function() { $('layerMenu').style.display = 'none'; });
+    $('layerMenu').querySelectorAll('a').forEach(function(a) { a.onclick = async function() { var act = a.getAttribute('data-act'); $('layerMenu').style.display = 'none';
+      if (act === 'standard') addStandardLayers(); else if (act === 'auto') autoMeasure(); else if (act === 'group') { var g = prompt('New group name'); if (g) { groupsOpen[g] = true; openLayerModal(null, { group_name: g }); } }
+      else if (act === 'showall') { layers.forEach(function(l) { l.is_visible = true; }); renderAll(); await supabaseClient.from('estimate_takeoff_layers').update({ is_visible: true }).eq('estimate_id', estimateId); } }; });
+    $('planSelect').onchange = function() { if (this.value !== '') openPlan(+this.value); };
+    $('prevPlan').onclick = function() { openPlan(planIdx - 1); }; $('nextPlan').onclick = function() { openPlan(planIdx + 1); };
+    $('scalePreset').onchange = function() { var v = this.value; if (v === 'custom') { setTool('scale'); toast('Click two points of a known dimension'); } else if (v !== '') setPresetScale(SCALE_PRESETS[+v], false); this.value = ''; };
+    $('scaleChip').onclick = function() { $('scalePreset').focus(); };
+    $('scaleCancel').onclick = function() { closeModal('scaleModal'); draft = []; setTool('select'); }; $('scaleSet').onclick = applyCustomScale;
+    $('noteCancel').onclick = function() { closeModal('noteModal'); draft = []; }; $('noteSave').onclick = saveNote;
+    document.querySelectorAll('[data-tool]').forEach(function(b) { b.onclick = function() { setTool(b.getAttribute('data-tool')); }; });
+    $('zoomIn').onclick = function() { setZoom(zoom * 1.25); }; $('zoomOut').onclick = function() { setZoom(zoom / 1.25); }; $('zoomFit').onclick = function() { setZoom(1); };
+    $('undoBtn').onclick = undo; $('exportBtn').onclick = exportPdf;
+    $('compareSelect').onchange = async function() { var i = +this.value; if (this.value === '' || i === planIdx) { compareDoc = null; var cc = $('compareCanvas'); cc.getContext('2d').clearRect(0, 0, cc.width, cc.height); if (i === planIdx && this.value !== '') { toast('Pick a different plan to compare', 'error'); this.value = ''; } return; } compareDoc = true; await renderCompare(); };
+    $('analyzeBtn').onclick = function() { if (!pdfPage) { toast('Open a plan first', 'error'); return; } $('analyzeStatus').style.display = 'none'; $('analyzeResults').style.display = 'none'; openModal('analyzeModal'); };
+    $('analyzeCancel').onclick = function() { closeModal('analyzeModal'); }; $('analyzeRun').onclick = runAnalyze;
+    document.addEventListener('keydown', function(e) {
+      if (e.code === 'Space' && !e.repeat && !inField(e)) { spaceDown = true; if (overlayCanvas) overlayCanvas.classList.add('hand'); }
+      if (document.querySelector('.modal-overlay.open') || inField(e)) return;
+      var k = e.key.toLowerCase();
+      if (e.key === 'Enter' && (tool === 'linear' || tool === 'area') && draft.length >= 2) finishDraft();
+      else if (e.key === 'Escape') { draft = []; draftDrops = []; measureLine = null; selectedId = null; renderProps(); redraw(); }
+      else if (e.key === 'Backspace' && draft.length) { e.preventDefault(); draft.pop(); draftDrops = draftDrops.filter(function(i) { return i < draft.length; }); redraw(); }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { e.preventDefault(); deleteMark(selectedId); }
+      else if (k === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
+      else if (k === 'd' && tool === 'linear' && draft.length) { var i = draft.length - 1; if (draftDrops.indexOf(i) < 0) draftDrops.push(i); redraw(); }
+      else if (k === 'v') setTool('select'); else if (k === 'h') setTool('pan'); else if (k === 'c') setTool('count'); else if (k === 'l') setTool('linear'); else if (k === 'a') setTool('area'); else if (k === 'm') setTool('measure'); else if (k === 'n') setTool('note');
+      else if (e.key === '+' || e.key === '=') setZoom(zoom * 1.25); else if (e.key === '-') setZoom(zoom / 1.25); else if (e.key === '0') setZoom(1);
+      else if (e.key === 'PageUp') { e.preventDefault(); openPlan(planIdx - 1); } else if (e.key === 'PageDown') { e.preventDefault(); openPlan(planIdx + 1); }
+    });
+    document.addEventListener('keyup', function(e) { if (e.code === 'Space') { spaceDown = false; if (overlayCanvas && tool !== 'pan') overlayCanvas.classList.remove('hand'); } });
+    setTool('select');
   }
-  function escHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
+  function inField(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
+
+  // ═══════════════════════ helpers ═══════════════════════
+  function dist(a, b) { return Math.hypot(b[0] - a[0], b[1] - a[1]); }
+  function polyLen(pts) { var s = 0; for (var i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]); return s; }
+  function polyArea(pts) { var a = 0; for (var i = 0, n = pts.length; i < n; i++) { var p = pts[i], q = pts[(i + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a) / 2; }
+  function segDist(p, a, b) { var dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy; if (!l2) return dist(p, a); var t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)); return dist(p, [a[0] + t * dx, a[1] + t * dy]); }
+  function inPoly(p, pts) { var c = false; for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) { if ((pts[i][1] > p[1]) !== (pts[j][1] > p[1]) && p[0] < (pts[j][0] - pts[i][0]) * (p[1] - pts[i][1]) / (pts[j][1] - pts[i][1]) + pts[i][0]) c = !c; } return c; }
+  function midOf(pts) { if (pts.length < 2) return pts[0]; var half = polyLen(pts) / 2, acc = 0; for (var i = 1; i < pts.length; i++) { var d = dist(pts[i - 1], pts[i]); if (acc + d >= half) { var t = d ? (half - acc) / d : 0; return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]; } acc += d; } return pts[pts.length - 1]; }
+  function centroid(pts) { var x = 0, y = 0; pts.forEach(function(p) { x += p[0]; y += p[1]; }); return [x / pts.length, y / pts.length]; }
+  function num(id) { return Number($(id).value || 0); }
+  function uniq(a) { return a.filter(function(x, i) { return x && a.indexOf(x) === i; }); }
+  function openModal(id) { $(id).classList.add('open'); } function closeModal(id) { $(id).classList.remove('open'); }
+  function toast(m, kind) { var t = $('toast'); t.textContent = m; t.className = 'toast show' + (kind ? ' ' + kind : ''); clearTimeout(t._t); t._t = setTimeout(function() { t.classList.remove('show'); }, 3500); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 })();
 </script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=265"></script>
 </body>
 </html>

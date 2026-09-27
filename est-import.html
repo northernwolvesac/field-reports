@@ -16,9 +16,9 @@
 </head>
 <body>
 <div class="box">
-  <h2 style="margin-top:0">Procore estimating history → app</h2>
-  <p style="font-size:13px;color:var(--nw-muted)">Admin tool. This page is opened from a Procore Estimating tab; it receives NWAC's estimate lines
-  and unit rates from that tab (browser message, Procore origin only) and saves them under your own login. Nothing is sent anywhere else.</p>
+  <h2 style="margin-top:0">Procore estimating → app</h2>
+  <p style="font-size:13px;color:var(--nw-muted)">Admin tool. This page is opened from a Procore Estimating tab; it receives NWAC's estimate lines,
+  unit rates and the cost catalog from that tab (browser message, Procore origin only) and saves them under your own login. Nothing is sent anywhere else.</p>
   <pre id="log">Waiting for data from the Procore tab…</pre>
 </div>
 <script>
@@ -55,7 +55,8 @@ requireAuth().catch(function(){});
     var d = e.data || {};
     if (d.type !== 'nw-procore-import' || !ready || busy) return;
     busy = true;
-    log('Received from ' + e.origin + ': ' + (d.projects || []).length + ' projects, ' + (d.lines || []).length + ' lines, ' + (d.norms || []).length + ' unit rates');
+    log('Received from ' + e.origin + ': ' + (d.projects || []).length + ' projects, ' + (d.lines || []).length + ' lines, ' +
+        (d.norms || []).length + ' unit rates, ' + (d.catalog_folders || []).length + ' catalog folders, ' + (d.catalog_items || []).length + ' catalog items');
     var res = {};
     try {
       if (d.norms && d.norms.length) res.norms = await put('est_norms', d.norms, 300, 'kind,item,unit');
@@ -65,6 +66,9 @@ requireAuth().catch(function(){});
         for (var i = 0; i < ids.length; i += 200) await supabaseClient.from('est_procore_lines').delete().in('project_id', ids.slice(i, i + 200));
         res.lines = await put('est_procore_lines', d.lines, 2000);
       }
+      // Cost catalog (Procore Estimating → est_catalog_folders / est_catalog_items, keyed on the Procore ids)
+      if (d.catalog_folders && d.catalog_folders.length) res.catalog_folders = await put('est_catalog_folders', d.catalog_folders, 500, 'id');
+      if (d.catalog_items && d.catalog_items.length) res.catalog_items = await put('est_catalog_items', d.catalog_items, 500, 'id');
       if (d.ratios) {
         var k = await supabaseClient.from('est_knowledge').upsert({ key: 'norms/procore-ratios', category: 'takeoff', title: 'NWAC Procore ratios (duct ft per air device, pipe ft per unit)',
           body_md: '```json\n' + JSON.stringify(d.ratios, null, 2) + '\n```\nFrom ' + (d.projects || []).length + ' NWAC Procore estimates (primary proposal of each), imported ' + new Date().toISOString().slice(0, 10) + '.',
