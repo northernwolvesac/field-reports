@@ -455,7 +455,7 @@
       }
       var stats = [];
       Object.keys(bySty).forEach(function (key) {
-        var segs = bySty[key]; if (segs.length < 20) return;
+        var segs = bySty[key]; if (segs.length < 20 || /^fill\|/.test(key)) return;
         var S = segs.map(norm), pc = findPairs(S, ptft, labs).pieces, sized = 0, tot = 0;
         pc.forEach(function (p) { tot += p.len_ft; if (looseLabel(p, labs, ptft)) sized += p.len_ft; });
         stats.push([sized, tot, key]);
@@ -527,9 +527,15 @@
       Object.keys(bySty).forEach(function (key) {
         if (keep.indexOf(key) >= 0 || bySty[key].length < 40) return;
         var w = +key.split('|')[1]; if (w < Math.max(1.5, minW * 0.6)) return;
-        bySty[key].forEach(function (sg) { S2.push(norm(sg)); used2.push([]); });
+        var isBar = /^fill\|/.test(key);
+        bySty[key].forEach(function (sg) { var ns = norm(sg); ns.q = isBar; S2.push(ns); used2.push([]); });
       });
-      var singles = singleLines(S2, used2, labs, ptft, leaders);
+      var barSegs = [];
+      Object.keys(bySty).forEach(function (key) { if (!/^fill\|/.test(key)) return; bySty[key].forEach(function (sg) { var ns = norm(sg); if (ns[6] >= 0.4 * ptft) barSegs.push(ns); }); });
+      var pairLabelFt = pcs.reduce(function (a, p) { return a + p.len_ft; }, 0);
+      var barPieces = barSegs.length >= 10 ? barRuns(barSegs, labs, ptft, pairLabelFt) : [];
+      if (barPieces.length) { S2 = S2.filter(function (x, i) { if (x.q) used2[i] = null; return !x.q; }); used2 = used2.filter(function (u) { return u !== null; }); }
+      var singles = singleLines(S2, used2, labs, ptft, leaders).concat(barPieces);
       var all = pcs.concat(singles), sizes = {}, total = 0, sf = 0, wf = 0;
       all.forEach(function (p) {
         sizes[p.size] = (sizes[p.size] || 0) + p.len_ft; total += p.len_ft;
@@ -672,12 +678,81 @@
       });
       return outs;
     }
+    function barRuns(B, labs, ptft, pairLabelFt) {
+      var n = B.length, comp = B.map(function (_, i) { return i; });
+      function find(i) { while (comp[i] !== i) { comp[i] = comp[comp[i]]; i = comp[i]; } return i; }
+      function near(a, b, tol) {
+        var E = [[a[0], a[1]], [a[2], a[3]]], F = [[b[0], b[1]], [b[2], b[3]]];
+        for (var x = 0; x < 2; x++) for (var y = 0; y < 2; y++) if (hyp(E[x][0] - F[y][0], E[x][1] - F[y][1]) < tol) return true;
+        return Math.min(ptSeg(b[0], b[1], a), ptSeg(b[2], b[3], a), ptSeg(a[0], a[1], b), ptSeg(a[2], a[3], b)) < tol;
+      }
+      var cell = 60, grid = {};
+      B.forEach(function (b, i) { var k = Math.floor((b[0] + b[2]) / 2 / cell) + ',' + Math.floor((b[1] + b[3]) / 2 / cell); (grid[k] = grid[k] || []).push(i); });
+      for (var i = 0; i < n; i++) {
+        var cx = Math.floor((B[i][0] + B[i][2]) / 2 / cell), cy = Math.floor((B[i][1] + B[i][3]) / 2 / cell);
+        for (var dx = -2; dx <= 2; dx++) for (var dy = -2; dy <= 2; dy++) (grid[(cx + dx) + ',' + (cy + dy)] || []).forEach(function (j) {
+          if (j <= i || find(i) === find(j)) return;
+          if (near(B[i], B[j], 12)) comp[find(i)] = find(j);
+        });
+      }
+      // label on a bar: within 2.5 ft sideways and along the bar (±1 ft)
+      var segSize = new Array(n), chains = {};
+      B.forEach(function (b, i) {
+        var best = null, bd = 1e9;
+        labs.forEach(function (l) {
+          var dx = l.cx - b[0], dy = l.cy - b[1], along = dx * b[4] + dy * b[5], perp = Math.abs(-dx * b[5] + dy * b[4]);
+          if (along < -ptft || along > b[6] + ptft || perp > 2.5 * ptft) return;
+          if (perp < bd) { best = l; bd = perp; }
+        });
+        if (best) segSize[i] = sizeOf(best);
+        (chains[find(i)] = chains[find(i)] || []).push(i);
+      });
+      // only a bar-drawn duct set qualifies: labels must sit on bars at least as much as on wall pairs (hatch strips and wall
+      // fills are bars too — Sage / L'Catteron / Sky Zone carry thousands of feet of them)
+      var labBars = 0, labBarFt = 0; segSize.forEach(function (z, i) { if (z) { labBars++; labBarFt += B[i][6] / ptft; } });
+      if (labBars < 6 || labBarFt < 0.5 * (pairLabelFt || 0)) return [];
+      // bars that are duct WALLS (Sage: two bars 6–48" apart, labels on them) are handled by the pair logic — a labelled bar with a
+      // parallel partner over half its length is a wall; if most labelled bars are walls this is not a single-line drawing
+      var walls = 0, ptin = ptft / 12;
+      segSize.forEach(function (z, i) {
+        if (!z) return;
+        var a = B[i], hasP = B.some(function (b, j) {
+          if (j === i || Math.abs(Math.sin(b[7] - a[7])) > 0.03) return false;
+          var d = Math.abs((b[0] - a[0]) * -a[5] + (b[1] - a[1]) * a[4]); if (d < 4 * ptin || d > 48 * ptin) return false;
+          var t1 = (b[0] - a[0]) * a[4] + (b[1] - a[1]) * a[5], t2 = (b[2] - a[0]) * a[4] + (b[3] - a[1]) * a[5];
+          return Math.min(a[6], Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2)) > 0.5 * Math.min(a[6], b[6]);
+        });
+        if (hasP) walls++;
+      });
+      if (walls > 0.4 * labBars) return [];
+      var freq = {}; labs.forEach(function (l) { var k = sizeOf(l); freq[k] = (freq[k] || 0) + 1; });
+      var common = Object.keys(freq).sort(function (a, b) { return freq[b] - freq[a]; })[0] || null;
+      var pieces = [];
+      Object.keys(chains).forEach(function (c) {
+        var ids = chains[c], cnt = {}, majority = null;
+        ids.forEach(function (i) { if (segSize[i]) cnt[segSize[i]] = (cnt[segSize[i]] || 0) + B[i][6]; });
+        Object.keys(cnt).forEach(function (k) { if (majority === null || cnt[k] > cnt[majority]) majority = k; });
+        ids.forEach(function (i) {
+          var sz = segSize[i] || majority, via = segSize[i] ? 'label' : majority ? 'run' : 'default';
+          if (!sz) {
+            // nearest sized bar within 30 pt
+            var bd2 = 1e9; B.forEach(function (o, j) { if (!segSize[j] || j === i) return; var d = Math.min(ptSeg(B[i][0], B[i][1], o), ptSeg(B[i][2], B[i][3], o)); if (d < bd2 && d < 30) { bd2 = d; sz = segSize[j]; via = 'near'; } });
+          }
+          if (!sz) sz = common;
+          if (!sz) return;
+          var w = parseInt(sz, 10) || 0;
+          pieces.push({ kind: 'single', w_in: w, len_ft: B[i][6] / ptft, size: sz, via: via, bar: true, xy: [B[i].slice(0, 4)] });
+        });
+      });
+      return pieces;
+    }
     function singleLines(S, used, labs, ptft, leaders) {
       var freeIdx = []; S.forEach(function (s, i) { if (!used[i].length && s[6] >= 0.5 * ptft) freeIdx.push(i); });
-      function touching(i, j) {
+      function touching(i, j, tol) {
+        tol = tol || 1.5;
         var s = S[i], t = S[j], E = [[s[0], s[1]], [s[2], s[3]]], F = [[t[0], t[1]], [t[2], t[3]]];
-        for (var a = 0; a < 2; a++) for (var b = 0; b < 2; b++) if (hyp(E[a][0] - F[b][0], E[a][1] - F[b][1]) < 1.5) return true;
-        return Math.min(ptSeg(t[0], t[1], s), ptSeg(t[2], t[3], s), ptSeg(s[0], s[1], t), ptSeg(s[2], s[3], t)) < 1.5;
+        for (var a = 0; a < 2; a++) for (var b = 0; b < 2; b++) if (hyp(E[a][0] - F[b][0], E[a][1] - F[b][1]) < tol) return true;
+        return Math.min(ptSeg(t[0], t[1], s), ptSeg(t[2], t[3], s), ptSeg(s[0], s[1], t), ptSeg(s[2], s[3], t)) < tol;
       }
       var pieces = [], seen = {};
       labs.forEach(function (l) {
@@ -715,8 +790,24 @@
           if (Math.min(mm[6], Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2)) > 0.5 * mm[6]) wall = true;
         }
         if (wall) return;
-        pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
+        pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), ids: ids, xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
       });
+      // unlabelled branches: free segments touching a labelled single run are runouts of that run (BOSS: 10"ø mains with
+      // unlabelled stubs to every diffuser) — they take the run's size; growth stops at 40 segments per run
+      pieces.forEach(function (pc) {
+        var stack = pc.ids.slice(), added = 0;
+        while (stack.length && added < 40) {
+          var k = stack.pop();
+          freeIdx.forEach(function (j) {
+            if (seen[j] || added >= 40 || S[j][6] < 0.4 * ptft) return;
+            // bars (thick polylines) meet through hairline elbow arcs that are not in any duct style — bridge up to 12 pt for them
+            if (!touching(k, j, (S[j].q || S[k].q) ? 12 : 3.5)) return;
+            seen[j] = 1; added++; stack.push(j);
+            pc.len_ft += S[j][6] / ptft; pc.xy.push(S[j].slice(0, 4)); pc.branch = (pc.branch || 0) + S[j][6] / ptft;
+          });
+        }
+      });
+      pieces.forEach(function (pc) { delete pc.ids; });
       return pieces;
     }
 
