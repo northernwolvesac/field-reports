@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=276"></script>
-<script src="est-engine.js?v=276"></script>
-<script src="geo-takeoff.js?v=276"></script>
+<script src="est-totals.js?v=277"></script>
+<script src="est-engine.js?v=277"></script>
+<script src="geo-takeoff.js?v=277"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -695,8 +695,10 @@ var AE = (function() {
         if (l) {   // an earlier run left this layer without a rate: fill it in now
           var u = await supabaseClient.from('estimate_takeoff_layers').update({ unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id, notes: rate.basis + ' · from the AI Estimator' }).eq('id', l.id).select().single();
           if (!u.error) { Object.assign(l, u.data); } return l; }
+        // ducts carry the same fittings allowance the AI estimate uses (GEO_FITTINGS, calibrated on 4 bids), as a ×1.08 multiplier
         var r = await supabaseClient.from('estimate_takeoff_layers').insert({ estimate_id: estId, group_name: group, name: rate.name || name, takeoff_type: 'linear', category: cat, labor_crew_type: cat === 'pipework' ? 'pipe' : 'sm', unit: 'ft',
-          unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id, color: BRIDGE_COLORS[layers.length % BRIDGE_COLORS.length], sort_order: layers.length, notes: rate.basis + ' · from the AI Estimator' }).select().single();
+          unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id, multiplier: cat === 'ductwork' ? 1.08 : 1, color: BRIDGE_COLORS[layers.length % BRIDGE_COLORS.length], sort_order: layers.length,
+          notes: rate.basis + (cat === 'ductwork' ? ' · ×1.08 fittings allowance' : '') + ' · from the AI Estimator' }).select().single();
         if (r.error) throw new Error(r.error.message); layers.push(r.data); made++; return r.data;
       }
       // 3 · the drawing geometry again, this time keeping every piece, laid on the plan
@@ -770,6 +772,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=276"></script>
+<script src="sw-register.js?v=277"></script>
 </body>
 </html>
