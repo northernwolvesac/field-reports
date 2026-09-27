@@ -16,9 +16,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="supabase-config.js?v=173"></script>
 <script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=280"></script>
-<script src="est-engine.js?v=280"></script>
-<script src="geo-takeoff.js?v=280"></script>
+<script src="est-totals.js?v=281"></script>
+<script src="est-engine.js?v=281"></script>
+<script src="geo-takeoff.js?v=281"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -177,7 +177,7 @@ var AE = (function() {
       '<div class="card"><div class="row" style="justify-content:space-between">' +
       '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
       ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + '</div></div>' +
-      '<div class="row"><label>Floors<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
+      '<div class="row"><label title="Shop drawings and T&amp;B are counted per plan sheet with new work; type a number here to override">SD/T&amp;B sheets<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
       (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a>' : '') + '</div></div></div>' +
 
       '<div class="card"><h3>1 · Bid documents</h3>' +
@@ -553,7 +553,7 @@ var AE = (function() {
     var n = await loadNorms();
     var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null });
     var res = Object.assign({}, session.result || {}, {
-      engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
+      engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
     session.result = res; session.status = 'priced';
     await supabaseClient.from('ai_est_sessions').update({ result: res, status: 'priced', updated_at: new Date().toISOString() }).eq('id', session.id);
@@ -581,7 +581,7 @@ var AE = (function() {
         ['Base subtotal', t.baseSubtotal], ['Overhead (' + Math.round(((t.rates || {}).overhead || 0) * 100) + '%)', t.overhead], ['Miscellaneous (2%)', t.miscellaneous], ['Sales tax (8.875%, material only)', t.tax]]
         .map(function(r) { return '<tr><td>' + r[0] + '</td><td class="n">' + money(r[1]) + '</td></tr>'; }).join('') +
       '<tr class="cat"><td>PROJECT TOTAL</td><td class="n">' + money(t.bidPrice) + '</td></tr></table>' +
-      '<p class="muted">Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' NWAC Procore rates' : 'fallback formula (Procore rate table not loaded yet)') + '. Floors: ' + e.floors + '.</p></div><div>' +
+      '<p class="muted">Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' NWAC Procore rates' : 'fallback formula (Procore rate table not loaded yet)') + '. Shop drawings / T&B: ' + e.floors + ' plan sheet' + (e.floors > 1 ? 's' : '') + (e.sdBasis ? ' — ' + esc(e.sdBasis) : '') + (e.pipeSheets ? '; piping ' + e.pipeSheets : '') + '.</p></div><div>' +
       (e.ductCheck ? '<p><b>Duct footage check:</b> ' + e.ductCheck.measured_ft + ' ft measured for ' + e.ductCheck.outlets + ' air devices; NWAC history says ' + e.ductCheck.expected_ft[0] + '–' + e.ductCheck.expected_ft[2] + ' ft (median ' + e.ductCheck.expected_ft[1] + ').</p>' : '') +
       (e.flags.length ? '<b>To check before this goes out (' + e.flags.length + ')</b><ul class="l">' + e.flags.map(function(f) { return '<li><b>' + esc(f.item) + '</b> — ' + esc(f.flag) + '</li>'; }).join('') + '</ul>' : '') +
       '</div></div>';
@@ -772,6 +772,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=280"></script>
+<script src="sw-register.js?v=281"></script>
 </body>
 </html>

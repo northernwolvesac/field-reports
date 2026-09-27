@@ -168,13 +168,20 @@
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [];
+    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {};
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
       // every level with work counts for shop drawings / T&B — numbered floors plus ground, cellar, mezzanine, roof, penthouse
       var fl = String(r.floor || '').trim().toLowerCase().replace(/^(level|floor|flr\.?)\s*/, '').replace(/(st|nd|rd|th)\s*(floor|fl\.?)?$/, '');
       if (fl && !/^(specs|legend|schedule|details|controls|riser)$/.test(type) && (/^\d+$/.test(fl) || /^(g|gf|ground|lobby|ll|lower level|cellar|basement|b\d?|mezz\w*|roof|ph|penthouse)$/.test(fl))) floors[fl.replace(/^(gf|lobby)$/, 'ground').replace(/^g$/, 'ground')] = 1;
+      // shop drawings / T&B are priced per plan sheet that carries new work, not per level: Kastriot's Crozier = 5 duct plans + 2 enlarged
+      // mechanical-room plans = 7, L'Catteron 2, Sage 1; T&B equals the ductwork SD count in 74% of NWAC's Procore estimates. Demo plans never count.
+      if (!isDemo) {
+        var ductRuns = (r.duct_runs || []).length, pipeRuns = (r.pipe_runs || []).length, planLike = type === 'enlarged' || (type === 'other' && /plan/i.test(r.sheet_title || ''));
+        if ((type === 'duct_plan' && (ductRuns || (r.geo || {}).total_ft > 0)) || (planLike && ductRuns)) ductSheets[sh] = 1;
+        if ((type === 'pipe_plan' && (pipeRuns || (r.geo_pipe || {}).total_ft > 0)) || (planLike && pipeRuns)) pipeSheets[sh] = 1;
+      }
       var eqList = [];
       (r.equipment || []).forEach(function (e0) {
         var tags = expandTags(e0.tag);
@@ -269,7 +276,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), ductSheets: Object.keys(ductSheets), pipeSheets: Object.keys(pipeSheets), wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -287,7 +294,10 @@
       if (l.flag) flags.push({ category: cat, item: d, flag: l.flag });
       lines.push(l); return l;
     }
-    var floors = Number(opts.floors) || C.floors.length || 1;
+    // SD / T&B count: session override → plan sheets with new ductwork → levels named on the sheets → 1
+    var floors = Number(opts.floors) || C.ductSheets.length || C.floors.length || 1;
+    var sdBasis = Number(opts.floors) ? 'session override' : C.ductSheets.length ? 'plan sheets with new ductwork: ' + C.ductSheets.join(', ') :
+      C.floors.length ? 'levels named on the sheets: ' + C.floors.join(', ') : 'no plan sheet read — 1 assumed';
 
     // 1. Disconnects
     var dq = C.demo.reduce(function (a, d) { return a + (d.qty || 0); }, 0);
@@ -406,13 +416,13 @@
       'Standalone Controls — $1,000/VAV + thermostat $500 + wiring $50; 10/day install', { is_firm: false, flag: 'replace with BMS quote if one comes in' });
 
     // 7. Services
-    add('services', 'Ductwork shop drawings — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.ductSD, 0, 'Standard — $2,500/floor');
-    // piping shop drawings only on the floors that carry piping (Kastriot, 360 Lexington: piping SD on 1 of 3 floors)
-    var pipeFl = Math.min(floors, C.pipeFloors.length || floors);
-    if (hasPipe) add('services', 'Piping shop drawings — ' + pipeFl + ' floor' + (pipeFl > 1 ? 's' : ''), pipeFl, 'floor', STD.pipeSD, 0,
-      'Standard — $1,300/floor, floors with piping only' + (C.pipeFloors.length ? ' (' + C.pipeFloors.join(', ') + ')' : ''));
+    add('services', 'Ductwork shop drawings — ' + floors + ' plan sheet' + (floors > 1 ? 's' : ''), floors, 'floor', STD.ductSD, 0, 'Standard — $2,500 per plan sheet (' + sdBasis + ')');
+    // piping shop drawings per plan sheet with new piping (pipe plans + enlarged mechanical-room plans; Kastriot 360 Lexington: piping SD on 1 of 3 floors)
+    var pipeFl = Number(opts.floors) ? Math.min(floors, C.pipeSheets.length || C.pipeFloors.length || floors) : (C.pipeSheets.length || Math.min(floors, C.pipeFloors.length || floors));
+    if (hasPipe) add('services', 'Piping shop drawings — ' + pipeFl + ' plan sheet' + (pipeFl > 1 ? 's' : ''), pipeFl, 'floor', STD.pipeSD, 0,
+      'Standard — $1,300 per plan sheet with new piping' + (C.pipeSheets.length ? ' (' + C.pipeSheets.join(', ') + ')' : C.pipeFloors.length ? ' (levels ' + C.pipeFloors.join(', ') + ')' : ''));
     if (!C.quotes.some(function (q) { return q.kind === 'tab'; }))
-      add('services', 'Testing & balancing — ' + floors + ' floor' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $2,500/floor');
+      add('services', 'Testing & balancing — ' + floors + ' plan sheet' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $2,500 per plan sheet, same count as the ductwork shop drawings');
     // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
     var rigTags = {}; C.rig.forEach(function (x) { rigTags[x.key || norm(x.tag)] = 1; });
     Object.keys(C.sched).forEach(function (tag) {
@@ -443,7 +453,7 @@
       byKey[k] = { category: f.category, flag: f.flag, item: f.item, items: [f.item], n: 1 }; grouped.push(byKey[k]);
     });
     grouped.forEach(function (g) { if (g.n > 1) { g.item = g.n + ' lines (' + g.items.slice(0, 3).map(function (s) { return String(s).split(' — ')[0]; }).join(', ') + (g.n > 3 ? '…' : '') + ')'; } });
-    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, ductCheck: ductCheck };
+    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck };
   }
 
   // "IDU-35-A,B" → IDU-35-A, IDU-35-B ; "AC-1-1/1-2" → AC-1-1, AC-1-2 ; "EF-1 & EF-2" → EF-1, EF-2
