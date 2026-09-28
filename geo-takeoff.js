@@ -854,7 +854,8 @@
       // segments stay available while less than half their length is inside pairs, and only the untouched part is counted
       function usedLen(i) { return (used[i] || []).reduce(function (a, iv) { return a + Math.max(0, Math.min(S[i][6], iv[1]) - Math.max(0, iv[0])); }, 0); }
       function freeLen(i) { return Math.max(0, S[i][6] - usedLen(i)); }
-      var freeIdx = []; S.forEach(function (s, i) { if (usedLen(i) < 0.5 * s[6] && freeLen(i) >= 0.5 * ptft) freeIdx.push(i); });
+      // partially paired segments qualify only as long trunks (≥ 8 ft, < 35 % inside pairs); short nibbled pieces are diffuser boxes and walls (Sage)
+      var freeIdx = []; S.forEach(function (s, i) { var u = usedLen(i); if (u === 0 ? s[6] >= 0.5 * ptft : (u < 0.5 * s[6] && s[6] >= 4 * ptft)) freeIdx.push(i); });
       function touching(i, j, tol) {
         tol = tol || 1.5;
         var s = S[i], t = S[j], E = [[s[0], s[1]], [s[2], s[3]]], F = [[t[0], t[1]], [t[2], t[3]]];
@@ -871,7 +872,7 @@
           freeIdx.forEach(function (i) {
             var s = S[i], dx = l.cx - (s[0] + s[2]) / 2, dy = l.cy - (s[1] + s[3]) / 2;
             var along = Math.abs(dx * s[4] + dy * s[5]), perp = Math.abs(-dx * s[5] + dy * s[4]);
-            if (along > s[6] / 2 + ptft || perp > 2 * ptft) return;
+            if (along > s[6] / 2 + ptft || perp > (usedLen(i) > 0 ? 1.0 : 2) * ptft) return;   // a nibbled trunk needs the label right on it
             if (perp < bd) { best = i; bd = perp; }
           });
         }
