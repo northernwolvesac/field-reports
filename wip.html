@@ -11,11 +11,11 @@
 <title>WIP Report — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=328"></script>
-<script src="auth.js?v=328"></script>
+<script src="supabase-config.js?v=329"></script>
+<script src="auth.js?v=329"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
-  .wrap { max-width: 1600px; margin: 0 auto; padding: 0 14px; }
+  .wrap { max-width: none; margin: 0; padding: 0 14px; }
   .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
   .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
   .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
@@ -34,7 +34,13 @@
   .card .v { font-size: 20px; font-weight: 800; color: #111318; margin-top: 2px; white-space: nowrap; }
   .card .s { font-size: 11px; color: #6b7280; margin-top: 2px; }
   .card.hi .v { color: #0369a1; }
-  .tblwrap { overflow: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
+  .tblwrap { overflow: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 0 0 10px 10px; border-top: 0; }
+  .scrollbar { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px 10px 0 0; padding: 6px 8px; position: sticky; top: 59px; z-index: 5; }
+  .scrollbar .track { flex: 1; overflow-x: auto; overflow-y: hidden; height: 12px; }
+  .scrollbar .track > div { height: 1px; }
+  .scrollbar button { width: 34px; height: 28px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; color: #111318; font-size: 15px; font-weight: 800; cursor: pointer; padding: 0; line-height: 1; flex: 0 0 auto; }
+  .scrollbar button:disabled { color: #c4c8cf; cursor: default; }
+  .scrollbar .hint { font-size: 11px; color: #6b7280; white-space: nowrap; }
   table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 1900px; }
   th { position: sticky; top: 0; background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; padding: 8px 8px; text-align: right; border-bottom: 1px solid #e5e7eb; white-space: nowrap; cursor: pointer; user-select: none; z-index: 2; }
   th.l, td.l { text-align: left; }
@@ -85,7 +91,8 @@
   </div>
   <div class="print-title" id="printTitle"></div>
   <div class="cards" id="cards"></div>
-  <div class="tblwrap"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  <div class="scrollbar noprint" id="scrollbar"><button type="button" id="scrollL" title="Scroll left">&#9664;</button><div class="track" id="scrollTrack"><div id="scrollSpacer"></div></div><span class="hint" id="scrollHint"></span><button type="button" id="scrollR" title="Scroll right">&#9654;</button></div>
+  <div class="tblwrap" id="tblwrap"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
   <p class="note">
     <b>Revised contract</b> = original + change orders (G702 line 3 of the latest application; without applications: original + approved COs).
     <b>Billed to date</b> = G702 line 4 of the latest application dated on or before the as-of date (drafts excluded unless checked); <b>backlog under contract</b> = revised − billed.
@@ -309,11 +316,25 @@
     ['fStatus', 'fPm', 'hideZero'].forEach(function(id) { $(id).addEventListener('change', render); });
     $('q').addEventListener('input', render);
     $('btnCsv').addEventListener('click', exportCsv);
+    // horizontal scrolling: arrows + a top scrollbar synced with the table
+    var wrap = $('tblwrap'), track = $('scrollTrack'), spacer = $('scrollSpacer'), syncing = false;
+    function syncBar() {
+      spacer.style.width = wrap.scrollWidth + 'px';
+      var max = wrap.scrollWidth - wrap.clientWidth;
+      $('scrollL').disabled = wrap.scrollLeft <= 0; $('scrollR').disabled = wrap.scrollLeft >= max - 1;
+      $('scrollHint').textContent = max > 1 ? Math.round(wrap.scrollLeft / max * 100) + '%' : '';
+      $('scrollbar').style.display = max > 1 ? '' : 'none';
+    }
+    wrap.addEventListener('scroll', function() { if (syncing) return; syncing = true; track.scrollLeft = wrap.scrollLeft; syncBar(); syncing = false; });
+    track.addEventListener('scroll', function() { if (syncing) return; syncing = true; wrap.scrollLeft = track.scrollLeft; syncBar(); syncing = false; });
+    $('scrollL').addEventListener('click', function() { wrap.scrollBy({ left: -Math.max(300, wrap.clientWidth * 0.6), behavior: 'smooth' }); });
+    $('scrollR').addEventListener('click', function() { wrap.scrollBy({ left: Math.max(300, wrap.clientWidth * 0.6), behavior: 'smooth' }); });
+    window.addEventListener('resize', syncBar); new MutationObserver(syncBar).observe($('tbody'), { childList: true }); syncBar();
     $('btnPrint').addEventListener('click', function() { window.print(); });
   }
   init().catch(function(e) { console.error(e); });
 })();
 </script>
-<script src="sw-register.js?v=328"></script>
+<script src="sw-register.js?v=329"></script>
 </body>
 </html>
