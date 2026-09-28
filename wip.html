@@ -11,8 +11,8 @@
 <title>WIP Report — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=329"></script>
-<script src="auth.js?v=329"></script>
+<script src="supabase-config.js?v=330"></script>
+<script src="auth.js?v=330"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: none; margin: 0; padding: 0 14px; }
@@ -327,14 +327,14 @@
     }
     wrap.addEventListener('scroll', function() { if (syncing) return; syncing = true; track.scrollLeft = wrap.scrollLeft; syncBar(); syncing = false; });
     track.addEventListener('scroll', function() { if (syncing) return; syncing = true; wrap.scrollLeft = track.scrollLeft; syncBar(); syncing = false; });
-    $('scrollL').addEventListener('click', function() { wrap.scrollBy({ left: -Math.max(300, wrap.clientWidth * 0.6), behavior: 'smooth' }); });
-    $('scrollR').addEventListener('click', function() { wrap.scrollBy({ left: Math.max(300, wrap.clientWidth * 0.6), behavior: 'smooth' }); });
+    $('scrollL').addEventListener('click', function() { wrap.scrollBy({ left: -Math.max(300, wrap.clientWidth * 0.6), behavior: 'auto' }); });
+    $('scrollR').addEventListener('click', function() { wrap.scrollBy({ left: Math.max(300, wrap.clientWidth * 0.6), behavior: 'auto' }); });
     window.addEventListener('resize', syncBar); new MutationObserver(syncBar).observe($('tbody'), { childList: true }); syncBar();
     $('btnPrint').addEventListener('click', function() { window.print(); });
   }
   init().catch(function(e) { console.error(e); });
 })();
 </script>
-<script src="sw-register.js?v=329"></script>
+<script src="sw-register.js?v=330"></script>
 </body>
 </html>
