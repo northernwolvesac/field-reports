@@ -8,8 +8,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=52"></script>
-<script src="auth.js?v=52"></script>
+<script src="supabase-config.js?v=326"></script>
+<script src="auth.js?v=326"></script>
 <script src="labor-rates.js?v=183"></script>
 <script src="cloud-save.js?v=52"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -120,12 +120,18 @@ body{padding-bottom:100px}
       <div class="field"><label>Pricing</label>
         <select id="costMode" data-save onchange="applyCostMode()">
           <option value="itemized">Itemized — materials, labor, subs</option>
-          <option value="lump">Lump sum — total only</option>
+          <option value="lump">Total — total only</option>
         </select></div>
-      <div class="field" id="lumpSumWrap" style="display:none"><label>Lump Sum Total ($)</label>
+      <div class="field" id="lumpSumWrap" style="display:none"><label>Total ($)</label>
         <input type="number" step="0.01" id="lumpSumAmount" data-save placeholder="0.00" oninput="calcCosts()"></div>
+      <div class="field" id="ohpModeWrap"><label>OH &amp; P</label>
+        <select id="ohpMode" data-save onchange="applyCostMode()">
+          <option value="show">Show OH 13% + Profit 10% on materials</option>
+          <option value="hide">Hide — OH&amp;P included in material costs</option>
+        </select></div>
     </div>
     <div id="lumpSumNote" style="display:none;font-size:11px;color:#94a3b8;margin:-4px 0 8px">The PDF shows only the total — no materials, labor, subcontractor or OH&amp;P breakdown.</div>
+    <div id="ohpHideNote" style="display:none;font-size:11px;color:#94a3b8;margin:-4px 0 8px">OH&amp;P is not shown: enter material costs with overhead and profit already included. The CO shows only the material and labor breakdown.</div>
     <div id="itemizedCost">
     <label style="font-weight:700;font-size:13px;margin-bottom:6px;display:block">Parts &amp; Materials</label>
     <div id="partsList">
@@ -146,7 +152,7 @@ body{padding-bottom:100px}
       </div>
     </div>
     <button class="btn btn-secondary btn-small" onclick="addLabor()" style="margin-top:8px">+ Add Labor</button>
-    <div style="font-size:11px;color:#94a3b8;margin-top:4px">Labor rates already include overhead &amp; profit — OH/Profit apply to materials only.</div>
+    <div class="ohp-row" style="font-size:11px;color:#94a3b8;margin-top:4px">Labor rates already include overhead &amp; profit — OH/Profit apply to materials only.</div>
 
     <label style="font-weight:700;font-size:13px;margin:16px 0 6px;display:block">Subcontractors</label>
     <div id="subsList"></div>
@@ -156,9 +162,9 @@ body{padding-bottom:100px}
     <!-- COST SUMMARY -->
     <div class="cost-summary">
       <div class="cost-row itemized-row"><span>Materials</span><span id="costParts">$0.00</span></div>
-      <div class="cost-row itemized-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;OH (13%)</span><span id="costOH">$0.00</span></div>
-      <div class="cost-row itemized-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;Profit (10%)</span><span id="costProfit">$0.00</span></div>
-      <div class="cost-row itemized-row"><span>Materials Total</span><span id="costMaterialsTotal">$0.00</span></div>
+      <div class="cost-row itemized-row ohp-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;OH (13%)</span><span id="costOH">$0.00</span></div>
+      <div class="cost-row itemized-row ohp-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;Profit (10%)</span><span id="costProfit">$0.00</span></div>
+      <div class="cost-row itemized-row ohp-row"><span>Materials Total</span><span id="costMaterialsTotal">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Labor</span><span id="costLabor">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Subcontractors</span><span id="costSubs">$0.00</span></div>
       <div class="cost-row total"><span>TOTAL</span><span id="costTotal">$0.00</span></div>
@@ -398,7 +404,7 @@ async function syncCOToPrimeContract(projId) {
       items.push({ description: 'SUBCONTRACTOR - ' + (x.name || 'SUB') + (x.trade ? ' (' + x.trade + ')' : '') + (x.desc ? ': ' + x.desc.split('\n')[0].slice(0, 80) : ''), amount: Math.round(c * 100) / 100 });
     });
     var amount = _coMoney((document.getElementById('costTotal') || {}).textContent);
-    if (isLumpSum()) items = amount ? [{ description: 'LUMP SUM', amount: Math.round(amount * 100) / 100 }] : [];
+    if (isLumpSum()) items = amount ? [{ description: 'TOTAL', amount: Math.round(amount * 100) / 100 }] : [];
     var desc = (v('changeDesc') || '').split('\n')[0].trim();
     var title = 'CO #' + (v('coNumber') || reportId) + (desc ? ' - ' + desc.slice(0, 90).toUpperCase() : '');
     var days = parseInt(v('addDays'), 10);
@@ -545,7 +551,8 @@ var _coStatus = 'submitted';
       custPrintName: fd.custPrintName,
       aiSummaryText: fd.aiSummary,
       costMode: fd.costMode,
-      lumpSumAmount: fd.lumpSumAmount
+      lumpSumAmount: fd.lumpSumAmount,
+      ohpMode: fd.ohpMode || 'show'
     };
 
     Object.keys(fields).forEach(function(id) {
@@ -653,8 +660,8 @@ function addLabor(){const r=document.createElement('div');r.className='labor-row
 
 function calcCosts(){
   let matRaw=0;document.querySelectorAll('.parts-row').forEach(r=>{const q=parseFloat(r.querySelector('.part-qty')?.value)||1;const c=parseFloat(r.querySelector('.part-cost')?.value)||0;matRaw+=q*c});
-  const oh=matRaw*0.13;
-  const profit=matRaw*0.10;
+  const oh=isHideOhp()?0:matRaw*0.13;
+  const profit=isHideOhp()?0:matRaw*0.10;
   const matTotal=matRaw+oh+profit;
   let labor=0;document.querySelectorAll('.labor-row').forEach(r=>{const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;labor+=h*rt});
   document.getElementById('costParts').textContent='$'+matRaw.toFixed(2);
@@ -667,12 +674,16 @@ function calcCosts(){
   document.getElementById('costTotal').textContent='$'+(isLumpSum()?(parseFloat(document.getElementById('lumpSumAmount').value)||0):(matTotal+labor+subs)).toFixed(2);
 }
 function isLumpSum(){return (document.getElementById('costMode')||{}).value==='lump'}
+function isHideOhp(){return !isLumpSum() && (document.getElementById('ohpMode')||{}).value==='hide'}
 function applyCostMode(){
-  var lump=isLumpSum();
+  var lump=isLumpSum(), hideOhp=isHideOhp();
   document.getElementById('itemizedCost').style.display=lump?'none':'';
   document.getElementById('lumpSumWrap').style.display=lump?'':'none';
+  document.getElementById('ohpModeWrap').style.display=lump?'none':'';
   document.getElementById('lumpSumNote').style.display=lump?'':'none';
+  document.getElementById('ohpHideNote').style.display=hideOhp?'':'none';
   document.querySelectorAll('.itemized-row').forEach(function(r){r.style.display=lump?'none':''});
+  document.querySelectorAll('.ohp-row').forEach(function(r){r.style.display=(lump||hideOhp)?'none':''});
   calcCosts();
 }
 setTimeout(applyCostMode,700);
@@ -961,6 +972,7 @@ function collectData(){
 clientEmail:v('clientEmail'),
 costMode:v('costMode')||'itemized',
 lumpSumAmount:v('lumpSumAmount'),
+ohpMode:v('ohpMode')||'show',
 _projectId: typeof getSelectedProjectId === 'function' ? getSelectedProjectId() : null,
 _cloudId: _editCloudId || null,
 _revisionNumber: _revisionNumber || 1,
@@ -1029,14 +1041,14 @@ function generatePDF(){
 
     section('Cost Summary');
     const t=id=>num(document.getElementById(id).textContent);
-    [['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0]].forEach(r=>{
+    (isHideOhp()?[['Materials',t('costParts'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0]]:[['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0]]).forEach(r=>{
       room(16);doc.setFont('helvetica',r[2]?'normal':'bold');doc.setFontSize(r[2]?9:10);doc.setTextColor(...(r[2]?mute:ink));
       doc.text(r[0],M+(r[2]?16:6),y);doc.text(money(r[1]),R-6,y,{align:'right'});y+=16});
     y+=4;
   }
   // total
   room(40);doc.setDrawColor(...ink);doc.setLineWidth(1.2);doc.line(M,y-4,R,y-4);
-  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...ink);doc.text(lump?'LUMP SUM TOTAL':'TOTAL',M+6,y+14);
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...ink);doc.text('TOTAL',M+6,y+14);
   doc.setFontSize(14);doc.text(money(num(document.getElementById('costTotal').textContent)),R-6,y+14,{align:'right'});
   y+=38;
 
@@ -1321,6 +1333,6 @@ function openChangeOrderAIChat() {
 <script src="form-utils.js?v=114"></script>
 <script src="nw-drive.js?v=221"></script>
 <script src="nw-form-kit.js?v=261"></script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=326"></script>
 </body>
 </html>
