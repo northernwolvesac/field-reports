@@ -16,7 +16,7 @@
   // Equipment Installation Standards: man-hours per unit
   // a unit is something with a tag on it (EF-1, AC-10-2, AH-1.10, EDH-G-1); detail titles and legend rows ("AC UNIT (ceiling mounted",
   // "Fan-Coil (hanging)", "EF (typical)") that the reader lists as equipment are not units — Sage carried 9 such phantoms (288 h)
-  function isRealTag(t) { t = String(t || '').trim(); return /^[A-Za-z]{1,6}([-\s]?[A-Za-z]{1,2})?[-\s]?\d[\w.\-\/]*$/.test(t) && !/\(|typ/i.test(t); }
+  function isRealTag(t) { t = String(t || '').trim(); return /^[A-Za-z]{1,6}([-\s]?[A-Za-z]{1,2})?[-\s]?\d[\w.\-\/]*$/.test(t) && !/[()]|typ/i.test(t) && t.split(/\s+/).length <= 2; }
   function installHours(eq) {
     var t = (eq.type || '').toLowerCase(), w = Number(eq.weight_lb || 0);
     if (/air curtain/.test(t)) return { h: 16, basis: 'air curtain — 1/day, 2 men' };
@@ -28,7 +28,7 @@
     // no weight on the schedule: Kastriot prices by what the thing is — light fans / duct heaters 4 h, pumps 8 h, ductless split parts 16 h,
     // rooftop / make-up air / hoods as 600 lb+ (48 h); everything else stays at the 200–500 lb tier
     if (!w && /\bfan\b|exhaust|transfer|duct heater|\bedh\b|electric heater|thermostat|damper|louver/.test(t)) return { h: 4, basis: 'weight not shown — light fan / duct heater (4/day, 2 men)', flag: 'weight unknown' };
-    if (!w && /pump/.test(t)) return { h: 8, basis: 'weight not shown — small pump (1/2 day, 2 men)', flag: 'weight unknown' };
+    if (!w && /\bpump\b/.test(t) && !/heat pump/.test(t)) return { h: 8, basis: 'weight not shown — small pump (1/2 day, 2 men)', flag: 'weight unknown' };
     if (!w && /ductless|mini[- ]split|dscu|dseu|cassette|wall[- ]mount|evaporator/.test(t)) return { h: 16, basis: 'weight not shown — ductless split component (1 day, 2 men)', flag: 'weight unknown' };
     if (!w && /rooftop|\brtu\b|make[- ]?up air|\bmua\b|hood|\bkeh\b|packaged unit|doas/.test(t)) return { h: 48, basis: 'weight not shown — rooftop / make-up air / hood priced as 600 lb+ (1 day, 6 men)', flag: 'weight unknown' };
     if (!w) return { h: 32, basis: 'weight not shown — priced as 200–500 lb (1 day, 4 men)', flag: 'weight unknown' };
@@ -448,8 +448,8 @@
     eqTags.sort().forEach(function (tag) {
       var s = C.sched[tag] || C.planEq[tag];
       if (!C.sched[tag] && !/unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens/i.test((s.type || '') + ' ' + tag)) return;
-      if (/diffuser|grille|register|vav|damper|louver|variable air volume|terminal unit|fan[- ]powered|\bcav\b|fire suppression|ansul|smoke detector|\bduct\b|connection/i.test((s.type || '') + ' ' + (s.label || tag))) return;
-      if (!isRealTag(s.label || tag) && (!C.sched[tag] || !(C.sched[tag].qty > 0) || /\(/.test(s.label || tag))) return;
+      if (/diffuser|grille|register|vav|damper|louver|variable air volume|terminal unit|fan[- ]powered|\bcav\b|fire suppression|ansul|smoke detector|duct\/hood|hood connection|duct connection/i.test((s.type || '') + ' ' + (s.label || tag))) return;
+      if (!isRealTag(s.label || tag) && (!C.sched[tag] || !(C.sched[tag].qty > 0) || /[()]/.test(s.label || tag) || String(s.label || tag).split(/\s+/).length > 2)) return;
       var about = [s.type, s.notes, s.location, s.furnished_by].join(' ');
       if (/existing|to remain|reference only|base building|by others|owner[- ]furnished|n\.?i\.?c/i.test(about)) return;
       var alt = /alternate|\balt\b|add alt/i.test(about);
@@ -483,10 +483,35 @@
         if (/fpb|fan[- ]powered/i.test(what)) ao.fpb += n; else ao.vavd += n;
       });
     });
-    if (ao.outlet) add('air_outlets', 'Diffusers / grilles / registers', ao.outlet, 'ea', 0, STD.airOutlet, 'Air Outlets Standards — 1.6 hr each');
-    if (ao.linear) add('air_outlets', 'Linear diffusers', ao.linear, 'lf', 0, STD.linearPerFt, 'Air Outlets Standards — 0.8 hr/ft', ao.linearGuess ? { flag: 'some lengths not shown — counted 4 ft per piece; check the plans' } : null);
-    if (ao.vavd) add('air_outlets', 'VAV boxes / fire-smoke / motorized dampers', ao.vavd, 'ea', 0, STD.vavOrDamper, 'Air Outlets Standards — 2.67 hr each');
-    if (ao.fpb) add('air_outlets', 'Fan-powered boxes', ao.fpb, 'ea', 0, STD.fpb, 'Air Outlets Standards — 8 hr each');
+    // the air-outlet vendor's quote (ADE) itemises every diffuser / grille / register, the linear-diffuser footage, VAVs and cable dampers —
+    // Kastriot prices installation from those counts (BOSS: 336 LF linear + 22 outlets, Sky Zone: 37 outlets the plan reader never saw)
+    var qo = { outlet: 0, linear: 0, vavd: 0, fpb: 0, lines: 0, vendor: '' };
+    C.quotes.forEach(function (q) {
+      if (!q || !(q.lines || []).length) return;
+      var hit = 0, acc = { outlet: 0, linear: 0, vavd: 0, fpb: 0 };
+      q.lines.forEach(function (l) {
+        var d = String(l.description || '') + ' ' + (l.tags || []).join(' '), n = Number(l.qty) || 0;
+        if (!n || /total|subtotal|section|allowance|freight|tax|scope letter/i.test(d)) return;
+        if (/cable[- ]operated|manual damper|volume damper|\bcod\b|opposed blade|light shield only|blank[- ]?off|plenum only/i.test(d)) { hit++; return; }
+        if (/linear|slot diffuser|\blsd\b|\bld\b/i.test(d)) { acc.linear += n; hit++; return; }
+        if (/fan[- ]powered|\bfpb\b/i.test(d)) { acc.fpb += n; hit++; return; }
+        if (/\bvav\b|\bcav\b|terminal unit|air valve|fire[\/ ]?smoke|\bfsd\b|motorized damper|smoke damper/i.test(d)) { acc.vavd += n; hit++; return; }
+        if (/diffuser|grille|register|drum louver|eggcrate|egg crate|\bcd\b|\bsr\b|\brg\b|\brr\b|\bsd\b|\bcr\b|\bsg\b|\beg\b/i.test(d) && !/fan|heater|curtain|louver plenum|monitoring|sensor|detector|damper/i.test(d)) { acc.outlet += n; hit++; return; }
+      });
+      if (hit >= 3 && (acc.outlet + acc.linear + acc.vavd + acc.fpb) > (qo.outlet + qo.linear + qo.vavd + qo.fpb)) { qo = { outlet: acc.outlet, linear: acc.linear, vavd: acc.vavd, fpb: acc.fpb, lines: hit, vendor: q.vendor || 'vendor' }; }
+    });
+    var aoBasis = '';
+    if (qo.lines) {
+      aoBasis = ' — counts from the ' + qo.vendor + ' air-outlet quote';
+      if (qo.outlet) ao.outlet = qo.outlet;
+      if (qo.linear) { ao.linear = qo.linear; ao.linearGuess = false; }
+      if (qo.vavd) ao.vavd = qo.vavd;
+      if (qo.fpb) ao.fpb = qo.fpb;
+    }
+    if (ao.outlet) add('air_outlets', 'Diffusers / grilles / registers', ao.outlet, 'ea', 0, STD.airOutlet, 'Air Outlets Standards — 1.6 hr each' + aoBasis);
+    if (ao.linear) add('air_outlets', 'Linear diffusers', ao.linear, 'lf', 0, STD.linearPerFt, 'Air Outlets Standards — 0.8 hr/ft' + aoBasis, ao.linearGuess ? { flag: 'some lengths not shown — counted 4 ft per piece; check the plans' } : null);
+    if (ao.vavd) add('air_outlets', 'VAV boxes / fire-smoke / motorized dampers', ao.vavd, 'ea', 0, STD.vavOrDamper, 'Air Outlets Standards — 2.67 hr each' + aoBasis);
+    if (ao.fpb) add('air_outlets', 'Fan-powered boxes', ao.fpb, 'ea', 0, STD.fpb, 'Air Outlets Standards — 8 hr each' + aoBasis);
 
     // standalone controls only when there is no BMS quote (Standalone Controls Standards)
     var vavCount = C.schedVav || Object.keys(C.devices).reduce(function (a, k) { return a + (C.devices[k].type === 'vav' || C.devices[k].type === 'fpb' ? C.devices[k].qty : 0); }, 0);

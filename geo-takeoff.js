@@ -444,15 +444,30 @@
       });
       if (labs.length < 3) return { error: 'fewer than 3 duct size labels', ptft: ptft };
       // segments by style (skip gray background, white, dashed)
-      var bySty = {}, n = D.segs.length / 5;
+      var bySty = {}, dashSty = {}, n = D.segs.length / 5;
       for (var i = 0; i < n; i++) {
         var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col;
-        if (st.dash) continue;
+        if (st.dash) {
+          if (!(Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) && hyp(D.segs[o + 2] - D.segs[o], D.segs[o + 3] - D.segs[o + 1]) > 0.8 * ptft)
+            (dashSty[st.key] = dashSty[st.key] || []).push([D.segs[o], D.segs[o + 1], D.segs[o + 2], D.segs[o + 3]]);
+          continue;
+        }
         if (Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) continue;
         var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3];
         if (hyp(x2 - x1, y2 - y1) <= 1.0) continue;
         (bySty[st.key] = bySty[st.key] || []).push([x1, y1, x2, y2]);
       }
+      // dash trains: a duct drawn as a row of 1-ft dashes (360 Lexington's heavy 1.68-pt mains — 375 dashes of 18 pt) becomes one
+      // segment per row so labels, pairs and single-line chaining see a line, not 30 stubs
+      // duct-weight styles take the merged rows in place; rows made of THIN dashes (360 Lexington's 0.72-pt mains labelled 12x6 / 8x8)
+      // only count through dashedRuns, i.e. when a size label sits on them — merged thin dashes fed into pairing made L'Catteron's
+      // 0.54-pt lines pair up (+800 ft)
+      Object.keys(bySty).forEach(function (key) {
+        var w = +key.split('|')[1], merged = mergeDashes(bySty[key], ptft);
+        if (w >= 1.0) { bySty[key] = merged; return; }
+        var orig = {}; bySty[key].forEach(function (g) { orig[g.join(',')] = 1; });
+        merged.forEach(function (g) { if (!orig[g.join(',')] && hyp(g[2] - g[0], g[3] - g[1]) >= 3 * ptft) (dashSty[key] = dashSty[key] || []).push(g); });
+      });
       var stats = [];
       Object.keys(bySty).forEach(function (key) {
         var segs = bySty[key]; if (segs.length < 20 || /^fill\|/.test(key)) return;
@@ -536,6 +551,8 @@
       var barPieces = barSegs.length >= 10 ? barRuns(barSegs, labs, ptft, pairLabelFt) : [];
       if (barPieces.length) { S2 = S2.filter(function (x, i) { if (x.q) used2[i] = null; return !x.q; }); used2 = used2.filter(function (u) { return u !== null; }); }
       var singles = singleLines(S2, used2, labs, ptft, leaders).concat(barPieces);
+      var dashPieces = dashedRuns(dashSty, labs, ptft, D.text, S, fp.used, singles);
+      singles = singles.concat(dashPieces);
       var all = pcs.concat(singles), sizes = {}, total = 0, sf = 0, wf = 0;
       all.forEach(function (p) {
         sizes[p.size] = (sizes[p.size] || 0) + p.len_ft; total += p.len_ft;
@@ -678,6 +695,86 @@
       });
       return outs;
     }
+    // dashed single-line ducts that carry their own size labels — 360 Lexington / April Tax / L'Catteron (MG Engineering) draw the
+    // linear-diffuser feeds as dashed lines labelled 12x6 / 8x8; a chain counts only when a label sits on it (no borrowing), and
+    // labels next to "existing" / "(E)" / "remain" / "remove" text are left alone
+    function dashedRuns(dashSty, labs, ptft, text, S, used, singles) {
+      var pieces = [], existing = (text || []).filter(function (t) { return /exist|\(e\)|remain|demol|remove/i.test(t.str || ''); });
+      // a label already sitting on a paired wall or a single-line run belongs to that duct, not to a dash row beside it (L'Catteron / Sage)
+      function usedLen(i) { return (used[i] || []).reduce(function (a, iv) { return a + Math.max(0, Math.min(S[i][6], iv[1]) - Math.max(0, iv[0])); }, 0); }
+      var taken = labs.map(function (l) {
+        for (var i = 0; i < S.length; i++) if (usedLen(i) > 0 && ptSeg(l.cx, l.cy, S[i]) < 1.2 * ptft) return true;
+        for (var k = 0; k < singles.length; k++) { var sx = singles[k].xy || []; for (var m = 0; m < sx.length; m++) if (ptSeg(l.cx, l.cy, sx[m]) < 1.2 * ptft) return true; }
+        return false;
+      });
+      function close(a, b, tol) {
+        return Math.min(hyp(a[0] - b[0], a[1] - b[1]), hyp(a[0] - b[2], a[1] - b[3]), hyp(a[2] - b[0], a[3] - b[1]), hyp(a[2] - b[2], a[3] - b[3]),
+                        ptSeg(b[0], b[1], a), ptSeg(b[2], b[3], a), ptSeg(a[0], a[1], b), ptSeg(a[2], a[3], b)) < tol;
+      }
+      Object.keys(dashSty).forEach(function (key) {
+        var B = dashSty[key].map(norm); if (B.length < 2 || B.length > 2500) return;
+        var n = B.length, comp = B.map(function (_, i) { return i; });
+        function find(i) { while (comp[i] !== i) { comp[i] = comp[comp[i]]; i = comp[i]; } return i; }
+        for (var i = 0; i < n; i++) for (var j = i + 1; j < n; j++) { if (find(i) !== find(j) && close(B[i], B[j], 6)) comp[find(i)] = find(j); }
+        var segSize = new Array(n), chains = {}, labelled = 0;
+        B.forEach(function (b, i) {
+          var best = null, bd = 1e9;
+          labs.forEach(function (l, li) {
+            if (taken[li]) return;
+            var dx = l.cx - b[0], dy = l.cy - b[1], along = dx * b[4] + dy * b[5], perp = Math.abs(-dx * b[5] + dy * b[4]);
+            if (along < -ptft || along > b[6] + ptft || perp > 0.8 * ptft) return;
+            if (existing.some(function (t) { return hyp((t.x0 + t.x1) / 2 - l.cx, (t.y0 + t.y1) / 2 - l.cy) < 3 * ptft; })) return;
+            if (perp < bd) { best = l; bd = perp; }
+          });
+          if (best) { segSize[i] = sizeOf(best); labelled++; }
+          (chains[find(i)] = chains[find(i)] || []).push(i);
+        });
+        if (labelled < 2) return;
+        Object.keys(chains).forEach(function (c) {
+          var ids = chains[c], cnt = {}, majority = null;
+          ids.forEach(function (i) { if (segSize[i]) cnt[segSize[i]] = (cnt[segSize[i]] || 0) + B[i][6]; });
+          Object.keys(cnt).forEach(function (k) { if (majority === null || cnt[k] > cnt[majority]) majority = k; });
+          if (!majority) return;
+          ids.forEach(function (i) {
+            var sz = segSize[i] || majority;
+            pieces.push({ kind: 'single', w_in: parseInt(sz, 10) || 0, len_ft: B[i][6] / ptft, size: sz, via: segSize[i] ? 'label' : 'run', dashed: true, xy: [B[i].slice(0, 4)] });
+          });
+        });
+      });
+      return pieces;
+    }
+    function mergeDashes(segs, ptft) {
+      if (segs.length < 20) return segs;
+      var lens = segs.map(function (g) { return hyp(g[2] - g[0], g[3] - g[1]); }).sort(function (a, b) { return a - b; });
+      var med = lens[Math.floor(lens.length / 2)];
+      if (med > 2.2 * ptft) return segs;                        // ordinary lines, not dashes
+      var groups = {}, out = [], maxGap = Math.min(3 * ptft, Math.max(6, 2.5 * med));
+      segs.forEach(function (g) {
+        var dx = g[2] - g[0], dy = g[3] - g[1], L = hyp(dx, dy); if (L < 0.5) { out.push(g); return; }
+        var ux = dx / L, uy = dy / L; if (ux < -1e-9 || (Math.abs(ux) < 1e-9 && uy < 0)) { ux = -ux; uy = -uy; }
+        var ang = Math.round(Math.atan2(uy, ux) * 200), off = -g[0] * uy + g[1] * ux, k = ang + '|' + Math.round(off / 1.5);
+        (groups[k] = groups[k] || []).push({ g: g, ux: ux, uy: uy, t0: Math.min(g[0] * ux + g[1] * uy, g[2] * ux + g[3] * uy), t1: Math.max(g[0] * ux + g[1] * uy, g[2] * ux + g[3] * uy), off: off });
+      });
+      Object.keys(groups).forEach(function (k) {
+        var G = groups[k].sort(function (a, b) { return a.t0 - b.t0; }), cur = null;
+        // a run merges only when it looks like a dash pattern: 4+ dashes of similar length with similar gaps (hatch ticks,
+        // diffuser symbols and grid marks in the duct style stay as they are — L'Catteron / Sage went +89 % / +24 % without this)
+        function cv(a) { if (a.length < 2) return 1; var m = a.reduce(function (x, y) { return x + y; }, 0) / a.length; var v = a.reduce(function (x, y) { return x + (y - m) * (y - m); }, 0) / a.length; return m > 0 ? Math.sqrt(v) / m : 1; }
+        function flush() {
+          if (!cur) return;
+          var regular = cur.n >= 4 && cv(cur.lens) <= 0.35 && cv(cur.gaps) <= 0.5 && cur.t1 - cur.t0 >= 3 * ptft;
+          if (regular) { var ux = cur.ux, uy = cur.uy, px = -uy * cur.off, py = ux * cur.off; out.push([px + ux * cur.t0, py + uy * cur.t0, px + ux * cur.t1, py + uy * cur.t1]); }
+          else cur.items.forEach(function (e) { out.push(e.g); });
+          cur = null;
+        }
+        G.forEach(function (e) {
+          if (cur && e.t0 - cur.t1 <= maxGap && e.t0 - cur.t1 >= 0.5 && e.t1 - e.t0 <= 2 * ptft) { cur.gaps.push(e.t0 - cur.t1); cur.lens.push(e.t1 - e.t0); cur.t1 = Math.max(cur.t1, e.t1); cur.n++; cur.off = (cur.off * (cur.n - 1) + e.off) / cur.n; cur.items.push(e); }
+          else { flush(); cur = { g: e.g, ux: e.ux, uy: e.uy, t0: e.t0, t1: e.t1, off: e.off, n: 1, lens: [e.t1 - e.t0], gaps: [], items: [e] }; }
+        });
+        flush();
+      });
+      return out;
+    }
     function barRuns(B, labs, ptft, pairLabelFt) {
       var n = B.length, comp = B.map(function (_, i) { return i; });
       function find(i) { while (comp[i] !== i) { comp[i] = comp[comp[i]]; i = comp[i]; } return i; }
@@ -753,7 +850,11 @@
       return pieces;
     }
     function singleLines(S, used, labs, ptft, leaders) {
-      var freeIdx = []; S.forEach(function (s, i) { if (!used[i].length && s[6] >= 0.5 * ptft) freeIdx.push(i); });
+      // a trunk line that the pair pass nibbled at (16" stubs every 6 ft on 360 Lexington's 20x6 mains) is still a single-line duct:
+      // segments stay available while less than half their length is inside pairs, and only the untouched part is counted
+      function usedLen(i) { return (used[i] || []).reduce(function (a, iv) { return a + Math.max(0, Math.min(S[i][6], iv[1]) - Math.max(0, iv[0])); }, 0); }
+      function freeLen(i) { return Math.max(0, S[i][6] - usedLen(i)); }
+      var freeIdx = []; S.forEach(function (s, i) { if (usedLen(i) < 0.5 * s[6] && freeLen(i) >= 0.5 * ptft) freeIdx.push(i); });
       function touching(i, j, tol) {
         tol = tol || 1.5;
         var s = S[i], t = S[j], E = [[s[0], s[1]], [s[2], s[3]]], F = [[t[0], t[1]], [t[2], t[3]]];
@@ -779,23 +880,26 @@
         while (stack.length && cnt <= 60) {
           var k = stack.pop();
           freeIdx.forEach(function (j) {
-            if (chain[j] || seen[j] || S[j][6] < 0.4 * ptft) return;
+            if (chain[j] || seen[j] || S[j][6] < 0.4 * ptft || usedLen(j) > 0) return;
             if (touching(k, j)) { chain[j] = 1; stack.push(j); cnt++; }
           });
         }
         var ids = Object.keys(chain).map(Number);
         ids.forEach(function (j) { seen[j] = 1; });
-        var L = ids.reduce(function (a, j) { return a + S[j][6]; }, 0) / ptft;
+        var L = ids.reduce(function (a, j) { return a + freeLen(j); }, 0) / ptft;
         if (L < 3) return;
-        var main = ids.reduce(function (a, j) { return S[j][6] > S[a][6] ? j : a; }, ids[0]), mm = S[main], wall = false;
-        for (var j = 0; j < S.length && !wall; j++) {
-          if (!used[j].length || Math.abs(Math.sin(S[j][7] - mm[7])) > 0.02) continue;
-          var d = Math.abs((S[j][0] - mm[0]) * -mm[5] + (S[j][1] - mm[1]) * mm[4]);
-          if (d > 30 * ptft / 12) continue;
+        // a duct WALL whose partner wall is fragmented into several pairs must not come back as a single line: paired segments running
+        // parallel within 30" on either side are summed, and half the main's length covered means it is a wall (Sage)
+        var main = ids.reduce(function (a, j) { return S[j][6] > S[a][6] ? j : a; }, ids[0]), mm = S[main], side = [0, 0];
+        for (var j = 0; j < S.length; j++) {
+          if (usedLen(j) < 0.5 * S[j][6] || Math.abs(Math.sin(S[j][7] - mm[7])) > 0.02) continue;
+          var dSigned = (S[j][0] - mm[0]) * -mm[5] + (S[j][1] - mm[1]) * mm[4], d = Math.abs(dSigned);
+          if (d < 1.5 || d > 30 * ptft / 12) continue;
           var t1 = (S[j][0] - mm[0]) * mm[4] + (S[j][1] - mm[1]) * mm[5], t2 = (S[j][2] - mm[0]) * mm[4] + (S[j][3] - mm[1]) * mm[5];
-          if (Math.min(mm[6], Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2)) > 0.5 * mm[6]) wall = true;
+          var ov = Math.min(mm[6], Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2));
+          if (ov > 0) side[dSigned < 0 ? 0 : 1] += ov;
         }
-        if (wall) return;
+        if (Math.max(side[0], side[1]) > 0.5 * mm[6]) return;
         pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), ids: ids, xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
       });
       // unlabelled branches: free segments touching a labelled single run are runouts of that run (BOSS: 10"ø mains with
@@ -805,11 +909,11 @@
         while (stack.length && added < 40) {
           var k = stack.pop();
           freeIdx.forEach(function (j) {
-            if (seen[j] || added >= 40 || S[j][6] < 0.4 * ptft) return;
+            if (seen[j] || added >= 40 || S[j][6] < 0.4 * ptft || usedLen(j) > 0) return;
             // bars (thick polylines) meet through hairline elbow arcs that are not in any duct style — bridge up to 12 pt for them
             if (!touching(k, j, (S[j].q || S[k].q) ? 12 : 3.5)) return;
             seen[j] = 1; added++; stack.push(j);
-            pc.len_ft += S[j][6] / ptft; pc.xy.push(S[j].slice(0, 4)); pc.branch = (pc.branch || 0) + S[j][6] / ptft;
+            pc.len_ft += freeLen(j) / ptft; pc.xy.push(S[j].slice(0, 4)); pc.branch = (pc.branch || 0) + freeLen(j) / ptft;
           });
         }
       });
