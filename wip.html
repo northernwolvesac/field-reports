@@ -11,8 +11,8 @@
 <title>WIP Report — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=330"></script>
-<script src="auth.js?v=330"></script>
+<script src="supabase-config.js?v=331"></script>
+<script src="auth.js?v=331"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: none; margin: 0; padding: 0 14px; }
@@ -317,7 +317,7 @@
     $('q').addEventListener('input', render);
     $('btnCsv').addEventListener('click', exportCsv);
     // horizontal scrolling: arrows + a top scrollbar synced with the table
-    var wrap = $('tblwrap'), track = $('scrollTrack'), spacer = $('scrollSpacer'), syncing = false;
+    var wrap = $('tblwrap'), track = $('scrollTrack'), spacer = $('scrollSpacer');
     function syncBar() {
       spacer.style.width = wrap.scrollWidth + 'px';
       var max = wrap.scrollWidth - wrap.clientWidth;
@@ -325,8 +325,8 @@
       $('scrollHint').textContent = max > 1 ? Math.round(wrap.scrollLeft / max * 100) + '%' : '';
       $('scrollbar').style.display = max > 1 ? '' : 'none';
     }
-    wrap.addEventListener('scroll', function() { if (syncing) return; syncing = true; track.scrollLeft = wrap.scrollLeft; syncBar(); syncing = false; });
-    track.addEventListener('scroll', function() { if (syncing) return; syncing = true; wrap.scrollLeft = track.scrollLeft; syncBar(); syncing = false; });
+    wrap.addEventListener('scroll', function() { if (Math.abs(track.scrollLeft - wrap.scrollLeft) > 1) track.scrollLeft = wrap.scrollLeft; syncBar(); });
+    track.addEventListener('scroll', function() { if (Math.abs(wrap.scrollLeft - track.scrollLeft) > 1) wrap.scrollLeft = track.scrollLeft; syncBar(); });
     $('scrollL').addEventListener('click', function() { wrap.scrollBy({ left: -Math.max(300, wrap.clientWidth * 0.6), behavior: 'auto' }); });
     $('scrollR').addEventListener('click', function() { wrap.scrollBy({ left: Math.max(300, wrap.clientWidth * 0.6), behavior: 'auto' }); });
     window.addEventListener('resize', syncBar); new MutationObserver(syncBar).observe($('tbody'), { childList: true }); syncBar();
@@ -335,6 +335,6 @@
   init().catch(function(e) { console.error(e); });
 })();
 </script>
-<script src="sw-register.js?v=330"></script>
+<script src="sw-register.js?v=331"></script>
 </body>
 </html>
