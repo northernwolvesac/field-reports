@@ -45,7 +45,7 @@
     else if (/branch selector|\bbs\b/.test(t)) pick(2500, 'branch selector budget');
     else if (/vrf|vrv|cassette|ductless|mini[- ]split|wall[- ]mount/.test(t)) pick(2800, 'VRF / ductless indoor unit budget');
     else if (/water[- ]?source|wshp|water[- ]cooled|water cooled|\bwchp\b/.test(t)) pick(Math.max(5000, (tons || 3) * 3000), 'water-source heat pump budget — $3,000 per ton');
-    else if (/rtu|rooftop|packaged|make[- ]?up air|\bmua\b/.test(t)) pick(Math.max(8000, (tons || 5) * 2200), 'rooftop / packaged unit budget — $2,200 per ton');
+    else if (/\brtu\b|rooftop|roof[- ]?top|make[- ]?up air|\bmua\b|packaged rooftop|doas/.test(t)) pick(Math.max(8000, (tons || 5) * 2200), 'rooftop / make-up air unit budget — $2,200 per ton');
     else if (/split|condens|heat pump|\bacc?u\b|\bcu\b/.test(t)) pick(Math.max(3000, (tons || 3) * 1100), 'split / condensing unit budget — $1,100 per ton');
     else if (/\bahu\b|air handl|fan coil|\bfcu\b/.test(t)) pick(Math.max(3000, (tons || 3) * 1200), 'air handler / fan coil budget — $1,200 per ton');
     else if (/hood|grease duct|\bkeh\b|make[- ]?up air|\bmua\b/.test(t)) pick(9000, 'kitchen hood / make-up air budget');
