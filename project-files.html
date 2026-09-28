@@ -217,8 +217,8 @@ requireAuth().catch(function(){});
       // Project documents live in Google Drive (F.JOBS/<project>): show the folder tree exactly as in Drive
       document.querySelector('.pf-toolbar').style.display = 'none';
       var legacy = await supabaseClient.from('project_files').select('*').eq('project_id', projectId).is('drive_id', null).not('storage_path', 'is', null).order('created_at', { ascending: false });
-      var techOnly = false; try { var prof = await getAuthProfile(); techOnly = !!(prof && prof.role === 'tech'); } catch (e) { techOnly = true; }
-      NWDriveBrowser.mount(document.getElementById('mainView'), { projectId: projectId, projectName: (project && project.project_name) || projectId, canEdit: true, fieldOnly: techOnly, userId: currentUserId, legacyRows: legacy.data || [] });
+      var techOnly = false, limited = false; try { var prof = await getAuthProfile(); techOnly = !!(prof && prof.role === 'tech'); limited = !!(prof && prof.role === 'pm_limited'); } catch (e) { techOnly = true; }
+      NWDriveBrowser.mount(document.getElementById('mainView'), { projectId: projectId, projectName: (project && project.project_name) || projectId, canEdit: true, fieldOnly: techOnly || limited, limitedFolders: limited, userId: currentUserId, legacyRows: legacy.data || [] });
       return;
     }
     await loadFiles();

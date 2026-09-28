@@ -675,7 +675,7 @@
 
   // Techs do not see management-only links (Bid Board, Prime Contracts, Workload, Management)
   getAuthProfile().then(function(profile) {
-    if (profile && profile.role === 'tech') renderReportGrid(true);
+    if (profile && (profile.role === 'tech' || profile.role === 'pm_limited')) renderReportGrid(true);
     var pc = document.getElementById('profileCircle');
     if (pc && profile) pc.classList.add(profile.role === 'tech' ? 'tech' : 'mgmt');
   }).catch(function(){});

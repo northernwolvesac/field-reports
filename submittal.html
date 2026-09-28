@@ -179,7 +179,7 @@
 requireAuth().catch(function(){});
 (function() {
   'use strict';
-  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm', 'pm_limited'];
   var MAX_TOTAL = 35 * 1024 * 1024;   // what the Drive proxy can take in one upload
   var params = new URLSearchParams(location.search);
   var projectId = params.get('project');

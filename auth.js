@@ -114,6 +114,13 @@
     return p && p.role === 'tech';
   }
 
+  // 'pm_limited' = a new project manager in the trial month: projects and their documents (drawings, specs, submittals, RFIs,
+  // POs, reports, photos, schedule) but no prime contracts, change orders, bid board or financial folders
+  async function isLimited() {
+    var p = await getAuthProfile();
+    return p && p.role === 'pm_limited';
+  }
+
   async function isAdmin() {
     var p = await getAuthProfile();
     return p && p.role === 'admin';
@@ -205,6 +212,7 @@
   window.getAuthProfile = getAuthProfile;
   window.isManager = isManager;
   window.isTech = isTech;
+  window.isLimited = isLimited;
   window.isAdmin = isAdmin;
   window.autoFillTechName = autoFillTechName;
   window.logout = logout;

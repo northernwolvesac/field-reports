@@ -68,12 +68,16 @@
   var FIELD_FOLDERS = ['drawings', 'submittals', 'iom & warranty', 'shop drawings', 'reports', 'tab report', 'as builts', 'specs', 'photos'];
   function normName(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
   var FIELD_SET = {}; FIELD_FOLDERS.forEach(function(n) { FIELD_SET[normName(n)] = true; });
+  // limited project manager (role pm_limited): the field folders plus RFI, Purchase Orders and Schedule — still nothing financial
+  var LIMITED_FOLDERS = FIELD_FOLDERS.concat(['rfi', 'purchase orders', 'schedule']);
+  var LIMITED_SET = {}; LIMITED_FOLDERS.forEach(function(n) { LIMITED_SET[normName(n)] = true; });
 
   function Browser(host, opts) {
     this.host = host; this.opts = opts || {};
     this.projectId = opts.projectId; this.projectName = opts.projectName || '';
     this.canEdit = !!opts.canEdit;
-    this.fieldOnly = !!opts.fieldOnly;
+    this.fieldOnly = !!opts.fieldOnly || !!opts.limitedFolders;
+    this.allowSet = opts.limitedFolders ? LIMITED_SET : FIELD_SET;
     this.tree = null; this.cur = null; this.query = '';
     ensureCss();
     host.classList.add('nwdb');
@@ -115,7 +119,7 @@
     if (!this.fieldOnly) return true;
     var top = it.folder && it.parent === this.tree.folderId ? it : this.topOf(it.parent === this.tree.folderId ? it.id : it.parent);
     if (!top) return false;                       // loose files at the project root are hidden for technicians
-    return !!FIELD_SET[normName(top.name)];
+    return !!this.allowSet[normName(top.name)];
   };
   Browser.prototype.countIn = function(id) {
     var n = 0, self = this;

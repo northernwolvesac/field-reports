@@ -60,6 +60,12 @@ var SB_API_URL = 'https://vrscvnebznmomkdlhooi.supabase.co';
 var SB_ANON_KEY = 'sb_publishable_7F9lDes97zMPVVrgdG2ggw_vdc6H3QE';
 var ADMIN_KEY = 'SET-IN-APPS-SCRIPT-ONLY';   // real value lives only in the deployed Apps Script project
 var FULL_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+// v3.11: a limited project manager (profile role pm_limited — new PMs in their first month) sees the field folders plus RFI,
+// Purchase Orders and Schedule; never contracts, billing, COI, insurance, proposals, quotes, change orders or tax certificates.
+var LIMITED_ROLES = ['pm_limited'];
+var LIMITED_FOLDERS = FIELD_FOLDERS.concat(['RFI', 'Purchase Orders', 'Schedule']);
+var LIMITED_EDITORS = ['sharon@northernwolvesac.com'];   // get Editor on LIMITED_FOLDERS of every project (apply_field_access), no root access
+var ACTIVE_FOLDERS = FIELD_FOLDERS;                       // set per request from the caller's role
 function callerFromToken(token) {
   if (!token) return null;
   var cache = CacheService.getScriptCache(), ck = 'tok:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token)).slice(0, 40);
@@ -73,11 +79,11 @@ function callerFromToken(token) {
     var p = UrlFetchApp.fetch(SB_API_URL + '/rest/v1/profiles?id=eq.' + u.id + '&select=role', { headers: h, muteHttpExceptions: true });
     if (p.getResponseCode() === 200) { var rows = JSON.parse(p.getContentText()); if (rows[0] && rows[0].role) role = rows[0].role; }
   } catch (e) {}
-  var caller = { id: u.id, email: u.email, role: role, full: FULL_ROLES.indexOf(role) >= 0 };
+  var caller = { id: u.id, email: u.email, role: role, full: FULL_ROLES.indexOf(role) >= 0, limited: LIMITED_ROLES.indexOf(role) >= 0 };
   try { cache.put(ck, JSON.stringify(caller), 300); } catch (e) {}
   return caller;
 }
-function isFieldTop(name) { var n = normName(name); return FIELD_FOLDERS.some(function(f) { return normName(f) === n; }); }
+function isFieldTop(name) { var n = normName(name); return ACTIVE_FOLDERS.some(function(f) { return normName(f) === n; }); }
 // keep only items whose top-level folder is a field folder (for technicians)
 function filterFieldItems(t) {
   var by = {}; (t.items || []).forEach(function(i) { by[i.id] = i; });
@@ -535,6 +541,19 @@ function applyFieldAccess(projectFolderId) {
       try { addPermission(f.getId(), FIELD_VIEWERS[j], 'commenter'); stats.added++; } catch (e) { stats.errors.push(f.getName() + ' ' + FIELD_VIEWERS[j] + ': ' + e.message); }
     }
   }
+  // limited project managers: Editor on the limited folders (RFI / Purchase Orders / Schedule are created when missing)
+  for (var k = 0; k < LIMITED_FOLDERS.length && LIMITED_EDITORS.length; k++) {
+    var lit = pf.getFoldersByName(LIMITED_FOLDERS[k]), lf = null;
+    if (lit.hasNext()) lf = lit.next();
+    else { var la = pf.getFolders(), ln = normName(LIMITED_FOLDERS[k]); while (la.hasNext()) { var lc = la.next(); if (normName(lc.getName()) === ln) { lf = lc; break; } } }
+    if (!lf) { lf = pf.createFolder(LIMITED_FOLDERS[k]); stats.created++; }
+    var lhave = {};
+    try { listPermissions(lf.getId()).forEach(function(p) { if (p.emailAddress) lhave[p.emailAddress.toLowerCase()] = p.role; }); } catch (e) {}
+    for (var m = 0; m < LIMITED_EDITORS.length; m++) {
+      if (lhave[LIMITED_EDITORS[m].toLowerCase()] === 'writer' || lhave[LIMITED_EDITORS[m].toLowerCase()] === 'owner') { stats.already++; continue; }
+      try { addPermission(lf.getId(), LIMITED_EDITORS[m], 'writer'); stats.added++; } catch (e) { stats.errors.push(lf.getName() + ' ' + LIMITED_EDITORS[m] + ': ' + e.message); }
+    }
+  }
   stats.success = true; return stats;
 }
 function revokeAccess(fileId, emails) { return { success: true, removed: removePermissions(fileId, emails || []) }; }
@@ -542,7 +561,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.10' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.11' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -550,11 +569,12 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
-    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.10', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.11', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
     var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
     if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
+    ACTIVE_FOLDERS = caller.limited ? LIMITED_FOLDERS : FIELD_FOLDERS;
     if (!caller.full) {
-      // technicians: field folders only
+      // technicians: field folders only (limited PMs: LIMITED_FOLDERS)
       var techActions = ['list_tree', 'list_files', 'upload_file', 'get_file', 'create_folder', 'replace_file', 'file_data'];
       if (techActions.indexOf(body.action) < 0) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not allowed for your role', auth: true })).setMimeType(ContentService.MimeType.JSON);
       if ((body.action === 'upload_file' || body.action === 'create_folder') && !fieldPathOk(body.category, body.subfolder, body.folder) && !dropPathOk(body.category, body.folder))
