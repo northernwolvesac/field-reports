@@ -14,6 +14,9 @@
     thermostat: 500, sensor: 400, tstatWiring: 50, vavControls: 1000        // Standalone Controls Standards
   };
   // Equipment Installation Standards: man-hours per unit
+  // a unit is something with a tag on it (EF-1, AC-10-2, AH-1.10, EDH-G-1); detail titles and legend rows ("AC UNIT (ceiling mounted",
+  // "Fan-Coil (hanging)", "EF (typical)") that the reader lists as equipment are not units — Sage carried 9 such phantoms (288 h)
+  function isRealTag(t) { t = String(t || '').trim(); return /^[A-Za-z]{1,6}([-\s]?[A-Za-z]{1,2})?[-\s]?\d[\w.\-\/]*$/.test(t) && !/\(|typ/i.test(t); }
   function installHours(eq) {
     var t = (eq.type || '').toLowerCase(), w = Number(eq.weight_lb || 0);
     if (/air curtain/.test(t)) return { h: 16, basis: 'air curtain — 1/day, 2 men' };
@@ -22,6 +25,12 @@
     if (/kitchen/.test(t) && /fan/.test(t)) return { h: 16, basis: 'kitchen exhaust fan — 1/day, 2 men' };
     if (!w && /induction|fan ?coil|fcu|cabinet|unit heater|thermostat|sensor|condensate pump|inline fan|cabinet fan|exhaust fan|ceiling fan/.test(t))
       return { h: /fan ?coil|fcu/.test(t) ? 16 : 8, basis: 'weight not shown — small terminal unit (' + (/fan ?coil|fcu/.test(t) ? '100–190 lb tier' : '40–90 lb tier') + ')', flag: 'weight unknown' };
+    // no weight on the schedule: Kastriot prices by what the thing is — light fans / duct heaters 4 h, pumps 8 h, ductless split parts 16 h,
+    // rooftop / make-up air / hoods as 600 lb+ (48 h); everything else stays at the 200–500 lb tier
+    if (!w && /\bfan\b|exhaust|transfer|duct heater|\bedh\b|electric heater|thermostat|damper|louver/.test(t)) return { h: 4, basis: 'weight not shown — light fan / duct heater (4/day, 2 men)', flag: 'weight unknown' };
+    if (!w && /pump/.test(t)) return { h: 8, basis: 'weight not shown — small pump (1/2 day, 2 men)', flag: 'weight unknown' };
+    if (!w && /ductless|mini[- ]split|dscu|dseu|cassette|wall[- ]mount|evaporator/.test(t)) return { h: 16, basis: 'weight not shown — ductless split component (1 day, 2 men)', flag: 'weight unknown' };
+    if (!w && /rooftop|\brtu\b|make[- ]?up air|\bmua\b|hood|\bkeh\b|packaged unit|doas/.test(t)) return { h: 48, basis: 'weight not shown — rooftop / make-up air / hood priced as 600 lb+ (1 day, 6 men)', flag: 'weight unknown' };
     if (!w) return { h: 32, basis: 'weight not shown — priced as 200–500 lb (1 day, 4 men)', flag: 'weight unknown' };
     if (w <= 35) return { h: 4, basis: '1–30 lb — 1/4 day, 2 men' };
     if (w <= 95) return { h: 8, basis: '40–90 lb — 1/2 day, 2 men' };
@@ -164,6 +173,13 @@
 
   // ── read the AI sheet results ────────────────────────────────────────
   function norm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }   // AC1-1 = AC-1-1
+  // "15", "ground", "roof"… from whatever the reader put in floor; null when it is not a level
+  function levelKey(floor) {
+    var fl = String(floor || '').trim().toLowerCase().replace(/^(level|floor|flr\.?)\s*/, '').replace(/(st|nd|rd|th)\s*(floor|fl\.?)?$/, '').trim();
+    if (/^\d+$/.test(fl) || /^(g|gf|ground|lobby|ll|lower level|cellar|basement|b\d?|mezz\w*|roof|ph|penthouse)$/.test(fl)) return fl.replace(/^(gf|lobby|g)$/, 'ground');
+    return null;
+  }
+  function sheetLabels(groups) { return Object.keys(groups).map(function (k) { var v = groups[k]; return v.length > 1 ? k + ' (' + v.join(' + ') + ')' : v[0]; }); }
 
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
@@ -191,8 +207,13 @@
       // mechanical-room plans = 7, L'Catteron 2, Sage 1; T&B equals the ductwork SD count in 74% of NWAC's Procore estimates. Demo plans never count.
       if (!isDemo) {
         var ductRuns = (r.duct_runs || []).length, pipeRuns = (r.pipe_runs || []).length, planLike = type === 'enlarged' || (type === 'other' && /plan/i.test(r.sheet_title || ''));
-        if ((type === 'duct_plan' && (ductRuns || (r.geo || {}).total_ft > 0)) || (planLike && ductRuns)) ductSheets[sh] = 1;
-        if ((type === 'pipe_plan' && (pipeRuns || (r.geo_pipe || {}).total_ft > 0)) || (planLike && pipeRuns)) pipeSheets[sh] = 1;
+        // Esquire M-101A/M-101B are one floor = one shop drawing (Kastriot: 3 floors, not 6 sheets); L'Catteron M-101/M-102 are both the 6th floor = 1;
+        // Crozier's enlarged mechanical-room plans M-401/402 stay separate (his 7); a roof plan carrying only a couple of drops and an overall
+        // plan superseded by enlarged plans (Sky Zone M1.0) do not count
+        var lvl = levelKey(r.floor), dKey = (type === 'duct_plan' && lvl) ? 'level ' + lvl : sh, pKey = (type === 'pipe_plan' && lvl) ? 'level ' + lvl : sh;
+        var roofOnly = lvl === 'roof' && ductRuns < 3 && !((r.geo || {}).total_ft > 50);
+        if (!coarseSet[sh] && !roofOnly && ((type === 'duct_plan' && (ductRuns || (r.geo || {}).total_ft > 0)) || (planLike && ductRuns))) (ductSheets[dKey] = ductSheets[dKey] || []).push(sh);
+        if ((type === 'pipe_plan' && (pipeRuns || (r.geo_pipe || {}).total_ft > 0)) || (planLike && pipeRuns)) (pipeSheets[pKey] = pipeSheets[pKey] || []).push(sh);
       }
       var eqList = [];
       (r.equipment || []).forEach(function (e0) {
@@ -210,7 +231,8 @@
           var q = planEq[tag] = planEq[tag] || { tag: tag, label: String(e.tag).trim(), qty: 0, sheets: [], per: {} };
           var fl = String(r.floor || sh), f = q.per[fl] = q.per[fl] || {};
           f[type] = (f[type] || 0) + Number(e.qty || 1); q.sheets.push(sh);
-          q.qty = Object.keys(q.per).reduce(function (a, k) { return a + Math.max.apply(null, Object.values(q.per[k])); }, 0);
+          var perFloor = Object.keys(q.per).map(function (k) { return Math.max.apply(null, Object.values(q.per[k])); });
+          q.qty = /\d/.test(tag) ? Math.max.apply(null, perFloor) : perFloor.reduce(function (a, b) { return a + b; }, 0);   // BOSS AHU-1 on M-100 + M-101, Esquire RTU-1 on floor + roof = 1 each
           if (!q.type && e.type) q.type = e.type;
           if (!q.notes && e.notes) q.notes = e.notes;
           if (!q.weight_lb && e.weight_lb) q.weight_lb = e.weight_lb;
@@ -297,7 +319,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), ductSheets: Object.keys(ductSheets), pipeSheets: Object.keys(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -426,8 +448,8 @@
     eqTags.sort().forEach(function (tag) {
       var s = C.sched[tag] || C.planEq[tag];
       if (!C.sched[tag] && !/unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens/i.test((s.type || '') + ' ' + tag)) return;
-      if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;
-      var about = [s.type, s.notes, s.location, s.furnished_by].join(' ');
+      if (/diffuser|grille|register|vav|damper|louver|variable air volume|terminal unit|fan[- ]powered|\bcav\b|fire suppression|ansul|smoke detector|\bduct\b|connection/i.test((s.type || '') + ' ' + (s.label || tag))) return;
+      if (!isRealTag(s.label || tag) && (!C.sched[tag] || !(C.sched[tag].qty > 0) || /\(/.test(s.label || tag))) return;
       if (/existing|to remain|reference only|base building|by others|owner[- ]furnished|n\.?i\.?c/i.test(about)) return;
       var alt = /alternate|\balt\b|add alt/i.test(about);
       var qty = Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1), ih = installHours(s);
