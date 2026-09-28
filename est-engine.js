@@ -47,7 +47,8 @@
     else if (/water[- ]?source|wshp|water[- ]cooled|water cooled|\bwchp\b/.test(t)) pick(Math.max(5000, (tons || 3) * 3000), 'water-source heat pump budget — $3,000 per ton');
     else if (/rtu|rooftop|packaged|make[- ]?up air|\bmua\b/.test(t)) pick(Math.max(8000, (tons || 5) * 2200), 'rooftop / packaged unit budget — $2,200 per ton');
     else if (/split|condens|heat pump|\bacc?u\b|\bcu\b|\bahu\b|air handl|fan coil|\bfcu\b/.test(t)) pick(Math.max(3500, (tons || 3) * 2000), 'split / air handler budget — $2,000 per ton');
-    else if (/kitchen|hood|grease|\bkef\b|\bkeh\b/.test(t)) pick(9000, 'kitchen exhaust budget');
+    else if (/hood|grease duct|\bkeh\b|make[- ]?up air|\bmua\b/.test(t)) pick(9000, 'kitchen hood / make-up air budget');
+    else if (/kitchen exhaust fan|\bkef\b|upblast/.test(t)) pick(3500, 'kitchen exhaust fan budget');
     else if (/roof|upblast|downblast/.test(t) && /fan|exhaust/.test(t)) pick(3500, 'roof exhaust fan budget');
     else if (/fan|exhaust|transfer|\bef\b|\btf\b|\bsf\b|\brf\b/.test(t)) pick(cfm > 1500 ? 4500 : 1800, 'inline / cabinet fan budget');
     else if (/pump/.test(t)) pick(5000, 'pump budget');
@@ -417,8 +418,10 @@
       var fam = (s.type || '') + ' ' + tag;
       var covered = (mfr && qBlob.indexOf(mfr) >= 0) || (mdl.length >= 5 && qBlob.indexOf(mdl) >= 0) ||
         (/vrf|vrv|cassette|branch selector|ductless|indoor unit|fan coil/i.test(fam) && /vrf|vrv|multi v|multi-v|heat recovery|fan coil|cassette/.test(qBlob)) ||
-        (/hood|kef|keh|mua|make[- ]?up|ansul|grease/i.test(fam) && /hood|captiveaire|kitchen|ansul/.test(qBlob));
-      var alt = /alternate|alt|add alt/i.test([s.type, s.notes, s.label].join(' '));
+        (/hood|\bkef\b|\bkeh\b|\bmua\b|make[- ]?up|ansul|grease/i.test(fam) && /hood|captiveaire|kitchen|ansul/.test(qBlob)) ||
+        (/\bfan\b|exhaust|transfer/i.test(fam) && !/hood|\bmua\b|make[- ]?up/i.test(fam) && /roof fan|cabinet fan|inline fan|exhaust fan|ceiling fan|greenheck|\bcsp\b|downblast|down blast/.test(qBlob));   // the air-outlet vendor's quote (ADE) carries the fans
+      if (/duct\/hood|connection|\bduct\b|grille|diffuser|register/i.test(fam)) return;   // duct accessories and air devices are not equipment
+      var alt = /alternate|\balt\b|add alt/i.test([s.type, s.notes, s.label].join(' '));
       if (covered) { var qv = ((C.quotes || []).filter(function (q) { return JSON.stringify(q || {}).toLowerCase().indexOf(mfr || mdl || 'no-match') >= 0; })[0] || {}).vendor || 'a vendor quote'; add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model].filter(Boolean).join(' · ') + ' (in ' + qv + ')', 0, 'ea', 0, 0, 'covered by the vendor package quote — no separate price', { is_firm: true }); return; }
       var bq = alt ? null : budgetFor(s, tag), bqty = Math.max(1, s.qty || (C.planEq[tag] && C.planEq[tag].qty) || 1);
       add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · ') + (bq ? ' [BUDGET]' : ''), bqty, 'ea', bq ? bq.cost : 0, 0,
