@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>WIP Report — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=324"></script>
+<script src="auth.js?v=324"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 40px; }
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0 10px; }
+  .tools input, .tools select { padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-family: inherit; }
+  .tools input[type=text] { flex: 1; min-width: 200px; }
+  .tools label.chk { font-size: 13px; color: #374151; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tools .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; }
+  .btn { padding: 10px 14px; font-size: 14px; font-weight: 700; border-radius: 10px; cursor: pointer; border: 1px solid #111318; background: #111318; color: #fff; text-decoration: none; white-space: nowrap; font-family: inherit; }
+  .btn.light { background: #fff; color: #111318; border-color: #d1d5db; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; }
+  .card .k { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; }
+  .card .v { font-size: 20px; font-weight: 800; color: #111318; margin-top: 2px; white-space: nowrap; }
+  .card .s { font-size: 11px; color: #6b7280; margin-top: 2px; }
+  .card.hi .v { color: #0369a1; }
+  .tblwrap { overflow: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 1380px; }
+  th { position: sticky; top: 0; background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; padding: 8px 8px; text-align: right; border-bottom: 1px solid #e5e7eb; white-space: nowrap; cursor: pointer; user-select: none; z-index: 2; }
+  th.l, td.l { text-align: left; }
+  th.sorted::after { content: ' ▾'; color: #0696D7; } th.sorted.asc::after { content: ' ▴'; }
+  td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; text-align: right; white-space: nowrap; color: #111318; }
+  td.l { white-space: normal; min-width: 180px; }
+  td .nm { font-weight: 700; } td .sub { display: block; font-size: 11px; color: #6b7280; }
+  td.neg { color: #b91c1c; } td.pos { color: #166534; }
+  td.muted { color: #9ca3af; }
+  tr.sec td { background: #111318; color: #fff; font-weight: 700; text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 8px; }
+  tr.tot td { background: #f9fafb; font-weight: 800; border-top: 2px solid #111318; }
+  tr.grand td { background: #e5e7eb; font-weight: 800; }
+  .pill { font-size: 10px; font-weight: 800; letter-spacing: .06em; border-radius: 999px; padding: 2px 7px; text-transform: uppercase; display: inline-block; }
+  .pill.active { background: #dcfce7; color: #166534; } .pill.completed { background: #f3f4f6; color: #374151; } .pill.on-hold { background: #fef3c7; color: #92400e; } .pill.nosetup { background: #fee2e2; color: #b91c1c; }
+  .bar { display: inline-block; width: 54px; height: 6px; background: #e5e7eb; border-radius: 3px; vertical-align: middle; margin-left: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #0696D7; }
+  .note { font-size: 11.5px; color: #6b7280; margin: 10px 0 0; line-height: 1.5; }
+  .blocked { text-align: center; padding: 60px 20px; color: #4b5563; }
+  .empty { text-align: center; padding: 40px 20px; color: #6b7280; }
+  a.pl { color: #0696D7; text-decoration: none; }
+  @media print {
+    body { background: #fff; padding: 0; } .top, .tools, .noprint { display: none !important; }
+    .wrap { max-width: none; padding: 0; } .tblwrap { border: 0; overflow: visible; } table { min-width: 0; font-size: 9.5px; } th, td { padding: 3px 4px; }
+    .cards { grid-template-columns: repeat(6, 1fr); } .card .v { font-size: 13px; } .print-title { display: block !important; }
+    @page { size: landscape; margin: 10mm; }
+  }
+  .print-title { display: none; font-size: 16px; font-weight: 800; margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="index.html" class="back">←</a>
+  <div class="ttl"><b>WIP Report</b><span id="sub">Work in progress · backlog under contract · billing status</span></div>
+  <img src="logo-header.png?v=258" alt="Northern Wolves AC" style="height:34px;width:auto">
+</div>
+<div class="wrap" id="main" style="display:none">
+  <div class="tools">
+    <span class="lbl">As of</span><input type="date" id="asOf">
+    <select id="fStatus"><option value="open">Active + On hold</option><option value="active">Active only</option><option value="completed">Completed</option><option value="all">All projects</option></select>
+    <select id="fPm"><option value="">All PMs</option></select>
+    <input type="text" id="q" placeholder="Search project, customer, job #…">
+    <label class="chk"><input type="checkbox" id="incDrafts"> include draft applications</label>
+    <label class="chk"><input type="checkbox" id="hideZero" checked> hide zero backlog</label>
+    <button class="btn light" id="btnCsv" type="button">Export CSV</button>
+    <button class="btn" id="btnPrint" type="button">Print / PDF</button>
+  </div>
+  <div class="print-title" id="printTitle"></div>
+  <div class="cards" id="cards"></div>
+  <div class="tblwrap"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  <p class="note">
+    <b>Revised contract</b> = original contract + change orders (from the latest application's G702 line 3; for contracts without applications: original + approved COs).
+    <b>Billed to date</b> = total completed &amp; stored to date (G702 line 4) on the latest application dated on or before the as-of date; retainage per the application; drafts excluded unless checked.
+    <b>Backlog under contract</b> = revised contract − billed to date. <b>Paid</b> = payments dated on or before the as-of date; <b>A/R</b> = net billed (less retainage) − paid.
+    <b>PM % complete</b> comes from the Workload Planner; <b>earned</b> = revised × PM %, <b>over / (under) billed</b> = billed − earned (blank when the PM has not entered a % complete).
+  </p>
+</div>
+<div class="blocked" id="blocked" style="display:none">This report is available to the office team only.</div>
+
+<script>
+(function() {
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var rows = [], sortKey = 'backlog', sortAsc = false, pmSet = {};
+  var $ = function(id) { return document.getElementById(id); };
+  var money = function(n) { n = Number(n || 0); var s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); return (n < 0 ? '(' + s + ')' : s); };
+  var pct = function(n) { return isFinite(n) ? (n * 100).toFixed(0) + '%' : '—'; };
+  var esc = function(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; };
+  var fmtDate = function(s) { if (!s) return ''; var d = new Date(s + (s.length === 10 ? 'T12:00:00' : '')); return isNaN(d) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+
+  // ── same retainage math as invoicing.html (computeTotalsFor) ──
+  function relOf(l) { var r = Number((l && l.retainage_release_pct) || 0); return r > 0 ? Math.min(1, r) : 0; }
+  function effRate(setup, app) { if (app && app.retainage_rate != null && app.retainage_rate !== '') return Number(app.retainage_rate); return (setup && setup.retainage_rate != null) ? Number(setup.retainage_rate) : 0.05; }
+  function effRateStored(setup, app) { if (app && app.retainage_rate_stored != null && app.retainage_rate_stored !== '') return Number(app.retainage_rate_stored); return Number((setup && setup.retainage_rate_stored) || 0); }
+  function totalsFor(setup, app, lines) {
+    var grandG = 0, grandCompleted = 0, grandStored = 0, heldCompleted = 0, heldStored = 0;
+    lines.forEach(function(li) {
+      if (li.is_parent) return;
+      var d = Number(li.prev_amount || 0), e = Number(li.this_amount || 0), f = Number(li.stored_amount || 0), keep = 1 - relOf(li);
+      heldCompleted += (d + e) * keep; heldStored += f * keep; grandG += d + e + f; grandCompleted += d + e; grandStored += f;
+    });
+    var rate = effRate(setup, app), rateStored = effRateStored(setup, app);
+    var L1 = Number(setup.original_contract_sum || 0);
+    var L2 = Number(app.co_prev_additions || 0) + Number(app.co_prev_deductions || 0) + Number(app.co_this_additions || 0) + Number(app.co_this_deductions || 0);
+    var L5t = heldCompleted * rate + heldStored * rateStored;
+    return { L1: L1, L2: L2, L3: L1 + L2, L4: grandG, L5t: L5t, L6: grandG - L5t };
+  }
+
+  async function fetchAll(table, select, filterFn) {
+    var out = [], from = 0, step = 1000;
+    while (true) {
+      var q = supabaseClient.from(table).select(select).range(from, from + step - 1);
+      if (filterFn) q = filterFn(q);
+      var r = await q; if (r.error) throw new Error(table + ': ' + r.error.message);
+      out = out.concat(r.data || []); if ((r.data || []).length < step) break; from += step;
+    }
+    return out;
+  }
+
+  var data = null;
+  async function loadData() {
+    var projects = await fetchAll('projects', 'id, project_name, short_code, status, pm_name, gc_name, contract_value, estimated_completion, target_completion_date, percent_complete, city, state');
+    var setups = await fetchAll('aia_projects', '*');
+    var apps = await fetchAll('aia_applications', '*', function(q) { return q.neq('status', 'void'); });
+    var pays = await fetchAll('aia_payments', 'aia_project_id, amount, date_paid');
+    var cos = await fetchAll('aia_change_orders', 'aia_project_id, amount, status');
+    data = { projects: projects, setups: setups, apps: apps, pays: pays, cos: cos, linesByApp: {} };
+  }
+  async function ensureLines(appIds) {
+    var need = appIds.filter(function(id) { return !data.linesByApp[id]; });
+    for (var i = 0; i < need.length; i += 20) {
+      var chunk = need.slice(i, i + 20);
+      var lines = await fetchAll('aia_line_items', 'application_id, prev_amount, this_amount, stored_amount, is_parent, retainage_release_pct', function(q) { return q.in('application_id', chunk); });
+      chunk.forEach(function(id) { data.linesByApp[id] = []; });
+      lines.forEach(function(l) { data.linesByApp[l.application_id].push(l); });
+    }
+  }
+
+  async function build() {
+    var asOf = $('asOf').value || new Date().toISOString().slice(0, 10);
+    var incDrafts = $('incDrafts').checked;
+    var byProject = {}; data.setups.forEach(function(s) { byProject[s.project_id] = s; });
+    var appsBy = {};
+    data.apps.forEach(function(a) {
+      if (!incDrafts && a.status === 'draft') return;
+      if ((a.application_date || '') > asOf) return;
+      var cur = appsBy[a.aia_project_id];
+      if (!cur || Number(a.application_no) > Number(cur.application_no)) appsBy[a.aia_project_id] = a;
+    });
+    await ensureLines(Object.keys(appsBy).map(function(k) { return appsBy[k].id; }));
+    var paidBy = {}; data.pays.forEach(function(p) { if ((p.date_paid || '') <= asOf) paidBy[p.aia_project_id] = (paidBy[p.aia_project_id] || 0) + Number(p.amount || 0); });
+    var coBy = {}; data.cos.forEach(function(c) { if (c.status === 'approved') coBy[c.aia_project_id] = (coBy[c.aia_project_id] || 0) + Number(c.amount || 0); });
+
+    rows = []; pmSet = {};
+    data.projects.forEach(function(p) {
+      var s = byProject[p.id], app = s ? appsBy[s.id] : null;
+      var r = { id: p.id, aiaId: s ? s.id : null, job: p.short_code || s && (s.job_number || s.project_no) || '', name: p.project_name, customer: s ? (s.client_name || p.gc_name || '') : (p.gc_name || ''),
+                pm: p.pm_name || '', status: p.status || 'active', setup: !!s, variant: s ? s.form_variant : '', appNo: app ? app.application_no : null, appDate: app ? app.application_date : null,
+                finish: p.target_completion_date || p.estimated_completion || (s && (s.substantial_completion_date || s.estimated_completion_date)) || '',
+                pmPct: (p.percent_complete != null && p.percent_complete !== '') ? Number(p.percent_complete) / (Number(p.percent_complete) > 1 ? 100 : 1) : null };
+      if (s) {
+        if (app) { var t = totalsFor(s, app, data.linesByApp[app.id] || []); r.original = t.L1; r.cos = t.L2; r.revised = t.L3; r.billed = t.L4; r.retainage = t.L5t; r.net = t.L6; }
+        else { r.original = Number(s.original_contract_sum || 0); r.cos = coBy[s.id] || 0; r.revised = r.original + r.cos; r.billed = 0; r.retainage = 0; r.net = 0; }
+        r.paid = paidBy[s.id] || 0;
+      } else { r.original = Number(p.contract_value || 0); r.cos = 0; r.revised = r.original; r.billed = 0; r.retainage = 0; r.net = 0; r.paid = 0; }
+      r.ar = r.net - r.paid; r.backlog = r.revised - r.billed; r.pctBilled = r.revised ? r.billed / r.revised : NaN;
+      r.earned = r.pmPct != null ? r.revised * r.pmPct : null; r.overUnder = r.earned != null ? r.billed - r.earned : null;
+      if (r.pm) pmSet[r.pm] = true;
+      rows.push(r);
+    });
+    var sel = $('fPm'), keep = sel.value; sel.innerHTML = '<option value="">All PMs</option>' + Object.keys(pmSet).sort().map(function(n) { return '<option' + (n === keep ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+    render();
+  }
+
+  var COLS = [
+    ['job', 'Job #', 'l'], ['name', 'Project / Customer', 'l'], ['pm', 'PM', 'l'], ['status', 'Status', 'l'],
+    ['original', 'Original Contract'], ['cos', 'Change Orders'], ['revised', 'Revised Contract'],
+    ['billed', 'Billed to Date'], ['pctBilled', '% Billed'], ['backlog', 'Backlog Under Contract'],
+    ['retainage', 'Retainage Held'], ['paid', 'Paid to Date'], ['ar', 'A/R Open'],
+    ['pmPct', 'PM % Compl.'], ['earned', 'Earned Revenue'], ['overUnder', 'Over / (Under) Billed'], ['finish', 'Est. Finish', 'l']
+  ];
+  function filtered() {
+    var st = $('fStatus').value, pm = $('fPm').value, q = ($('q').value || '').toLowerCase(), hideZero = $('hideZero').checked;
+    return rows.filter(function(r) {
+      if (st === 'open' && r.status === 'completed') return false;
+      if (st === 'active' && r.status !== 'active') return false;
+      if (st === 'completed' && r.status !== 'completed') return false;
+      if (pm && r.pm !== pm) return false;
+      if (q && (r.name + ' ' + r.customer + ' ' + r.job).toLowerCase().indexOf(q) < 0) return false;
+      if (hideZero && r.revised > 0 && Math.abs(r.backlog) < 1) return false;   // fully billed
+      return true;
+    });
+  }
+  function render() {
+    var list = filtered();
+    list.sort(function(a, b) { var x = a[sortKey], y = b[sortKey]; if (x == null) x = -Infinity; if (y == null) y = -Infinity; if (typeof x === 'string') { x = x.toLowerCase(); y = String(y || '').toLowerCase(); } return (x < y ? -1 : x > y ? 1 : 0) * (sortAsc ? 1 : -1); });
+    $('thead').innerHTML = '<tr>' + COLS.map(function(c) { return '<th class="' + (c[2] || '') + (sortKey === c[0] ? ' sorted' + (sortAsc ? ' asc' : '') : '') + '" data-k="' + c[0] + '">' + c[1] + '</th>'; }).join('') + '</tr>';
+    $('thead').querySelectorAll('th').forEach(function(th) { th.addEventListener('click', function() { var k = th.getAttribute('data-k'); if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = (k === 'name' || k === 'job' || k === 'pm' || k === 'status' || k === 'finish'); } render(); }); });
+    var groups = [['active', 'Active'], ['on-hold', 'On hold'], ['completed', 'Completed']], html = '', grand = sum([]);
+    groups.forEach(function(g) {
+      var gl = list.filter(function(r) { return r.status === g[0]; }); if (!gl.length) return;
+      html += '<tr class="sec"><td colspan="' + COLS.length + '">' + g[1] + ' · ' + gl.length + '</td></tr>';
+      gl.forEach(function(r) { html += rowHtml(r); });
+      var t = sum(gl); html += totHtml(t, g[1] + ' total');
+      Object.keys(t).forEach(function(k) { grand[k] += t[k]; });
+    });
+    if (!list.length) html = '<tr><td colspan="' + COLS.length + '" class="empty">No projects match.</td></tr>';
+    else if (list.length > 1) html += totHtml(grand, 'Grand total', true);
+    $('tbody').innerHTML = html;
+    var all = sum(list), open = sum(list.filter(function(r) { return r.status !== 'completed'; }));
+    $('cards').innerHTML = card('Revised contracts', money(all.revised), list.length + ' projects') + card('Billed to date', money(all.billed), pct(all.revised ? all.billed / all.revised : NaN) + ' of contracts')
+      + card('Backlog under contract', money(all.backlog), money(open.backlog) + ' on open jobs', true) + card('Retainage held', money(all.retainage), 'not yet billable')
+      + card('A/R open', money(all.ar), 'net billed − paid') + card('Paid to date', money(all.paid), '');
+    $('printTitle').textContent = 'Northern Wolves AC — WIP Report as of ' + fmtDate($('asOf').value) + ' (' + $('fStatus').options[$('fStatus').selectedIndex].text + ')';
+    $('sub').textContent = 'As of ' + fmtDate($('asOf').value) + ' · ' + list.length + ' projects · backlog ' + money(all.backlog);
+  }
+  function sum(list) { var t = { original: 0, cos: 0, revised: 0, billed: 0, backlog: 0, retainage: 0, paid: 0, ar: 0, earned: 0, overUnder: 0 }; list.forEach(function(r) { Object.keys(t).forEach(function(k) { t[k] += Number(r[k] || 0); }); }); return t; }
+  function card(k, v, s, hi) { return '<div class="card' + (hi ? ' hi' : '') + '"><div class="k">' + k + '</div><div class="v">$' + v + '</div><div class="s">' + s + '</div></div>'; }
+  function cell(v, cls) { var n = Number(v || 0); return '<td class="' + (cls || '') + (n < 0 ? ' neg' : '') + '">' + (v == null ? '<span class="muted">—</span>' : money(v)) + '</td>'; }
+  function rowHtml(r) {
+    var link = r.aiaId ? '<a class="pl" href="invoicing.html?project=' + r.id + '">' + esc(r.name) + '</a>' : esc(r.name);
+    return '<tr>' +
+      '<td class="l">' + esc(r.job) + (r.appNo ? '<span class="sub">App #' + r.appNo + ' · ' + fmtDate(r.appDate) + '</span>' : '') + '</td>' +
+      '<td class="l"><span class="nm">' + link + '</span><span class="sub">' + esc(r.customer) + (r.setup ? '' : ' · <span class="pill nosetup">no contract setup</span>') + '</span></td>' +
+      '<td class="l">' + esc(r.pm) + '</td><td class="l"><span class="pill ' + r.status + '">' + r.status + '</span></td>' +
+      cell(r.original) + cell(r.cos) + cell(r.revised) + cell(r.billed) +
+      '<td>' + pct(r.pctBilled) + (isFinite(r.pctBilled) ? '<span class="bar"><i style="width:' + Math.min(100, Math.max(0, r.pctBilled * 100)) + '%"></i></span>' : '') + '</td>' +
+      cell(r.backlog, r.backlog > 0 ? 'pos' : '') + cell(r.retainage) + cell(r.paid) + cell(r.ar) +
+      '<td>' + (r.pmPct != null ? pct(r.pmPct) : '<span class="muted">—</span>') + '</td>' + cell(r.earned) + cell(r.overUnder) +
+      '<td class="l">' + fmtDate(r.finish) + '</td></tr>';
+  }
+  function totHtml(t, label, grand) {
+    return '<tr class="' + (grand ? 'grand' : 'tot') + '"><td class="l" colspan="4">' + label + '</td>' + cell(t.original) + cell(t.cos) + cell(t.revised) + cell(t.billed) + '<td>' + pct(t.revised ? t.billed / t.revised : NaN) + '</td>' +
+      cell(t.backlog) + cell(t.retainage) + cell(t.paid) + cell(t.ar) + '<td></td>' + cell(t.earned) + cell(t.overUnder) + '<td></td></tr>';
+  }
+
+  function exportCsv() {
+    var list = filtered(), head = ['Job #', 'Project', 'Customer', 'PM', 'Status', 'Original Contract', 'Change Orders', 'Revised Contract', 'Billed to Date', '% Billed', 'Backlog Under Contract', 'Retainage Held', 'Paid to Date', 'A/R Open', 'PM % Complete', 'Earned Revenue', 'Over/(Under) Billed', 'Est. Finish', 'Latest App #', 'App Date', 'Contract Setup'];
+    var esc2 = function(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var num = function(v) { return v == null ? '' : Number(v).toFixed(2); };
+    var out = [head.join(',')];
+    list.forEach(function(r) { out.push([r.job, r.name, r.customer, r.pm, r.status, num(r.original), num(r.cos), num(r.revised), num(r.billed), isFinite(r.pctBilled) ? (r.pctBilled * 100).toFixed(1) : '', num(r.backlog), num(r.retainage), num(r.paid), num(r.ar), r.pmPct != null ? (r.pmPct * 100).toFixed(0) : '', num(r.earned), num(r.overUnder), r.finish || '', r.appNo || '', r.appDate || '', r.setup ? 'yes' : 'no'].map(esc2).join(',')); });
+    var blob = new Blob(['﻿' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'WIP Report ' + $('asOf').value + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  async function init() {
+    await requireAuth();
+    var prof = null; try { prof = await getAuthProfile(); } catch (e) {}
+    if (!prof || OFFICE_ROLES.indexOf(prof.role) < 0) { $('blocked').style.display = 'block'; return; }
+    $('main').style.display = 'block';
+    $('asOf').value = new Date().toISOString().slice(0, 10);
+    $('tbody').innerHTML = '<tr><td class="empty" colspan="17">Loading prime contracts…</td></tr>';
+    try { await loadData(); await build(); } catch (e) { $('tbody').innerHTML = '<tr><td class="empty" colspan="17">' + esc(e.message) + '</td></tr>'; return; }
+    ['asOf', 'incDrafts'].forEach(function(id) { $(id).addEventListener('change', function() { build(); }); });
+    ['fStatus', 'fPm', 'hideZero'].forEach(function(id) { $(id).addEventListener('change', render); });
+    $('q').addEventListener('input', render);
+    $('btnCsv').addEventListener('click', exportCsv);
+    $('btnPrint').addEventListener('click', function() { window.print(); });
+  }
+  init().catch(function(e) { console.error(e); });
+})();
+</script>
+<script src="sw-register.js?v=324"></script>
+</body>
+</html>
