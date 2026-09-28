@@ -570,6 +570,7 @@
       <div class="detail-tab" data-dtab="submittals">Submittals</div>
       <div class="detail-tab" data-dtab="iom">IOM</div>
       <div class="detail-tab" data-dtab="warranty">Warranty</div>
+      <div class="detail-tab" data-dtab="pos">POs</div>
       <div class="detail-tab" data-dtab="change-orders">Change Orders</div>
       <div class="detail-tab" data-dtab="rfis">RFIs</div>
     </div>
@@ -702,6 +703,27 @@
           <div id="warrantyLogList"></div>
         </div>
         <div id="warrantyEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">No warranty letters yet.</div>
+      </div>
+    </div>
+
+    <!-- PURCHASE ORDERS TAB -->
+    <div class="detail-tab-content" id="tabPOs" data-dtab="pos">
+      <div style="padding:14px 16px 24px">
+        <div id="posActions" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+          <a id="btnNewPO" href="#" onclick="event.preventDefault(); openNewPO();" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid #d1d5db;border-radius:12px;text-decoration:none;color:inherit;">
+            <div style="width:42px;height:42px;border-radius:12px;background:#111318;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🧾</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:14px;color:#111318;">Create purchase order</div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px;">PO (2 pages) + vendor quote + email copy → saved in Purchase Orders here and in the general PO folder, then Send</div>
+            </div>
+            <div style="color:#111318;font-size:20px;font-weight:700;">›</div>
+          </a>
+        </div>
+        <div id="poLog" style="display:none;">
+          <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Purchase orders</div>
+          <div id="poLogList"></div>
+        </div>
+        <div id="posEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">No purchase orders for this project yet.</div>
       </div>
     </div>
 
@@ -1049,8 +1071,8 @@ requireAuth().catch(function(){});
     if (isTechUser !== null) return isTechUser;
     try { var prof = await getAuthProfile(); isTechUser = !!(prof && prof.role === 'tech'); } catch (e) { isTechUser = true; }
     if (isTechUser) {
-      document.querySelectorAll('#detailTabs .detail-tab[data-dtab="prime"], #detailTabs .detail-tab[data-dtab="change-orders"]').forEach(function(t) { t.style.display = 'none'; });
-      ['tabPrime', 'tabChangeOrders', 'setupSteps', 'submittalActions', 'iomActions', 'warrantyActions'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      document.querySelectorAll('#detailTabs .detail-tab[data-dtab="prime"], #detailTabs .detail-tab[data-dtab="change-orders"], #detailTabs .detail-tab[data-dtab="pos"]').forEach(function(t) { t.style.display = 'none'; });
+      ['tabPrime', 'tabChangeOrders', 'tabPOs', 'setupSteps', 'submittalActions', 'iomActions', 'warrantyActions'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
       document.querySelectorAll('a[href="invoicing.html"]').forEach(function(a) { a.style.display = 'none'; });
     }
     return isTechUser;
@@ -1880,7 +1902,32 @@ requireAuth().catch(function(){});
     iom:       { list: 'iomLogList',       wrap: 'iomLog',       empty: 'iomEmpty',        prefix: 'IOM', page: 'submittal.html?kind=iom&', again: 'Resubmit' },
     warranty:  { list: 'warrantyLogList',  wrap: 'warrantyLog',  empty: 'warrantyEmpty',   prefix: 'W',   page: 'warranty.html?', again: 'Revise' }
   };
-  async function loadSubmittals(projectId) { ['submittal', 'iom', 'warranty'].forEach(function(k) { loadDocLog(projectId, k); }); }
+  async function loadSubmittals(projectId) { ['submittal', 'iom', 'warranty'].forEach(function(k) { loadDocLog(projectId, k); }); loadPOs(projectId); }
+  // Purchase orders of this project (purchase_orders table; PDFs in Drive / Purchase Orders)
+  var PO_COLOR = { saved: '#6b7280', sent: '#0696D7', acknowledged: '#15803d', void: '#dc2626', legacy: '#b45309' };
+  async function loadPOs(projectId) {
+    var list = document.getElementById('poLogList'), wrap = document.getElementById('poLog'), empty = document.getElementById('posEmpty');
+    if (!list) return;
+    if (await techCheck()) return;
+    var r = await supabaseClient.from('purchase_orders').select('id,seq,po_number,revision,status,po_date,vendor_name,quote_ref,total,drive_url,general_drive_url,sent_at').eq('project_id', projectId).order('seq', { ascending: false }).order('revision', { ascending: false });
+    if (currentProjectId !== projectId) return;
+    var rows = r.data || [];
+    wrap.style.display = rows.length ? '' : 'none'; empty.style.display = rows.length ? 'none' : '';
+    var money = function(v) { v = Number(v) || 0; return (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+    list.innerHTML = rows.map(function(s) {
+      var st = s.status || 'saved', col = PO_COLOR[st] || '#6b7280', pdf = s.drive_url || s.general_drive_url;
+      var meta = [s.po_date ? new Date(s.po_date + 'T12:00:00').toLocaleDateString() : '', s.quote_ref || '', s.sent_at ? 'sent ' + new Date(s.sent_at).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;background:#fff;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:180px"><div style="font-weight:700;font-size:14px;color:#111318">' + escHtml(s.po_number) + (s.revision ? ' R' + s.revision : '') + ' — ' + escHtml(s.vendor_name) + '</div>' +
+        '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escHtml(meta) + '</div></div>' +
+        '<div style="font-weight:700;font-size:14px">' + money(s.total) + '</div>' +
+        '<span style="font-size:11px;font-weight:700;color:' + col + ';text-transform:uppercase">' + escHtml(st === 'legacy' ? 'Excel' : st) + '</span>' +
+        (pdf ? '<a href="' + escHtml(pdf) + '" target="_blank" style="font-size:12px;font-weight:700;color:#0696D7;text-decoration:none">PDF ↗</a>' : '') +
+        '<a href="po.html?id=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">' + (st === 'legacy' ? 'Open' : 'Open / Send') + '</a>' +
+        (st === 'legacy' ? '' : '<a href="po.html?from=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">Revise</a>') +
+        '</div>';
+    }).join('');
+  }
   async function loadDocLog(projectId, kind) {
     var K = DOC_KINDS[kind];
     var list = document.getElementById(K.list), wrap = document.getElementById(K.wrap), empty = document.getElementById(K.empty);
@@ -2079,6 +2126,7 @@ requireAuth().catch(function(){});
     });
 
     // O&M / IOM manual (submittal.html?kind=iom) and warranty letter (warranty.html)
+    window.openNewPO = function() { if (currentProjectId) window.location.href = 'po.html?project=' + encodeURIComponent(currentProjectId); };
     window.openCloseoutDoc = function(kind) {
       if (!currentProjectId) return;
       window.location.href = (kind === 'warranty' ? 'warranty.html?' : 'submittal.html?kind=iom&') + 'project=' + encodeURIComponent(currentProjectId);

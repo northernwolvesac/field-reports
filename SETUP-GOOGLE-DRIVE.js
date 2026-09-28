@@ -146,7 +146,7 @@ function getRootFolder() { return DriveApp.getFolderById(FJOBS_FOLDER_ID); }
 function getLegacyRoot() { var it = DriveApp.getFoldersByName(LEGACY_ROOT_NAME); return it.hasNext() ? it.next() : null; }
 
 function listProjectFolders(rootId) {
-  return listChildren([rootId]).filter(isFolderItem).map(function(f) {
+  return listChildren([rootId]).filter(isFolderItem).filter(function(f) { return !isNonProject(f.name); }).map(function(f) {
     return { id: f.id, name: f.name, description: f.description || '', modifiedTime: f.modifiedTime };
   });
 }
@@ -256,6 +256,33 @@ function fileData(fileId) {
   var f = DriveApp.getFileById(fileId);
   if (f.getSize() > 30 * 1024 * 1024) return { success: false, error: 'File too large to load (' + Math.round(f.getSize() / 1048576) + ' MB)' };
   return { success: true, name: f.getName(), mimeType: f.getMimeType(), size: f.getSize(), data: Utilities.base64Encode(f.getBlob().getBytes()) };
+}
+
+// ---------- v3.10: purchase orders — a general "Purchase Orders" folder at the root + copies of files ----------
+// Root-level folders that are NOT projects (never listed as projects, never get the project template)
+var NON_PROJECT_FOLDERS = ['Purchase Orders', 'PO'];
+function isNonProject(name) { var n = normName(name); return NON_PROJECT_FOLDERS.some(function(f) { return normName(f) === n; }); }
+// get-or-create a plain folder directly under the root (no template sub-folders, no field access)
+function rootFolder(name) {
+  var root = getRootFolder(), n = normName(name), all = root.getFolders();
+  while (all.hasNext()) { var f = all.next(); if (normName(f.getName()) === n) return { success: true, folder: { id: f.getId(), name: f.getName(), url: f.getUrl() } }; }
+  var nf = root.createFolder(name);
+  return { success: true, folder: { id: nf.getId(), name: nf.getName(), url: nf.getUrl() }, created: true };
+}
+// upload straight into a folder by id (used for the general Purchase Orders folder)
+function uploadToFolder(folderId, fileName, base64Data, mimeType) {
+  var folder = DriveApp.getFolderById(folderId);
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'application/octet-stream', fileName);
+  var file = folder.createFile(blob);
+  var info = fileInfo(file, '', ''); info.folderId = folder.getId(); info.folderName = folder.getName();
+  return { success: true, file: info, folderId: folder.getId() };
+}
+// copy an existing Drive file into another folder (same bytes, new id)
+function copyFile(fileId, targetFolderId, newName) {
+  var src = DriveApp.getFileById(fileId), folder = DriveApp.getFolderById(targetFolderId);
+  var copy = src.makeCopy(newName || src.getName(), folder);
+  var info = fileInfo(copy, '', ''); info.folderId = folder.getId(); info.folderName = folder.getName();
+  return { success: true, file: info };
 }
 
 // ---------- send_email (v3.8): office users send Drive files (e.g. a submittal package) to outside recipients ----------
@@ -515,7 +542,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.9' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.10' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -523,7 +550,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
-    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.9', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.10', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
     var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
     if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
     if (!caller.full) {
@@ -563,6 +590,9 @@ function doPost(e) {
       case 'replace_file':    result = replaceFile(body.fileId, body.fileData, body.mimeType, body.fileName); break;
       case 'file_data':       result = fileData(body.fileId); break;
       case 'forget':          result = forgetProject(body.projectId); break;
+      case 'root_folder':     result = rootFolder(body.name); break;
+      case 'upload_to_folder': result = uploadToFolder(body.folderId, body.fileName, body.fileData, body.mimeType); break;
+      case 'copy_file':       result = copyFile(body.fileId, body.targetFolderId, body.newName); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };
     }

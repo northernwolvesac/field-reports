@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>Purchase Orders — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=304"></script>
+<script src="auth.js?v=304"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 40px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
+  .tools input, .tools select { padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-family: inherit; }
+  .tools input { flex: 1; min-width: 200px; }
+  .btn { padding: 10px 14px; font-size: 14px; font-weight: 700; border-radius: 10px; cursor: pointer; border: 1px solid #111318; background: #111318; color: #fff; text-decoration: none; white-space: nowrap; }
+  .btn.light { background: #fff; color: #111318; border-color: #d1d5db; }
+  .row { display: grid; grid-template-columns: 150px 1fr 1fr 110px 96px 150px; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 8px; background: #fff; font-size: 13px; }
+  .row .no { font-weight: 700; color: #111318; } .row .no small { display: block; font-weight: 400; color: #6b7280; font-size: 11px; }
+  .row .v b { display: block; color: #111318; } .row .v span { font-size: 12px; color: #6b7280; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .amt { text-align: right; font-weight: 700; white-space: nowrap; }
+  .row .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .row .acts a { font-size: 12px; font-weight: 700; color: #0696D7; text-decoration: none; white-space: nowrap; }
+  .row .acts a.dark { color: #111318; }
+  .pill { font-size: 10px; font-weight: 800; letter-spacing: .06em; border-radius: 999px; padding: 2px 8px; text-transform: uppercase; display: inline-block; }
+  .pill.sent { background: #e0f2fe; color: #0369a1; } .pill.saved, .pill.draft { background: #f3f4f6; color: #374151; } .pill.void { background: #fee2e2; color: #b91c1c; } .pill.legacy { background: #fef3c7; color: #92400e; } .pill.acknowledged { background: #dcfce7; color: #166534; }
+  .row select.st { font-size: 11px; font-weight: 700; border: 1px solid #e5e7eb; border-radius: 6px; padding: 3px 4px; background: #fff; font-family: inherit; max-width: 110px; }
+  .head { display: grid; grid-template-columns: 150px 1fr 1fr 110px 96px 150px; gap: 10px; padding: 0 12px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; }
+  .empty { text-align: center; padding: 40px 20px; color: #6b7280; }
+  .sum { font-size: 12px; color: #6b7280; margin: 4px 0 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(17,19,24,.45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 520px; padding: 18px; box-sizing: border-box; }
+  .modal h3 { margin: 0 0 12px; font-size: 17px; }
+  .modal select, .modal input { width: 100%; box-sizing: border-box; padding: 10px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; }
+  .modal .acts { display: flex; gap: 10px; margin-top: 14px; }
+  .modal .acts button { flex: 1; padding: 12px; font-size: 15px; font-weight: 700; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
+  .modal .acts button.go { background: #111318; border-color: #111318; color: #fff; }
+  .blocked { text-align: center; padding: 60px 20px; color: #4b5563; }
+  @media (max-width: 760px) { .row, .head { grid-template-columns: 1fr 1fr; } .head { display: none; } .row .amt { text-align: left; } .row .acts { justify-content: flex-start; grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="index.html" class="back">←</a>
+  <div class="ttl"><b>Purchase Orders</b><span id="sub">All projects · NW Projects / Purchase Orders</span></div>
+  <img src="logo-header.png?v=258" alt="Northern Wolves AC" style="height:34px;width:auto">
+</div>
+<div class="wrap" id="main" style="display:none">
+  <div class="tools">
+    <input id="q" placeholder="Search PO #, vendor, project, quote…">
+    <select id="fStatus"><option value="">All statuses</option><option value="open">Saved / sent</option><option value="saved">Saved</option><option value="sent">Sent</option><option value="acknowledged">Acknowledged</option><option value="void">Void</option><option value="legacy">Imported (Excel)</option></select>
+    <select id="fProject"><option value="">All projects</option></select>
+    <a class="btn" href="#" id="btnNew">+ New PO</a>
+  </div>
+  <div class="sum" id="sum"></div>
+  <div class="head"><div>PO #</div><div>Vendor</div><div>Project</div><div style="text-align:right">Amount</div><div>Status</div><div style="text-align:right">Actions</div></div>
+  <div id="list"></div>
+  <div class="empty" id="empty" style="display:none">No purchase orders yet.</div>
+  <div style="text-align:center;margin-top:10px"><a href="#" id="more" class="btn light" style="display:none">Show more</a></div>
+</div>
+<div class="blocked" id="blocked" style="display:none"></div>
+
+<div class="modal-bg" id="newModal"><div class="modal">
+  <h3>New purchase order</h3>
+  <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">Project</label>
+  <select id="mProject"><option value="">— choose the project —</option></select>
+  <div class="acts"><button id="mCancel">Cancel</button><button class="go" id="mGo">Create PO</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+(function() {
+  'use strict';
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var STATUSES = [['saved', 'Saved'], ['sent', 'Sent'], ['acknowledged', 'Acknowledged'], ['void', 'Void']];
+  var rows = [], projects = [], shown = 0, PAGE = 100;
+  var $ = function(id) { return document.getElementById(id); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function money(v) { v = Number(v) || 0; return (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3000); }
+  function fmt(d) { if (!d) return ''; var p = String(d).slice(0, 10).split('-'); return p.length === 3 ? p[1] + '/' + p[2] + '/' + p[0] : d; }
+
+  init().catch(function(e) { console.error(e); $('blocked').textContent = 'Could not load: ' + (e.message || e); $('blocked').style.display = ''; });
+
+  async function init() {
+    var profile = null;
+    try { profile = await getAuthProfile(); } catch (e) {}
+    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { $('blocked').textContent = 'Purchase orders are managed by the office.'; $('blocked').style.display = ''; return; }
+    var pr = await supabaseClient.from('projects').select('id,project_name,short_code,status').order('project_name');
+    projects = (pr.data || []).sort(function(a, b) { var ra = a.status === 'completed' ? 1 : 0, rb = b.status === 'completed' ? 1 : 0; return ra - rb || String(a.project_name).localeCompare(String(b.project_name)); });
+    [$('fProject'), $('mProject')].forEach(function(sel) {
+      projects.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.project_name + (p.short_code ? ' (' + p.short_code + ')' : '') + (p.status === 'completed' ? ' — completed' : ''); sel.appendChild(o); });
+    });
+    var params = new URLSearchParams(location.search);
+    if (params.get('project')) $('fProject').value = params.get('project');
+    await load();
+    $('q').addEventListener('input', render); $('fStatus').addEventListener('change', render); $('fProject').addEventListener('change', render);
+    $('btnNew').addEventListener('click', function(e) { e.preventDefault(); $('mProject').value = $('fProject').value || ''; $('newModal').classList.add('show'); });
+    $('mCancel').addEventListener('click', function() { $('newModal').classList.remove('show'); });
+    $('mGo').addEventListener('click', function() { var p = $('mProject').value; if (!p) { toast('Choose the project'); return; } location.href = 'po.html?project=' + encodeURIComponent(p); });
+    $('more').addEventListener('click', function(e) { e.preventDefault(); shown += PAGE; render(true); });
+    $('main').style.display = '';
+  }
+
+  async function load() {
+    rows = []; var from = 0;
+    while (true) {
+      var r = await supabaseClient.from('purchase_orders').select('id,seq,po_number,revision,status,project_id,project_name,job_code,po_date,vendor_name,vendor_code,quote_ref,total,drive_url,general_drive_url,sent_at,legacy_file,created_by_name').order('seq', { ascending: false }).order('revision', { ascending: false }).range(from, from + 999);
+      if (r.error) { if (/purchase_orders/.test(r.error.message) && /not exist|schema cache/i.test(r.error.message)) { $('empty').innerHTML = 'The purchase_orders table is not created yet — run <b>purchase-orders-schema.sql</b> in Supabase.'; $('empty').style.display = ''; return; } throw new Error(r.error.message); }
+      rows = rows.concat(r.data || []);
+      if (!r.data || r.data.length < 1000) break;
+      from += 1000;
+    }
+    render();
+  }
+
+  function filtered() {
+    var q = ($('q').value || '').trim().toLowerCase(), st = $('fStatus').value, pj = $('fProject').value;
+    return rows.filter(function(r) {
+      if (pj && r.project_id !== pj) return false;
+      if (st === 'open' ? (r.status !== 'saved' && r.status !== 'sent' && r.status !== 'acknowledged') : st && r.status !== st) return false;
+      if (!q) return true;
+      return [r.po_number, r.vendor_name, r.vendor_code, r.project_name, r.job_code, r.quote_ref, r.legacy_file, String(r.total)].join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function render(keep) {
+    var list = filtered(); if (!keep) shown = PAGE;
+    var total = list.reduce(function(s, r) { return s + (Number(r.total) || 0); }, 0);
+    $('sum').textContent = list.length + ' purchase order' + (list.length === 1 ? '' : 's') + ' · ' + money(total) + (rows.length ? ' · last number NWAC' + rows[0].seq : '');
+    $('empty').style.display = list.length ? 'none' : ''; if (!list.length && rows.length) $('empty').textContent = 'Nothing matches.';
+    $('list').innerHTML = list.slice(0, shown).map(function(r) {
+      var st = r.status || 'saved', canEdit = st !== 'legacy';
+      var stHtml = canEdit ? '<select class="st" data-id="' + r.id + '">' + STATUSES.map(function(s) { return '<option value="' + s[0] + '"' + (s[0] === st ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select>' : '<span class="pill legacy">Excel</span>';
+      var pdf = r.drive_url || r.general_drive_url;
+      return '<div class="row">' +
+        '<div class="no">' + esc(r.po_number) + (r.revision ? ' <span style="color:#d97706">R' + r.revision + '</span>' : '') + '<small>' + fmt(r.po_date) + (r.created_by_name ? ' · ' + esc(r.created_by_name) : '') + '</small></div>' +
+        '<div class="v"><b>' + esc(r.vendor_name) + '</b><span>' + esc(r.quote_ref || '') + '</span></div>' +
+        '<div class="v"><b>' + esc(r.project_name || '—') + '</b><span>' + esc(r.job_code || '') + '</span></div>' +
+        '<div class="amt">' + money(r.total) + '</div>' +
+        '<div>' + stHtml + (r.sent_at ? '<div style="font-size:10px;color:#6b7280">sent ' + fmt(r.sent_at) + '</div>' : '') + '</div>' +
+        '<div class="acts">' + (pdf ? '<a href="' + esc(pdf) + '" target="_blank">PDF ↗</a>' : '') +
+          '<a class="dark" href="po.html?id=' + r.id + '">' + (canEdit ? 'Open / Send' : 'Open') + '</a>' +
+          (canEdit ? '<a class="dark" href="po.html?from=' + r.id + '">Revise</a>' : '') +
+          '<a class="dark" href="po.html?copy=' + r.id + '" title="New PO with the same lines">Copy</a>' +
+        '</div></div>';
+    }).join('');
+    $('more').style.display = list.length > shown ? '' : 'none';
+    $('list').querySelectorAll('select.st').forEach(function(el) {
+      el.addEventListener('change', async function() {
+        var u = await supabaseClient.from('purchase_orders').update({ status: el.value, updated_at: new Date().toISOString() }).eq('id', el.getAttribute('data-id'));
+        if (u.error) { toast('Could not update: ' + u.error.message); return; }
+        var r = rows.filter(function(x) { return x.id === el.getAttribute('data-id'); })[0]; if (r) r.status = el.value;
+        toast('Status updated');
+      });
+    });
+  }
+})();
+</script>
+<script src="sw-register.js?v=304"></script>
+</body>
+</html>
