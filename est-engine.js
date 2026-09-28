@@ -17,6 +17,45 @@
   // a unit is something with a tag on it (EF-1, AC-10-2, AH-1.10, EDH-G-1); detail titles and legend rows ("AC UNIT (ceiling mounted",
   // "Fan-Coil (hanging)", "EF (typical)") that the reader lists as equipment are not units — Sage carried 9 such phantoms (288 h)
   function isRealTag(t) { t = String(t || '').trim(); return /^[A-Za-z]{1,6}([-\s]?[A-Za-z]{1,2})?[-\s]?\d[\w.\-\/]*$/.test(t) && !/[()]|typ/i.test(t) && t.split(/\s+/).length <= 2; }
+  // Equipment budgets for scheduled units nobody quoted — Kastriot never leaves a unit at $0: he carries a flagged budget
+  // (Sky Zone ERV-1 $15,000, New Balance York AHU/CU pairs $7,000 each, Life Time WSHPs $6,000 each, fin tubes $1,000, smoke detectors $500).
+  // Numbers below are rounded from his bids and the vendor quotes read on 2026 jobs; every line is flagged "budget — get a quote".
+  function tonsOf(s) {
+    var t = [s.capacity, s.notes, s.model, s.type].join(' ');
+    var m = /(\d+(?:\.\d+)?)\s*-?\s*ton/i.exec(t); if (m) return +m[1];
+    m = /(\d{2,3}(?:,\d{3})?)\s*(?:mbh|kbtu)/i.exec(t); if (m) return +m[1].replace(/,/g, '') / 12;
+    m = /(\d{2,3},?\d{3})\s*btu/i.exec(t); if (m) return +m[1].replace(/,/g, '') / 12000;
+    m = /\b(\d{3})\b/.exec(String(s.model || '')); if (m && /rtu|ahu|split|heat pump|condens|packaged/i.test(s.type || '')) { var n = +m[1]; if (n % 6 === 0 && n <= 600) return n / 12; }
+    return 0;
+  }
+  function cfmOf(s) { var m = /(\d[\d,]{2,})\s*cfm/i.exec([s.cfm, s.capacity, s.notes].join(' ')); return m ? +m[1].replace(/,/g, '') : 0; }
+  function budgetFor(s, tag) {
+    var t = ((s.type || '') + ' ' + tag).toLowerCase(), tons = tonsOf(s), cfm = cfmOf(s), b = null;
+    function pick(cost, why) { b = { cost: Math.round(cost / 50) * 50, why: why }; }
+    if (/smoke detector/.test(t)) pick(500, 'duct smoke detector allowance');
+    else if (/thermostat|sensor/.test(t)) pick(500, 'thermostat / sensor allowance');
+    else if (/fin[- ]?tube|baseboard|convector/.test(t)) pick(1000, 'fin tube / baseboard budget');
+    else if (/condensate pump/.test(t)) pick(400, 'condensate pump budget');
+    else if (/air curtain/.test(t)) pick(3500, 'air curtain budget');
+    else if (/duct heater|\bedh\b|electric heater|unit heater/.test(t)) pick(1800, 'electric heater budget');
+    else if (/erv|energy recovery|heat recovery|\bhrv\b|doas|dedicated outdoor/.test(t)) pick(Math.max(8000, (cfm || 500) * 25), 'ERV / DOAS budget — $25 per CFM' + (cfm ? '' : ' (500 CFM assumed)'));
+    else if (/boiler/.test(t)) pick(6000, 'boiler budget');
+    else if (/crac|computer room|liebert/.test(t)) pick(Math.max(25000, (tons || 3) * 9000), 'CRAC budget — $9,000 per ton');
+    else if (/vrf|vrv/.test(t) && /outdoor|condens|heat recovery unit|\bcu\b/.test(t)) pick(Math.max(12000, (tons || 8) * 3000), 'VRF outdoor unit budget — $3,000 per ton');
+    else if (/branch selector|\bbs\b/.test(t)) pick(2500, 'branch selector budget');
+    else if (/vrf|vrv|cassette|ductless|mini[- ]split|wall[- ]mount/.test(t)) pick(2800, 'VRF / ductless indoor unit budget');
+    else if (/water[- ]?source|wshp|water[- ]cooled|water cooled|\bwchp\b/.test(t)) pick(Math.max(5000, (tons || 3) * 3000), 'water-source heat pump budget — $3,000 per ton');
+    else if (/rtu|rooftop|packaged|make[- ]?up air|\bmua\b/.test(t)) pick(Math.max(8000, (tons || 5) * 2200), 'rooftop / packaged unit budget — $2,200 per ton');
+    else if (/split|condens|heat pump|\bacc?u\b|\bcu\b|\bahu\b|air handl|fan coil|\bfcu\b/.test(t)) pick(Math.max(3500, (tons || 3) * 2000), 'split / air handler budget — $2,000 per ton');
+    else if (/kitchen|hood|grease|\bkef\b|\bkeh\b/.test(t)) pick(9000, 'kitchen exhaust budget');
+    else if (/roof|upblast|downblast/.test(t) && /fan|exhaust/.test(t)) pick(3500, 'roof exhaust fan budget');
+    else if (/fan|exhaust|transfer|\bef\b|\btf\b|\bsf\b|\brf\b/.test(t)) pick(cfm > 1500 ? 4500 : 1800, 'inline / cabinet fan budget');
+    else if (/pump/.test(t)) pick(5000, 'pump budget');
+    else if (/humidif/.test(t)) pick(8000, 'humidifier budget');
+    else if (/louver/.test(t)) pick(1200, 'louver budget');
+    else if (/unit|heater|cooler|tank|separator|filter|silencer|\bvfd\b/.test(t)) pick(tons ? Math.max(4000, tons * 2000) : 4000, 'equipment budget');
+    return b;
+  }
   function installHours(eq) {
     var t = (eq.type || '').toLowerCase(), w = Number(eq.weight_lb || 0);
     if (/air curtain/.test(t)) return { h: 16, basis: 'air curtain — 1/day, 2 men' };
@@ -368,8 +407,11 @@
       var s = C.sched[tag];
       if (quoted[tag] || /owner/i.test(s.furnished_by || '')) return;
       if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;   // air devices are counted below
-      add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · '), Math.max(1, s.qty || (C.planEq[tag] && C.planEq[tag].qty) || 1), 'ea', 0, 0,
-        'on schedule ' + s.sheets[0] + ' — no quote yet', { is_firm: false, flag: 'quote needed' });
+      if (/existing|to remain|reference only|by others|n\.?i\.?c/i.test([s.type, s.notes, s.furnished_by].join(' '))) return;
+      var bq = budgetFor(s, tag), bqty = Math.max(1, s.qty || (C.planEq[tag] && C.planEq[tag].qty) || 1);
+      add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · ') + (bq ? ' [BUDGET]' : ''), bqty, 'ea', bq ? bq.cost : 0, 0,
+        bq ? 'budget — ' + bq.why + '; on schedule ' + s.sheets[0] + ', no vendor quote' : 'on schedule ' + s.sheets[0] + ' — no quote yet',
+        { is_firm: false, flag: bq ? 'budget $' + bq.cost.toLocaleString() + ' each — no vendor quote, get one' : 'quote needed' });
     });
 
     // 3. Ductwork
