@@ -462,6 +462,7 @@
         <select id="sVariant">
           <option value="owner">Owner / Client (with Architect's Certificate)</option>
           <option value="subcontractor">Subcontractor (To Contractor, Contract No.)</option>
+          <option value="simple">Simple invoice — no AIA forms (JRM style)</option>
         </select>
       </div>
       <div class="field">
@@ -486,6 +487,16 @@
       <div class="field">
         <label>Contract for</label>
         <input type="text" id="sContractFor" placeholder="e.g. HVAC Installation">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Client job number</label>
+        <input type="text" id="sJobNo" placeholder="e.g. 40-25-242 (printed on simple invoices)">
+      </div>
+      <div class="field">
+        <label>Attn.</label>
+        <input type="text" id="sClientAttn" placeholder="e.g. Accounts Payable">
       </div>
     </div>
     <div class="field">
@@ -523,6 +534,57 @@
     <div class="modal-actions">
       <button class="btn-cancel" id="setupCancel">Cancel</button>
       <button class="btn-save" id="setupSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- New SIMPLE invoice modal (form_variant = simple: one amount per invoice, no G702/G703) -->
+<div class="modal-overlay" id="simpleModal">
+  <div class="modal-card">
+    <h2>New Simple Invoice</h2>
+    <div class="row">
+      <div class="field" style="flex:0 0 90px">
+        <label>Position *</label>
+        <input type="number" id="smNo" min="1" step="1">
+      </div>
+      <div class="field" style="flex:0 0 140px">
+        <label>Invoice # *</label>
+        <input type="text" id="smInv" placeholder="e.g. 01 or BBP-01">
+      </div>
+      <div class="field">
+        <label>Invoice date *</label>
+        <input type="date" id="smDate">
+      </div>
+      <div class="field">
+        <label>Period to *</label>
+        <input type="date" id="smTo">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Amount this invoice ($) *</label>
+        <input type="number" id="smAmount" step="0.01" placeholder="96000.00">
+        <div class="field-hint">Negative for a credit. Previous invoices and balance to finish are computed.</div>
+      </div>
+      <div class="field">
+        <label>PO Number</label>
+        <input type="text" id="smPo" placeholder="client's PO for this invoice">
+      </div>
+      <div class="field" style="flex:0 0 150px">
+        <label>Status</label>
+        <select id="smStatus"><option value="draft">Draft</option><option value="submitted">Submitted</option></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Description (printed on the invoice)</label>
+      <input type="text" id="smMemo" placeholder="Contract work / Change Order #015 - Re-insulate existing ductwork">
+    </div>
+    <div class="field">
+      <label><input type="checkbox" id="smCo"> This invoice bills a change order (adds the amount to the adjusted contract)</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="smCancel">Cancel</button>
+      <button class="btn-save" id="smCreate">Create</button>
     </div>
   </div>
 </div>
@@ -791,6 +853,8 @@ requireAuth().catch(function(){});
     // New app modal
     document.getElementById('naCancel').addEventListener('click', function() { closeModal('newAppModal'); });
     document.getElementById('naCreate').addEventListener('click', createApplication);
+    document.getElementById('smCancel').addEventListener('click', function() { closeModal('simpleModal'); });
+    document.getElementById('smCreate').addEventListener('click', createSimpleInvoice);
     // Line item modal
     document.getElementById('lCancel').addEventListener('click', function() { closeModal('lineModal'); });
     document.getElementById('lSave').addEventListener('click', saveLineItem);
@@ -870,6 +934,8 @@ requireAuth().catch(function(){});
       document.getElementById('sProjectNo').value    = d.project_no || '';
       document.getElementById('sContractNo').value   = d.contract_no || '';
       document.getElementById('sProjectAddr').value  = d.project_address || '';
+      document.getElementById('sJobNo').value        = d.job_number || '';
+      document.getElementById('sClientAttn').value   = d.client_attn || '';
       document.getElementById('sContractNumber').value = d.contract_number || '';
       document.getElementById('sTitle').value        = d.title || '';
       document.getElementById('sStatus').value       = d.status || 'approved';
@@ -898,6 +964,8 @@ requireAuth().catch(function(){});
       document.getElementById('sProjectNo').value    = '';
       document.getElementById('sContractNo').value   = '';
       document.getElementById('sProjectAddr').value  = '';
+      document.getElementById('sJobNo').value        = '';
+      document.getElementById('sClientAttn').value   = '';
       ['sContractNumber','sTitle','sDescription','sInclusions','sExclusions','sStartDate','sEstCompletion','sSubCompletion','sActCompletion','sSignedReceived','sTermination']
         .forEach(function(id) { document.getElementById(id).value = ''; });
       document.getElementById('sStatus').value = 'approved';
@@ -946,6 +1014,8 @@ requireAuth().catch(function(){});
       project_no:            document.getElementById('sProjectNo').value.trim() || null,
       contract_no:           document.getElementById('sContractNo').value.trim() || null,
       project_address:       document.getElementById('sProjectAddr').value.trim() || null,
+      job_number:            document.getElementById('sJobNo').value.trim() || null,
+      client_attn:           document.getElementById('sClientAttn').value.trim() || null,
       contract_number:       document.getElementById('sContractNumber').value.trim() || null,
       title:                 document.getElementById('sTitle').value.trim() || null,
       status:                document.getElementById('sStatus').value || 'approved',
@@ -1104,6 +1174,191 @@ requireAuth().catch(function(){});
     window.location.href = 'invoicing.html?app=' + newAppId + '&sub=detail';
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  //   SIMPLE INVOICES (form_variant = 'simple') — clients like JRM Construction that do not use AIA forms.
+  //   Same aia_applications rows and totals; one line per invoice; PDF in the Purchase Order style.
+  // ═══════════════════════════════════════════════════════════════════════
+  function isSimple(setup) { return !!setup && setup.form_variant === 'simple'; }
+  var simpleProjectId = null;
+
+  async function openSimpleModal(aiaProjectId) {
+    simpleProjectId = aiaProjectId;
+    var s = await supabaseClient.from('aia_projects').select('*').eq('id', aiaProjectId).maybeSingle();
+    var last = await supabaseClient.from('aia_applications').select('application_no, invoice_no').eq('aia_project_id', aiaProjectId).order('application_no', { ascending: false }).limit(1).maybeSingle();
+    var nextNo = last && last.data ? (last.data.application_no + 1) : 1;
+    var prevInv = last && last.data ? String(last.data.invoice_no || '') : '';
+    // continue the client's numbering pattern: "01" → "02", "BBP-03" → "BBP-04", "0002" → "0003"
+    var m = /^(.*?)(\d+)$/.exec(prevInv), nextInv = m ? m[1] + String(parseInt(m[2], 10) + 1).padStart(m[2].length, '0') : String(nextNo).padStart(2, '0');
+    document.getElementById('smNo').value = nextNo;
+    document.getElementById('smInv').value = nextInv;
+    var today = new Date(), lastOfPrev = new Date(today.getFullYear(), today.getMonth(), 0);
+    document.getElementById('smDate').value = ymd(today);
+    document.getElementById('smTo').value = ymd(lastOfPrev);
+    document.getElementById('smAmount').value = '';
+    document.getElementById('smPo').value = (s.data && (s.data.contract_number || s.data.contract_no)) || '';
+    document.getElementById('smMemo').value = 'Contract work';
+    document.getElementById('smCo').checked = false;
+    document.getElementById('smStatus').value = 'draft';
+    openModal('simpleModal');
+  }
+
+  async function createSimpleInvoice() {
+    if (!canEdit) return;
+    var appNo = parseInt(document.getElementById('smNo').value, 10), inv = document.getElementById('smInv').value.trim();
+    var date = document.getElementById('smDate').value, to = document.getElementById('smTo').value;
+    var amt = Number(document.getElementById('smAmount').value), co = document.getElementById('smCo').checked;
+    var memo = document.getElementById('smMemo').value.trim() || 'Contract work', po = document.getElementById('smPo').value.trim();
+    if (!appNo || !inv || !date || !to || !isFinite(amt) || document.getElementById('smAmount').value === '') { showToast('Position, invoice #, dates and amount are required', 'error'); return; }
+    var btn = document.getElementById('smCreate'); btn.disabled = true; btn.textContent = 'Creating…';
+    var setupRes = await supabaseClient.from('aia_projects').select('*').eq('id', simpleProjectId).maybeSingle();
+    var prior = await supabaseClient.from('aia_applications').select('*').eq('aia_project_id', simpleProjectId).lt('application_no', appNo).order('application_no', { ascending: false }).limit(1).maybeSingle();
+    var prevCum = 0, coPrevAdd = 0, coPrevDed = 0;
+    if (prior && prior.data) {
+      var pl = await supabaseClient.from('aia_line_items').select('*').eq('application_id', prior.data.id);
+      var pt = computeTotalsFor(setupRes.data || {}, prior.data, pl.data || []).lines;
+      prevCum = pt.L4;
+      coPrevAdd = Number(prior.data.co_prev_additions || 0) + Number(prior.data.co_this_additions || 0);
+      coPrevDed = Number(prior.data.co_prev_deductions || 0) + Number(prior.data.co_this_deductions || 0);
+    }
+    var from = to.slice(0, 8) + '01';
+    var row = { aia_project_id: simpleProjectId, application_no: appNo, invoice_no: inv, period_from: from, period_to: to, application_date: date,
+      previous_certificates: prevCum, co_prev_additions: coPrevAdd, co_prev_deductions: coPrevDed,
+      co_this_additions: co && amt > 0 ? amt : 0, co_this_deductions: co && amt < 0 ? amt : 0,
+      status: document.getElementById('smStatus').value || 'draft', po_number: po || null, memo: memo, retainage_rate: 0, created_by: currentUserId };
+    var ins = await supabaseClient.from('aia_applications').insert(row).select().single();
+    if (ins.error) { btn.disabled = false; btn.textContent = 'Create'; showToast('Create failed: ' + ins.error.message, 'error'); return; }
+    var lines = [];
+    if (prevCum) lines.push({ application_id: ins.data.id, item_no: '1', description: 'Previous invoices', scheduled_value: Number((setupRes.data || {}).original_contract_sum || 0), prev_amount: prevCum, this_amount: 0, stored_amount: 0, is_change_order: false, is_parent: false, sort_order: 1 });
+    lines.push({ application_id: ins.data.id, item_no: String(lines.length + 1), description: memo, scheduled_value: co ? amt : Number((setupRes.data || {}).original_contract_sum || 0), prev_amount: 0, this_amount: amt, stored_amount: 0, is_change_order: !!co, is_parent: false, sort_order: lines.length + 1 });
+    await supabaseClient.from('aia_line_items').insert(lines);
+    btn.disabled = false; btn.textContent = 'Create';
+    closeModal('simpleModal');
+    showToast('✅ Invoice ' + inv + ' created', 'success');
+    window.location.href = 'invoicing.html?app=' + ins.data.id;
+  }
+
+  function simpleJobName(setup) { return setup.title || setup.contract_for || (setup.project && setup.project.project_name) || ''; }
+  function simpleAddress(setup) { return String(setup.project_address || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean).join(', '); }
+
+  function renderSimpleCard(t, invNo) {
+    var L = t.lines, s = currentSetup, a = currentApp, rate = effRate(s, a);
+    return '<div class="inv-card"><div class="inv-card-h"><h3>Simple Invoice (no AIA forms)</h3>' + (canEdit ? '<button class="btn-secondary pc-edit" id="editSimpleBtn">Edit</button>' : '') + '</div>' +
+      '<div class="inv-settings">' +
+        kvRow('To:', escHtml(s.client_name || '') + (s.client_attn ? ' — Attn: ' + escHtml(s.client_attn) : '')) +
+        kvRow('Job name:', escHtml(simpleJobName(s))) +
+        kvRow('Job location:', escHtml(simpleAddress(s))) +
+        kvRow('PO Number:', escHtml(a.po_number || s.contract_number || s.contract_no || '--')) +
+        kvRow('Job Number:', escHtml(s.job_number || '--')) +
+        kvRow('Contract dated:', mdyShort(s.contract_date) || '--') +
+        kvRow('Description:', escHtml(a.memo || '--')) +
+        kvRow('Original contract amount:', fmtMoney(L.L1)) +
+        (L.L2 ? kvRow('Change orders to date:', fmtMoney(L.L2)) : '') +
+        kvRow('Adjusted contract amount:', fmtMoney(L.L3)) +
+        kvRow('Amount completed to date:', fmtMoney(L.L4)) +
+        (rate ? kvRow('Less retainage (' + (rate * 100).toFixed(2) + '%):', fmtMoney(L.L5t)) : '') +
+        kvRow('Less previous invoices:', fmtMoney(L.L7)) +
+        kvRow('<b>Amount due this invoice:</b>', '<b>' + fmtMoney(L.L8) + '</b>') +
+        kvRow('Balance to finish, incl. retainage:', fmtMoney(L.L9)) +
+      '</div></div>';
+  }
+
+  async function editSimpleHeader() {
+    if (!canEdit) return;
+    var inv = prompt('Invoice #:', currentApp.invoice_no || String(currentApp.application_no)); if (inv === null) return;
+    var date = prompt('Invoice date (YYYY-MM-DD):', currentApp.application_date || ''); if (date === null) return;
+    var to = prompt('Period to (YYYY-MM-DD):', currentApp.period_to); if (to === null) return;
+    var po = prompt('PO Number:', currentApp.po_number || ''); if (po === null) return;
+    var memo = prompt('Description:', currentApp.memo || ''); if (memo === null) return;
+    var prev = prompt('Less previous invoices ($):', currentApp.previous_certificates || 0); if (prev === null) return;
+    var r = await supabaseClient.from('aia_applications').update({ invoice_no: inv.trim() || null, application_date: date || null, period_to: to, po_number: po.trim() || null, memo: memo.trim() || null, previous_certificates: Number(prev) || 0 }).eq('id', currentApp.id);
+    if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
+    showToast('✅ Invoice updated', 'success'); renderApplication(currentApp.id);
+  }
+
+  var simpleLogo = null, simpleSig = null;
+  async function loadSimpleAssets() {
+    if (!simpleLogo) {
+      try {
+        var img = new Image(); img.src = 'logo-full.png';
+        await new Promise(function(res, rej) { img.onload = res; img.onerror = rej; });
+        var c = document.createElement('canvas'); c.width = 600; c.height = Math.round(600 * img.height / img.width);
+        var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        simpleLogo = { data: c.toDataURL('image/jpeg', 0.92), ratio: c.height / c.width };
+      } catch (e) { simpleLogo = { data: null, ratio: 0.55 }; }
+    }
+    if (simpleSig === null) {
+      try { var r = await supabaseClient.from('app_assets').select('data,mime').eq('key', 'signature:leonid-leonidov').maybeSingle(); simpleSig = (r.data && r.data.data) ? 'data:' + (r.data.mime || 'image/png') + ';base64,' + r.data.data : false; }
+      catch (e) { simpleSig = false; }
+    }
+  }
+
+  // Invoice PDF in the Purchase Order look: same header block, navy/blue headings, dark total bar
+  async function exportSimplePdf() {
+    if (!window.jspdf || !window.jspdf.jsPDF) { showToast('PDF library not loaded — refresh and retry', 'error'); return; }
+    await loadSimpleAssets();
+    var jsPDF = window.jspdf.jsPDF, doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    var W = 612, M = 40, R = W - M, y = 0;
+    var ink = [17, 19, 24], navy = [30, 41, 59], blue = [23, 105, 170], mute = [90, 98, 110], line = [203, 213, 225], dark = [45, 55, 72];
+    var s = currentSetup, a = currentApp, t = computeTotals(), L = t.lines, rate = effRate(s, a);
+    var invNo = a.invoice_no || String(a.application_no), job = simpleJobName(s);
+    function font(st, sz, col) { doc.setFont('helvetica', st); doc.setFontSize(sz); doc.setTextColor.apply(doc, col || ink); }
+    function mdy(iso) { if (!iso) return ''; var d = new Date(iso + 'T00:00:00'); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(); }
+    // header
+    var yy = 30;
+    if (simpleLogo.data) doc.addImage(simpleLogo.data, 'JPEG', M, yy - 4, 120, 120 * simpleLogo.ratio);
+    font('bold', 11, navy); doc.text('NORTHERN WOLVES INC', R, yy + 8, { align: 'right' });
+    font('normal', 8, mute);
+    ['55 9th Street, Unit 55A-2, Brooklyn, NY 11215', 'Office: (347) 463-9248', 'hello@northernwolvesac.com  |  northernwolvesac.com', 'Fully Licensed & Insured  |  Serving NYC Since 2017'].forEach(function(l, i) { doc.text(l, R, yy + 22 + i * 11, { align: 'right' }); });
+    var top = Math.max(yy + 120 * simpleLogo.ratio + 6, yy + 66);
+    doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.7); doc.line(M, top, R, top);
+    y = top + 24;
+    font('bold', 16, navy); doc.text('INVOICE', W / 2, y, { align: 'center' }); y += 18;
+    font('bold', 12, blue); doc.text('INVOICE No.: ' + invNo, W / 2, y, { align: 'center' }); y += 26;
+    // to / dates
+    var cw = (R - M - 14) / 2, x2 = M + cw + 14, y0 = y;
+    function kv(x, lab, val, lw, w) { font('bold', 9, ink); doc.text(lab, x, y); font('normal', 9, ink); var ls = doc.splitTextToSize(val || '—', w - lw); doc.text(ls, x + lw, y); y += Math.max(1, ls.length) * 11.5 + 3; }
+    kv(M, 'TO:', s.client_name || '', 46, cw);
+    if (s.client_attn) kv(M, 'ATTN.:', s.client_attn, 46, cw);
+    String(s.client_address || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean).forEach(function(l) { font('normal', 9, ink); doc.text(l, M + 46, y); y += 11.5; });
+    var yL = y; y = y0;
+    kv(x2, 'Invoice Date:', mdy(a.application_date), 78, cw);
+    kv(x2, 'Period To:', mdy(a.period_to), 78, cw);
+    var yR = y; y = Math.max(yL, yR) + 10;
+    // job block
+    font('bold', 10.5, blue); doc.text('JOB', M, y); y += 13;
+    kv(M, 'JOB NAME:', job, 100, R - M);
+    kv(M, 'JOB LOCATION:', simpleAddress(s), 100, R - M);
+    kv(M, 'PO Number:', a.po_number || s.contract_number || s.contract_no || '', 100, R - M);
+    if (s.job_number) kv(M, 'JOB Number:', s.job_number, 100, R - M);
+    if (s.contract_date) kv(M, 'CONTRACT DATED:', mdy(s.contract_date), 100, R - M);
+    if (a.memo && a.memo !== 'Contract work') kv(M, 'DESCRIPTION:', a.memo, 100, R - M);
+    y += 8;
+    // amounts
+    font('bold', 10.5, blue); doc.text('AMOUNTS', M, y); y += 8;
+    var rows = [['ORIGINAL CONTRACT AMOUNT', L.L1]];
+    if (L.L2) rows.push(['CHANGE ORDERS TO DATE', L.L2]);
+    rows.push(['ADJUSTED CONTRACT AMOUNT', L.L3], ['AMOUNT COMPLETED TO DATE', L.L4]);
+    if (rate) rows.push(['LESS RETAINAGE (' + (rate * 100).toFixed(2) + '%)', -L.L5t]);
+    rows.push(['LESS PREVIOUS INVOICES', -L.L7]);
+    rows.forEach(function(r, i) {
+      doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.5); doc.line(M, y + 2, R, y + 2);
+      font(i === 0 ? 'bold' : 'normal', 9.5, ink); doc.text(r[0], M + 4, y + 16);
+      doc.text(fmtMoney(r[1]), R - 6, y + 16, { align: 'right' }); y += 20;
+    });
+    doc.setFillColor.apply(doc, dark); doc.rect(M, y + 2, R - M, 22, 'F');
+    font('bold', 10, [255, 255, 255]); doc.text('AMOUNT DUE THIS INVOICE', M + 6, y + 17); doc.text(fmtMoney(L.L8), R - 6, y + 17, { align: 'right' }); y += 30;
+    font('normal', 9.5, ink); doc.text('BALANCE TO FINISH, INCL. RETAINAGE', M + 4, y + 10); doc.text(fmtMoney(L.L9), R - 6, y + 10, { align: 'right' }); y += 34;
+    // signature
+    if (simpleSig) { try { doc.addImage(simpleSig, 'PNG', M + 4, y - 6, 120, 38); } catch (e) {} }
+    y += 36; doc.setDrawColor.apply(doc, ink); doc.setLineWidth(0.8); doc.line(M, y, M + 220, y);
+    font('normal', 8.5, ink); doc.text((s.signer_name || 'Leonid Leonidov') + ' - ' + (s.signer_title || 'General Manager'), M, y + 12);
+    font('bold', 8.5, ink); doc.text('NORTHERN WOLVES, Inc.', M, y + 24);
+    // footer
+    doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.5); doc.line(M, 752, R, 752);
+    font('normal', 7.5, mute); doc.text('Northern Wolves Inc  ·  Invoice ' + invNo + '  ·  ' + job, M, 764); doc.text('Page 1', R, 764, { align: 'right' });
+    doc.save(('Invoice ' + invNo + ' - ' + job).replace(/[\\/:*?"<>|]+/g, '-') + '.pdf');
+  }
+
   // ─── Approved change orders → invoice ───────────────────────────────
   // A CO is billable on an invoice once status = approved and its approved
   // date is on/before the invoice's period end. Approved in the period →
@@ -1209,6 +1464,7 @@ requireAuth().catch(function(){});
       '</div>';
 
     if (invoiceSub === 'summary') {
+      if (isSimple(currentSetup)) html += renderSimpleCard(t, invNo);
       html += '<div class="inv-card"><div class="inv-card-h"><h3>General Settings</h3>' +
           (canEdit ? '<button class="btn-secondary pc-edit" id="editHdrBtn">Edit</button>' : '') + '</div>' +
         '<div class="inv-settings">' +
@@ -1242,11 +1498,12 @@ requireAuth().catch(function(){});
 
     var pb = document.getElementById('pdfBtn');
     if (pb) pb.addEventListener('click', function() {
-      try { exportAiaPdf(); } catch (err) { console.error(err); showToast('PDF failed: ' + err.message, 'error'); }
+      try { if (isSimple(currentSetup)) exportSimplePdf().catch(function(err) { console.error(err); showToast('PDF failed: ' + err.message, 'error'); }); else exportAiaPdf(); } catch (err) { console.error(err); showToast('PDF failed: ' + err.message, 'error'); }
     });
     var sb = document.getElementById('statusBtn'); if (sb) sb.addEventListener('click', changeStatus);
     var db = document.getElementById('invDelBtn'); if (db) db.addEventListener('click', function() { deleteInvoice(currentApp.id); });
     var eb = document.getElementById('editHdrBtn'); if (eb) eb.addEventListener('click', editHeader);
+    var esb = document.getElementById('editSimpleBtn'); if (esb) esb.addEventListener('click', editSimpleHeader);
     ['coPrevAdd','coPrevDed','coThisAdd','coThisDed'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', saveCoSummary);
@@ -2073,7 +2330,7 @@ requireAuth().catch(function(){});
       a.addEventListener('click', function(e) {
         e.preventDefault(); menu.style.display = 'none';
         var k = a.getAttribute('data-create');
-        if (k === 'invoice') openNewAppModal(b.setup.id);
+        if (k === 'invoice') { if (isSimple(b.setup)) openSimpleModal(b.setup.id); else openNewAppModal(b.setup.id); }
         else if (k === 'co') openCoModal(null);
         else if (k === 'payment') openPayModal(null);
       });
@@ -2245,7 +2502,7 @@ requireAuth().catch(function(){});
       '</tr>';
     }).join('');
     return '<div class="pc-section-h"><h2>Invoices (Payment Applications)</h2>' +
-        (canEdit ? '<button class="btn-create" id="invAdd">＋ New Invoice</button>' : '') + '</div>' +
+        (canEdit ? '<button class="btn-create" id="invAdd">' + (isSimple(s) ? '＋ New Simple Invoice' : '＋ New Invoice') + '</button>' : '') + '</div>' +
       '<div class="pc-table-wrap"><table class="pc-table"><thead><tr>' +
         '<th>Invoice Position</th><th>Invoice #</th><th>Billing Period</th><th>Billing Date</th><th>Status</th>' +
         '<th class="num">Original Contract Sum</th><th class="num">Net Change By Change Orders</th><th class="num">Revised Contract Sum</th>' +
@@ -2417,7 +2674,7 @@ requireAuth().catch(function(){});
     var coAdd = document.getElementById('coAdd'); if (coAdd) coAdd.addEventListener('click', function() { openCoModal(null); });
     main.querySelectorAll('[data-co-edit]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); openCoModal(a.getAttribute('data-co-edit')); }); });
     main.querySelectorAll('[data-co-files]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); openCoFilesModal(a.getAttribute('data-co-files')); }); });
-    var invAdd = document.getElementById('invAdd'); if (invAdd) invAdd.addEventListener('click', function() { openNewAppModal(pc.setup.id); });
+    var invAdd = document.getElementById('invAdd'); if (invAdd) invAdd.addEventListener('click', function() { if (isSimple(pc.setup)) openSimpleModal(pc.setup.id); else openNewAppModal(pc.setup.id); });
     main.querySelectorAll('[data-inv-del]').forEach(function(bt) { bt.addEventListener('click', function(e) { e.stopPropagation(); deleteInvoice(bt.getAttribute('data-inv-del')); }); });
     var payAdd = document.getElementById('payAdd'); if (payAdd) payAdd.addEventListener('click', function() { openPayModal(null); });
     main.querySelectorAll('[data-pay-edit]').forEach(function(bt) { bt.addEventListener('click', function() { openPayModal(bt.getAttribute('data-pay-edit')); }); });
