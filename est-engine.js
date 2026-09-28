@@ -411,8 +411,7 @@
       if (!isRealTag(s.label || tag) && !(s.qty > 0 && !/[()]/.test(s.label || tag))) return;   // schedule notes / model fragments are not units
       // a package quote covers units it never names by tag: Daikin's VRV quote covers the cassettes and branch selectors, Klimany's LG quote
       // the ducted fan coils, CaptiveAire the hoods — match by manufacturer, model or equipment family before calling anything unquoted
-      var qBlob = (C.quotes || []).map(function (q) { return JSON.stringify(q || {}).toLowerCase(); }).join('
-');
+      var qBlob = (C.quotes || []).map(function (q) { return JSON.stringify(q || {}).toLowerCase(); }).join(' ');
       var mfr = String(s.manufacturer || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(function (w) { return w.length >= 3 && !/^(inc|llc|corp|the|and|applied|industries|systems|company)$/.test(w); })[0];
       var mdl = String(s.model || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6);
       var fam = (s.type || '') + ' ' + tag;
@@ -420,7 +419,7 @@
         (/vrf|vrv|cassette|branch selector|ductless|indoor unit|fan coil/i.test(fam) && /vrf|vrv|multi v|multi-v|heat recovery|fan coil|cassette/.test(qBlob)) ||
         (/hood|kef|keh|mua|make[- ]?up|ansul|grease/i.test(fam) && /hood|captiveaire|kitchen|ansul/.test(qBlob));
       var alt = /alternate|alt|add alt/i.test([s.type, s.notes, s.label].join(' '));
-      if (covered) { add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model].filter(Boolean).join(' · ') + ' (in ' + ((C.quotes || []).filter(function (q) { return JSON.stringify(q || {}).toLowerCase().indexOf(mfr || mdl || '§') >= 0; })[0] || {}).vendor || 'a vendor quote') + ')', 0, 'ea', 0, 0, 'covered by the vendor package quote — no separate price', { is_firm: true }); return; }
+      if (covered) { var qv = ((C.quotes || []).filter(function (q) { return JSON.stringify(q || {}).toLowerCase().indexOf(mfr || mdl || 'no-match') >= 0; })[0] || {}).vendor || 'a vendor quote'; add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model].filter(Boolean).join(' · ') + ' (in ' + qv + ')', 0, 'ea', 0, 0, 'covered by the vendor package quote — no separate price', { is_firm: true }); return; }
       var bq = alt ? null : budgetFor(s, tag), bqty = Math.max(1, s.qty || (C.planEq[tag] && C.planEq[tag].qty) || 1);
       add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · ') + (bq ? ' [BUDGET]' : ''), bqty, 'ea', bq ? bq.cost : 0, 0,
         bq ? 'budget — ' + bq.why + '; on schedule ' + s.sheets[0] + ', no vendor quote' : 'on schedule ' + s.sheets[0] + ' — no quote yet',
