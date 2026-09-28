@@ -11,8 +11,8 @@
 <title>WIP Report — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=327"></script>
-<script src="auth.js?v=327"></script>
+<script src="supabase-config.js?v=328"></script>
+<script src="auth.js?v=328"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: 1600px; margin: 0 auto; padding: 0 14px; }
@@ -185,14 +185,16 @@
       } else { r.original = Number(p.contract_value || 0); r.cos = 0; r.revised = r.original; r.billed = 0; r.retainage = 0; r.net = 0; r.paid = 0; }
       r.ar = r.net - r.paid; r.backlog = r.revised - r.billed; r.pctBilled = r.revised ? r.billed / r.revised : null;
       // cost side
-      if (c) {
+      var cEst = c ? Number(c.labor_est || 0) + Number(c.materials_est || 0) + Number(c.subs_est || 0) : 0;
+      if (c && cEst > 0) {
         r.hasCost = true; r.costAsOf = c.as_of || '';
         r.estCost = Number(c.labor_est || 0) + Number(c.materials_est || 0) + Number(c.subs_est || 0);
         r.costToDate = Number(c.labor_spent || 0) + Number(c.materials_spent || 0) + Number(c.subs_spent || 0);
         r.costToComplete = r.estCost - r.costToDate;
         r.pctComplete = r.estCost ? Math.min(1.5, r.costToDate / r.estCost) : null; r.basis = 'cost';
       } else {
-        r.hasCost = false; r.estCost = null; r.costToDate = null; r.costToComplete = null;
+        // no estimate yet (or no cost row): spent may still be known, but % complete / GP need a budget
+        r.hasCost = false; r.estCost = null; r.costToDate = c ? Number(c.labor_spent || 0) + Number(c.materials_spent || 0) + Number(c.subs_spent || 0) : null; r.costToComplete = null;
         var pmPct = (p.percent_complete != null && p.percent_complete !== '') ? Number(p.percent_complete) / (Number(p.percent_complete) > 1 ? 100 : 1) : null;
         r.pctComplete = pmPct; r.basis = pmPct != null ? 'pm' : '';
       }
@@ -312,6 +314,6 @@
   init().catch(function(e) { console.error(e); });
 })();
 </script>
-<script src="sw-register.js?v=327"></script>
+<script src="sw-register.js?v=328"></script>
 </body>
 </html>
