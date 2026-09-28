@@ -1382,15 +1382,16 @@ requireAuth().then(function() {
   // Save status
   document.getElementById('btnSaveStatus').addEventListener('click', saveStatus);
 
-  // --- Init ---
-  loadProfile();
-  loadReports();
-})();
+  // assign-projects modal (markup sits after this script)
   document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('assignSearch').addEventListener('input', renderAssignList);
     document.getElementById('assignCancel').addEventListener('click', closeAssign);
     document.getElementById('assignSave').addEventListener('click', saveAssign);
   });
+  // --- Init ---
+  loadProfile();
+  loadReports();
+})();
 </script>
 <div class="assign-overlay" id="assignOverlay">
   <div class="assign-modal">
