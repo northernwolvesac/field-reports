@@ -1386,9 +1386,11 @@ requireAuth().then(function() {
   loadProfile();
   loadReports();
 })();
-  document.getElementById('assignSearch').addEventListener('input', renderAssignList);
-  document.getElementById('assignCancel').addEventListener('click', closeAssign);
-  document.getElementById('assignSave').addEventListener('click', saveAssign);
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('assignSearch').addEventListener('input', renderAssignList);
+    document.getElementById('assignCancel').addEventListener('click', closeAssign);
+    document.getElementById('assignSave').addEventListener('click', saveAssign);
+  });
 </script>
 <div class="assign-overlay" id="assignOverlay">
   <div class="assign-modal">
