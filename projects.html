@@ -8,10 +8,10 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=132"></script>
+<script src="supabase-config.js?v=327"></script>
 <script src="nw-drive.js?v=221"></script>
-<script src="nw-drive-browser.js?v=221"></script>
-<script src="auth.js?v=132"></script>
+<script src="nw-drive-browser.js?v=327"></script>
+<script src="auth.js?v=327"></script>
 <script src="cloud-save.js?v=132"></script>
 <script src="schedule-utils.js?v=137"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -483,6 +483,7 @@
     color: var(--nw-primary);
     border-bottom-color: var(--nw-primary);
   }
+  .pc-in { padding:8px 10px;font-size:13px;border:1px solid #d1d5db;border-radius:8px;background:#fff;min-width:0;width:100%;box-sizing:border-box; }
   .detail-tab-content { display: none; }
   .detail-tab-content.active { display: block; }
 
@@ -571,7 +572,7 @@
       <div class="detail-tab" data-dtab="iom">IOM</div>
       <div class="detail-tab" data-dtab="warranty">Warranty</div>
       <div class="detail-tab" data-dtab="pos">POs</div>
-      <div class="detail-tab" data-dtab="pos">POs</div>
+      <div class="detail-tab" data-dtab="costs">Costs</div>
       <div class="detail-tab" data-dtab="change-orders">Change Orders</div>
       <div class="detail-tab" data-dtab="rfis">RFIs</div>
     </div>
@@ -728,24 +729,30 @@
       </div>
     </div>
 
-    <!-- PURCHASE ORDERS TAB -->
-    <div class="detail-tab-content" id="tabPOs" data-dtab="pos">
-      <div style="padding:14px 16px 24px">
-        <div id="posActions" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-          <a id="btnNewPO" href="#" onclick="event.preventDefault(); openNewPO();" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid #d1d5db;border-radius:12px;text-decoration:none;color:inherit;">
-            <div style="width:42px;height:42px;border-radius:12px;background:#111318;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🧾</div>
-            <div style="flex:1;">
-              <div style="font-weight:700;font-size:14px;color:#111318;">Create purchase order</div>
-              <div style="font-size:12px;color:#64748b;margin-top:2px;">PO (2 pages) + vendor quote + email copy → saved in Purchase Orders here and in the general PO folder, then Send</div>
-            </div>
-            <div style="color:#111318;font-size:20px;font-weight:700;">›</div>
-          </a>
+    <!-- COSTS TAB (WIP cost side: estimate vs spent; office roles only) -->
+    <div class="detail-tab-content" id="tabCosts" data-dtab="costs">
+      <div style="padding:14px 16px 24px" id="pcForm">
+        <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Project costs · estimate vs spent</div>
+        <div id="pcMeta" style="font-size:12px;color:#64748b;margin-bottom:12px"></div>
+        <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;gap:8px 10px;align-items:center;font-size:13px">
+          <div></div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Labor</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Materials</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Subs</div>
+          <div style="font-weight:700">Estimated</div>
+          <input type="number" step="0.01" id="pcLaborEst" class="pc-in" placeholder="0"><input type="number" step="0.01" id="pcMatEst" class="pc-in" placeholder="0"><input type="number" step="0.01" id="pcSubsEst" class="pc-in" placeholder="0">
+          <div style="font-weight:700">Spent to date</div>
+          <input type="number" step="0.01" id="pcLaborSpent" class="pc-in" placeholder="0"><input type="number" step="0.01" id="pcMatSpent" class="pc-in" placeholder="0"><input type="number" step="0.01" id="pcSubsSpent" class="pc-in" placeholder="0">
         </div>
-        <div id="poLog" style="display:none;">
-          <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Purchase orders</div>
-          <div id="poLogList"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;font-size:13px">
+          <div><label style="display:block;font-size:11px;color:#6b7280;margin-bottom:3px">Costs as of</label><input type="date" id="pcAsOf" class="pc-in" style="width:100%"></div>
+          <div><label style="display:block;font-size:11px;color:#6b7280;margin-bottom:3px">Labor hours left (optional)</label><input type="number" step="0.5" id="pcHoursLeft" class="pc-in" style="width:100%" placeholder="0"></div>
         </div>
-        <div id="posEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">No purchase orders for this project yet.</div>
+        <div style="margin-top:10px"><label style="display:block;font-size:11px;color:#6b7280;margin-bottom:3px">Notes</label><textarea id="pcNotes" class="pc-in" rows="2" style="width:100%;box-sizing:border-box;font-family:inherit"></textarea></div>
+        <div id="pcSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:14px"></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+          <button type="button" id="pcSave" onclick="saveProjectCosts()" style="padding:10px 16px;font-size:14px;font-weight:700;border-radius:10px;border:1px solid #111318;background:#111318;color:#fff;cursor:pointer">Save costs</button>
+          <span id="pcStatus" style="font-size:12px;color:#64748b"></span>
+          <a href="wip.html" style="margin-left:auto;font-size:12px;font-weight:700;color:#0696D7;text-decoration:none">WIP report ↗</a>
+        </div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:10px">Labor spent is entered by hand (payroll); materials and subs from vendor invoices. Estimates come from the bid. These feed the WIP report: cost to complete, % complete by cost, earned revenue and over / under billings.</div>
       </div>
     </div>
 
@@ -1096,8 +1103,8 @@ requireAuth().catch(function(){});
     if (isTechUser !== null) return isTechUser;
     try { var prof = await getAuthProfile(); isTechUser = !!(prof && prof.role === 'tech'); isLimitedUser = !!(prof && prof.role === 'pm_limited'); } catch (e) { isTechUser = true; }
     if (isTechUser || isLimitedUser) {
-      document.querySelectorAll('#detailTabs .detail-tab[data-dtab="prime"], #detailTabs .detail-tab[data-dtab="change-orders"], #detailTabs .detail-tab[data-dtab="pos"]').forEach(function(t) { t.style.display = 'none'; });
-      ['tabPrime', 'tabChangeOrders', 'tabPOs', 'setupSteps'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      document.querySelectorAll('#detailTabs .detail-tab[data-dtab="prime"], #detailTabs .detail-tab[data-dtab="change-orders"], #detailTabs .detail-tab[data-dtab="pos"], #detailTabs .detail-tab[data-dtab="costs"]').forEach(function(t) { t.style.display = 'none'; });
+      ['tabPrime', 'tabChangeOrders', 'tabPOs', 'tabCosts', 'setupSteps'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
       document.querySelectorAll('a[href="invoicing.html"]').forEach(function(a) { a.style.display = 'none'; });
     }
     if (isTechUser) ['submittalActions', 'iomActions', 'warrantyActions'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
@@ -1928,7 +1935,44 @@ requireAuth().catch(function(){});
     iom:       { list: 'iomLogList',       wrap: 'iomLog',       empty: 'iomEmpty',        prefix: 'IOM', page: 'submittal.html?kind=iom&', again: 'Resubmit' },
     warranty:  { list: 'warrantyLogList',  wrap: 'warrantyLog',  empty: 'warrantyEmpty',   prefix: 'W',   page: 'warranty.html?', again: 'Revise' }
   };
-  async function loadSubmittals(projectId) { ['submittal', 'iom', 'warranty'].forEach(function(k) { loadDocLog(projectId, k); }); loadPOs(projectId); }
+  async function loadSubmittals(projectId) { ['submittal', 'iom', 'warranty'].forEach(function(k) { loadDocLog(projectId, k); }); loadPOs(projectId); loadProjectCosts(projectId); }
+  // ── project costs (project_costs table): the cost side of the WIP report ──
+  var PC_FIELDS = { labor_est: 'pcLaborEst', materials_est: 'pcMatEst', subs_est: 'pcSubsEst', labor_spent: 'pcLaborSpent', materials_spent: 'pcMatSpent', subs_spent: 'pcSubsSpent', hours_left: 'pcHoursLeft', as_of: 'pcAsOf', notes: 'pcNotes' };
+  var pcContract = 0, pcRow = null;
+  function pcNum(id) { return parseFloat((document.getElementById(id) || {}).value) || 0; }
+  function pcMoney(n) { n = Number(n || 0); var t = Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 }); return (n < 0 ? '-$' : '$') + t; }
+  async function loadProjectCosts(projectId) {
+    if (!document.getElementById('pcForm')) return;
+    if (await techCheck() || isLimitedUser) return;
+    var r = await supabaseClient.from('project_costs').select('*').eq('project_id', projectId).maybeSingle();
+    var c = await supabaseClient.from('aia_projects').select('original_contract_sum').eq('project_id', projectId).maybeSingle();
+    if (currentProjectId !== projectId) return;
+    pcRow = r.data || null; pcContract = c.data ? Number(c.data.original_contract_sum || 0) : 0;
+    Object.keys(PC_FIELDS).forEach(function(k) { var el = document.getElementById(PC_FIELDS[k]); if (el) el.value = pcRow && pcRow[k] != null ? pcRow[k] : ''; });
+    var meta = document.getElementById('pcMeta');
+    if (r.error) meta.textContent = 'Costs table not available yet: ' + r.error.message;
+    else meta.textContent = pcRow ? ('Updated ' + new Date(pcRow.updated_at).toLocaleDateString() + (pcRow.as_of ? ' · costs as of ' + pcRow.as_of : '') + (pcRow.source === 'master-xlsx' ? ' · seeded from NWAC Master Records' : '')) : 'No cost data yet — enter the estimate from the bid and what has been spent so far.';
+    document.getElementById('pcStatus').textContent = '';
+    calcProjectCosts();
+  }
+  function calcProjectCosts() {
+    var est = pcNum('pcLaborEst') + pcNum('pcMatEst') + pcNum('pcSubsEst'), spent = pcNum('pcLaborSpent') + pcNum('pcMatSpent') + pcNum('pcSubsSpent');
+    var pct = est ? spent / est : 0, gp = pcContract ? pcContract - est : null;
+    var tile = function(k, v, sub) { return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">' + k + '</div><div style="font-size:16px;font-weight:800;color:#111318">' + v + '</div>' + (sub ? '<div style="font-size:11px;color:#6b7280">' + sub + '</div>' : '') + '</div>'; };
+    document.getElementById('pcSummary').innerHTML = tile('Est. total cost', pcMoney(est)) + tile('Spent to date', pcMoney(spent), (pct * 100).toFixed(0) + '% complete by cost') + tile('Cost to complete', pcMoney(est - spent), (est - spent) < 0 ? 'over budget' : '') +
+      (gp != null ? tile('Est. gross profit', pcMoney(gp), pcContract ? (gp / pcContract * 100).toFixed(1) + '% of ' + pcMoney(pcContract) + ' contract' : '') : tile('Est. gross profit', '—', 'no prime contract yet'));
+  }
+  window.saveProjectCosts = async function() {
+    if (!currentProjectId) return;
+    var st = document.getElementById('pcStatus'); st.textContent = 'Saving…';
+    var prof = null; try { prof = await getAuthProfile(); } catch (e) {}
+    var row = { project_id: currentProjectId, source: 'app', updated_by: prof ? prof.id : null, updated_at: new Date().toISOString() };
+    Object.keys(PC_FIELDS).forEach(function(k) { var v = (document.getElementById(PC_FIELDS[k]) || {}).value; if (k === 'as_of' || k === 'notes') row[k] = v || null; else if (k === 'hours_left') row[k] = v === '' ? null : Number(v); else row[k] = Number(v) || 0; });
+    var r = await supabaseClient.from('project_costs').upsert(row, { onConflict: 'project_id' });
+    if (r.error) { st.textContent = 'Error: ' + r.error.message; return; }
+    st.textContent = 'Saved'; showToast('Project costs saved'); loadProjectCosts(currentProjectId);
+  };
+  document.addEventListener('input', function(e) { if (e.target && e.target.classList && e.target.classList.contains('pc-in')) calcProjectCosts(); });
   // Purchase orders of this project (purchase_orders table; PDFs in Drive / Purchase Orders)
   var PO_COLOR = { saved: '#6b7280', sent: '#0696D7', acknowledged: '#15803d', void: '#dc2626', legacy: '#b45309' };
   async function loadPOs(projectId) {
@@ -2152,7 +2196,6 @@ requireAuth().catch(function(){});
     });
 
     // O&M / IOM manual (submittal.html?kind=iom) and warranty letter (warranty.html)
-    window.openNewPO = function() { if (currentProjectId) window.location.href = 'po.html?project=' + encodeURIComponent(currentProjectId); };
     window.openNewPO = function() { if (currentProjectId) window.location.href = 'po.html?project=' + encodeURIComponent(currentProjectId); };
     window.openCloseoutDoc = function(kind) {
       if (!currentProjectId) return;
@@ -2403,6 +2446,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=327"></script>
 </body>
 </html>
