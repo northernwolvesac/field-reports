@@ -450,6 +450,7 @@
       if (!C.sched[tag] && !/unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens/i.test((s.type || '') + ' ' + tag)) return;
       if (/diffuser|grille|register|vav|damper|louver|variable air volume|terminal unit|fan[- ]powered|\bcav\b|fire suppression|ansul|smoke detector|\bduct\b|connection/i.test((s.type || '') + ' ' + (s.label || tag))) return;
       if (!isRealTag(s.label || tag) && (!C.sched[tag] || !(C.sched[tag].qty > 0) || /\(/.test(s.label || tag))) return;
+      var about = [s.type, s.notes, s.location, s.furnished_by].join(' ');
       if (/existing|to remain|reference only|base building|by others|owner[- ]furnished|n\.?i\.?c/i.test(about)) return;
       var alt = /alternate|\balt\b|add alt/i.test(about);
       var qty = Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1), ih = installHours(s);
