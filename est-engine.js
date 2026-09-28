@@ -404,8 +404,10 @@
       (q.lines || []).forEach(function (l) { (l.tags || []).forEach(function (t) { quoted[norm(t)] = q.vendor || true; }); });
     });
     var bms = C.quotes.some(function (q) { return q.kind === 'controls'; });
-    Object.keys(C.sched).sort().forEach(function (tag) {
-      var s = C.sched[tag];
+    var unqTags = Object.keys(C.sched);
+    Object.keys(C.planEq).forEach(function (tag) { if (!C.sched[tag] && isRealTag(C.planEq[tag].label || tag) && /unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens|erv|boiler/i.test((C.planEq[tag].type || '') + ' ' + tag)) unqTags.push(tag); });
+    unqTags.sort().forEach(function (tag) {
+      var s = C.sched[tag] || Object.assign({ sheets: C.planEq[tag].sheets || ['plan'], label: C.planEq[tag].label }, C.planEq[tag]);
       if (quoted[tag] || /owner/i.test(s.furnished_by || '')) return;
       if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;   // air devices are counted below
       if (/existing|to remain|reference only|by others|n\.?i\.?c/i.test([s.type, s.notes, s.furnished_by].join(' '))) return;
@@ -523,7 +525,7 @@
       var manual = /^(VD|MVD|BD|COD|OD|CD)\d*$/.test(norm(d.tag)) || /volume|balanc|manual|cable|opposed/i.test((d.notes || '') + ' ' + d.size);
       if (/diffuser|grille|register/.test(d.type)) ao.outlet += d.qty;
       else if (d.type === 'linear') { if (d.lf) ao.linear += d.lf; else { ao.linear += d.qty * 4; ao.linearGuess = true; } }
-      else if (d.type === 'vav') ao.vavd += d.qty;
+      else if (d.type === 'vav') { if (!manual && !/\bvdi?\b|volume damper|remote operat/i.test((d.tag || '') + ' ' + (d.notes || ''))) ao.vavd += d.qty; }
       else if ((d.type === 'fsd' || d.type === 'motorized_damper') && !manual) ao.vavd += d.qty;
       else if (d.type === 'fpb') ao.fpb += d.qty;
     });
@@ -571,7 +573,7 @@
     if (ao.fpb) add('air_outlets', 'Fan-powered boxes', ao.fpb, 'ea', 0, STD.fpb, 'Air Outlets Standards — 8 hr each' + aoBasis);
 
     // standalone controls only when there is no BMS quote (Standalone Controls Standards)
-    var vavCount = C.schedVav || Object.keys(C.devices).reduce(function (a, k) { return a + (C.devices[k].type === 'vav' || C.devices[k].type === 'fpb' ? C.devices[k].qty : 0); }, 0);
+    var vavCount = C.schedVav || Object.keys(C.devices).reduce(function (a, k) { var d = C.devices[k]; if (/\bvdi?\b|volume damper|remote operat|manual|cable/i.test((d.tag || '') + ' ' + (d.notes || ''))) return a; return a + (d.type === 'vav' || d.type === 'fpb' ? d.qty : 0); }, 0);
     if (!bms && vavCount) add('equipment', 'Standalone VAV controls (no BMS quote)', vavCount, 'ea', STD.vavControls + STD.thermostat + STD.tstatWiring, 1.6,
       'Standalone Controls — $1,000/VAV + thermostat $500 + wiring $50; 10/day install', { is_firm: false, flag: 'replace with BMS quote if one comes in' });
 
