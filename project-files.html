@@ -265,6 +265,7 @@ requireAuth().catch(function(){});
     }
     var r = await supabaseClient.from('projects').select('id, short_code, project_name, pm_name, status')
       .eq('id', projectId).maybeSingle();
+    try { var lp = await getAuthProfile(); if (lp && lp.role === 'pm_limited' && (lp.project_ids || []).indexOf(projectId) < 0) r = { data: null }; } catch (e) {}
     if (r.data) {
       project = r.data;
       document.getElementById('pfHeader').innerHTML =

@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration  (v3.9)
+// GOOGLE APPS SCRIPT - Google Drive Integration (v3.12)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -64,7 +64,8 @@ var FULL_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
 // Purchase Orders and Schedule; never contracts, billing, COI, insurance, proposals, quotes, change orders or tax certificates.
 var LIMITED_ROLES = ['pm_limited'];
 var LIMITED_FOLDERS = FIELD_FOLDERS.concat(['RFI', 'Purchase Orders', 'Schedule']);
-var LIMITED_EDITORS = ['sharon@northernwolvesac.com'];   // get Editor on LIMITED_FOLDERS of every project (apply_field_access), no root access
+// v3.12: a limited PM is confined to the projects listed in profiles.project_ids (app project ids); Drive Editor rights on the
+// limited folders of exactly those projects are granted / revoked with the set_limited_access action (management → Team → Projects)
 var ACTIVE_FOLDERS = FIELD_FOLDERS;                       // set per request from the caller's role
 function callerFromToken(token) {
   if (!token) return null;
@@ -74,12 +75,12 @@ function callerFromToken(token) {
   var r = UrlFetchApp.fetch(SB_API_URL + '/auth/v1/user', { headers: h, muteHttpExceptions: true });
   if (r.getResponseCode() !== 200) return null;
   var u = JSON.parse(r.getContentText()); if (!u || !u.id) return null;
-  var role = 'tech';
+  var role = 'tech', projectIds = [];
   try {
-    var p = UrlFetchApp.fetch(SB_API_URL + '/rest/v1/profiles?id=eq.' + u.id + '&select=role', { headers: h, muteHttpExceptions: true });
-    if (p.getResponseCode() === 200) { var rows = JSON.parse(p.getContentText()); if (rows[0] && rows[0].role) role = rows[0].role; }
+    var p = UrlFetchApp.fetch(SB_API_URL + '/rest/v1/profiles?id=eq.' + u.id + '&select=*', { headers: h, muteHttpExceptions: true });
+    if (p.getResponseCode() === 200) { var rows = JSON.parse(p.getContentText()); if (rows[0] && rows[0].role) role = rows[0].role; if (rows[0] && rows[0].project_ids) projectIds = rows[0].project_ids; }
   } catch (e) {}
-  var caller = { id: u.id, email: u.email, role: role, full: FULL_ROLES.indexOf(role) >= 0, limited: LIMITED_ROLES.indexOf(role) >= 0 };
+  var caller = { id: u.id, email: u.email, role: role, full: FULL_ROLES.indexOf(role) >= 0, limited: LIMITED_ROLES.indexOf(role) >= 0, projectIds: projectIds };
   try { cache.put(ck, JSON.stringify(caller), 300); } catch (e) {}
   return caller;
 }
@@ -247,6 +248,26 @@ function topFolderOfFile(fileId) {
   return null;
 }
 function techMayTouch(fileId) { var top = topFolderOfFile(fileId); return !!top && (isFieldTop(top) || isDropTop(top)); }
+// the project folder (direct child of the root) that contains this file, or null
+function projectFolderOfFile(fileId) {
+  var f; try { f = DriveApp.getFileById(fileId); } catch (e) { try { f = DriveApp.getFolderById(fileId); } catch (e2) { return null; } }
+  var parents = f.getParents(); if (!parents.hasNext()) return null;
+  var cur = parents.next();
+  for (var i = 0; i < 12 && cur; i++) {
+    var ps = cur.getParents(); if (!ps.hasNext()) return null;
+    var up = ps.next(), id = up.getId();
+    if (id === FJOBS_FOLDER_ID || id === OLD_ROOT_ID) return cur;
+    cur = up;
+  }
+  return null;
+}
+// limited PM: is this project (by app id) one of the caller's assigned projects?
+function limitedProjectOk(caller, projectId) { return !!projectId && (caller.projectIds || []).indexOf(projectId) >= 0; }
+function limitedFileOk(caller, fileId) {
+  var pf = projectFolderOfFile(fileId); if (!pf) return false;
+  var desc = ''; try { desc = pf.getDescription() || ''; } catch (e) {}
+  return limitedProjectOk(caller, desc);
+}
 // overwrite a file's content in place (same id / link), optionally renaming it
 function replaceFile(fileId, base64Data, mimeType, fileName) {
   var bytes = Utilities.base64Decode(base64Data);
@@ -541,19 +562,29 @@ function applyFieldAccess(projectFolderId) {
       try { addPermission(f.getId(), FIELD_VIEWERS[j], 'commenter'); stats.added++; } catch (e) { stats.errors.push(f.getName() + ' ' + FIELD_VIEWERS[j] + ': ' + e.message); }
     }
   }
-  // limited project managers: Editor on the limited folders (RFI / Purchase Orders / Schedule are created when missing)
-  for (var k = 0; k < LIMITED_FOLDERS.length && LIMITED_EDITORS.length; k++) {
-    var lit = pf.getFoldersByName(LIMITED_FOLDERS[k]), lf = null;
-    if (lit.hasNext()) lf = lit.next();
-    else { var la = pf.getFolders(), ln = normName(LIMITED_FOLDERS[k]); while (la.hasNext()) { var lc = la.next(); if (normName(lc.getName()) === ln) { lf = lc; break; } } }
-    if (!lf) { lf = pf.createFolder(LIMITED_FOLDERS[k]); stats.created++; }
-    var lhave = {};
-    try { listPermissions(lf.getId()).forEach(function(p) { if (p.emailAddress) lhave[p.emailAddress.toLowerCase()] = p.role; }); } catch (e) {}
-    for (var m = 0; m < LIMITED_EDITORS.length; m++) {
-      if (lhave[LIMITED_EDITORS[m].toLowerCase()] === 'writer' || lhave[LIMITED_EDITORS[m].toLowerCase()] === 'owner') { stats.already++; continue; }
-      try { addPermission(lf.getId(), LIMITED_EDITORS[m], 'writer'); stats.added++; } catch (e) { stats.errors.push(lf.getName() + ' ' + LIMITED_EDITORS[m] + ': ' + e.message); }
+  stats.success = true; return stats;
+}
+// limited PM: grant (Editor) or revoke access to the limited folders of one project (folders created when missing on grant)
+function setLimitedAccess(projectFolderId, email, grant) {
+  if (!email) return { success: false, error: 'email required' };
+  var pf = DriveApp.getFolderById(projectFolderId), stats = { project: pf.getName(), email: email, grant: !!grant, added: 0, removed: 0, already: 0, created: 0, errors: [] };
+  var wanted = {}; LIMITED_FOLDERS.forEach(function(n) { wanted[normName(n)] = n; });
+  var found = {}, all = pf.getFolders();
+  while (all.hasNext()) { var c = all.next(), nn = normName(c.getName()); if (wanted[nn] && !found[nn]) found[nn] = c; }
+  Object.keys(wanted).forEach(function(nn) {
+    var lf = found[nn];
+    if (!lf) { if (!grant) return; lf = pf.createFolder(wanted[nn]); stats.created++; }
+    var have = null;
+    try { listPermissions(lf.getId()).forEach(function(p) { if (p.emailAddress && p.emailAddress.toLowerCase() === email.toLowerCase()) have = p.role; }); } catch (e) {}
+    if (grant) {
+      if (have === 'writer' || have === 'owner') { stats.already++; return; }
+      try { if (have) removePermissions(lf.getId(), [email]); addPermission(lf.getId(), email, 'writer'); stats.added++; } catch (e) { stats.errors.push(lf.getName() + ': ' + e.message); }
+    } else if (have && have !== 'owner') {
+      try { stats.removed += removePermissions(lf.getId(), [email]).length; } catch (e) { stats.errors.push(lf.getName() + ': ' + e.message); }
     }
-  }
+  });
+  // nothing on the project folder itself either (a limited PM is never shared the whole project)
+  try { if (!grant) stats.removed += removePermissions(pf.getId(), [email]).length; } catch (e) {}
   stats.success = true; return stats;
 }
 function revokeAccess(fileId, emails) { return { success: true, removed: removePermissions(fileId, emails || []) }; }
@@ -561,7 +592,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.11' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.12' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -569,7 +600,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
-    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.11', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.12', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
     var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
     if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
     ACTIVE_FOLDERS = caller.limited ? LIMITED_FOLDERS : FIELD_FOLDERS;
@@ -581,6 +612,12 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Technicians can only add files to field folders', auth: true })).setMimeType(ContentService.MimeType.JSON);
       if ((body.action === 'replace_file' || body.action === 'file_data') && !techMayTouch(body.fileId))
         return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not allowed for your role', auth: true })).setMimeType(ContentService.MimeType.JSON);
+      if (caller.limited) {
+        // limited PM: only the assigned projects (profiles.project_ids), whether addressed by project id or by file id
+        var byProject = ['list_tree', 'list_files', 'upload_file', 'create_folder'].indexOf(body.action) >= 0;
+        var ok = byProject ? limitedProjectOk(caller, body.projectId) : limitedFileOk(caller, body.fileId);
+        if (!ok) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'This project is not assigned to you', auth: true })).setMimeType(ContentService.MimeType.JSON);
+      }
       if (body.action === 'list_tree') { result = filterFieldItems(listTree(body.projectName, body.projectId, body.maxDepth)); return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON); }
       if (body.action === 'list_files') { var lf = listProjectFiles(body.projectName, body.projectId); lf.files = lf.files.filter(function(f) { return isFieldTop(f.category); }); return ContentService.createTextOutput(JSON.stringify(lf)).setMimeType(ContentService.MimeType.JSON); }
     }
@@ -604,6 +641,8 @@ function doPost(e) {
       case 'copy_tree':       result = copyTree(body.sourceFolderId, body.targetFolderId, body.nameMap, body); break;
       case 'copy_project':    result = copyProject(body.sourceFolderId); break;
       case 'apply_field_access': result = applyFieldAccess(body.folderId || getProjectFolder(body.projectName, body.projectId).getId()); break;
+      case 'set_limited_access': var lpf = body.folderId ? DriveApp.getFolderById(body.folderId) : findProjectFolder(body.projectId, body.projectName);
+                                 result = lpf ? setLimitedAccess(lpf.getId(), body.email, body.grant !== false) : { success: false, error: 'Project folder not found' }; break;
       case 'revoke_access':   result = revokeAccess(body.fileId, body.emails); break;
       case 'list_access':     result = listAccess(body.fileId); break;
       case 'send_email':      result = sendEmailWithFiles(body, caller); break;

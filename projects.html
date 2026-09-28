@@ -1081,6 +1081,8 @@ requireAuth().catch(function(){});
         .from('projects')
         .select('*')
         .order('created_at', { ascending: false });
+      // limited project manager (pm_limited): only the projects assigned in profiles.project_ids (RLS enforces it too)
+      try { var lp = await getAuthProfile(); if (lp && lp.role === 'pm_limited' && data) { var allow = lp.project_ids || []; data = data.filter(function(r) { return allow.indexOf(r.id) >= 0; }); } } catch (e) {}
       return { data: data, error: error };
     } catch(e) {
       return { data: null, error: e };

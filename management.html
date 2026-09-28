@@ -348,6 +348,23 @@
   .role-badge.pm { background: #d1fae5; color: #047857; }
   .role-badge.foreman { background: #fef3c7; color: #b45309; }
   .role-badge.tech { background: #f1f5f9; color: #64748b; }
+  .role-badge.pm_limited { background: #fce7f3; color: #be185d; }
+  .team-assign-btn { border: 1px solid var(--nw-border); background: #fff; color: var(--nw-primary); border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .team-assign-btn:hover { border-color: var(--nw-primary); }
+  .assign-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 500; padding: 16px; }
+  .assign-overlay.open { display: flex; }
+  .assign-modal { background: #fff; border-radius: 14px; width: 100%; max-width: 520px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .assign-head { padding: 16px 18px 10px; border-bottom: 1px solid var(--nw-border); }
+  .assign-head h3 { margin: 0 0 4px; font-size: 16px; }
+  .assign-head p { margin: 0; font-size: 12px; color: var(--nw-muted); }
+  .assign-search { margin: 10px 18px 0; padding: 8px 10px; border: 1px solid var(--nw-border); border-radius: 8px; font-size: 13px; width: calc(100% - 36px); }
+  .assign-list { overflow: auto; padding: 8px 18px; flex: 1; }
+  .assign-list label { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-bottom: 1px solid #f1f5f9; font-size: 13px; cursor: pointer; }
+  .assign-list label small { color: var(--nw-muted); margin-left: auto; font-size: 11px; }
+  .assign-foot { padding: 12px 18px; border-top: 1px solid var(--nw-border); display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .assign-foot .status { margin-right: auto; font-size: 12px; color: var(--nw-muted); }
+  .assign-foot button { border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--nw-border); background: #fff; }
+  .assign-foot button.primary { background: var(--nw-primary); color: #fff; border-color: var(--nw-primary); }
 
   /* ===== Activity Timeline ===== */
   .activity-timeline { padding: 16px; }
@@ -1109,6 +1126,12 @@ requireAuth().then(function() {
         html += '<div class="team-meta">Last report: ' + fmtDate(lastReport) + '</div>';
       }
       html += '</div>';
+      if (role === 'pm_limited') {
+        var n = (p.project_ids || []).length;
+        html += '<div class="team-meta" style="margin-top:4px">Limited access: ' + n + ' project' + (n === 1 ? '' : 's') + '</div>';
+      }
+      html += '</div>';
+      if (role === 'pm_limited') html += '<button type="button" class="team-assign-btn" data-uid="' + p.id + '">Projects</button>';
       html += '<div class="team-stats-col">';
       html += '<div class="team-report-count">' + count + '</div>';
       html += '<div class="team-report-label">Reports</div>';
@@ -1117,6 +1140,67 @@ requireAuth().then(function() {
     });
 
     container.innerHTML = html;
+    container.querySelectorAll('.team-assign-btn').forEach(function(b) { b.addEventListener('click', function() { openAssign(b.getAttribute('data-uid')); }); });
+  }
+
+  // ── limited PM → assigned projects (profiles.project_ids) + Editor on the project's document folders in Drive ──
+  var DRIVE_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxPvr8QooEcdcxt937V49-Y_o9lz5-qQUQqjnaGr5mcabxOr9iZbkP3yxN9O2T09NoW/exec';
+  var assignUser = null, assignProjects = [], assignChecked = {};
+  async function driveProxy(body) {
+    var s = await supabaseClient.auth.getSession();
+    var token = s && s.data && s.data.session ? s.data.session.access_token : null;
+    var resp = await fetch(DRIVE_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({}, body, { token: token })) });
+    return resp.json();
+  }
+  async function openAssign(uid) {
+    assignUser = allProfiles.filter(function(p) { return p.id === uid; })[0];
+    if (!assignUser) return;
+    assignChecked = {}; (assignUser.project_ids || []).forEach(function(id) { assignChecked[id] = true; });
+    document.getElementById('assignTitle').textContent = 'Projects for ' + (assignUser.full_name || assignUser.email);
+    document.getElementById('assignStatus').textContent = '';
+    document.getElementById('assignSearch').value = '';
+    document.getElementById('assignList').innerHTML = '<div class="loading-text">Loading projects…</div>';
+    document.getElementById('assignOverlay').classList.add('open');
+    if (!assignProjects.length) {
+      var r = await supabaseClient.from('projects').select('id, project_name, short_code, status').order('project_name');
+      assignProjects = r.data || [];
+    }
+    renderAssignList();
+  }
+  function renderAssignList() {
+    var q = (document.getElementById('assignSearch').value || '').toLowerCase();
+    var html = '';
+    assignProjects.forEach(function(p) {
+      var label = (p.short_code ? p.short_code + ' · ' : '') + (p.project_name || '');
+      if (q && label.toLowerCase().indexOf(q) < 0) return;
+      html += '<label><input type="checkbox" data-pid="' + p.id + '"' + (assignChecked[p.id] ? ' checked' : '') + '> ' + escHtml(label) + '<small>' + escHtml(p.status || '') + '</small></label>';
+    });
+    document.getElementById('assignList').innerHTML = html || '<div class="loading-text">No projects match.</div>';
+    document.querySelectorAll('#assignList input[type=checkbox]').forEach(function(c) { c.addEventListener('change', function() { if (c.checked) assignChecked[c.getAttribute('data-pid')] = true; else delete assignChecked[c.getAttribute('data-pid')]; }); });
+  }
+  function closeAssign() { document.getElementById('assignOverlay').classList.remove('open'); }
+  async function saveAssign() {
+    if (!assignUser) return;
+    var before = assignUser.project_ids || [], after = Object.keys(assignChecked);
+    var st = document.getElementById('assignStatus'); st.textContent = 'Saving…';
+    var up = await supabaseClient.from('profiles').update({ project_ids: after }).eq('id', assignUser.id);
+    if (up.error) { st.textContent = 'Error: ' + up.error.message; return; }
+    assignUser.project_ids = after;
+    // Drive: Editor on the document folders of newly assigned projects, removed from the ones taken away
+    var added = after.filter(function(id) { return before.indexOf(id) < 0; }), removed = before.filter(function(id) { return after.indexOf(id) < 0; });
+    var byId = {}; assignProjects.forEach(function(p) { byId[p.id] = p; });
+    var errs = [], done = 0, total = added.length + removed.length;
+    for (var i = 0; i < added.length; i++) {
+      st.textContent = 'Drive access ' + (++done) + '/' + total + '…';
+      try { var r1 = await driveProxy({ action: 'set_limited_access', projectId: added[i], projectName: (byId[added[i]] || {}).project_name, email: assignUser.email, grant: true }); if (!r1.success) errs.push(r1.error || 'grant failed'); } catch (e) { errs.push(e.message); }
+    }
+    for (var j = 0; j < removed.length; j++) {
+      st.textContent = 'Drive access ' + (++done) + '/' + total + '…';
+      try { var r2 = await driveProxy({ action: 'set_limited_access', projectId: removed[j], projectName: (byId[removed[j]] || {}).project_name, email: assignUser.email, grant: false }); if (!r2.success) errs.push(r2.error || 'revoke failed'); } catch (e) { errs.push(e.message); }
+    }
+    st.textContent = errs.length ? 'Saved; Drive: ' + errs.join('; ') : 'Saved';
+    renderTeam();
+    if (!errs.length) setTimeout(closeAssign, 600);
   }
 
   function escHtml(s) {
@@ -1302,7 +1386,18 @@ requireAuth().then(function() {
   loadProfile();
   loadReports();
 })();
+  document.getElementById('assignSearch').addEventListener('input', renderAssignList);
+  document.getElementById('assignCancel').addEventListener('click', closeAssign);
+  document.getElementById('assignSave').addEventListener('click', saveAssign);
 </script>
+<div class="assign-overlay" id="assignOverlay">
+  <div class="assign-modal">
+    <div class="assign-head"><h3 id="assignTitle">Projects</h3><p>A limited PM sees only the checked projects in the app and gets Editor access to their document folders in Drive (no contracts or financial folders).</p></div>
+    <input type="text" id="assignSearch" class="assign-search" placeholder="Search projects…">
+    <div class="assign-list" id="assignList"></div>
+    <div class="assign-foot"><span class="status" id="assignStatus"></span><button type="button" id="assignCancel">Cancel</button><button type="button" class="primary" id="assignSave">Save</button></div>
+  </div>
+</div>
 <script src="sw-register.js?v=258"></script>
 </body>
 </html>
