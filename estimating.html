@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=332">
+<link rel="stylesheet" href="procore-ui.css?v=333">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="supabase-config.js?v=332"></script>
-<script src="auth.js?v=332"></script>
-<script src="est-totals.js?v=332"></script>
-<script src="procore-ui.js?v=332"></script>
-<script src="nw-catalog-picker.js?v=332"></script>
-<script src="nw-proposal.js?v=332"></script>
-<script src="bid-actions.js?v=332"></script>
+<script src="supabase-config.js?v=333"></script>
+<script src="auth.js?v=333"></script>
+<script src="est-totals.js?v=333"></script>
+<script src="procore-ui.js?v=333"></script>
+<script src="nw-catalog-picker.js?v=333"></script>
+<script src="nw-proposal.js?v=333"></script>
+<script src="bid-actions.js?v=333"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -2111,6 +2111,7 @@ requireAuth().catch(function(){});
     var rows = [
       { key: 'individual_labor_rates', label: 'Individual labor rates', on: !!es.individual_labor_rates, enabled: true, hint: 'Lets every cost item carry its own Labor Rate' },
       { key: 'round_ea', label: 'Round quantities using ea', on: es.round_ea === true || es.round_ea === 'true', enabled: true, hint: 'Whole numbers for "ea" quantities in the grid' },
+      { key: 'count_install_material', label: 'Count material on install lines', on: !(es.count_install_material === false || es.count_install_material === 'false'), enabled: true, hint: 'Material on Disconnects / Equipment Install / Air Outlets lines is priced and taxed (Procore). Off = labor only' },
       { key: 'labor_separate', label: 'Show labor as separate line', on: false, enabled: false },
       { key: 'catalog_margins', label: 'Apply catalog margins', on: false, enabled: false },
       { key: 'auto_budget', label: 'Auto-assign budget codes', on: false, enabled: false },
@@ -3403,6 +3404,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=332"></script>
+<script src="sw-register.js?v=333"></script>
 </body>
 </html>

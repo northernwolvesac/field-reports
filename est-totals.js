@@ -40,10 +40,9 @@
 //     individual_labor_rates  per-line labor_rate replaces the global labor cost rate
 //     round_ea                Total Quantity of 'ea' lines is rounded to a whole number BEFORE pricing (Procore)
 //     count_install_material  material on disconnects / equipment_install / air_outlets lines is priced (Procore:
-//                             material is material) and is taxable by default.  Default OFF = legacy behaviour:
-//                             that material is dropped from Subtotal (the line reports materialDropped: true).
-//                             Turning it on re-prices every estimate rolled up from a takeoff with priced
-//                             diffusers / VAVs / dampers — flip it only with Russ's sign-off.
+//                             material is material) and is taxable by default.  DEFAULT ON since 2026-09-28
+//                             (Russ: 'как в Procore'); only an explicit false / 'false' restores the legacy
+//                             behaviour where that material is dropped from Subtotal (line reports materialDropped).
 // laborBreakdown counts hours by labor_crew_type only for the four known crews; a line with a null / '' crew is
 //   priced but not counted in any crew bucket (same as the pre-Procore formula).
 //
@@ -63,6 +62,7 @@
   function pct(v, def) { return (v === null || v === undefined || v === '') ? def : num(v); }
   // es_settings flags arrive as JSONB booleans, but a form may have stored the string 'true' / 'false'
   function flag(v) { return v === true || v === 'true'; }
+  function flagOn(v) { return !(v === false || v === 'false'); }   // default ON; only an explicit false turns it off
 
   function nwEstRates(est) {
     est = est || {};
@@ -112,7 +112,7 @@
     var unit = String(line.unit || '');
     var costType = wet ? 'S' : (cat === 'services' ? 'O' : 'ML');
     var installCat = costType === 'ML' && !TAXABLE_CATS[cat];   // disconnects / equipment_install / air_outlets
-    var countInstall = flag(es.count_install_material);
+    var countInstall = flagOn(es.count_install_material);   // Procore default (Russ 2026-09-28): install-line material is priced
     var materialDropped = installCat && !countInstall;
 
     var qty = num(line.quantity);
