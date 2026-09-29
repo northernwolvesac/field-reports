@@ -11,20 +11,20 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=334">
+<link rel="stylesheet" href="procore-ui.css?v=335">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=334"></script>
-<script src="auth.js?v=334"></script>
-<script src="est-totals.js?v=334"></script>
-<script src="procore-ui.js?v=334"></script>
+<script src="supabase-config.js?v=335"></script>
+<script src="auth.js?v=335"></script>
+<script src="est-totals.js?v=335"></script>
+<script src="procore-ui.js?v=335"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="bid-actions.js?v=334"></script>
-<script src="est-drawings.js?v=334"></script>
-<script src="nw-proposal.js?v=334"></script>
+<script src="bid-actions.js?v=335"></script>
+<script src="est-drawings.js?v=335"></script>
+<script src="nw-proposal.js?v=335"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -434,7 +434,11 @@ requireAuth().catch(function(){});
     (function() {
       var b = $('fsBtn'); if (!b) return;
       function paint() { var on = !!document.fullscreenElement; b.innerHTML = PC.icon(on ? 'fullscreen_exit' : 'fullscreen', 20); b.title = on ? 'Exit full screen (Esc)' : 'Full screen'; }
-      b.addEventListener('click', function() { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { PC.toast && PC.toast('Full screen is not available in this browser', 'error'); } });
+      b.addEventListener('click', function() {
+        if (document.fullscreenElement) { document.exitFullscreen(); return; }
+        var pr; try { pr = document.documentElement.requestFullscreen(); } catch (e) { pr = Promise.reject(e); }
+        if (pr && pr.catch) pr.catch(function() { if (typeof toast === 'function') toast('Full screen was blocked by the browser — press F11 instead', 'error'); });
+      });
       document.addEventListener('fullscreenchange', function() { paint(); setTimeout(sizeFrames, 60); });
       paint();
       try { new ResizeObserver(function() { sizeFrames(); }).observe(document.querySelector('.bp-head')); } catch (e) {}
@@ -1805,6 +1809,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=334"></script>
+<script src="sw-register.js?v=335"></script>
 </body>
 </html>
