@@ -30,6 +30,7 @@
       }
       // Sync profile to localStorage for backward compatibility
       syncProfile(session.user);
+      estimatorGuard();
       return session;
     } catch (err) {
       if (err.message !== 'Not authenticated') {
@@ -103,6 +104,22 @@
   }
 
   // ─── Role Checks ──────────────────────────────────────────────────
+
+  // 'estimator': Bid Board + the estimating tools only. Every other page bounces to the Bid Board (the database policies
+  // in estimator-role.sql enforce the same for financial / project data).
+  var ESTIMATOR_PAGES = ['index.html', 'bid-board.html', 'bid-project.html', 'estimating.html', 'takeoff.html', 'assembly-library.html',
+                         'ai-estimator.html', 'est-knowledge.html', 'login.html', 'install.html'];
+  function estimatorGuard() {
+    getAuthProfile().then(function(p) {
+      if (!p || p.role !== 'estimator') return;
+      var page = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+      if (ESTIMATOR_PAGES.indexOf(page) < 0) location.replace('bid-board.html');
+    }).catch(function() {});
+  }
+  async function isEstimator() {
+    var p = await getAuthProfile();
+    return !!(p && p.role === 'estimator');
+  }
 
   async function isManager() {
     var p = await getAuthProfile();
@@ -186,6 +203,12 @@
 
     var emailEl = document.getElementById('profileEmail');
     if (emailEl) emailEl.textContent = profile.email || '';
+
+    // estimators have no AI Support / general tools: hide the shortcut in the header
+    if (profile.role === 'estimator') {
+      var sup = document.querySelector('.nav-ic[href="support.html"]');
+      if (sup) sup.style.display = 'none';
+    }
   }
 
   // ─── Role Gate ────────────────────────────────────────────────────
@@ -214,6 +237,7 @@
   window.isTech = isTech;
   window.isLimited = isLimited;
   window.isAdmin = isAdmin;
+  window.isEstimator = isEstimator;
   window.autoFillTechName = autoFillTechName;
   window.logout = logout;
   window.requireRole = requireRole;

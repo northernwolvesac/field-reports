@@ -14,8 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-<script src="supabase-config.js?v=173"></script>
-<script src="auth.js?v=173"></script>
+<script src="supabase-config.js?v=337"></script>
+<script src="auth.js?v=337"></script>
 <style>
   body { padding-bottom: 24px; }
   .kb-wrap { max-width: 1280px; margin: 0 auto; }
@@ -125,7 +125,7 @@
 requireAuth().catch(function(){});
 var KB = (function() {
   'use strict';
-  var OFFICE = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var OFFICE = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm', 'estimator'];
   var CATS = [
     ['standard', 'Pricing & labor standards'], ['process', 'Process'], ['takeoff', 'Takeoff'],
     ['proposal', 'Proposal'], ['vendors', 'Vendors'], ['subcontractors', 'Subcontractors'],
@@ -285,6 +285,6 @@ var KB = (function() {
   return { tab: tab, openKnow: openKnow, openBench: openBench, closeDetail: closeDetail };
 })();
 </script>
-<script src="sw-register.js?v=319"></script>
+<script src="sw-register.js?v=337"></script>
 </body>
 </html>

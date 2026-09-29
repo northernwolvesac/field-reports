@@ -10,9 +10,9 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=52"></script>
-<script src="auth.js?v=52"></script>
-<script src="cloud-save.js?v=52"></script>
+<script src="supabase-config.js?v=337"></script>
+<script src="auth.js?v=337"></script>
+<script src="cloud-save.js?v=337"></script>
 <title>Management Dashboard — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -349,6 +349,7 @@
   .role-badge.foreman { background: #fef3c7; color: #b45309; }
   .role-badge.tech { background: #f1f5f9; color: #64748b; }
   .role-badge.pm_limited { background: #fce7f3; color: #be185d; }
+  .role-badge.estimator { background: #d1fae5; color: #065f46; }
   .team-assign-btn { border: 1px solid var(--nw-border); background: #fff; color: var(--nw-primary); border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .team-assign-btn:hover { border-color: var(--nw-primary); }
   .assign-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 500; padding: 16px; }
@@ -1401,6 +1402,6 @@ requireAuth().then(function() {
     <div class="assign-foot"><span class="status" id="assignStatus"></span><button type="button" id="assignCancel">Cancel</button><button type="button" class="primary" id="assignSave">Save</button></div>
   </div>
 </div>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=337"></script>
 </body>
 </html>

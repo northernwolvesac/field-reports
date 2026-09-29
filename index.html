@@ -14,8 +14,8 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="supabase-config.js?v=52"></script>
-  <script src="auth.js?v=52"></script>
+  <script src="supabase-config.js?v=337"></script>
+  <script src="auth.js?v=337"></script>
   <title>Northern Wolves AC — Field Reports</title>
   <style>
     /* ═══════════════════════════════════════════════════════════════
@@ -558,13 +558,23 @@
     ]}
   ];
 
-  function renderReportGrid(isTech) {
+  // 'estimator' access code: one folder, only the Bid Board and the estimating tools
+  var ESTIMATOR_FOLDERS = [
+    { num: '01', title: 'Estimating', desc: 'Bid Board, takeoff, estimates, cost catalog', stripe: '', links: [
+      ['Bid Board', 'bid-board.html'],
+      ['Cost Catalog', 'assembly-library.html'],
+      ['AI Estimator', 'ai-estimator.html'],
+      ['Estimating Knowledge', 'est-knowledge.html']
+    ]}
+  ];
+
+  function renderReportGrid(isTech, role) {
     var drafts = getDrafts();
     var draftCounts = {};
     drafts.forEach(function(d) { if (d.type) draftCounts[d.type] = (draftCounts[d.type] || 0) + 1; });
 
     var page = '', nav = '';
-    FOLDERS.forEach(function(f) {
+    (role === 'estimator' ? ESTIMATOR_FOLDERS : FOLDERS).forEach(function(f) {
       var links = f.links.filter(function(l) { return !(isTech && l[3]); });
       var cells = '', dd = '';
       links.forEach(function(l) {
@@ -676,7 +686,12 @@
 
   // Techs do not see management-only links (Bid Board, Prime Contracts, Workload, Management)
   getAuthProfile().then(function(profile) {
-    if (profile && (profile.role === 'tech' || profile.role === 'pm_limited')) renderReportGrid(true);
+    if (profile && profile.role === 'estimator') {
+      renderReportGrid(true, 'estimator');
+      var dsec = document.getElementById('dispatchSection'), dfeed = document.getElementById('dispatchFeed');
+      if (dsec) dsec.style.display = 'none'; if (dfeed) dfeed.innerHTML = '';
+      var sl = document.querySelector('.dash-footer a[href="support.html"]'); if (sl) sl.style.display = 'none';
+    } else if (profile && (profile.role === 'tech' || profile.role === 'pm_limited')) renderReportGrid(true);
     var pc = document.getElementById('profileCircle');
     if (pc && profile) pc.classList.add(profile.role === 'tech' ? 'tech' : 'mgmt');
   }).catch(function(){});
@@ -690,6 +705,6 @@
   setTimeout(checkiOSInstall, 1000);
 })();
 </script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=337"></script>
 </body>
 </html>
