@@ -11,1003 +11,1770 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="procore-ui.css?v=332">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=332"></script>
+<script src="auth.js?v=332"></script>
+<script src="est-totals.js?v=332"></script>
+<script src="procore-ui.js?v=332"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="supabase-config.js?v=173"></script>
-<script src="auth.js?v=173"></script>
-<script src="est-totals.js?v=319"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="bid-actions.js?v=332"></script>
+<script src="est-drawings.js?v=332"></script>
+<script src="nw-proposal.js?v=332"></script>
 <style>
-  body { background: #f8fafc; padding-bottom: 40px; }
-  .bp-wrap { max-width: 1600px; margin: 0 auto; }
+  /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
+  :root { --nav-h: 60px; }
 
-  .bp-crumb { padding: 12px 20px 4px; font-size: 12px; color: #64748b; }
-  .bp-crumb a { color: #0696D7; text-decoration: none; font-weight: 600; }
-  .bp-crumb a:hover { text-decoration: underline; }
+  /* ── page shell ── */
+  body.pc-page { background: var(--pc-bg, #f5f6f7); }
+  .bp-head { background: #fff; border-bottom: 1px solid var(--pc-border, #e5e7eb); }
+  .bp-head .pc-title-row { border-bottom: 0; }
+  .bp-head .pc-crumb { padding: 10px 24px 0; }
+  .bp-head .pc-title-row { padding-left: 24px; padding-right: 24px; }
+  .bp-main { padding: 16px 24px 24px; }
+  .bp-main.frame-mode { padding: 0; }
+  .bp-pane[hidden] { display: none !important; }
+  .bp-frame { display: block; width: 100%; border: 0; background: #fff; min-height: 480px; }
+  #schemaBanner { margin: 12px 24px 0; display: none; }
+  #schemaBanner.show { display: block; }
+  body.bp-strip-hidden .pc-est-strip { display: none !important; }
+  body.bp-strip-hidden.has-est-strip { padding-bottom: 0; }
+  /* frame tabs: the iframe is sized to end above the fixed strip, so the body needs no strip padding */
+  body.bp-frame-mode.has-est-strip { padding-bottom: 0; }
 
-  .bp-title-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 4px 20px 12px;
-  }
-  .bp-title {
-    flex: 1; font-size: 26px; font-weight: 800; color: #0f172a;
-    border: 1px solid transparent; padding: 4px 8px; border-radius: 6px; background: transparent;
-  }
-  .bp-title:focus { outline: none; border-color: #0696D7; background: #fff; }
-
-  .bp-stage-select {
-    padding: 6px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.4px; border-radius: 12px; border: 1px solid transparent;
-    cursor: pointer; font-family: inherit;
-  }
-  .st-invitation    { background: #f5f3ff; color: #6d28d9; border-color: #c4b5fd; }
-  .st-to_do         { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
-  .st-estimating    { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
-  .st-bid_submitted { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .st-accepted      { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-  .st-in_progress   { background: #cffafe; color: #155e75; border-color: #67e8f9; }
-  .st-complete      { background: #dcfce7; color: #14532d; border-color: #86efac; }
-  .st-delayed       { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
-  .st-lost          { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
-  .st-archived      { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
-
-  .btn-primary { background: linear-gradient(135deg,#0696D7,#0479B2); color:#fff; border:none;
-                 padding: 8px 16px; border-radius: 7px; font-weight: 700; font-size: 12px; cursor: pointer; }
-  .btn-secondary { background:#fff; color:#0696D7; border:1px solid #0696D7;
-                   padding: 7px 14px; border-radius: 7px; font-weight: 700; font-size: 12px; cursor: pointer; }
-  .btn-orange { background: linear-gradient(135deg,#f97316,#ea580c); color:#fff; border:none;
-                padding: 8px 16px; border-radius: 7px; font-weight: 700; font-size: 12px; cursor: pointer;
-                box-shadow: 0 2px 8px rgba(249,115,22,.3); }
-  .btn-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;
-                padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
-
-  /* ═══════ TAB BAR ═══════ */
-  .bp-tabs {
-    display: flex; gap: 0; padding: 0 20px; border-bottom: 1px solid #e2e8f0;
-    background: #fff;
-  }
-  .bp-tab {
-    padding: 12px 20px; font-size: 13px; font-weight: 600; color: #64748b;
-    border-bottom: 3px solid transparent; cursor: pointer; text-decoration: none;
-    display: inline-block;
-  }
-  .bp-tab:hover { color: #0696D7; background: #f8fafc; }
-  .bp-tab.active { color: #0696D7; border-bottom-color: #0696D7; font-weight: 700; }
-
-  .bp-body { padding: 16px 20px; }
-
-  /* ═══════ 2-COL LAYOUT ═══════ */
-  .bp-2col { display: grid; grid-template-columns: 1fr 380px; gap: 16px; }
+  /* ── overview ── */
+  .bp-2col { display: grid; grid-template-columns: 1fr 420px; gap: 16px; align-items: start; }
   @media (max-width: 1100px) { .bp-2col { grid-template-columns: 1fr; } }
+  .bp-card-title { font-size: 15px; font-weight: 600; padding: 16px 16px 8px; display: flex; align-items: center; gap: 8px; }
+  .bp-card-title .spacer { flex: 1; }
+  .bp-total-chip { font-size: 12px; font-weight: 600; color: var(--pc-link, #1a66e0); background: var(--pc-link-bg, #e8f0fe); padding: 3px 10px; border-radius: 12px; }
+  .bp-form { padding: 4px 16px 16px; }
+  .bp-form .pc-label { color: var(--pc-text, #1f2933); font-weight: 500; }
+  .bp-form textarea.pc-textarea { height: auto; min-height: 64px; padding: 8px 10px; resize: vertical; }
+  .bp-form .pc-input[disabled], .bp-form .pc-select[disabled], .bp-form .pc-textarea[disabled] { background: #f9fafb; color: var(--pc-muted, #6b7280); }
+  .bp-icon-field { position: relative; }
+  .bp-icon-field .pc-input { padding-right: 34px; }
+  .bp-icon-field > svg, .bp-icon-field > .ic { position: absolute; right: 10px; top: 9px; color: var(--pc-muted, #6b7280); pointer-events: none; }
+  .bp-icon-field.left .pc-select { padding-left: 34px; }
+  .bp-icon-field.left > .ic { left: 10px; right: auto; }
+  .bp-icon-field.left > .ic.locked { color: var(--pc-danger, #dc2626); }
+  .bp-icon-field.left > .ic.unlocked { color: var(--pc-success, #16a34a); }
+  .bp-estimator { position: relative; }
+  .bp-estimator .pc-select { padding-right: 60px; }
+  .bp-estimator .clear { position: absolute; right: 30px; top: 6px; width: 24px; height: 24px; border: 0; background: transparent; cursor: pointer; color: var(--pc-muted, #6b7280); padding: 0; display: grid; place-items: center; }
+  .bp-estimator .clear:hover { color: var(--pc-text, #1f2933); }
+  .bp-inv-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--pc-muted, #6b7280); cursor: pointer; padding: 6px 0; user-select: none; }
+  .bp-inv-toggle svg { transition: transform .15s; }
+  .bp-inv-toggle.open svg { transform: rotate(180deg); }
+  #invBody[hidden] { display: none; }
+  .bp-cust-label { font-size: 12px; color: var(--pc-muted, #6b7280); margin: 0 0 6px; }
+  .bp-add-btn { width: 100%; height: 36px; border: 0; border-radius: 4px; background: var(--pc-secondary, #f0f1f3); color: var(--pc-text, #1f2933); font: inherit; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .bp-add-btn:hover { background: #e5e7eb; }
+  .bp-add-btn[disabled] { opacity: .5; cursor: default; }
+  .bp-cust-block { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--pc-border, #e5e7eb); border-radius: 4px; background: #fff; }
+  .bp-cust-block .txt { flex: 1; line-height: 1.4; }
+  .bp-cust-block .txt b { display: block; }
+  .bp-cust-block .txt .sub { color: var(--pc-muted, #6b7280); font-size: 12px; }
+  .bp-cust-block .pc-btn-icon { flex: none; }
 
-  .card {
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px;
-  }
-  .card h3 {
-    margin: 0 0 12px; font-size: 14px; font-weight: 700; color: #0f172a;
-  }
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px; }
-  .field input, .field select, .field textarea {
-    width: 100%; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 6px;
-    font-size: 13px; box-sizing: border-box; background: #fff; font-family: inherit;
-  }
-  .field textarea { min-height: 80px; resize: vertical; }
-  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* side panels */
+  .bp-side-card + .bp-side-card { margin-top: 16px; }
+  .bp-side-h { display: flex; align-items: center; padding: 14px 16px; font-size: 15px; font-weight: 600; }
+  .bp-side-h .spacer { flex: 1; }
+  .bp-side-b { padding: 0 16px 16px; }
+  .bp-empty { text-align: center; padding: 36px 12px 28px; color: var(--pc-muted, #6b7280); font-size: 13px; }
+  .bp-empty .art { width: 72px; height: 54px; margin: 0 auto 14px; border: 2px solid #1a66e0; border-radius: 3px; position: relative; background: #fff; }
+  .bp-empty .art::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: #1a66e0; }
+  .bp-empty .art::after { content: '+'; position: absolute; left: -12px; bottom: -10px; width: 24px; height: 24px; border-radius: 50%; background: #f47e42; color: #fff; font-weight: 700; line-height: 24px; text-align: center; font-size: 16px; }
+  .bp-empty b { display: block; color: var(--pc-text, #1f2933); font-size: 14px; margin-bottom: 4px; }
+  .bp-composer { border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; padding: 8px; margin-bottom: 10px; background: #fff; }
+  .bp-composer textarea { width: 100%; min-height: 70px; border: 0; outline: 0; resize: vertical; font: inherit; padding: 4px; }
+  .bp-composer .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+  .bp-note { padding: 10px 0; border-top: 1px solid var(--pc-row-sep, #eceff3); display: flex; gap: 10px; }
+  .bp-note:first-child { border-top: 0; }
+  .bp-note .txt { flex: 1; min-width: 0; }
+  .bp-note .meta { font-size: 12px; color: var(--pc-muted, #6b7280); margin-bottom: 3px; display: flex; gap: 6px; align-items: center; }
+  .bp-note .body { white-space: pre-wrap; word-break: break-word; }
+  .bp-task { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--pc-row-sep, #eceff3); }
+  .bp-task:first-child { border-top: 0; }
+  .bp-task input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--pc-link, #1a66e0); }
+  .bp-task .txt { flex: 1; min-width: 0; }
+  .bp-task.done .txt .t { text-decoration: line-through; color: var(--pc-muted, #6b7280); }
+  .bp-task .sub { font-size: 12px; color: var(--pc-muted, #6b7280); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bp-task .sub .past { color: var(--pc-danger, #dc2626); font-weight: 600; }
+  .bp-task .sub .soon { color: var(--pc-amber, #b45309); font-weight: 600; }
 
-  /* Notes/Tasks side panel */
-  .side-item {
-    padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;
-    margin-bottom: 8px; font-size: 13px; background: #f8fafc;
-  }
-  .side-item .who { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+  /* ── documents ── */
+  .bp-docs { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; min-height: 60vh; }
+  @media (max-width: 900px) { .bp-docs { grid-template-columns: 1fr; } }
+  .bp-tree-row { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; cursor: pointer; border-left: 3px solid transparent; font-size: 13px; }
+  .bp-tree-row:hover { background: var(--pc-row-active, #f3f6fb); }
+  .bp-tree-row.sel { border-left-color: var(--pc-link, #1a66e0); background: var(--pc-row-active, #f3f6fb); }
+  .bp-tree-row.sub { padding-left: 34px; }
+  .bp-tree-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bp-tree-row .cnt { color: var(--pc-muted, #6b7280); font-size: 12px; }
+  .bp-tree-row .ic { color: var(--pc-muted, #6b7280); display: inline-flex; }
+  .bp-doc-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--pc-border, #e5e7eb); color: var(--pc-muted, #6b7280); font-size: 13px; }
+  .bp-doc-head .spacer { flex: 1; }
+  .bp-doc-head input[type=range] { width: 120px; accent-color: var(--pc-text, #1f2933); }
+  .bp-doc-tools { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--pc-border, #e5e7eb); }
+  .bp-doc-tools .pc-select { width: 140px; height: 32px; }
+  .bp-doc-tools .spacer { flex: 1; }
+  .bp-doc-tools .pc-search { width: 260px; }
+  .bp-doc-tools .pc-search input { height: 32px; }
+  .bp-doc-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--pc-row-sep, #eceff3); font-size: 13px; }
+  .bp-doc-row:hover { background: var(--pc-row-active, #f3f6fb); }
+  .bp-doc-row .ic { color: var(--pc-muted, #6b7280); display: inline-flex; }
+  .bp-doc-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .bp-doc-row .sub { color: var(--pc-muted, #6b7280); font-size: 12px; }
+  .bp-doc-grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 16px; }
+  .bp-page-tile { border: 1px solid var(--pc-border, #e5e7eb); border-radius: 4px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+  .bp-page-tile .th { background: #f3f4f6; display: grid; place-items: center; min-height: 60px; cursor: pointer; }
+  .bp-page-tile .th img { display: block; width: 100%; height: auto; }
+  .bp-page-tile .cap { display: flex; align-items: center; gap: 4px; padding: 6px 4px 6px 8px; font-size: 12px; border-top: 1px solid var(--pc-border, #e5e7eb); }
+  .bp-page-tile .cap .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .bp-page-tile .cap .sc { color: var(--pc-muted, #6b7280); font-size: 11px; }
 
-  /* Documents */
-  .doc-row {
-    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px;
-    border: 1px solid #e2e8f0; margin-bottom: 6px; background: #fff;
-  }
-  .doc-row .fname { flex: 1; font-size: 13px; color: #0696D7; font-weight: 600; }
-  .doc-row .size  { font-size: 11px; color: #94a3b8; }
-
-  .empty-block {
-    padding: 40px 20px; text-align: center; color: #94a3b8; font-size: 13px;
-  }
-
-  .action-tile {
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-    padding: 24px; display: flex; align-items: center; gap: 16px;
-  }
-  .action-tile .icon {
-    font-size: 40px; width: 60px; text-align: center;
-  }
-  .action-tile .txt { flex: 1; }
-  .action-tile h3 { margin: 0 0 4px; font-size: 15px; color: #0f172a; }
-  .action-tile p { margin: 0; font-size: 12px; color: #64748b; }
-
-  .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 8px;
-    font-size: 13px; z-index: 700; opacity: 0; transition: opacity .2s;
-  }
-  .toast.show { opacity: 1; }
-  .toast.success { background: #059669; }
-  .toast.error { background: #dc2626; }
+  /* ── proposal ── */
+  .bp-prop { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .bp-prop { grid-template-columns: 1fr; } }
+  .bp-prop-settings { position: sticky; top: calc(var(--nav-h, 60px) + 12px); max-height: calc(100vh - var(--nav-h, 60px) - 80px); overflow: auto; }
+  .bp-prop-settings .pc-card-b { padding: 8px 16px 16px; }
+  .bp-ps-sec { font-size: 12px; color: var(--pc-muted, #6b7280); margin: 14px 0 6px; }
+  .bp-ps-sec:first-child { margin-top: 4px; }
+  .bp-ps-sub { font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+  .bp-switch { display: flex; align-items: center; gap: 10px; padding: 5px 0; cursor: pointer; font-size: 13px; user-select: none; }
+  .bp-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .bp-switch i { width: 34px; height: 18px; border-radius: 9px; background: #9ca3af; position: relative; flex: none; transition: background .15s; }
+  .bp-switch i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .bp-switch input:checked + i { background: var(--pc-link, #1a66e0); }
+  .bp-switch input:checked + i::after { left: 18px; }
+  .bp-switch.off { opacity: .5; cursor: default; }
+  .bp-prop-settings .pc-select { height: 32px; }
+  .bp-prop-settings .pc-field { margin-bottom: 8px; }
+  .bp-prop-settings .bp-add-btn { height: 32px; margin-top: 4px; font-size: 13px; }
+  .bp-prop-settings .bp-cust-mini { font-size: 12px; color: var(--pc-muted, #6b7280); margin-top: 4px; display: flex; gap: 6px; align-items: center; }
+  .bp-prop-settings .bp-cust-mini b { color: var(--pc-text, #1f2933); }
+  .bp-prop-centre { min-width: 0; }
+  .bp-prop-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; min-height: 32px; }
+  .bp-prop-bar .spacer { flex: 1; }
+  .bp-prop-bar .mode { font-size: 12px; color: var(--pc-muted, #6b7280); }
+  .bp-prop-bar .mode.on { color: var(--pc-amber, #b45309); font-weight: 600; }
+  #propToolbar { display: none; flex-wrap: wrap; gap: 4px; align-items: center; }
+  #propToolbar.show { display: flex; }
+  .prop-btn { height: 28px; min-width: 30px; padding: 0 8px; background: #fff; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; font-size: 12px; cursor: pointer; font-family: inherit; color: var(--pc-text, #1f2933); }
+  .prop-btn:hover { background: var(--pc-secondary, #f0f1f3); }
+  .bp-paper { background: #fff; max-width: 960px; margin: 0 auto; padding: 40px 48px; border: 1px solid var(--pc-border, #e5e7eb); box-shadow: 0 2px 10px rgba(0,0,0,.06); min-height: 70vh; font-size: 13px; line-height: 1.5; color: #1f2933; outline: none; }
+  .bp-paper[contenteditable=true] { box-shadow: 0 0 0 2px var(--pc-link, #1a66e0); }
+  .bp-paper table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 12px; }
+  .bp-paper th { text-align: right; padding: 6px 8px; font-weight: 400; color: #6b7280; border-bottom: 1px solid #d1d5db; }
+  .bp-paper th:first-child { text-align: left; }
+  .bp-paper td { padding: 5px 8px; border-bottom: 1px solid #eceff3; text-align: right; }
+  .bp-paper td:first-child { text-align: left; }
+  .bp-paper h2 { font-size: 15px; margin: 16px 0 6px; }
+  .bp-paper h3 { font-size: 13px; margin: 14px 0 6px; }
+  .bp-paper p { margin: 0 0 8px; }
+  .bp-paper ul, .bp-paper ol { padding-left: 24px; margin: 6px 0 12px; }
 </style>
 </head>
-<body>
+<body class="pc-page">
 
-<div class="bp-wrap">
-  <div class="bp-crumb"><a href="bid-board.html">Bid Board</a> <span style="color:#cbd5e1">›</span> <span id="crumbName">…</span></div>
+<div class="bp-head">
+  <div id="titleHost"></div>
+  <div id="tabsHost"></div>
+</div>
 
-  <div class="bp-title-row">
-    <input class="bp-title" id="bpTitle" placeholder="Project name">
-    <select class="bp-stage-select st-estimating" id="stageSel"></select>
-    <div style="position:relative">
-      <button class="btn-secondary" id="actionsBtn" title="Project actions">⋯</button>
-      <div id="actionsMenu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:220px;z-index:60">
-        <a href="#" data-act="save-template"  style="display:block;padding:10px 14px;font-size:13px;color:#334155;text-decoration:none;border-bottom:1px solid #f1f5f9">📌 Save as Template</a>
-        <a href="#" data-act="duplicate"      style="display:block;padding:10px 14px;font-size:13px;color:#334155;text-decoration:none;border-bottom:1px solid #f1f5f9">📄 Duplicate Project</a>
-        <a href="#" data-act="add-alt"        style="display:block;padding:10px 14px;font-size:13px;color:#334155;text-decoration:none;border-bottom:1px solid #f1f5f9">➕ Add Alternate Estimate</a>
-        <a href="#" data-act="archive"        style="display:block;padding:10px 14px;font-size:13px;color:#991b1b;text-decoration:none">🗑 Archive</a>
-      </div>
-    </div>
-  </div>
+<div id="schemaBanner" class="pc-banner-info"></div>
 
-  <div class="bp-tabs">
-    <a class="bp-tab active" data-tab="overview"   href="#overview">Overview</a>
-    <a class="bp-tab"        data-tab="documents"  href="#documents">Documents</a>
-    <a class="bp-tab"        data-tab="takeoff"    id="tabTakeoff"    href="#takeoff">Takeoff</a>
-    <a class="bp-tab"        data-tab="estimating" id="tabEstimating" href="#estimating">Estimating</a>
-    <a class="bp-tab"        data-tab="proposal"   href="#proposal">Proposal</a>
-  </div>
-
-  <!-- Estimate versions strip (E1/E2/E3) — Procore-style -->
-  <div id="versionStrip" style="display:none;padding:6px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;align-items:center;gap:8px">
-    <span style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-right:4px">Versions:</span>
-    <span id="versionChips" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"></span>
-    <button class="btn-secondary" id="addVerBtn" style="padding:4px 10px;font-size:11px">+ Alt Estimate</button>
-  </div>
+<main class="bp-main" id="bpMain">
 
   <!-- ═══════ OVERVIEW ═══════ -->
-  <div class="bp-body" id="body-overview">
+  <div class="bp-pane" id="body-overview">
     <div class="bp-2col">
       <div>
-        <div class="card">
-          <h3>Estimate Overview</h3>
-          <div class="field-row">
-            <div class="field">
-              <label>Estimate Name</label>
-              <input type="text" id="ovName">
+        <div class="pc-card">
+          <div class="bp-card-title"><span>Estimate Overview</span><span class="spacer"></span><span class="bp-total-chip" id="ovTotalChip" title="Estimate Total (current version)">Estimate Total —</span></div>
+          <div class="bp-form">
+            <div class="pc-grid2">
+              <div class="pc-field"><label class="pc-label" for="ovName">Estimate Name</label><input class="pc-input" type="text" id="ovName" data-col="name"></div>
+              <div class="pc-field"><label class="pc-label" for="ovNumber">Project Number</label><input class="pc-input" type="text" id="ovNumber" data-col="project_number"></div>
             </div>
-            <div class="field">
-              <label>Project Number (customer's)</label>
-              <input type="text" id="ovNumber" placeholder="e.g. 11010174">
+            <div class="pc-field"><label class="pc-label" for="ovDescription">Project Description</label><textarea class="pc-textarea" id="ovDescription" data-col="project_description"></textarea></div>
+            <div class="pc-grid2">
+              <div class="pc-field"><label class="pc-label" for="ovEstimator">Estimator</label>
+                <div class="bp-estimator"><select class="pc-select" id="ovEstimator" data-col="estimator_name"><option value="">— Select —</option></select><button type="button" class="clear" id="ovEstimatorClear" title="Clear estimator"></button></div>
+              </div>
+              <div class="pc-field"><label class="pc-label" for="ovOffice">Office</label>
+                <select class="pc-select" id="ovOffice" data-col="office">
+                  <option value="">— Select —</option>
+                  <option>NYC</option>
+                  <option>Long Island</option>
+                  <option>NJ</option>
+                  <option>Westchester</option>
+                  <option>Other</option>
+                </select>
+              </div>
             </div>
-          </div>
-          <div class="field">
-            <label>Project Description</label>
-            <textarea id="ovDescription"></textarea>
-          </div>
-          <div class="field-row">
-            <div class="field">
-              <label>Estimator</label>
-              <input type="text" id="ovEstimator">
+            <div class="pc-grid2">
+              <div class="pc-field"><label class="pc-label" for="ovMeasure">Measurement System</label>
+                <select class="pc-select" id="ovMeasure"><option value="US">US</option><option value="Metric">Metric</option></select>
+              </div>
+              <div class="pc-field"><label class="pc-label" for="ovSqft">Square Footage</label><input class="pc-input" type="number" step="1" min="0" id="ovSqft" data-col="square_footage"></div>
             </div>
-            <div class="field">
-              <label>Office</label>
-              <select id="ovOffice">
-                <option value="">— Select —</option>
-                <option>NYC</option>
-                <option>Long Island</option>
-                <option>NJ</option>
-                <option>Westchester</option>
-                <option>Other</option>
-              </select>
+            <div class="pc-grid2">
+              <div class="pc-field"><label class="pc-label" for="ovDue">Due Date</label><div class="bp-icon-field" id="ovDueWrap"><input class="pc-input" type="date" id="ovDue" data-col="bid_due_date"></div></div>
+              <div class="pc-field"><label class="pc-label" for="ovDueTime">Due Time</label><div class="bp-icon-field" id="ovDueTimeWrap"><input class="pc-input" type="time" id="ovDueTime" data-col="due_time"></div></div>
             </div>
-          </div>
-          <div class="field-row">
-            <div class="field">
-              <label>Square Footage</label>
-              <input type="number" id="ovSqft" step="1">
+            <div class="pc-field"><label class="pc-label" for="ovPricing">Estimate pricing</label>
+              <div class="bp-icon-field left" id="ovPricingWrap"><select class="pc-select" id="ovPricing"><option value="unlocked">Unlocked</option><option value="locked">Locked</option></select></div>
             </div>
-            <div class="field">
-              <label>Quote # (auto)</label>
-              <input type="text" id="ovQuote" readonly style="background:#f1f5f9">
-            </div>
-          </div>
-          <div class="field-row">
-            <div class="field">
-              <label>Bid Due Date</label>
-              <input type="date" id="ovDue">
-            </div>
-            <div class="field">
-              <label>Due Time</label>
-              <input type="time" id="ovDueTime">
+            <div class="bp-inv-toggle" id="invToggle">Invitation</div>
+            <div id="invBody" hidden>
+              <div class="pc-grid2">
+                <div class="pc-field"><label class="pc-label" for="ovGc">Requester Company</label><input class="pc-input" type="text" id="ovGc" data-col="requester_company" placeholder="General contractor"></div>
+                <div class="pc-field"><label class="pc-label" for="ovGcEmail">Requester Email</label><input class="pc-input" type="email" id="ovGcEmail" data-col="requester_email"></div>
+              </div>
+              <div class="pc-grid2">
+                <div class="pc-field"><label class="pc-label" for="ovInviteDate">Invitation Date</label><input class="pc-input" type="date" id="ovInviteDate" data-col="invitation_date"></div>
+                <div class="pc-field"><label class="pc-label" for="ovIntent">Bid Intent</label>
+                  <select class="pc-select" id="ovIntent" data-col="bid_intent"><option value="">—</option><option value="undecided">Undecided</option><option value="will_bid">Will Bid</option><option value="no_bid">No Bid</option></select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="card" style="margin-top:12px">
-          <h3>Customer / Requester</h3>
-          <div class="field-row">
-            <div class="field">
-              <label>Requester Company (GC — if from invitation)</label>
-              <input type="text" id="ovGc" placeholder="e.g. Vanguard Construction & Co.">
-            </div>
-            <div class="field">
-              <label>Requester Email</label>
-              <input type="email" id="ovGcEmail" placeholder="gmo@vanguardcon.com">
-            </div>
+        <div class="pc-card" style="margin-top:16px">
+          <div class="bp-card-title">Customer Information</div>
+          <div class="bp-form">
+            <p class="bp-cust-label">Customer Company</p>
+            <div id="custCompanyHost"></div>
+            <p class="bp-cust-label" style="margin-top:14px">Project Address</p>
+            <div id="custAddressHost"></div>
           </div>
-          <div class="field-row">
-            <div class="field">
-              <label>Invitation Date</label>
-              <input type="date" id="ovInviteDate">
-            </div>
-            <div class="field">
-              <label>Bid Intent</label>
-              <select id="ovIntent">
-                <option value="">—</option>
-                <option value="undecided">Undecided</option>
-                <option value="will_bid">Will Bid</option>
-                <option value="no_bid">No Bid</option>
-              </select>
-            </div>
-          </div>
-          <div class="field">
-            <label>End Customer (if different from GC)</label>
-            <input type="text" id="ovCustomer">
-          </div>
-          <div class="field">
-            <label>Project Address</label>
-            <input type="text" id="ovAddress" placeholder="2540 Amsterdam Ave, New York, NY">
-          </div>
-        </div>
-
-        <div style="text-align:right;margin-top:12px">
-          <button class="btn-primary" id="saveOvBtn">💾 Save Overview</button>
         </div>
       </div>
 
       <div>
-        <div class="card">
-          <h3 style="display:flex;align-items:center"><span style="flex:1">📝 Notes (<span id="notesCount">0</span>)</span>
-            <button class="btn-secondary" id="addNoteBtn">＋ Note</button></h3>
-          <div id="notesList"></div>
+        <div class="pc-card bp-side-card">
+          <div class="bp-side-h"><span>Notes (<span id="notesCount">0</span>)</span><span class="spacer"></span><button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" id="notesAddBtn" title="Add note"></button></div>
+          <div class="bp-side-b">
+            <div class="bp-composer" id="notesComposer" hidden>
+              <textarea id="notesBody" placeholder="Write a note…"></textarea>
+              <div class="row"><button type="button" class="pc-btn pc-btn-secondary" id="notesCancelBtn">Cancel</button><button type="button" class="pc-btn pc-btn-primary" id="notesSaveBtn">Save</button></div>
+            </div>
+            <div id="notesList"></div>
+          </div>
         </div>
-        <div class="card" style="margin-top:12px">
-          <h3 style="display:flex;align-items:center"><span style="flex:1">✅ Tasks (<span id="tasksCount">0</span>)</span>
-            <button class="btn-secondary" id="addTaskBtn">＋ Task</button></h3>
-          <div id="tasksList"></div>
+        <div class="pc-card bp-side-card">
+          <div class="bp-side-h"><span>Tasks (<span id="tasksCount">0</span>)</span><span class="spacer"></span><button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" id="tasksAddBtn" title="Add task"></button></div>
+          <div class="bp-side-b"><div id="tasksList"></div></div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ═══════ DOCUMENTS ═══════ -->
-  <div class="bp-body" id="body-documents" style="display:none">
-    <div class="card">
-      <h3 style="display:flex;align-items:center">
-        <span style="flex:1">📁 Project Documents</span>
-        <a class="btn-orange" id="openDocsBtn" href="#">📤 Full documents page →</a>
-      </h3>
-      <div id="docsList">
-        <div class="empty-block">Loading…</div>
+  <div class="bp-pane" id="body-documents" hidden>
+    <div class="bp-docs">
+      <div class="pc-card">
+        <div class="bp-side-h"><span>Folders</span><span class="spacer"></span><span id="docTreeKebab"></span></div>
+        <div id="docTree" style="padding-bottom:8px"></div>
+      </div>
+      <div class="pc-card">
+        <div class="bp-doc-head"><span id="docFolderTitle">Custom Drawings</span><span class="spacer"></span><input type="range" id="docThumbSize" min="90" max="320" step="10" value="142" title="Thumbnail size"></div>
+        <div class="bp-doc-tools">
+          <select class="pc-select" id="docSort"><option value="custom">Custom</option><option value="name">Name</option><option value="date">Date</option></select>
+          <button type="button" class="pc-btn pc-btn-outline pc-btn-icon" id="docSortDir" title="Sort direction"></button>
+          <span class="spacer"></span>
+          <div class="pc-search"><input class="pc-input" type="search" id="docSearch" placeholder="Search drawing"></div>
+          <span id="docListKebab"></span>
+        </div>
+        <div id="docList"><div class="pc-empty">Loading…</div></div>
       </div>
     </div>
   </div>
 
-  <!-- ═══════ TAKEOFF (link to takeoff.html) ═══════ -->
-  <div class="bp-body" id="body-takeoff" style="display:none">
-    <div class="action-tile">
-      <div class="icon">📐</div>
-      <div class="txt">
-        <h3>On-Screen Takeoff</h3>
-        <p>Procore-style takeoff: layers from the NWAC cost catalog (duct and pipe sizes, diffusers, services), count / linear / area on the plans, auto scale from the sheet, auto-measure ducts and pipes, priced roll-up into the estimate.</p>
+  <!-- ═══════ TAKEOFF (embedded takeoff.html) ═══════ -->
+  <div class="bp-pane" id="body-takeoff" hidden></div>
+
+  <!-- ═══════ ESTIMATING (embedded estimating.html) ═══════ -->
+  <div class="bp-pane" id="body-estimating" hidden></div>
+
+  <!-- ═══════ PROPOSAL ═══════ -->
+  <div class="bp-pane" id="body-proposal" hidden>
+    <div class="bp-prop">
+      <div class="pc-card bp-prop-settings">
+        <div class="bp-card-title">Detail Settings</div>
+        <div class="pc-card-b" id="propSettingsHost"></div>
       </div>
-      <a class="btn-orange" id="openTakeoffBtn" href="#">Open Takeoff →</a>
+      <div class="bp-prop-centre">
+        <div class="bp-prop-bar">
+          <div id="propToolbar">
+            <button type="button" class="prop-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" class="prop-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" class="prop-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+            <button type="button" class="prop-btn" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+            <button type="button" class="prop-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+            <button type="button" class="prop-btn" data-block="h2" title="Section heading">H2</button>
+            <button type="button" class="prop-btn" data-block="h3" title="Sub heading">H3</button>
+            <button type="button" class="prop-btn" data-block="p" title="Paragraph">¶</button>
+          </div>
+          <span class="spacer"></span>
+          <span class="mode" id="propModeLabel">Live preview</span>
+          <span id="propKebab"></span>
+        </div>
+        <div class="bp-paper pc-paper" id="propPaper"></div>
+      </div>
     </div>
   </div>
 
-  <!-- ═══════ ESTIMATING (link to estimating.html) ═══════ -->
-  <div class="bp-body" id="body-estimating" style="display:none">
-    <div class="action-tile">
-      <div class="icon">💰</div>
-      <div class="txt">
-        <h3>Estimating — Line Items & Pricing</h3>
-        <p>Add cost items by category, apply NWAC standards ($60/hr, 20% overhead, 2% misc, 8.875% tax), see live totals.</p>
-      </div>
-      <a class="btn-orange" id="openEstBtn" href="#">Open Estimate →</a>
-    </div>
-    <div class="card" style="margin-top:16px">
-      <h3>Summary</h3>
-      <div id="estSummary" style="font-size:13px;color:#64748b">Loading…</div>
-    </div>
-  </div>
+</main>
 
-  <!-- ═══════ PROPOSAL — WYSIWYG editor ═══════ -->
-  <div class="bp-body" id="body-proposal" style="display:none">
-    <div class="card" style="padding:0;overflow:hidden">
-      <!-- Toolbar -->
-      <div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;align-items:center">
-        <button class="prop-btn" data-cmd="bold" title="Bold"><b>B</b></button>
-        <button class="prop-btn" data-cmd="italic" title="Italic"><i>I</i></button>
-        <button class="prop-btn" data-cmd="underline" title="Underline"><u>U</u></button>
-        <span style="width:1px;height:20px;background:#cbd5e1;margin:0 4px"></span>
-        <button class="prop-btn" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
-        <button class="prop-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
-        <span style="width:1px;height:20px;background:#cbd5e1;margin:0 4px"></span>
-        <button class="prop-btn" data-block="h2" title="Section heading">H2</button>
-        <button class="prop-btn" data-block="h3" title="Sub heading">H3</button>
-        <button class="prop-btn" data-block="p"  title="Paragraph">¶</button>
-        <span style="width:1px;height:20px;background:#cbd5e1;margin:0 4px"></span>
-        <button class="prop-btn" id="insHeaderBtn" title="Insert company header + customer block">📋 Header</button>
-        <button class="prop-btn" id="insScopeBtn"  title="Insert scope of work block">📝 Scope</button>
-        <button class="prop-btn" id="insLinesBtn"  title="Insert line-items table">📊 Line Items</button>
-        <button class="prop-btn" id="insTotalsBtn" title="Insert totals block">💰 Totals</button>
-        <span style="flex:1"></span>
-        <button class="btn-secondary" id="loadTplBtn" style="font-size:11px;padding:5px 10px" title="Reset to default template (overwrites current)">↺ Default Template</button>
-        <button class="btn-primary" id="savePropBtn" style="font-size:12px;padding:6px 12px">💾 Save</button>
-        <button class="btn-orange"  id="exportPropBtn" style="font-size:12px;padding:6px 12px">📄 Export PDF</button>
-      </div>
-      <!-- WYSIWYG canvas -->
-      <div id="propEditor" contenteditable="true"
-        style="min-height:60vh;padding:32px 40px;background:#fff;outline:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1.55;color:#0f172a"></div>
-    </div>
-    <p style="text-align:center;font-size:11px;color:#94a3b8;margin-top:8px">
-      Ctrl+S to save · Insert blocks pull live data from the current estimate
-    </p>
-  </div>
-
-  <style>
-    .prop-btn {
-      padding: 5px 9px; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px;
-      font-size: 12px; cursor: pointer; font-family: inherit; color: #334155;
-    }
-    .prop-btn:hover { background: #f0f9ff; border-color: #0696D7; }
-    #propEditor h1 { font-size: 22px; font-weight: 800; margin: 0 0 12px; color: #0f172a; }
-    #propEditor h2 { font-size: 16px; font-weight: 700; margin: 14px 0 6px; color: #0f172a; border-bottom: 2px solid #226B8A; padding-bottom: 4px; }
-    #propEditor h3 { font-size: 13px; font-weight: 700; margin: 10px 0 4px; color: #226B8A; text-transform: uppercase; letter-spacing: .5px; }
-    #propEditor p  { margin: 0 0 8px; }
-    #propEditor table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 12px; }
-    #propEditor th   { background: #226B8A; color: #fff; text-align: left; padding: 6px 8px; font-weight: 700; }
-    #propEditor td   { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
-    #propEditor .totals-row td { font-weight: 700; }
-    #propEditor .grand td { background: #f8fafc; font-size: 14px; color: #0f172a; }
-    #propEditor ul, #propEditor ol { padding-left: 24px; margin: 6px 0 12px; }
-    #propEditor .co-header { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 12px 0; border-bottom: 2px solid #226B8A; }
-    #propEditor .co-header .col b { display: block; font-size: 13px; color: #226B8A; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
-  </style>
-</div>
-
-<div class="toast" id="toast"></div>
+<input type="file" id="drawingFileInput" accept="application/pdf,.pdf" multiple hidden>
 
 <script>
 requireAuth().catch(function(){});
 (function() {
   'use strict';
 
-  var MGMT_ROLES = ['admin','manager','lead_pm','project_manager','apm'];
-  var STAGES = [
-    ['invitation','Invitation'],['to_do','To Do'],['estimating','Estimating'],
-    ['bid_submitted','Bid Submitted'],['accepted','Accepted'],['in_progress','In Progress'],
-    ['complete','Complete'],['delayed','Delayed'],['lost','Lost'],['archived','Archived']
-  ];
+  if (!window.PC) {
+    document.body.insertAdjacentHTML('afterbegin', '<div style="margin:24px;padding:14px;background:#fee2e2;color:#991b1b;border-radius:4px;font:14px sans-serif">procore-ui.js did not load — the Bid Project page needs the shared Procore UI layer.</div>');
+    return;
+  }
 
+  var TABS = ['overview','documents','takeoff','estimating','proposal'];
   var params = new URLSearchParams(location.search);
-  var estimateId = params.get('id');
-  if (!estimateId) { alert('Missing ?id=<estimate id>'); location.href = 'bid-board.html'; return; }
+  var paramId = params.get('id');
+  var paramEst = params.get('est');
+  if (!paramId) { location.href = 'bid-board.html'; return; }
 
-  var currentUser = null, canEdit = false;
-  var currentEstimate = null;
-  var currentTab = (location.hash || '#overview').replace('#', '') || 'overview';
+  var currentUser = null, profile = null, canEdit = false;
+  var currentEstimate = null;   // root row (project)
+  var currentVersion = null;    // estimate version shown on takeoff / estimating / proposal
+  var currentTab = (location.hash || '#overview').replace('#', '');
+  if (TABS.indexOf(currentTab) < 0) currentTab = 'overview';
+  var profilesCache = null;
+  var linesCache = null;        // estimate_line_items of currentVersion
+  var frames = { takeoff: null, estimating: null };
+  var frameReady = { takeoff: false, estimating: false };
+  var pendingCmds = { takeoff: [], estimating: [] };
+  var schemaMissing = false;
 
+  function rootId() { return currentEstimate ? currentEstimate.id : paramId; }
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function toast(m, k) { PC.toast(m, k || 'info'); }
+  function icon(n, s) { return PC.icon(n, s || 18); }
+  function debounce(fn, ms) { var t; return function() { var a = arguments, c = this; clearTimeout(t); t = setTimeout(function() { fn.apply(c, a); }, ms); }; }
+  function settingsOf(row) { return (row && row.settings && typeof row.settings === 'object') ? row.settings : {}; }
+  function viewOnly() { toast('View only — management or estimator role needed', 'error'); }
+  function money(n) { return PC.money(Number(n) || 0); }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  INIT
+  // ═══════════════════════════════════════════════════════════════
   init();
 
   async function init() {
+    if (window.pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+    PC.mountHeader();   // idempotent: inserts the NW header first in <body>, runs initAuthUI(), installs the outside-click closer
+
     try {
       var u = await supabaseClient.auth.getUser();
       if (u && u.data && u.data.user) currentUser = u.data.user;
-      var prof = await supabaseClient.from('profiles').select('id,role,full_name').eq('id', currentUser.id).maybeSingle();
-      if (prof.data) canEdit = MGMT_ROLES.indexOf(prof.data.role) >= 0;
-    } catch(e){ console.warn(e); }
+      profile = (typeof getAuthProfile === 'function') ? await getAuthProfile() : null;
+      if (!profile && currentUser) {
+        var prof = await supabaseClient.from('profiles').select('id,role,full_name,email').eq('id', currentUser.id).maybeSingle();
+        profile = prof.data;
+      }
+      canEdit = PC.canEdit(profile || {});
+    } catch(e) { console.warn(e); }
 
-    populateStages();
-    bindEvents();
-    await loadEstimate();
-    setTab(currentTab);
-  }
+    var ok = await loadEstimate();
+    if (!ok) return;
 
-  function populateStages() {
-    var sel = document.getElementById('stageSel');
-    STAGES.forEach(function(s) {
-      var o = document.createElement('option'); o.value = s[0]; o.textContent = s[1]; sel.appendChild(o);
+    bindOverview();
+    bindDocuments();
+    bindProposal();
+    window.addEventListener('message', onFrameMessage);
+    window.addEventListener('hashchange', function() {
+      var t = (location.hash || '#overview').replace('#', '');
+      if (TABS.indexOf(t) >= 0 && t !== currentTab) setTab(t, true);
     });
-    sel.disabled = !canEdit;
+    window.addEventListener('resize', sizeFrames);
+    window.addEventListener('beforeunload', function(e) {
+      if (propDirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    hydrateOverview();
+    loadNotesTasks();
+    renderStrip();
+    setTab(currentTab, true);
   }
 
-  function bindEvents() {
-    document.querySelectorAll('.bp-tab').forEach(function(t) {
-      t.addEventListener('click', function(e) {
-        e.preventDefault();
-        setTab(t.getAttribute('data-tab'));
+  async function loadEstimate() {
+    var r = await supabaseClient.from('estimates').select('*').eq('id', paramId).maybeSingle();
+    if (r.error || !r.data) { toast('Estimate not found', 'error'); setTimeout(function() { location.href = 'bid-board.html'; }, 1200); return false; }
+    var row = r.data;
+    if (row.parent_estimate_id) {
+      // ?id pointed at an alternate → normalise to ?id=root&est=alternate
+      var rr = await supabaseClient.from('estimates').select('*').eq('id', row.parent_estimate_id).maybeSingle();
+      if (rr.data) {
+        currentEstimate = rr.data;
+        currentVersion = row;
+        if (!paramEst) paramEst = row.id;
+        paramId = currentEstimate.id;
+      } else {
+        currentEstimate = row; currentVersion = row;
+      }
+    } else {
+      currentEstimate = row;
+      currentVersion = row;
+      if (paramEst && paramEst !== row.id) {
+        var vr = await supabaseClient.from('estimates').select('*').eq('id', paramEst).maybeSingle();
+        if (vr.data && (vr.data.parent_estimate_id === row.id || vr.data.id === row.id)) currentVersion = vr.data;
+        else paramEst = null;
+      }
+    }
+    if (!('settings' in currentEstimate)) showSchemaBanner();
+    syncUrl();
+    document.title = (currentVersion.quote_number ? 'Q' + currentVersion.quote_number + ' · ' : '') + (currentVersion.name || 'Bid Project') + ' — NWAC';
+    return true;
+  }
+
+  // push = user-initiated tab click → new history entry (Back returns to the previous tab, like Procore's per-tab URLs);
+  // otherwise (init / hashchange / version switch) replace the current entry.
+  function syncUrl(push) {
+    var url = 'bid-project.html?id=' + rootId() + (currentVersion && currentVersion.id !== rootId() ? '&est=' + currentVersion.id : '') + '#' + currentTab;
+    try { if (push) history.pushState(null, '', url); else history.replaceState(null, '', url); } catch(e) {}
+  }
+
+  function showSchemaBanner() {
+    schemaMissing = true;
+    var b = $('schemaBanner');
+    b.textContent = 'Procore-style settings (measurement system, pricing lock, proposal detail settings) are not saved yet — run procore-ui-schema.sql on Supabase to add estimates.settings.';
+    b.classList.add('show');
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  TITLE ROW / TABS / SHELL
+  // ═══════════════════════════════════════════════════════════════
+  function renderTitle() {
+    var e = currentVersion || currentEstimate;
+    var stage = currentEstimate.bid_stage || 'estimating';
+    PC.renderTitleRow($('titleHost'), {
+      crumb: { label: 'Bid Board', href: 'bid-board.html' },
+      title: e.name || '(untitled)',
+      sub: e.quote_number ? 'Q#' + e.quote_number : '',
+      stage: { value: stage, onChange: updateStage, readOnly: !canEdit },
+      avatarName: e.estimator_name || '',
+      actions: tabActions(currentTab),
+      kebab: projectMenu()
+    });
+  }
+
+  function tabActions(tab) {
+    if (tab === 'overview') return [ { id: 'upload', label: 'Upload', primary: true, onClick: openUploadDrawings } ];
+    if (tab === 'documents') return [
+      { id: 'autoRename', label: 'Auto-rename', icon: 'auto_awesome', onClick: autoRenameDrawings },
+      { id: 'startTakeoff', label: 'Start Takeoff', onClick: function() { setTab('takeoff'); } },
+      { id: 'upload', label: 'Upload', primary: true, onClick: openUploadDrawings }
+    ];
+    if (tab === 'takeoff') return [
+      { id: 'showEstimate', label: 'Show Estimate', onClick: function() { sendCmd('takeoff', 'showEstimate'); } },
+      { id: 'newLayer', label: 'Create New Takeoff Layer', primary: true, onClick: function() { if (!canEdit) return viewOnly(); sendCmd('takeoff', 'newLayer'); } }
+    ];
+    // Estimating: plain buttons — the embedded estimating.html owns the single Actions / Import / Export menu
+    // (handleCmd opens PC.menu on its grid bar), so the header must not render a second copy of it.
+    if (tab === 'estimating') return [
+      { id: 'actions', label: 'Actions', primary: true, icon: 'expand_more', title: 'Actions', onClick: function() { sendCmd('estimating', 'actions'); } },
+      { id: 'import', label: 'Import', icon: 'expand_more', title: 'Import estimate / BoM', onClick: function() { sendCmd('estimating', 'import'); } },
+      { id: 'export', label: 'Export', icon: 'expand_more', title: 'Export estimate / BoM', onClick: function() { sendCmd('estimating', 'export'); } }
+    ];
+    if (tab === 'proposal') return [
+      { id: 'export', label: 'Export', primary: true, menu: [
+        { label: 'PDF', icon: 'description', onClick: exportProposalPdf },
+        { label: 'NWAC letter (2-page PDF)', icon: 'description', onClick: exportProposalLetter },
+        { label: 'Excel (line items)', icon: 'grid_on', onClick: exportProposalXlsx }
+      ] }
+    ];
+    return [];
+  }
+
+  function projectMenu() {
+    var archived = (currentEstimate.bid_stage === 'archived');
+    return [
+      { label: 'Copy Project', icon: 'content_copy', disabled: !canEdit, onClick: copyProject },
+      { label: 'Copy Project to Template', icon: 'content_copy', disabled: !canEdit, onClick: copyToTemplate },
+      { label: 'Set Project as Template', icon: 'check', disabled: !canEdit, onClick: setAsTemplate },
+      { label: 'Set Project as Default Template', icon: 'check_circle', disabled: !canEdit, onClick: setAsDefaultTemplate },
+      { label: 'Apply Project Template', icon: 'content_paste', disabled: !canEdit, onClick: applyTemplateDialog },
+      { sep: true },
+      archived
+        ? { label: 'Unarchive', icon: 'undo', disabled: !canEdit, onClick: unarchiveProject }
+        : { label: 'Archive', icon: 'folder', disabled: !canEdit, onClick: archiveProject },
+      { label: 'Delete', icon: 'delete', danger: true, disabled: !canEdit, onClick: deleteProject }
+    ];
+  }
+
+  function renderTabs() {
+    PC.renderTabs($('tabsHost'), {
+      active: currentTab,
+      hrefs: { overview: '#overview', documents: '#documents', takeoff: '#takeoff', estimating: '#estimating', proposal: '#proposal' },
+      onClick: function(key) { setTab(key); }
+    });
+  }
+
+  function setTab(tab, noPush) {
+    if (TABS.indexOf(tab) < 0) tab = 'overview';
+    var prevTab = currentTab;
+    currentTab = tab;
+    syncUrl(!noPush && tab !== prevTab);
+    TABS.forEach(function(k) { $('body-' + k).hidden = (k !== tab); });
+    var frameMode = (tab === 'takeoff' || tab === 'estimating');
+    $('bpMain').classList.toggle('frame-mode', frameMode);
+    document.body.classList.toggle('bp-frame-mode', frameMode);
+    document.body.classList.toggle('bp-strip-hidden', tab === 'overview' || tab === 'documents');
+    renderTitle();
+    renderTabs();
+    if (tab === 'overview') { loadEstSummary(); }
+    if (tab === 'documents') { loadDocs(); }
+    if (tab === 'takeoff') { ensureFrame('takeoff'); }
+    if (tab === 'estimating') { ensureFrame('estimating'); }
+    if (tab === 'proposal') { openProposal(); }
+    if (frameMode) sizeFrames();
+  }
+
+  // ─── embedded takeoff.html / estimating.html ─────────────────────
+  function frameSrc(key) {
+    var page = key === 'takeoff' ? 'takeoff.html' : 'estimating.html';
+    return page + '?est=' + currentVersion.id + '&embed=1';
+  }
+  function ensureFrame(key) {
+    if (frames[key]) return frames[key];
+    var f = document.createElement('iframe');
+    f.id = key === 'takeoff' ? 'takeoffFrame' : 'estFrame';
+    f.className = 'bp-frame';
+    f.setAttribute('title', key === 'takeoff' ? 'Takeoff' : 'Estimating');
+    f.src = frameSrc(key);
+    $('body-' + key).appendChild(f);
+    frames[key] = f;
+    frameReady[key] = false;
+    return f;
+  }
+  function reloadFrames() {
+    ['takeoff','estimating'].forEach(function(k) {
+      if (frames[k]) { frameReady[k] = false; pendingCmds[k] = []; frames[k].src = frameSrc(k); }
+    });
+  }
+  function sizeFrames() {
+    ['takeoff','estimating'].forEach(function(k) {
+      var f = frames[k]; if (!f || $('body-' + k).hidden) return;
+      var top = f.getBoundingClientRect().top;
+      // .pc-est-strip is position:fixed (offsetParent is null for fixed elements) → measure its rect instead
+      var strip = document.querySelector('.pc-est-strip');
+      var hidden = document.body.classList.contains('bp-strip-hidden');
+      var stripH = (!hidden && strip) ? strip.getBoundingClientRect().height : 0;
+      var h = window.innerHeight - top - stripH;   // body.bp-frame-mode cancels the has-est-strip padding
+      f.style.height = Math.max(420, h) + 'px';
+    });
+  }
+  function sendCmd(key, cmd, payload) {
+    var f = ensureFrame(key);
+    var msg = { type: 'nw-cmd', cmd: cmd, payload: payload || {} };
+    if (!frameReady[key]) { pendingCmds[key].push(msg); return; }
+    if (typeof PC.sendCmd === 'function') PC.sendCmd(f, cmd, payload || {});
+    else if (f.contentWindow) f.contentWindow.postMessage(msg, '*');
+  }
+  function onFrameMessage(e) {
+    if (e.origin !== location.origin) return;   // only our own embedded takeoff.html / estimating.html
+    var d = e.data;
+    if (!d || d.type !== 'nw-event') return;
+    var key = null;
+    if (frames.takeoff && e.source === frames.takeoff.contentWindow) key = 'takeoff';
+    else if (frames.estimating && e.source === frames.estimating.contentWindow) key = 'estimating';
+    var p = d.payload || {};
+    if (d.event === 'ready') {
+      if (key) {
+        frameReady[key] = true;
+        var q = pendingCmds[key]; pendingCmds[key] = [];
+        q.forEach(function(m) { frames[key].contentWindow.postMessage(m, '*'); });
+      }
+      sizeFrames();
+    } else if (d.event === 'totals') {
+      linesCache = null;
+      if (PC.estStrip && typeof PC.estStrip.refresh === 'function') PC.estStrip.refresh();
+      refreshVersionSettings();   // the iframe may have written settings.markups / manual_groups / es_settings
+    } else if (d.event === 'navigate') {
+      if (p.href) { location.href = p.href; return; }   // e.g. est-strip "Set as primary" → reload on the new root
+      if (p.tab) setTab(p.tab);
+    } else if (d.event === 'title') {
+      if (p.name) {
+        currentVersion.name = p.name;
+        if (currentVersion.id === currentEstimate.id) currentEstimate.name = p.name;
+        var h = $('titleHost').querySelector('.pc-h1'); if (h) h.textContent = p.name;
+        $('ovName').value = p.name;
+        document.title = (currentVersion.quote_number ? 'Q' + currentVersion.quote_number + ' · ' : '') + p.name + ' — NWAC';
+      }
+    }
+  }
+
+  // ─── bottom estimate version strip (renderStrip = init only; later use PC.estStrip.setCurrent / refresh) ───
+  function renderStrip() {
+    if (typeof PC.estStrip !== 'function') return;
+    document.querySelectorAll('.pc-est-strip').forEach(function(el) { el.remove(); });
+    PC.estStrip(document.body, {
+      rootId: rootId(),
+      currentId: currentVersion.id,
+      canEdit: canEdit,
+      onSwitch: switchVersion
+    });
+    sizeFrames();
+  }
+  async function switchVersion(id) {
+    if (!id || id === currentVersion.id) return;
+    var r = await supabaseClient.from('estimates').select('*').eq('id', id).maybeSingle();
+    if (r.error || !r.data) { toast('Version not found', 'error'); return; }
+    currentVersion = r.data;
+    if (currentVersion.id === currentEstimate.id) currentEstimate = currentVersion;
+    linesCache = null; propSettings = null; propLoadedFor = null; estimatorEmailCache = {};
+    syncUrl();
+    reloadFrames();
+    hydrateOverview();
+    renderTitle();
+    if (PC.estStrip && typeof PC.estStrip.setCurrent === 'function') PC.estStrip.setCurrent(currentVersion.id);
+    if (currentTab === 'proposal') openProposal();
+    if (currentTab === 'overview') loadEstSummary();
+  }
+
+  // ─── stage ───────────────────────────────────────────────────────
+  async function updateStage(key) {
+    if (!canEdit) return viewOnly();
+    if (!key) return;
+    var upd = await supabaseClient.from('estimates').update({
+      bid_stage: key,
+      archived_at: key === 'archived' ? new Date().toISOString() : null
+    }).eq('id', rootId());
+    if (upd.error) { toast('Stage update failed: ' + upd.error.message, 'error'); return; }
+    currentEstimate.bid_stage = key;
+    currentEstimate.archived_at = key === 'archived' ? new Date().toISOString() : null;
+    toast('Stage → ' + key.replace(/_/g, ' '), 'success');
+    renderTitle();
+  }
+
+  // ─── project kebab actions (all via BidActions + PC dialogs) ─────
+  function needActions() { if (!window.BidActions) { toast('bid-actions.js not loaded', 'error'); return false; } return true; }
+  async function copyProject() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    var name = await PC.prompt({ title: 'Copy Project', label: 'New project name', value: (currentEstimate.name || 'Untitled') + ' (copy)', okLabel: 'Copy' });
+    if (!name) return;
+    try {
+      var newId = await BidActions.copyProject(rootId(), { name: name, asTemplate: false });
+      toast('Project copied — opening…', 'success');
+      if (newId) setTimeout(function() { location.href = 'bid-project.html?id=' + newId + '#overview'; }, 500);
+    } catch(e) { toast('Copy failed: ' + (e.message || e), 'error'); }
+  }
+  async function copyToTemplate() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    var name = await PC.prompt({ title: 'Copy Project to Template', label: 'Template name', value: (currentEstimate.name || 'Untitled') + ' Template', okLabel: 'Create template' });
+    if (!name) return;
+    try {
+      await BidActions.copyProject(rootId(), { name: name, asTemplate: true });
+      toast('Template created: ' + name, 'success');
+    } catch(e) { toast('Failed: ' + (e.message || e), 'error'); }
+  }
+  async function setAsTemplate() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    if (!(await PC.confirm({ title: 'Set Project as Template', message: 'Mark "' + (currentEstimate.name || '') + '" as a project template? It will appear in the template list when creating new projects.', okLabel: 'Set as template' }))) return;
+    try { await BidActions.setTemplate(rootId()); currentEstimate.is_template = true; toast('Project is now a template', 'success'); }
+    catch(e) { toast('Failed: ' + (e.message || e), 'error'); }
+  }
+  async function setAsDefaultTemplate() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    if (!(await PC.confirm({ title: 'Set Project as Default Template', message: 'Use "' + (currentEstimate.name || '') + '" as the default template for new projects?', okLabel: 'Set as default' }))) return;
+    try { await BidActions.setDefaultTemplate(rootId()); currentEstimate.is_template = true; toast('Default template set', 'success'); }
+    catch(e) { toast('Failed: ' + (e.message || e), 'error'); }
+  }
+  async function applyTemplateDialog() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    var q = await supabaseClient.from('estimates').select('id,name,quote_number,settings').eq('is_template', true).neq('id', rootId()).order('name');
+    var tpls = q.data || [];
+    var body = document.createElement('div');
+    if (!tpls.length) body.innerHTML = '<div class="pc-empty">No project templates yet. Use "Copy Project to Template" or "Set Project as Template" first.</div>';
+    else body.innerHTML =
+      '<div class="pc-banner-info" style="margin-bottom:12px">Takeoff and estimate items from the template will be merged into the current estimate (' + esc(currentVersion.version_label || 'Original Estimate') + ').</div>' +
+      '<div class="pc-field"><label class="pc-label">Select project template you want to apply on your project</label>' +
+      '<select class="pc-select" id="tplPick"><option value="">— Select template —</option>' +
+      tpls.map(function(t) { var def = settingsOf(t).is_default_template; return '<option value="' + t.id + '">' + esc(t.name) + (t.quote_number ? ' (Q' + t.quote_number + ')' : '') + (def ? ' — default' : '') + '</option>'; }).join('') +
+      '</select></div>';
+    var m = PC.modal({
+      title: 'Apply Project Template', body: body, size: 'sm',
+      buttons: [
+        { label: 'Cancel', onClick: function() { m.close(); } },
+        { label: 'Confirm', primary: true, closeOnDone: false, onClick: async function() {
+          var sel = body.querySelector('#tplPick'); var id = sel ? sel.value : '';
+          if (!id) { toast('Pick a template', 'error'); return false; }
+          try {
+            await BidActions.applyTemplate(currentVersion.id, id);
+            m.close(); toast('Template applied', 'success');
+            linesCache = null; reloadFrames(); loadEstSummary();
+            if (PC.estStrip && typeof PC.estStrip.refresh === 'function') PC.estStrip.refresh();
+          } catch(e) { toast('Apply failed: ' + (e.message || e), 'error'); return false; }
+        } }
+      ]
+    });
+  }
+  async function archiveProject() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    if (!(await PC.confirm({ title: 'Archive project', message: 'Move "' + (currentEstimate.name || '') + '" to Archived? You can restore it later from the Archived stage.', okLabel: 'Archive' }))) return;
+    try { await BidActions.archive(rootId()); toast('Archived', 'success'); setTimeout(function() { location.href = 'bid-board.html?stage=archived'; }, 600); }
+    catch(e) { toast('Archive failed: ' + (e.message || e), 'error'); }
+  }
+  async function unarchiveProject() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    try { await BidActions.unarchive(rootId()); currentEstimate.bid_stage = 'estimating'; currentEstimate.archived_at = null; toast('Restored to Estimating', 'success'); renderTitle(); }
+    catch(e) { toast('Failed: ' + (e.message || e), 'error'); }
+  }
+  async function deleteProject() {
+    if (!canEdit) return viewOnly(); if (!needActions()) return;
+    try {
+      var res = await BidActions.del(rootId(), currentEstimate.name || 'this project');
+      if (res === false) return;
+      var chk = await supabaseClient.from('estimates').select('id').eq('id', rootId()).maybeSingle();
+      if (!chk.data) { setTimeout(function() { location.href = 'bid-board.html'; }, 500); }   // BidActions.del already toasts
+    } catch(e) { toast('Delete failed: ' + (e.message || e), 'error'); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  OVERVIEW
+  // ═══════════════════════════════════════════════════════════════
+  var saveTimers = {};
+  function queueSave(col, val) {
+    clearTimeout(saveTimers[col]);
+    saveTimers[col] = setTimeout(function() {
+      var patch = {}; patch[col] = val;
+      var p = PC.saveField('estimates', currentVersion.id, patch, { silent: true });   // Procore autosaves silently; errors still toast
+      currentVersion[col] = val;
+      if (currentVersion.id === currentEstimate.id) currentEstimate[col] = val;
+      if (p && typeof p.then === 'function') p.catch(function(e) { console.warn(e); });
+    }, 600);
+  }
+  // Re-read estimates.settings before merging: the embedded estimating.html writes settings.markups /
+  // manual_groups / es_settings / labor_sales_rate while the user works, so the parent's in-memory copy
+  // may be stale and an UPDATE from it would silently drop those keys.
+  async function refreshVersionSettings() {
+    if (!currentVersion || schemaMissing) return settingsOf(currentVersion);
+    try {
+      var cur = await supabaseClient.from('estimates').select('settings').eq('id', currentVersion.id).maybeSingle();
+      if (!cur.error && cur.data && cur.data.settings && typeof cur.data.settings === 'object') {
+        currentVersion.settings = cur.data.settings;
+        if (currentVersion.id === currentEstimate.id) currentEstimate.settings = cur.data.settings;
+      }
+    } catch(e) { console.warn(e); }
+    return settingsOf(currentVersion);
+  }
+  async function saveSettings(patch) {
+    var base = await refreshVersionSettings();
+    var s = Object.assign({}, base, patch);
+    var r = await supabaseClient.from('estimates').update({ settings: s }).eq('id', currentVersion.id);
+    if (r.error) {
+      if (/settings/i.test(r.error.message || '')) showSchemaBanner();
+      toast('Settings not saved: ' + r.error.message, 'error');
+      return false;
+    }
+    currentVersion.settings = s;
+    if (currentVersion.id === currentEstimate.id) currentEstimate.settings = s;
+    return true;
+  }
+
+  function bindOverview() {
+    // icons
+    $('ovDueWrap').insertAdjacentHTML('beforeend', icon('event'));
+    $('ovDueTimeWrap').insertAdjacentHTML('beforeend', icon('schedule'));
+    $('ovPricingWrap').insertAdjacentHTML('afterbegin', '<span class="ic unlocked" id="ovPricingIcon">' + icon('lock_open') + '</span>');
+    $('ovEstimatorClear').innerHTML = icon('close', 16);
+    $('invToggle').insertAdjacentHTML('beforeend', icon('expand_more', 16));
+    $('notesAddBtn').innerHTML = icon('add');
+    $('tasksAddBtn').innerHTML = icon('add');
+
+    // autosave per field (600 ms debounce)
+    var fields = document.querySelectorAll('#body-overview [data-col]');
+    Array.prototype.forEach.call(fields, function(el) {
+      var col = el.getAttribute('data-col');
+      var handler = function() {
+        if (!canEdit) { viewOnly(); hydrateOverview(); return; }
+        var v = el.value;
+        if (el.type === 'number') v = v === '' ? null : parseFloat(v);
+        else { v = String(v).trim(); if (v === '') v = null; }
+        if (col === 'name') {
+          if (!v) { el.value = currentVersion.name || ''; return; }
+          var h = $('titleHost').querySelector('.pc-h1'); if (h) h.textContent = v;
+          document.title = (currentVersion.quote_number ? 'Q' + currentVersion.quote_number + ' · ' : '') + v + ' — NWAC';
+        }
+        if (col === 'estimator_name') renderTitleSoon();
+        queueSave(col, v);
+      };
+      el.addEventListener('change', handler);
+      if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'email')) el.addEventListener('input', handler);
+      if (el.tagName === 'TEXTAREA') el.addEventListener('input', handler);
+    });
+    $('ovEstimatorClear').addEventListener('click', function() {
+      if (!canEdit) return viewOnly();
+      $('ovEstimator').value = '';
+      queueSave('estimator_name', null);
+      renderTitleSoon();
+    });
+    $('ovMeasure').addEventListener('change', function() {
+      if (!canEdit) return viewOnly();
+      saveSettings({ measurement_system: $('ovMeasure').value }).then(function(ok) { if (ok) toast('Saved', 'success'); });
+    });
+    $('ovPricing').addEventListener('change', function() {
+      if (!canEdit) return viewOnly();
+      var locked = $('ovPricing').value === 'locked';
+      setPricingIcon(locked);
+      saveSettings({ pricing_locked: locked }).then(function(ok) { if (ok) toast(locked ? 'Estimate pricing locked' : 'Estimate pricing unlocked', 'success'); });
+    });
+    $('invToggle').addEventListener('click', function() {
+      var open = $('invBody').hidden;
+      $('invBody').hidden = !open;
+      $('invToggle').classList.toggle('open', open);
+    });
+    // notes composer
+    $('notesAddBtn').addEventListener('click', function() { if (!canEdit) return viewOnly(); openNoteComposer(null); });
+    $('notesCancelBtn').addEventListener('click', closeNoteComposer);
+    $('notesSaveBtn').addEventListener('click', saveNote);
+    $('tasksAddBtn').addEventListener('click', function() { if (!canEdit) return viewOnly(); openTaskDialog(null); });
+    loadProfiles();
+  }
+  var renderTitleSoon = debounce(function() { renderTitle(); }, 700);
+
+  function setPricingIcon(locked) {
+    var ic = $('ovPricingIcon'); if (!ic) return;
+    ic.className = 'ic ' + (locked ? 'locked' : 'unlocked');
+    ic.innerHTML = icon(locked ? 'lock' : 'lock_open');
+  }
+
+  async function loadProfiles() {
+    if (profilesCache) return profilesCache;
+    var q = await supabaseClient.from('profiles').select('id,full_name,email,role').in('role', PC.MGMT_ROLES).eq('is_active', true).order('full_name');
+    profilesCache = q.data || [];
+    fillEstimatorSelect();
+    return profilesCache;
+  }
+  function fillEstimatorSelect() {
+    var sel = $('ovEstimator');
+    var cur = (currentVersion && currentVersion.estimator_name) || '';
+    var names = (profilesCache || []).map(function(p) { return p.full_name || p.email; }).filter(Boolean);
+    if (cur && names.indexOf(cur) < 0) names.unshift(cur);
+    sel.innerHTML = '<option value="">— Select —</option>' + names.map(function(n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('');
+    sel.value = cur;
+  }
+
+  function hydrateOverview() {
+    var e = currentVersion;
+    var s = settingsOf(e);
+    var set = function(id, v) { $(id).value = (v == null ? '' : v); };
+    set('ovName', e.name); set('ovNumber', e.project_number); set('ovDescription', e.project_description);
+    set('ovOffice', e.office); set('ovSqft', e.square_footage);
+    set('ovDue', e.bid_due_date); set('ovDueTime', e.due_time ? String(e.due_time).slice(0, 5) : '');
+    set('ovGc', e.requester_company); set('ovGcEmail', e.requester_email); set('ovInviteDate', e.invitation_date); set('ovIntent', e.bid_intent);
+    $('ovMeasure').value = s.measurement_system === 'Metric' ? 'Metric' : 'US';
+    $('ovPricing').value = s.pricing_locked ? 'locked' : 'unlocked';
+    setPricingIcon(!!s.pricing_locked);
+    fillEstimatorSelect();
+    var ro = !canEdit;
+    Array.prototype.forEach.call(document.querySelectorAll('#body-overview .pc-input, #body-overview .pc-select, #body-overview .pc-textarea'), function(el) { el.disabled = ro; });
+    if (e.requester_company || e.requester_email || e.invitation_date || e.bid_intent) { $('invBody').hidden = false; $('invToggle').classList.add('open'); }
+    renderCustomer();
+    renderTitle();
+  }
+
+  // ─── customer / address ──────────────────────────────────────────
+  function renderCustomer() {
+    var e = currentVersion;
+    var host = $('custCompanyHost');
+    if (e.client_name) {
+      host.innerHTML = '<div class="bp-cust-block">' + PC.avatar(e.client_name, 28) +
+        '<div class="txt"><b>' + esc(e.client_name) + '</b>' + (e.client_address ? '<span class="sub">' + esc(e.client_address) + '</span>' : '') + '</div>' +
+        '<button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" id="custClearBtn" title="Remove customer">' + icon('close', 16) + '</button></div>';
+      $('custClearBtn').addEventListener('click', async function() {
+        if (!canEdit) return viewOnly();
+        if (!(await PC.confirm({ title: 'Remove customer', message: 'Remove ' + e.client_name + ' from this project?', okLabel: 'Remove' }))) return;
+        setCustomer(null, null);
+      });
+    } else {
+      host.innerHTML = '<button type="button" class="bp-add-btn" id="custAddBtn"' + (canEdit ? '' : ' disabled') + '>' + icon('add', 16) + ' Add Customer</button>';
+      $('custAddBtn').addEventListener('click', openCustomerModal);
+    }
+    var ah = $('custAddressHost');
+    if (e.project_address) {
+      ah.innerHTML = '<div class="bp-cust-block"><span class="ic" style="color:#6b7280;display:inline-flex">' + icon('near_me') + '</span><div class="txt">' + esc(e.project_address) + '</div>' +
+        '<button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" id="addrEditBtn" title="Edit address">' + icon('edit', 16) + '</button></div>';
+      $('addrEditBtn').addEventListener('click', openAddressModal);
+    } else {
+      ah.innerHTML = '<button type="button" class="bp-add-btn" id="addrAddBtn"' + (canEdit ? '' : ' disabled') + '>' + icon('add', 16) + ' Add Address</button>';
+      $('addrAddBtn').addEventListener('click', openAddressModal);
+    }
+  }
+  function setCustomer(name, address) {
+    if (!canEdit) return viewOnly();
+    var patch = { client_name: name, client_address: address };
+    PC.saveField('estimates', currentVersion.id, patch, { silent: true });
+    Object.assign(currentVersion, patch);
+    if (currentVersion.id === currentEstimate.id) Object.assign(currentEstimate, patch);
+    renderCustomer();
+    renderPropCustomer();
+  }
+  function joinAddr(c) {
+    var line = [c.address, c.city, [c.state, c.zip].filter(Boolean).join(' ')].map(function(x) { return (x || '').trim(); }).filter(Boolean).join(', ');
+    return line || null;
+  }
+  async function openCustomerModal() {
+    if (!canEdit) return viewOnly();
+    var body = document.createElement('div');
+    body.innerHTML =
+      '<div class="pc-search" style="margin-bottom:10px"><input class="pc-input" type="search" id="custSearch" placeholder="Search customers">' + icon('search') + '</div>' +
+      '<div id="custList" style="max-height:340px;overflow:auto;border:1px solid var(--pc-border,#e5e7eb);border-radius:4px"><div class="pc-empty">Loading…</div></div>' +
+      '<div style="margin-top:10px"><a href="#" id="custNewLink" class="pc-link" style="font-size:13px;text-decoration:none">' + icon('add', 14) + ' New customer</a></div>' +
+      '<div id="custNewForm" hidden style="margin-top:10px;border-top:1px solid var(--pc-border,#e5e7eb);padding-top:10px">' +
+        '<div class="pc-field"><label class="pc-label">Company name *</label><input class="pc-input" id="cnName"></div>' +
+        '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">Contact name</label><input class="pc-input" id="cnContact"></div><div class="pc-field"><label class="pc-label">Contact email</label><input class="pc-input" id="cnEmail" type="email"></div></div>' +
+        '<div class="pc-field"><label class="pc-label">Street</label><input class="pc-input" id="cnAddr"></div>' +
+        '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">City</label><input class="pc-input" id="cnCity"></div><div class="pc-grid2" style="gap:8px"><div class="pc-field"><label class="pc-label">State</label><input class="pc-input" id="cnState" value="NY"></div><div class="pc-field"><label class="pc-label">Zip</label><input class="pc-input" id="cnZip"></div></div></div>' +
+        '<button type="button" class="pc-btn pc-btn-primary" id="cnSaveBtn">Create and select</button>' +
+      '</div>';
+    var m = PC.modal({ title: 'Add Customer', body: body, size: 'md', buttons: [ { label: 'Cancel', onClick: function() { m.close(); } } ] });
+    var all = [];
+    var list = body.querySelector('#custList');
+    function draw() {
+      var q = (body.querySelector('#custSearch').value || '').toLowerCase().trim();
+      var rows = all.filter(function(c) { return !q || (c.name + ' ' + (c.contact_name || '') + ' ' + (c.address || '') + ' ' + (c.city || '')).toLowerCase().indexOf(q) >= 0; });
+      if (!rows.length) { list.innerHTML = '<div class="pc-empty">No customers match.</div>'; return; }
+      list.innerHTML = rows.slice(0, 200).map(function(c) {
+        return '<div class="bp-doc-row" data-cid="' + c.id + '" style="cursor:pointer">' + PC.avatar(c.name, 28) +
+          '<div class="nm"><div>' + esc(c.name) + '</div><div class="sub">' + esc([c.contact_name, joinAddr(c)].filter(Boolean).join(' · ')) + '</div></div></div>';
+      }).join('');
+      Array.prototype.forEach.call(list.querySelectorAll('[data-cid]'), function(row) {
+        row.addEventListener('click', function() {
+          var c = all.find(function(x) { return x.id === row.getAttribute('data-cid'); });
+          if (!c) return;
+          setCustomer(c.name, joinAddr(c)); m.close();
+        });
+      });
+    }
+    var q = await supabaseClient.from('customers').select('id,name,contact_name,contact_email,address,city,state,zip').eq('is_active', true).order('name').limit(500);
+    all = q.data || [];
+    draw();
+    body.querySelector('#custSearch').addEventListener('input', debounce(draw, 150));
+    body.querySelector('#custNewLink').addEventListener('click', function(ev) { ev.preventDefault(); var f = body.querySelector('#custNewForm'); f.hidden = !f.hidden; if (!f.hidden) body.querySelector('#cnName').focus(); });
+    body.querySelector('#cnSaveBtn').addEventListener('click', async function() {
+      var g = function(id) { return (body.querySelector('#' + id).value || '').trim(); };
+      var name = g('cnName'); if (!name) { toast('Company name is required', 'error'); return; }
+      var row = { name: name, contact_name: g('cnContact'), contact_email: g('cnEmail'), address: g('cnAddr'), city: g('cnCity'), state: g('cnState'), zip: g('cnZip'), created_by: currentUser ? currentUser.id : null };
+      var ins = await supabaseClient.from('customers').insert(row).select().single();
+      if (ins.error) { toast('Customer insert failed: ' + ins.error.message, 'error'); return; }
+      setCustomer(ins.data.name, joinAddr(ins.data)); m.close();
+    });
+  }
+  function openAddressModal() {
+    if (!canEdit) return viewOnly();
+    var cur = currentVersion.project_address || '';
+    var parts = cur.split(',').map(function(s) { return s.trim(); });
+    var street = parts[0] || '', city = parts[1] || '', st = '', zip = '';
+    if (parts[2]) { var sz = parts[2].split(/\s+/); st = sz[0] || ''; zip = sz.slice(1).join(' '); }
+    var body = document.createElement('div');
+    body.innerHTML =
+      '<div class="pc-field"><label class="pc-label">Street</label><input class="pc-input" id="adStreet" value="' + esc(street) + '"></div>' +
+      '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">City</label><input class="pc-input" id="adCity" value="' + esc(city) + '"></div>' +
+      '<div class="pc-grid2" style="gap:8px"><div class="pc-field"><label class="pc-label">State</label><input class="pc-input" id="adState" value="' + esc(st || 'NY') + '"></div><div class="pc-field"><label class="pc-label">Zip</label><input class="pc-input" id="adZip" value="' + esc(zip) + '"></div></div></div>';
+    var m = PC.modal({ title: cur ? 'Edit Address' : 'Add Address', body: body, size: 'sm', buttons: [
+      { label: 'Cancel', onClick: function() { m.close(); } },
+      { label: 'Save', primary: true, onClick: function() {
+        var g = function(id) { return (body.querySelector('#' + id).value || '').trim(); };
+        var addr = joinAddr({ address: g('adStreet'), city: g('adCity'), state: g('adState'), zip: g('adZip') });
+        PC.saveField('estimates', currentVersion.id, { project_address: addr }, { silent: true });
+        currentVersion.project_address = addr;
+        if (currentVersion.id === currentEstimate.id) currentEstimate.project_address = addr;
+        renderCustomer(); m.close();
+      } }
+    ] });
+    setTimeout(function() { var i = body.querySelector('#adStreet'); if (i) i.focus(); }, 50);
+  }
+
+  // ─── estimate total chip ─────────────────────────────────────────
+  async function loadLines() {
+    if (linesCache) return linesCache;
+    var li = await supabaseClient.from('estimate_line_items').select('*').eq('estimate_id', currentVersion.id).order('sort_order');
+    linesCache = li.data || [];
+    return linesCache;
+  }
+  async function loadEstSummary() {
+    var chip = $('ovTotalChip');
+    try {
+      var lines = await loadLines();
+      var t = nwEstTotals(lines, currentVersion);
+      var total = (t.total != null) ? t.total : t.bidPrice;
+      chip.textContent = 'Estimate Total ' + money(total) + (lines.length ? '' : ' · no items');
+    } catch(e) { chip.textContent = 'Estimate Total —'; }
+  }
+
+  // ─── notes / tasks (keyed by rootId — alternates share them) ─────
+  var editingNoteId = null;
+  async function loadNotesTasks() {
+    var n = await supabaseClient.from('bid_project_notes')
+      .select('id, body, created_at, created_by, author:profiles(full_name)').eq('estimate_id', rootId()).order('created_at', { ascending: false });
+    if (n.error) {
+      var n2 = await supabaseClient.from('bid_project_notes').select('id, body, created_at, created_by').eq('estimate_id', rootId()).order('created_at', { ascending: false });
+      renderNotes(n2.data || []);
+    } else renderNotes(n.data || []);
+    var t = await supabaseClient.from('bid_project_tasks')
+      .select('id, title, due_date, is_done, created_by, assignee_id, assignee:profiles!assignee_id(full_name)').eq('estimate_id', rootId()).order('is_done').order('due_date');
+    if (t.error) {
+      var t2 = await supabaseClient.from('bid_project_tasks').select('id, title, due_date, is_done, created_by, assignee_id').eq('estimate_id', rootId()).order('is_done').order('due_date');
+      renderTasks(t2.data || []);
+    } else renderTasks(t.data || []);
+  }
+  function renderNotes(notes) {
+    $('notesCount').textContent = notes.length;
+    var host = $('notesList');
+    if (!notes.length) {
+      host.innerHTML = '<div class="bp-empty"><div class="art"></div><b>Create a Note</b>Take notes to help organize thoughts and information with your team.</div>';
+      return;
+    }
+    host.innerHTML = notes.map(function(n) {
+      var who = (n.author && n.author.full_name) || '—';
+      return '<div class="bp-note" data-nid="' + n.id + '">' + PC.avatar(who, 28) +
+        '<div class="txt"><div class="meta"><b>' + esc(who) + '</b><span>·</span><span>' + esc(PC.date(n.created_at)) + '</span></div>' +
+        '<div class="body">' + esc(n.body) + '</div></div>' +
+        '<span class="nk" data-note-kebab="' + n.id + '"></span></div>';
+    }).join('');
+    Array.prototype.forEach.call(host.querySelectorAll('[data-note-kebab]'), function(el) {
+      var id = el.getAttribute('data-note-kebab');
+      var n = notes.find(function(x) { return x.id === id; });
+      el.innerHTML = PC.kebab([
+        { label: 'Edit', icon: 'edit', disabled: !canEdit, onClick: function() { openNoteComposer(n); } },
+        { label: 'Delete', icon: 'delete', danger: true, disabled: !canEdit, onClick: async function() {
+          if (!(await PC.confirm({ title: 'Delete note', message: 'Delete this note?', okLabel: 'Delete', danger: true }))) return;
+          var d = await supabaseClient.from('bid_project_notes').delete().eq('id', id);
+          if (d.error) { toast('Delete failed: ' + d.error.message, 'error'); return; }
+          loadNotesTasks();
+        } }
+      ]);
+    });
+  }
+  function openNoteComposer(note) {
+    editingNoteId = note ? note.id : null;
+    $('notesComposer').hidden = false;
+    $('notesBody').value = note ? note.body : '';
+    $('notesSaveBtn').textContent = note ? 'Update' : 'Save';
+    $('notesBody').focus();
+  }
+  function closeNoteComposer() { $('notesComposer').hidden = true; $('notesBody').value = ''; editingNoteId = null; }
+  async function saveNote() {
+    if (!canEdit) return viewOnly();
+    var b = ($('notesBody').value || '').trim();
+    if (!b) { toast('Write something first', 'error'); return; }
+    var r;
+    if (editingNoteId) r = await supabaseClient.from('bid_project_notes').update({ body: b }).eq('id', editingNoteId);
+    else r = await supabaseClient.from('bid_project_notes').insert({ estimate_id: rootId(), body: b, created_by: currentUser ? currentUser.id : null });
+    if (r.error) { toast('Note save failed: ' + r.error.message, 'error'); return; }
+    closeNoteComposer();
+    loadNotesTasks();
+  }
+  function renderTasks(tasks) {
+    $('tasksCount').textContent = tasks.length;
+    var host = $('tasksList');
+    if (!tasks.length) {
+      host.innerHTML = '<div class="bp-empty"><div class="art"></div><b>Create a Task</b>Assign a task with a due date to yourself or someone else on your team.</div>';
+      return;
+    }
+    host.innerHTML = tasks.map(function(t) {
+      var due = t.due_date ? PC.date(t.due_date) : '';
+      var di = (t.due_date && !t.is_done) ? PC.dueInfo(t.due_date) : null;
+      var who = t.assignee && t.assignee.full_name;
+      return '<div class="bp-task' + (t.is_done ? ' done' : '') + '">' +
+        '<input type="checkbox" data-task-id="' + t.id + '"' + (t.is_done ? ' checked' : '') + (canEdit ? '' : ' disabled') + '>' +
+        '<div class="txt"><div class="t">' + esc(t.title) + '</div><div class="sub">' +
+          (due ? '<span>' + icon('event', 13) + ' ' + esc(due) + '</span>' : '') +
+          (di && di.label ? '<span class="' + esc(di.cls) + '">' + esc(di.label) + '</span>' : '') +
+          (who ? '<span>' + PC.avatar(who, 18) + ' ' + esc(who) + '</span>' : '') +
+        '</div></div>' +
+        '<span data-task-kebab="' + t.id + '"></span></div>';
+    }).join('');
+    Array.prototype.forEach.call(host.querySelectorAll('input[data-task-id]'), function(cb) {
+      cb.addEventListener('change', async function() {
+        var r = await supabaseClient.from('bid_project_tasks').update({ is_done: cb.checked, completed_at: cb.checked ? new Date().toISOString() : null }).eq('id', cb.getAttribute('data-task-id'));
+        if (r.error) toast('Update failed: ' + r.error.message, 'error');
+        loadNotesTasks();
       });
     });
-    document.getElementById('stageSel').addEventListener('change', updateStage);
-    document.getElementById('bpTitle').addEventListener('blur', updateTitle);
-    document.getElementById('saveOvBtn').addEventListener('click', saveOverview);
-    document.getElementById('addNoteBtn').addEventListener('click', addNote);
-    document.getElementById('addTaskBtn').addEventListener('click', addTask);
-    // Actions menu
-    document.getElementById('actionsBtn').addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      var m = document.getElementById('actionsMenu');
-      m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    Array.prototype.forEach.call(host.querySelectorAll('[data-task-kebab]'), function(el) {
+      var id = el.getAttribute('data-task-kebab');
+      var t = tasks.find(function(x) { return x.id === id; });
+      el.innerHTML = PC.kebab([
+        { label: 'Edit', icon: 'edit', disabled: !canEdit, onClick: function() { openTaskDialog(t); } },
+        { label: 'Delete', icon: 'delete', danger: true, disabled: !canEdit, onClick: async function() {
+          if (!(await PC.confirm({ title: 'Delete task', message: 'Delete "' + t.title + '"?', okLabel: 'Delete', danger: true }))) return;
+          var d = await supabaseClient.from('bid_project_tasks').delete().eq('id', id);
+          if (d.error) { toast('Delete failed: ' + d.error.message, 'error'); return; }
+          loadNotesTasks();
+        } }
+      ]);
     });
-    document.addEventListener('click', function() { document.getElementById('actionsMenu').style.display = 'none'; });
-    document.getElementById('actionsMenu').addEventListener('click', function(ev) {
-      var a = ev.target.closest('[data-act]'); if (!a) return;
-      ev.preventDefault();
-      var act = a.getAttribute('data-act');
-      document.getElementById('actionsMenu').style.display = 'none';
-      if (act === 'save-template')   saveAsTemplate();
-      else if (act === 'duplicate')  duplicateProject();
-      else if (act === 'add-alt')    addAltEstimate();
-      else if (act === 'archive')    archive();
+  }
+  async function openTaskDialog(task) {
+    if (!canEdit) return viewOnly();
+    var people = await loadProfiles();
+    var body = document.createElement('div');
+    body.innerHTML =
+      '<div class="pc-field"><label class="pc-label">Title *</label><input class="pc-input" id="tkTitle" value="' + esc(task ? task.title : '') + '"></div>' +
+      '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">Due date</label><input class="pc-input" type="date" id="tkDue" value="' + esc(task ? (task.due_date || '') : '') + '"></div>' +
+      '<div class="pc-field"><label class="pc-label">Assignee</label><select class="pc-select" id="tkWho"><option value="">— Unassigned —</option>' +
+        people.map(function(p) { return '<option value="' + p.id + '"' + (task && task.assignee_id === p.id ? ' selected' : '') + '>' + esc(p.full_name || p.email) + '</option>'; }).join('') +
+      '</select></div></div>';
+    var m = PC.modal({ title: task ? 'Edit Task' : 'Create a Task', body: body, size: 'sm', buttons: [
+      { label: 'Cancel', onClick: function() { m.close(); } },
+      { label: task ? 'Update' : 'Create', primary: true, closeOnDone: false, onClick: async function() {
+        // return false on every error path: PC.modal closes the dialog when an async onClick resolves to anything else
+        var title = (body.querySelector('#tkTitle').value || '').trim();
+        if (!title) { toast('Title is required', 'error'); return false; }
+        var row = { title: title, due_date: body.querySelector('#tkDue').value || null, assignee_id: body.querySelector('#tkWho').value || null };
+        var r;
+        try {
+          if (task) r = await supabaseClient.from('bid_project_tasks').update(row).eq('id', task.id);
+          else { row.estimate_id = rootId(); row.created_by = currentUser ? currentUser.id : null; r = await supabaseClient.from('bid_project_tasks').insert(row); }
+        } catch(e) { toast('Task save failed: ' + (e.message || e), 'error'); return false; }
+        if (r.error) { toast('Task save failed: ' + r.error.message, 'error'); return false; }
+        m.close(); loadNotesTasks();
+      } }
+    ] });
+    setTimeout(function() { var i = body.querySelector('#tkTitle'); if (i) i.focus(); }, 50);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  DOCUMENTS
+  // ═══════════════════════════════════════════════════════════════
+  var drawings = [], attachments = [];
+  var docSel = { type: 'drawings', id: null };
+  var docsLoadedOnce = false;
+  var thumbGen = 0;
+
+  function bindDocuments() {
+    $('docSortDir').setAttribute('data-dir', 'asc');
+    $('docSortDir').innerHTML = icon('arrow_upward');
+    $('docSortDir').addEventListener('click', function() {
+      var d = $('docSortDir').getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+      $('docSortDir').setAttribute('data-dir', d);
+      $('docSortDir').innerHTML = icon(d === 'asc' ? 'arrow_upward' : 'arrow_downward');
+      renderDocList();
     });
-    // Version strip
-    document.getElementById('addVerBtn').addEventListener('click', addAltEstimate);
-    // Proposal editor
-    document.querySelectorAll('.prop-btn[data-cmd]').forEach(function(b) {
-      b.addEventListener('mousedown', function(e){ e.preventDefault(); });
-      b.addEventListener('click', function() { document.execCommand(b.getAttribute('data-cmd'), false, null); });
+    $('docSort').addEventListener('change', renderDocList);
+    $('docSearch').addEventListener('input', debounce(renderDocList, 200));
+    $('docThumbSize').addEventListener('input', debounce(function() { if (docSel.type === 'drawing') renderDocList(); }, 250));
+    $('docSearch').insertAdjacentHTML('afterend', icon('search'));
+    $('docTreeKebab').innerHTML = PC.kebab([
+      { label: 'Upload drawings', icon: 'upload', disabled: !canEdit, onClick: openUploadDrawings },
+      { label: 'Upload attachment', icon: 'upload', disabled: !canEdit, onClick: openUploadAttachment },
+      { sep: true },
+      { label: 'Open full documents page', icon: 'open_in_new', onClick: function() { location.href = 'project-files.html?estimate=' + rootId(); } }
+    ]);
+    $('docListKebab').innerHTML = PC.kebab([
+      { label: 'Upload', icon: 'upload', disabled: !canEdit, onClick: function() { if (docSel.type === 'attachments') openUploadAttachment(); else openUploadDrawings(); } },
+      { label: 'Auto-rename sheets', icon: 'auto_awesome', disabled: !canEdit, onClick: autoRenameDrawings },
+      { label: 'Refresh', icon: 'refresh', onClick: loadDocs }
+    ]);
+    $('drawingFileInput').addEventListener('change', function() {
+      var files = Array.prototype.slice.call($('drawingFileInput').files || []);
+      $('drawingFileInput').value = '';
+      if (files.length) uploadDrawings(files);
     });
-    document.querySelectorAll('.prop-btn[data-block]').forEach(function(b) {
-      b.addEventListener('mousedown', function(e){ e.preventDefault(); });
-      b.addEventListener('click', function() { document.execCommand('formatBlock', false, b.getAttribute('data-block')); });
+  }
+
+  async function loadDocs() {
+    var d = await supabaseClient.from('estimate_drawings').select('*').eq('estimate_id', rootId()).order('created_at');
+    if (d.error) { $('docList').innerHTML = '<div class="pc-empty" style="color:#dc2626">' + esc(d.error.message) + '</div>'; return; }
+    drawings = d.data || [];
+    var a = await supabaseClient.from('project_files').select('id, filename, size_bytes, category, storage_path, content_type, uploaded_by, created_at').eq('estimate_id', rootId()).order('created_at', { ascending: false });
+    attachments = a.error ? [] : (a.data || []);
+    if (docSel.type === 'drawing' && !drawings.some(function(x) { return x.id === docSel.id; })) docSel = { type: 'drawings', id: null };
+    docsLoadedOnce = true;
+    renderDocTree();
+    renderDocList();
+    fillProposalFiles();
+  }
+
+  function pageTotal() { return drawings.reduce(function(s, d) { return s + (Number(d.page_count) || 0); }, 0); }
+
+  function renderDocTree() {
+    var host = $('docTree');
+    var html = '';
+    html += '<div class="bp-tree-row' + (docSel.type === 'drawings' ? ' sel' : '') + '" data-sel="drawings"><span class="ic">' + icon('layers') + '</span><span class="nm">Drawings</span><span class="cnt">' + pageTotal() + '</span><span data-tree-kebab="drawings"></span></div>';
+    drawings.forEach(function(d) {
+      html += '<div class="bp-tree-row sub' + (docSel.type === 'drawing' && docSel.id === d.id ? ' sel' : '') + '" data-sel="drawing" data-id="' + d.id + '"><span class="ic">' + icon('folder', 16) + '</span><span class="nm" title="' + esc(d.filename) + '">' + esc(d.filename) + '</span><span class="cnt">' + (d.page_count || 1) + '</span><span data-tree-kebab="drawing" data-id="' + d.id + '"></span></div>';
     });
-    document.getElementById('insHeaderBtn').addEventListener('click', insertHeader);
-    document.getElementById('insScopeBtn').addEventListener('click',  insertScope);
-    document.getElementById('insLinesBtn').addEventListener('click',  insertLineItems);
-    document.getElementById('insTotalsBtn').addEventListener('click', insertTotals);
-    document.getElementById('loadTplBtn').addEventListener('click',   loadDefaultProposal);
-    document.getElementById('savePropBtn').addEventListener('click',  savePropHtml);
-    document.getElementById('exportPropBtn').addEventListener('click', exportPropPdf);
-    // Ctrl+S save when in proposal
-    document.addEventListener('keydown', function(e) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's' && currentTab === 'proposal') {
-        e.preventDefault(); savePropHtml();
+    html += '<div class="bp-tree-row' + (docSel.type === 'attachments' ? ' sel' : '') + '" data-sel="attachments"><span class="ic">' + icon('description') + '</span><span class="nm">Attachments</span><span class="cnt">' + attachments.length + '</span><span data-tree-kebab="attachments"></span></div>';
+    host.innerHTML = html;
+    Array.prototype.forEach.call(host.querySelectorAll('[data-sel]'), function(row) {
+      row.addEventListener('click', function(ev) {
+        if (ev.target.closest('.pc-kebab')) return;
+        docSel = { type: row.getAttribute('data-sel'), id: row.getAttribute('data-id') || null };
+        renderDocTree(); renderDocList();
+      });
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-tree-kebab]'), function(el) {
+      var kind = el.getAttribute('data-tree-kebab');
+      if (kind === 'drawings') el.innerHTML = PC.kebab([
+        { label: 'Upload drawings', icon: 'upload', disabled: !canEdit, onClick: openUploadDrawings },
+        { label: 'Auto-rename sheets', icon: 'auto_awesome', disabled: !canEdit, onClick: autoRenameDrawings }
+      ]);
+      else if (kind === 'attachments') el.innerHTML = PC.kebab([
+        { label: 'Upload attachment', icon: 'upload', disabled: !canEdit, onClick: openUploadAttachment },
+        { label: 'Open full documents page', icon: 'open_in_new', onClick: function() { location.href = 'project-files.html?estimate=' + rootId(); } }
+      ]);
+      else {
+        var d = drawings.find(function(x) { return x.id === el.getAttribute('data-id'); });
+        el.innerHTML = PC.kebab(drawingMenu(d));
       }
     });
   }
 
-  function setTab(tab) {
-    currentTab = tab;
-    location.hash = tab;
-    document.querySelectorAll('.bp-tab').forEach(function(t) {
-      t.classList.toggle('active', t.getAttribute('data-tab') === tab);
-    });
-    ['overview','documents','takeoff','estimating','proposal'].forEach(function(k) {
-      document.getElementById('body-' + k).style.display = (k === tab) ? '' : 'none';
-    });
-    if (tab === 'documents') loadDocs();
-    if (tab === 'estimating') loadEstSummary();
-    if (tab === 'proposal')   loadProposal();
+  function drawingMenu(d) {
+    return [
+      { label: 'Rename', icon: 'edit', disabled: !canEdit, onClick: function() { renameDrawing(d); } },
+      { label: 'Start Takeoff', icon: 'straighten', onClick: function() { startTakeoffOn(d, 1); } },
+      { label: 'Download', icon: 'download', onClick: function() { downloadDrawing(d); } },
+      { sep: true },
+      { label: 'Delete', icon: 'delete', danger: true, disabled: !canEdit, onClick: function() { deleteDrawing(d); } }
+    ];
+  }
+  function startTakeoffOn(d, page) {
+    setTab('takeoff');
+    sendCmd('takeoff', 'openPlan', { drawingId: d.id, page: page || 1 });
+  }
+  async function renameDrawing(d) {
+    if (!canEdit) return viewOnly();
+    var name = await PC.prompt({ title: 'Rename drawing', label: 'File name', value: d.filename, okLabel: 'Rename' });
+    if (!name || name === d.filename) return;
+    if (!window.EstDrawings) { toast('est-drawings.js not loaded', 'error'); return; }
+    try { await EstDrawings.rename(d.id, name); d.filename = name; toast('Renamed', 'success'); renderDocTree(); renderDocList(); }
+    catch(e) { toast('Rename failed: ' + (e.message || e), 'error'); }
+  }
+  async function deleteDrawing(d) {
+    if (!canEdit) return viewOnly();
+    var ok = await PC.confirm({ title: 'Delete drawing', message: 'Delete "' + d.filename + '"? All takeoff measurements drawn on its ' + (d.page_count || 1) + ' page(s) — in every estimate version — will be deleted too.', okLabel: 'Delete', danger: true });
+    if (!ok) return;
+    if (!window.EstDrawings) { toast('est-drawings.js not loaded', 'error'); return; }
+    try { await EstDrawings.remove(d); toast('Drawing deleted', 'success'); loadDocs(); }
+    catch(e) { toast('Delete failed: ' + (e.message || e), 'error'); }
+  }
+  async function downloadDrawing(d) {
+    if (!window.EstDrawings) { toast('est-drawings.js not loaded', 'error'); return; }
+    try { var url = await EstDrawings.signedUrl(d.storage_path, { download: true }); if (url) window.open(url, '_blank'); }
+    catch(e) { toast('Download failed: ' + (e.message || e), 'error'); }
   }
 
-  async function loadEstimate() {
-    var res = await supabaseClient.from('estimates').select('*').eq('id', estimateId).maybeSingle();
-    if (res.error || !res.data) { toast('Load failed', 'error'); return; }
-    currentEstimate = res.data;
-    hydrateOverview();
-    loadNotesTasks();
-    loadVersions();
+  function sortRows(rows, nameOf, dateOf) {
+    var by = $('docSort').value, dir = $('docSortDir').getAttribute('data-dir') === 'desc' ? -1 : 1;
+    var out = rows.slice();
+    if (by === 'name') out.sort(function(a, b) { return nameOf(a).localeCompare(nameOf(b), undefined, { numeric: true }) * dir; });
+    else if (by === 'date') out.sort(function(a, b) { return (String(dateOf(a)) < String(dateOf(b)) ? -1 : 1) * dir; });
+    else if (dir < 0) out.reverse();
+    return out;
   }
 
-  // ─── Estimate versions (E1/E2/E3) ───────────────────────────────
-  async function loadVersions() {
-    // Root of the "bid project" = the primary estimate row
-    var rootId = currentEstimate.parent_estimate_id || currentEstimate.id;
-    var q = await supabaseClient.from('estimates')
-      .select('id, version_label, version_number, parent_estimate_id, name')
-      .or('id.eq.' + rootId + ',parent_estimate_id.eq.' + rootId)
-      .order('version_number', {ascending: true});
-    if (q.error || !q.data) return;
-    var versions = q.data;
-    if (versions.length <= 1) {
-      document.getElementById('versionStrip').style.display = 'none';
+  function renderDocList() {
+    var host = $('docList');
+    var q = ($('docSearch').value || '').toLowerCase().trim();
+    thumbGen++;
+    if (docSel.type === 'attachments') {
+      $('docFolderTitle').textContent = 'Attachments';
+      var rows = sortRows(attachments.filter(function(f) { return !q || (f.filename || '').toLowerCase().indexOf(q) >= 0; }), function(f) { return f.filename || ''; }, function(f) { return f.created_at; });
+      if (!rows.length) { host.innerHTML = '<div class="pc-empty">No attachments yet.</div>'; return; }
+      host.innerHTML = rows.map(function(f) {
+        var kb = f.size_bytes ? (f.size_bytes > 1048576 ? (f.size_bytes / 1048576).toFixed(1) + ' MB' : Math.round(f.size_bytes / 1024) + ' KB') : '';
+        return '<div class="bp-doc-row"><span class="ic">' + icon('description') + '</span><div class="nm" data-open-att="' + f.id + '"><div>' + esc(f.filename) + '</div><div class="sub">' + esc([f.category || 'other', kb, PC.date(f.created_at)].filter(Boolean).join(' · ')) + '</div></div><span data-att-kebab="' + f.id + '"></span></div>';
+      }).join('');
+      Array.prototype.forEach.call(host.querySelectorAll('[data-open-att]'), function(el) { el.addEventListener('click', function() { downloadAttachment(attachments.find(function(x) { return x.id === el.getAttribute('data-open-att'); }), false); }); });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-att-kebab]'), function(el) {
+        var f = attachments.find(function(x) { return x.id === el.getAttribute('data-att-kebab'); });
+        el.innerHTML = PC.kebab([
+          { label: 'Rename', icon: 'edit', disabled: !canEdit, onClick: async function() {
+            var name = await PC.prompt({ title: 'Rename attachment', label: 'File name', value: f.filename, okLabel: 'Rename' });
+            if (!name || name === f.filename) return;
+            var r = await supabaseClient.from('project_files').update({ filename: name }).eq('id', f.id);
+            if (r.error) { toast('Rename failed: ' + r.error.message, 'error'); return; }
+            f.filename = name; toast('Renamed', 'success'); renderDocList();
+          } },
+          { label: 'Download', icon: 'download', onClick: function() { downloadAttachment(f, true); } },
+          { sep: true },
+          { label: 'Delete', icon: 'delete', danger: true, disabled: !canEdit, onClick: async function() {
+            if (!(await PC.confirm({ title: 'Delete attachment', message: 'Delete "' + f.filename + '" permanently?', okLabel: 'Delete', danger: true }))) return;
+            if (f.storage_path) await supabaseClient.storage.from('project-files').remove([f.storage_path]);
+            var d = await supabaseClient.from('project_files').delete().eq('id', f.id);
+            if (d.error) { toast('Delete failed: ' + d.error.message, 'error'); return; }
+            toast('Deleted', 'success'); loadDocs();
+          } }
+        ]);
+      });
       return;
     }
-    document.getElementById('versionStrip').style.display = 'flex';
-    document.getElementById('versionChips').innerHTML = versions.map(function(v) {
-      var active = v.id === estimateId;
-      return '<a href="bid-project.html?id=' + v.id + '"' +
-        ' style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;' +
-        (active
-          ? 'background:#0696D7;color:#fff'
-          : 'background:#fff;color:#334155;border:1px solid #cbd5e1') + '">' +
-        'E' + v.version_number + (v.version_label && v.version_label !== 'Original Estimate' ? ' · ' + esc(v.version_label) : '') +
-        '</a>';
-    }).join('');
-  }
-
-  async function addAltEstimate() {
-    if (!canEdit) return;
-    var label = prompt('Label for this alternate (e.g. "R-410A option" or "Value Engineered"):', 'Alt ' + Date.now().toString().slice(-4));
-    if (!label) return;
-    var rootId = currentEstimate.parent_estimate_id || currentEstimate.id;
-    // Find highest version_number so far
-    var vq = await supabaseClient.from('estimates')
-      .select('version_number').or('id.eq.' + rootId + ',parent_estimate_id.eq.' + rootId);
-    var maxV = 1;
-    (vq.data || []).forEach(function(r){ if (r.version_number > maxV) maxV = r.version_number; });
-    var newVer = maxV + 1;
-    var srcFields = Object.assign({}, currentEstimate);
-    // Wipe fields that must be unique / are audit
-    delete srcFields.id; delete srcFields.quote_number;
-    delete srcFields.created_at; delete srcFields.updated_at;
-    delete srcFields.sent_at; delete srcFields.awarded_at;
-    delete srcFields.aia_project_id;
-    srcFields.parent_estimate_id = rootId;
-    srcFields.version_label      = label;
-    srcFields.version_number     = newVer;
-    srcFields.is_template        = false;
-    srcFields.template_source_id = null;
-    srcFields.archived_at        = null;
-    srcFields.name = (currentEstimate.name || 'Untitled') + ' — ' + label;
-    var ins = await supabaseClient.from('estimates').insert(srcFields).select().single();
-    if (ins.error) { toast('Add alt failed: ' + ins.error.message, 'error'); return; }
-    toast('E' + newVer + ' created — opening…', 'success');
-    setTimeout(function(){ location.href = 'bid-project.html?id=' + ins.data.id; }, 500);
-  }
-
-  // ─── Templates ──────────────────────────────────────────────────
-  async function saveAsTemplate() {
-    if (!canEdit) return;
-    var tplName = prompt('Template name:', (currentEstimate.name || 'Untitled') + ' Template');
-    if (!tplName) return;
-    // Duplicate the estimate as a template
-    var src = Object.assign({}, currentEstimate);
-    delete src.id; delete src.quote_number;
-    delete src.created_at; delete src.updated_at;
-    delete src.sent_at; delete src.awarded_at; delete src.aia_project_id;
-    src.name             = tplName;
-    src.is_template      = true;
-    src.template_source_id = currentEstimate.id;
-    src.bid_stage        = 'estimating';
-    src.parent_estimate_id = null;
-    src.version_number   = 1;
-    src.archived_at      = null;
-    var ins = await supabaseClient.from('estimates').insert(src).select().single();
-    if (ins.error) { toast('Template save failed: ' + ins.error.message, 'error'); return; }
-    // Copy line items too
-    var li = await supabaseClient.from('estimate_line_items').select('*').eq('estimate_id', currentEstimate.id);
-    if (li.data && li.data.length) {
-      var copies = li.data.map(function(r) {
-        var c = Object.assign({}, r); delete c.id; delete c.created_at; delete c.updated_at;
-        c.estimate_id = ins.data.id;
-        return c;
+    if (docSel.type === 'drawing') {
+      var d = drawings.find(function(x) { return x.id === docSel.id; });
+      if (!d) { docSel = { type: 'drawings', id: null }; renderDocTree(); renderDocList(); return; }
+      $('docFolderTitle').textContent = d.filename;
+      var w = parseInt($('docThumbSize').value, 10) || 142;
+      var pages = [];
+      for (var p = 1; p <= (d.page_count || 1); p++) { var meta = (d.page_meta || {})[String(p)] || {}; pages.push({ n: p, label: meta.sheet || ('Page ' + p), scale: meta.scale || null }); }
+      pages = sortRows(pages.filter(function(pg) { return !q || pg.label.toLowerCase().indexOf(q) >= 0 || ('page ' + pg.n).indexOf(q) >= 0; }), function(pg) { return pg.label; }, function(pg) { return String(pg.n).padStart(5, '0'); });
+      if (!pages.length) { host.innerHTML = '<div class="pc-empty">No pages match.</div>'; return; }
+      host.innerHTML = '<div class="bp-doc-grid">' + pages.map(function(pg) {
+        return '<div class="bp-page-tile" style="width:' + w + 'px" data-page="' + pg.n + '"><div class="th" data-open-page="' + pg.n + '" style="min-height:' + Math.round(w * 0.7) + 'px"><span class="pc-muted" style="font-size:11px">' + icon('description') + '</span></div>' +
+          '<div class="cap"><span class="nm" title="' + esc(pg.label) + '">' + esc(pg.label) + '</span>' + (pg.scale ? '<span class="sc">' + esc(pg.scale) + '</span>' : '') + '<span data-page-kebab="' + pg.n + '"></span></div></div>';
+      }).join('') + '</div>';
+      Array.prototype.forEach.call(host.querySelectorAll('[data-open-page]'), function(el) { el.addEventListener('click', function() { startTakeoffOn(d, parseInt(el.getAttribute('data-open-page'), 10)); }); });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-page-kebab]'), function(el) {
+        var n = parseInt(el.getAttribute('data-page-kebab'), 10);
+        el.innerHTML = PC.kebab([
+          { label: 'Rename', icon: 'edit', disabled: !canEdit, onClick: async function() {
+            var cur = ((d.page_meta || {})[String(n)] || {}).sheet || '';
+            var name = await PC.prompt({ title: 'Rename sheet', label: 'Sheet number / name', value: cur, placeholder: 'M-101', okLabel: 'Rename' });
+            if (name == null) return;
+            var meta = Object.assign({}, d.page_meta || {}); meta[String(n)] = Object.assign({}, meta[String(n)] || {}, { sheet: name.trim() || null });
+            var r = await supabaseClient.from('estimate_drawings').update({ page_meta: meta }).eq('id', d.id);
+            if (r.error) { toast('Rename failed: ' + r.error.message, 'error'); return; }
+            d.page_meta = meta; renderDocList();
+          } },
+          { label: 'Start Takeoff', icon: 'straighten', onClick: function() { startTakeoffOn(d, n); } },
+          { label: 'Download', icon: 'download', onClick: function() { downloadDrawing(d); } },
+          { sep: true },
+          { label: 'Delete', icon: 'delete', danger: true, disabled: !canEdit, onClick: function() { deleteDrawing(d); } }
+        ]);
       });
-      await supabaseClient.from('estimate_line_items').insert(copies);
-    }
-    toast('✅ Saved as template: ' + tplName, 'success');
-  }
-
-  async function duplicateProject() {
-    if (!canEdit) return;
-    if (!confirm('Duplicate this bid project (with all line items) as a new draft?')) return;
-    var src = Object.assign({}, currentEstimate);
-    delete src.id; delete src.quote_number;
-    delete src.created_at; delete src.updated_at;
-    delete src.sent_at; delete src.awarded_at; delete src.aia_project_id;
-    src.name = (currentEstimate.name || 'Untitled') + ' (copy)';
-    src.bid_stage = 'estimating';
-    src.parent_estimate_id = null;
-    src.version_number = 1;
-    src.is_template = false;
-    src.template_source_id = currentEstimate.id;
-    src.archived_at = null;
-    var ins = await supabaseClient.from('estimates').insert(src).select().single();
-    if (ins.error) { toast('Duplicate failed: ' + ins.error.message, 'error'); return; }
-    var li = await supabaseClient.from('estimate_line_items').select('*').eq('estimate_id', currentEstimate.id);
-    if (li.data && li.data.length) {
-      var copies = li.data.map(function(r) {
-        var c = Object.assign({}, r); delete c.id; delete c.created_at; delete c.updated_at;
-        c.estimate_id = ins.data.id;
-        return c;
-      });
-      await supabaseClient.from('estimate_line_items').insert(copies);
-    }
-    toast('Duplicated — opening…', 'success');
-    setTimeout(function(){ location.href = 'bid-project.html?id=' + ins.data.id; }, 500);
-  }
-
-  // ─── Proposal editor ────────────────────────────────────────────
-  var proposalLoaded = false;
-  function loadProposal() {
-    if (proposalLoaded) return;
-    var ed = document.getElementById('propEditor');
-    if (currentEstimate && currentEstimate.proposal_html) {
-      ed.innerHTML = currentEstimate.proposal_html;
-    } else {
-      loadDefaultProposal();
-    }
-    proposalLoaded = true;
-  }
-
-  function loadDefaultProposal() {
-    var e = currentEstimate;
-    var today = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
-    var html =
-      '<h1>' + esc(e.name || 'Proposal') + '</h1>' +
-      '<div class="co-header">' +
-        '<div class="col"><b>From</b>' +
-          'Northern Wolves AC<br>124 9th St, #274<br>Brooklyn, NY 11215<br>(347) 440-3030' +
-        '</div>' +
-        '<div class="col"><b>To</b>' +
-          esc(e.requester_company || e.client_name || 'Customer name') + '<br>' +
-          esc(e.project_address || 'Project address') +
-        '</div>' +
-      '</div>' +
-      '<p style="text-align:right;margin-top:8px"><b>Quote #' + (e.quote_number || '—') + '</b> · ' + today + '</p>' +
-      '<h2>Scope of Work</h2>' +
-      '<p>' + esc(e.scope_summary || e.project_description || 'Enter scope of work here…') + '</p>' +
-      '<h3>Inclusions</h3>' +
-      '<p>' + esc(e.inclusions || '—') + '</p>' +
-      '<h3>Exclusions</h3>' +
-      '<p>' + esc(e.exclusions || '—') + '</p>' +
-      '<h2>Pricing</h2>' +
-      '<p><span id="_totals_placeholder">Click <b>💰 Totals</b> to insert live pricing from the estimate.</span></p>' +
-      '<h2>Terms</h2>' +
-      '<p>Payment terms: Net 30. Proposal valid for 30 days.<br>Northern Wolves AC · Licensed HVAC contractor NY/NJ.</p>';
-    document.getElementById('propEditor').innerHTML = html;
-  }
-
-  function insertAtCursor(html) {
-    var ed = document.getElementById('propEditor');
-    ed.focus();
-    var sel = window.getSelection();
-    if (sel.rangeCount) {
-      var r = sel.getRangeAt(0);
-      var frag = r.createContextualFragment(html);
-      r.deleteContents(); r.insertNode(frag);
-      sel.removeAllRanges();
-    } else {
-      ed.insertAdjacentHTML('beforeend', html);
-    }
-  }
-
-  function insertHeader() {
-    var e = currentEstimate;
-    insertAtCursor(
-      '<div class="co-header">' +
-        '<div class="col"><b>From</b>Northern Wolves AC<br>124 9th St, #274<br>Brooklyn, NY 11215<br>(347) 440-3030</div>' +
-        '<div class="col"><b>To</b>' + esc(e.requester_company || e.client_name || 'Customer name') + '<br>' +
-        esc(e.project_address || 'Project address') + '</div>' +
-      '</div>'
-    );
-  }
-
-  function insertScope() {
-    var e = currentEstimate;
-    insertAtCursor(
-      '<h2>Scope of Work</h2><p>' + esc(e.scope_summary || e.project_description || '…') + '</p>' +
-      '<h3>Inclusions</h3><p>' + esc(e.inclusions || '—') + '</p>' +
-      '<h3>Exclusions</h3><p>' + esc(e.exclusions || '—') + '</p>'
-    );
-  }
-
-  async function insertLineItems() {
-    var li = await supabaseClient.from('estimate_line_items').select('*').eq('estimate_id', estimateId).order('sort_order');
-    var lines = li.data || [];
-    if (!lines.length) { toast('No line items to insert', 'error'); return; }
-    var laborRate = Number(currentEstimate.labor_rate) || 60;
-    var rows = lines.map(function(l) {
-      var mat = (Number(l.quantity)||0) * (Number(l.unit_material_cost)||0);
-      var lab = (Number(l.quantity)||0) * (Number(l.unit_labor_hours)||0) * laborRate;
-      var t = mat + lab;
-      return '<tr><td>' + esc(l.category.replace('_',' ')) + '</td>' +
-        '<td>' + esc(l.description || '') + '</td>' +
-        '<td style="text-align:right">' + (Number(l.quantity)||0) + ' ' + esc(l.unit || '') + '</td>' +
-        '<td style="text-align:right">$' + Math.round(t).toLocaleString() + '</td></tr>';
-    }).join('');
-    insertAtCursor(
-      '<h3>Line Items</h3>' +
-      '<table><thead><tr><th>Category</th><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Total</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody></table>'
-    );
-  }
-
-  async function insertTotals() {
-    var li = await supabaseClient.from('estimate_line_items')
-      .select('category, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, is_wet_tap, is_optional').eq('estimate_id', estimateId);
-    var t = nwEstTotals(li.data || [], currentEstimate);
-    var money = function(n){ return '$' + Math.round(n).toLocaleString(); };
-    var pctTxt = function(p){ return (Math.round(p * 100000) / 1000) + '%'; };
-    insertAtCursor(
-      '<table><tbody>' +
-      '<tr><td>Equipment / Material</td><td style="text-align:right">' + money(t.materialTotal) + '</td></tr>' +
-      '<tr><td>Labor (' + t.laborHours.toFixed(1) + ' hrs @ $' + t.laborRate + ')</td><td style="text-align:right">' + money(t.labor) + '</td></tr>' +
-      (t.wetTap ? '<tr><td>Wet-tap</td><td style="text-align:right">' + money(t.wetTap) + '</td></tr>' : '') +
-      (t.services ? '<tr><td>Services</td><td style="text-align:right">' + money(t.services) + '</td></tr>' : '') +
-      '<tr><td>Overhead (' + pctTxt(t.rates.overhead) + ')</td><td style="text-align:right">' + money(t.overhead) + '</td></tr>' +
-      '<tr><td>Miscellaneous (' + pctTxt(t.rates.misc) + ')</td><td style="text-align:right">' + money(t.miscellaneous) + '</td></tr>' +
-      '<tr><td>NY Sales Tax (' + pctTxt(t.rates.tax) + ', material/equipment only)</td><td style="text-align:right">' + money(t.tax) + '</td></tr>' +
-      '<tr class="totals-row grand"><td>Total</td><td style="text-align:right">' + money(t.bidPrice) + '</td></tr>' +
-      '</tbody></table>'
-    );
-  }
-
-  async function savePropHtml() {
-    if (!canEdit) { toast('View only', 'error'); return; }
-    var html = document.getElementById('propEditor').innerHTML;
-    var upd = await supabaseClient.from('estimates').update({ proposal_html: html }).eq('id', estimateId);
-    if (upd.error) { toast('Save failed: ' + upd.error.message, 'error'); return; }
-    toast('Proposal saved', 'success');
-    currentEstimate.proposal_html = html;
-  }
-
-  function exportPropPdf() {
-    var ed = document.getElementById('propEditor');
-    if (!ed.innerHTML.trim()) { toast('Nothing to export', 'error'); return; }
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'padding:30px;font-family:sans-serif;font-size:12px;line-height:1.5;color:#0f172a';
-    wrap.innerHTML = ed.innerHTML;
-    var name = (currentEstimate.quote_number ? 'Q' + currentEstimate.quote_number + '_' : '') +
-               (currentEstimate.name || 'Proposal').replace(/[^A-Za-z0-9_-]+/g, '_') + '.pdf';
-    html2pdf().set({
-      margin: [12, 12, 12, 12], filename: name,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    }).from(wrap).save();
-  }
-
-  function hydrateOverview() {
-    var e = currentEstimate;
-    document.getElementById('crumbName').textContent = e.name || '(untitled)';
-    document.getElementById('bpTitle').value = e.name || '';
-    document.title = (e.quote_number ? 'Q' + e.quote_number + ' · ' : '') + (e.name || 'Bid Project') + ' — NWAC';
-
-    var stageSel = document.getElementById('stageSel');
-    stageSel.value = e.bid_stage || 'estimating';
-    stageSel.className = 'bp-stage-select st-' + (e.bid_stage || 'estimating');
-
-    document.getElementById('ovName').value        = e.name || '';
-    document.getElementById('ovNumber').value      = e.project_number || '';
-    document.getElementById('ovDescription').value = e.project_description || '';
-    document.getElementById('ovEstimator').value   = e.estimator_name || '';
-    document.getElementById('ovOffice').value      = e.office || '';
-    document.getElementById('ovSqft').value        = e.square_footage || '';
-    document.getElementById('ovQuote').value       = e.quote_number || '';
-    document.getElementById('ovDue').value         = e.bid_due_date || '';
-    document.getElementById('ovDueTime').value     = e.due_time || '';
-    document.getElementById('ovGc').value          = e.requester_company || '';
-    document.getElementById('ovGcEmail').value     = e.requester_email || '';
-    document.getElementById('ovInviteDate').value  = e.invitation_date || '';
-    document.getElementById('ovIntent').value      = e.bid_intent || '';
-    document.getElementById('ovCustomer').value    = e.client_name || '';
-    document.getElementById('ovAddress').value     = e.project_address || '';
-
-    // Wire tab links
-    document.getElementById('openDocsBtn').href    = 'project-files.html?estimate=' + estimateId;
-    document.getElementById('openTakeoffBtn').href = 'takeoff.html?est=' + estimateId;
-    document.getElementById('tabTakeoff').href     = 'takeoff.html?est=' + estimateId;
-    document.getElementById('openEstBtn').href     = 'estimating.html?est=' + estimateId;
-    document.getElementById('tabEstimating').href  = 'estimating.html?est=' + estimateId;
-
-    // Make Takeoff / Estimating tabs actually navigate away (they open the full-featured pages)
-    document.getElementById('tabTakeoff').addEventListener('click', function(ev) {
-      ev.preventDefault(); location.href = 'takeoff.html?est=' + estimateId;
-    });
-    document.getElementById('tabEstimating').addEventListener('click', function(ev) {
-      ev.preventDefault(); location.href = 'estimating.html?est=' + estimateId;
-    });
-  }
-
-  async function updateStage() {
-    if (!canEdit) return;
-    var v = document.getElementById('stageSel').value;
-    var upd = await supabaseClient.from('estimates').update({
-      bid_stage: v,
-      archived_at: v === 'archived' ? new Date().toISOString() : null
-    }).eq('id', estimateId);
-    if (upd.error) { toast('Stage update failed: ' + upd.error.message, 'error'); return; }
-    document.getElementById('stageSel').className = 'bp-stage-select st-' + v;
-    toast('Stage → ' + v.replace('_',' '), 'success');
-  }
-
-  async function updateTitle() {
-    if (!canEdit) return;
-    var v = document.getElementById('bpTitle').value.trim();
-    if (!v) return;
-    if (v === currentEstimate.name) return;
-    var upd = await supabaseClient.from('estimates').update({ name: v }).eq('id', estimateId);
-    if (upd.error) { toast('Rename failed: ' + upd.error.message, 'error'); return; }
-    currentEstimate.name = v;
-    document.getElementById('crumbName').textContent = v;
-    document.getElementById('ovName').value = v;
-    toast('Renamed', 'success');
-  }
-
-  async function saveOverview() {
-    if (!canEdit) { toast('View only', 'error'); return; }
-    var payload = {
-      name:                document.getElementById('ovName').value.trim() || currentEstimate.name,
-      project_number:      document.getElementById('ovNumber').value.trim() || null,
-      project_description: document.getElementById('ovDescription').value.trim() || null,
-      estimator_name:      document.getElementById('ovEstimator').value.trim() || null,
-      office:              document.getElementById('ovOffice').value || null,
-      square_footage:      parseFloat(document.getElementById('ovSqft').value) || null,
-      bid_due_date:        document.getElementById('ovDue').value || null,
-      due_time:            document.getElementById('ovDueTime').value || null,
-      requester_company:   document.getElementById('ovGc').value.trim() || null,
-      requester_email:     document.getElementById('ovGcEmail').value.trim() || null,
-      invitation_date:     document.getElementById('ovInviteDate').value || null,
-      bid_intent:          document.getElementById('ovIntent').value || null,
-      client_name:         document.getElementById('ovCustomer').value.trim() || null,
-      project_address:     document.getElementById('ovAddress').value.trim() || null
-    };
-    var upd = await supabaseClient.from('estimates').update(payload).eq('id', estimateId);
-    if (upd.error) { toast('Save failed: ' + upd.error.message, 'error'); return; }
-    toast('Saved', 'success');
-    currentEstimate = Object.assign({}, currentEstimate, payload);
-    document.getElementById('crumbName').textContent = payload.name;
-    document.getElementById('bpTitle').value = payload.name;
-  }
-
-  async function archive() {
-    if (!canEdit) return;
-    if (!confirm('Move this project to Archived? You can restore later from the Archived tab.')) return;
-    var upd = await supabaseClient.from('estimates').update({
-      bid_stage: 'archived', archived_at: new Date().toISOString()
-    }).eq('id', estimateId);
-    if (upd.error) { toast('Archive failed: ' + upd.error.message, 'error'); return; }
-    toast('Archived', 'success');
-    setTimeout(function(){ location.href = 'bid-board.html?stage=archived'; }, 700);
-  }
-
-  // ─── Notes / Tasks ──────────────────────────────────────────────
-  async function loadNotesTasks() {
-    var n = await supabaseClient.from('bid_project_notes')
-      .select('id, body, created_at, created_by').eq('estimate_id', estimateId).order('created_at', {ascending:false});
-    renderNotes(n.data || []);
-    var t = await supabaseClient.from('bid_project_tasks')
-      .select('id, title, due_date, is_done, created_by').eq('estimate_id', estimateId).order('is_done').order('due_date');
-    renderTasks(t.data || []);
-  }
-  function renderNotes(notes) {
-    document.getElementById('notesCount').textContent = notes.length;
-    var host = document.getElementById('notesList');
-    if (!notes.length) { host.innerHTML = '<div class="empty-block">No notes yet.</div>'; return; }
-    host.innerHTML = notes.map(function(n) {
-      return '<div class="side-item">' + esc(n.body) +
-        '<div class="who">' + new Date(n.created_at).toLocaleString() + '</div></div>';
-    }).join('');
-  }
-  function renderTasks(tasks) {
-    document.getElementById('tasksCount').textContent = tasks.length;
-    var host = document.getElementById('tasksList');
-    if (!tasks.length) { host.innerHTML = '<div class="empty-block">No tasks yet.</div>'; return; }
-    host.innerHTML = tasks.map(function(t) {
-      return '<div class="side-item" style="' + (t.is_done ? 'opacity:0.5;text-decoration:line-through' : '') + '">' +
-        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
-        '<input type="checkbox" data-task-id="' + t.id + '"' + (t.is_done ? ' checked' : '') + '>' +
-        esc(t.title) + '</label>' +
-        (t.due_date ? '<div class="who">Due ' + t.due_date + '</div>' : '') +
-      '</div>';
-    }).join('');
-    host.querySelectorAll('input[data-task-id]').forEach(function(cb) {
-      cb.addEventListener('change', async function() {
-        await supabaseClient.from('bid_project_tasks').update({
-          is_done: cb.checked,
-          completed_at: cb.checked ? new Date().toISOString() : null
-        }).eq('id', cb.getAttribute('data-task-id'));
-        loadNotesTasks();
-      });
-    });
-  }
-  async function addNote() {
-    var b = prompt('Note:');
-    if (!b || !b.trim()) return;
-    var ins = await supabaseClient.from('bid_project_notes').insert({
-      estimate_id: estimateId, body: b.trim(), created_by: currentUser ? currentUser.id : null
-    });
-    if (ins.error) { toast('Note add failed: ' + ins.error.message, 'error'); return; }
-    loadNotesTasks();
-  }
-  async function addTask() {
-    var t = prompt('Task title:');
-    if (!t || !t.trim()) return;
-    var d = prompt('Due date (YYYY-MM-DD, optional):') || null;
-    var ins = await supabaseClient.from('bid_project_tasks').insert({
-      estimate_id: estimateId, title: t.trim(), due_date: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null,
-      created_by: currentUser ? currentUser.id : null
-    });
-    if (ins.error) { toast('Task add failed: ' + ins.error.message, 'error'); return; }
-    loadNotesTasks();
-  }
-
-  // ─── Documents (short list) ─────────────────────────────────────
-  async function loadDocs() {
-    var host = document.getElementById('docsList');
-    host.innerHTML = '<div class="empty-block">Loading…</div>';
-    var q = await supabaseClient.from('project_files')
-      .select('id, filename, size_bytes, category, storage_path, uploaded_by, created_at')
-      .eq('estimate_id', estimateId).order('created_at', {ascending:false});
-    if (q.error) {
-      host.innerHTML = '<div class="empty-block" style="color:#dc2626">' + esc(q.error.message) + '</div>'; return;
-    }
-    var files = q.data || [];
-    if (!files.length) {
-      host.innerHTML = '<div class="empty-block">No documents uploaded yet — click <b>Full documents page</b> to upload.</div>';
+      loadThumbs(d, pages, w, thumbGen);
       return;
     }
-    host.innerHTML = files.slice(0, 30).map(function(f) {
-      var kb = f.size_bytes ? Math.round(f.size_bytes / 1024) + ' KB' : '';
-      return '<div class="doc-row">' +
-        '<span style="font-size:16px">📄</span>' +
-        '<div style="flex:1"><div class="fname">' + esc(f.filename) + '</div>' +
-        '<div class="size">' + esc(f.category || 'other') + ' · ' + kb + ' · ' + new Date(f.created_at).toLocaleDateString() + '</div>' +
-        '</div></div>';
-    }).join('') + (files.length > 30 ? '<div style="font-size:11px;color:#94a3b8;margin-top:6px">Showing 30 of ' + files.length + '. Open full docs page →</div>' : '');
-  }
-
-  // ─── Estimating summary ─────────────────────────────────────────
-  async function loadEstSummary() {
-    var host = document.getElementById('estSummary');
-    host.innerHTML = 'Loading…';
-    var li = await supabaseClient.from('estimate_line_items')
-      .select('category, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, is_wet_tap, is_optional').eq('estimate_id', estimateId);
-    if (li.error) { host.textContent = 'Error: ' + li.error.message; return; }
-    var lines = li.data || [];
-    if (!lines.length) { host.textContent = 'No line items yet — open Estimate to add them.'; return; }
-
-    var byCat = {}, matTot = 0, laborHrs = 0;
-    lines.forEach(function(l) {
-      var mat = (Number(l.quantity)||0) * (Number(l.unit_material_cost)||0);
-      var hrs = (Number(l.quantity)||0) * (Number(l.unit_labor_hours)||0);
-      matTot += mat; laborHrs += hrs;
-      (byCat[l.category] = byCat[l.category] || { m:0, h:0, n:0 });
-      byCat[l.category].m += mat;
-      byCat[l.category].h += hrs;
-      byCat[l.category].n++;
-    });
-    var t = nwEstTotals(lines, currentEstimate);   // same totals as the Estimate page
-
-    var catHtml = Object.keys(byCat).map(function(k) {
-      var c = byCat[k];
-      return '<tr><td style="padding:4px 8px">' + k.replace('_',' ') + '</td>' +
-        '<td style="padding:4px 8px" class="col-num">' + c.n + '</td>' +
-        '<td style="padding:4px 8px" class="col-num">$' + Math.round(c.m).toLocaleString() + '</td>' +
-        '<td style="padding:4px 8px" class="col-num">' + c.h.toFixed(1) + '</td></tr>';
+    // Drawings root — one row per drawing set
+    $('docFolderTitle').textContent = 'Custom Drawings';
+    var sets = sortRows(drawings.filter(function(x) { return !q || (x.filename || '').toLowerCase().indexOf(q) >= 0; }), function(x) { return x.filename || ''; }, function(x) { return x.created_at; });
+    if (!sets.length) {
+      host.innerHTML = '<div class="pc-empty">No drawings uploaded yet.' + (canEdit ? '<br><button type="button" class="pc-btn pc-btn-primary" id="docEmptyUpload" style="margin-top:12px">Upload</button>' : '') + '</div>';
+      var b = $('docEmptyUpload'); if (b) b.addEventListener('click', openUploadDrawings);
+      return;
+    }
+    host.innerHTML = sets.map(function(x) {
+      return '<div class="bp-doc-row"><span class="ic">' + icon('folder') + '</span><div class="nm" data-open-set="' + x.id + '"><div>' + esc(x.filename) + '</div><div class="sub">' + (x.page_count || 1) + ' page' + ((x.page_count || 1) === 1 ? '' : 's') + ' · ' + esc(PC.date(x.created_at)) + '</div></div><span data-set-kebab="' + x.id + '"></span></div>';
     }).join('');
-
-    host.innerHTML =
-      '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
-      '<thead><tr style="background:#f1f5f9"><th style="text-align:left;padding:4px 8px">Category</th>' +
-      '<th style="text-align:right;padding:4px 8px">Lines</th>' +
-      '<th style="text-align:right;padding:4px 8px">Material $</th>' +
-      '<th style="text-align:right;padding:4px 8px">Labor hrs</th></tr></thead><tbody>' + catHtml + '</tbody></table>' +
-      '<div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:6px">' +
-      '<div>Equipment / Material: <b>$' + Math.round(t.materialTotal).toLocaleString() + '</b></div>' +
-      '<div>Labor: <b>' + t.laborHours.toFixed(1) + ' hrs</b> × $' + t.laborRate + ' = $' + Math.round(t.labor).toLocaleString() + '</div>' +
-      (t.wetTap + t.services ? '<div>Wet-tap + Services: <b>$' + Math.round(t.wetTap + t.services).toLocaleString() + '</b></div>' : '') +
-      '<div>Overhead + Misc + Tax: <b>$' + Math.round(t.overhead + t.miscellaneous + t.tax).toLocaleString() + '</b></div>' +
-      '<div style="font-size:16px;margin-top:6px;font-weight:700;color:#059669">Total: $' + Math.round(t.bidPrice).toLocaleString() + '</div>' +
-      '</div>';
+    Array.prototype.forEach.call(host.querySelectorAll('[data-open-set]'), function(el) { el.addEventListener('click', function() { docSel = { type: 'drawing', id: el.getAttribute('data-open-set') }; renderDocTree(); renderDocList(); }); });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-set-kebab]'), function(el) {
+      var x = drawings.find(function(y) { return y.id === el.getAttribute('data-set-kebab'); });
+      el.innerHTML = PC.kebab(drawingMenu(x));
+    });
   }
 
-  // ─── Helpers ────────────────────────────────────────────────────
-  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function toast(m, k){
-    var t = document.getElementById('toast');
-    t.textContent = m; t.className = 'toast show' + (k ? ' ' + k : '');
-    setTimeout(function(){ t.classList.remove('show'); }, 3000);
+  async function loadThumbs(d, pages, w, gen) {
+    if (!window.EstDrawings || typeof EstDrawings.thumbnail !== 'function') return;
+    for (var i = 0; i < pages.length; i++) {
+      if (gen !== thumbGen) return;
+      var tile = $('docList').querySelector('.bp-page-tile[data-page="' + pages[i].n + '"] .th');
+      if (!tile) continue;
+      try {
+        var url = await EstDrawings.thumbnail(d, pages[i].n, w);
+        if (gen !== thumbGen) return;
+        if (url) tile.innerHTML = '<img src="' + url + '" alt="">';
+      } catch(e) { /* keep placeholder */ }
+    }
+  }
+
+  async function downloadAttachment(f, forceDownload) {
+    if (!f) return;
+    if (!f.storage_path) { toast('This file lives on Google Drive — open it from the full documents page', 'error'); return; }
+    var r = await supabaseClient.storage.from('project-files').createSignedUrl(f.storage_path, 3600, forceDownload ? { download: f.filename } : undefined);
+    if (r.error || !r.data) { toast('Could not open file: ' + (r.error ? r.error.message : ''), 'error'); return; }
+    window.open(r.data.signedUrl, '_blank');
+  }
+
+  // ─── uploads (drawings → estimate_drawings ONLY; attachments → project_files) ───
+  function openUploadDrawings() {
+    if (!canEdit) return viewOnly();
+    $('drawingFileInput').click();
+  }
+  async function uploadDrawings(files) {
+    if (!window.EstDrawings) { toast('est-drawings.js not loaded', 'error'); return; }
+    var pdfs = files.filter(function(f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
+    if (!pdfs.length) { toast('Drawings must be PDF files', 'error'); return; }
+    toast('Uploading ' + pdfs.length + ' drawing' + (pdfs.length === 1 ? '' : 's') + '…');
+    try {
+      // EstDrawings.upload never throws per file: it returns {rows, errors}; onProgress gets one {index,total,file,stage} object
+      var res = await EstDrawings.upload(rootId(), pdfs, { onProgress: function(info) {
+        if (info && info.total > 1 && info.stage === 'upload') toast('Uploading ' + (info.index + 1) + ' of ' + info.total + (info.file ? ' — ' + info.file.name : ''));
+      } });
+      var errs = (res && res.errors) || [], rows = (res && res.rows) || [];
+      errs.forEach(function(er) { toast(er.message || 'Upload failed', 'error'); });
+      if (rows.length) toast('Uploaded ' + rows.length + ' drawing' + (rows.length === 1 ? '' : 's'), 'success');
+    } catch(e) { toast('Upload failed: ' + (e.message || e), 'error'); }
+    if (currentTab !== 'documents') setTab('documents'); else loadDocs();
+  }
+  function openUploadAttachment() {
+    if (!canEdit) return viewOnly();
+    var body = document.createElement('div');
+    body.innerHTML =
+      '<div class="pc-field"><label class="pc-label">Files</label><input class="pc-input" type="file" id="attFiles" multiple style="padding-top:6px"></div>' +
+      '<div class="pc-field"><label class="pc-label">Category</label><select class="pc-select" id="attCat"><option value="other">Other</option><option value="quotes">Quotes</option><option value="specs">Specs</option></select></div>' +
+      '<div class="pc-field"><label class="pc-label">Notes</label><input class="pc-input" id="attNotes"></div>';
+    var m = PC.modal({ title: 'Upload attachment', body: body, size: 'sm', buttons: [
+      { label: 'Cancel', onClick: function() { m.close(); } },
+      { label: 'Upload', primary: true, closeOnDone: false, onClick: async function() {
+        // return false on error paths so PC.modal keeps the dialog (and the picked files) open
+        var files = Array.prototype.slice.call(body.querySelector('#attFiles').files || []);
+        if (!files.length) { toast('Pick at least one file', 'error'); return false; }
+        var category = body.querySelector('#attCat').value, notes = (body.querySelector('#attNotes').value || '').trim() || null;
+        var ok = 0, failed = 0;
+        for (var i = 0; i < files.length; i++) {
+          var file = files[i];
+          var path = 'est-' + rootId() + '/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+          try {
+            var up = await supabaseClient.storage.from('project-files').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || null });
+            if (up.error) { toast('Upload failed for ' + file.name + ': ' + up.error.message, 'error'); failed++; continue; }
+            var ins = await supabaseClient.from('project_files').insert({ estimate_id: rootId(), filename: file.name, storage_path: path, size_bytes: file.size, content_type: file.type || null, category: category, notes: notes, uploaded_by: currentUser ? currentUser.id : null });
+            if (ins.error) { toast('Row insert failed for ' + file.name + ': ' + ins.error.message, 'error'); failed++; continue; }
+          } catch(e) { toast('Upload failed for ' + file.name + ': ' + (e.message || e), 'error'); failed++; continue; }
+          ok++;
+        }
+        if (ok) toast('Uploaded ' + ok + ' file' + (ok === 1 ? '' : 's'), 'success');
+        if (ok) { docSel = { type: 'attachments', id: null }; loadDocs(); }
+        if (failed && !ok) return false;   // nothing went through — keep the dialog open for a retry
+        m.close();
+      } }
+    ] });
+  }
+  async function autoRenameDrawings() {
+    if (!canEdit) return viewOnly();
+    if (!window.EstDrawings || typeof EstDrawings.detectSheets !== 'function') { toast('est-drawings.js not loaded', 'error'); return; }
+    if (!docsLoadedOnce) await loadDocs();
+    if (!drawings.length) { toast('No drawings to rename', 'error'); return; }
+    toast('Detecting sheet numbers and scales…');
+    var n = 0;
+    for (var i = 0; i < drawings.length; i++) {
+      try { await EstDrawings.detectSheets(drawings[i]); n++; } catch(e) { console.warn(e); }
+    }
+    toast('Auto-rename finished for ' + n + ' drawing' + (n === 1 ? '' : 's'), 'success');
+    loadDocs();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PROPOSAL
+  // ═══════════════════════════════════════════════════════════════
+  var propSettings = null, propLoadedFor = null, propDirty = false, estimatorEmailCache = {};
+  var propSaveTimer = null, propHtmlTimer = null;
+
+  var PROP_SCHEMA = [
+    { sec: 'Quick Simplification' },
+    { sw: 'groupsOnly', label: 'Groups Only' }, { sw: 'lumpSum', label: 'Lump Sum' },
+    { sec: 'Material Details' },
+    { sw: 'quantity', label: 'Quantity' }, { sw: 'assemblyItems', label: 'Assembly Items', disabled: true, tip: 'Needs catalog link' },
+    { sw: 'itemTotalCost', label: 'Item Total Cost' }, { sw: 'combinedUnitCost', label: 'Combined Unit Cost' },
+    { sw: 'groupSubtotals', label: 'Group Subtotals' }, { sw: 'manufacturer', label: 'Manufacturer' },
+    { sw: 'catalogNumber', label: 'Catalog Number' }, { sw: 'description', label: 'Description' },
+    { sec: 'Group By' },
+    { sel: 'groupBy', options: [['groups', 'Groups'], ['assemblies', 'Assemblies'], ['categories', 'Categories']] },
+    { sec: 'Summary Details' },
+    { sw: 'summary.laborMaterials', label: 'Labor and Materials' }, { sw: 'summary.taxes', label: 'Taxes' },
+    { sw: 'summary.overhead', label: 'Overhead' }, { sw: 'summary.profit', label: 'Profit' },
+    { sw: 'summary.acceptedBy', label: 'Accepted By' }, { sw: 'summary.date', label: 'Date' },
+    { sec: 'Rounding' },
+    { sw: 'rounding.twoDecimals', label: 'Show 2 decimals' }, { sw: 'rounding.roundTotal', label: 'Round Proposal Total' },
+    { sec: 'Price / sq ft' },
+    { sw: 'sqft.costItems', label: 'Cost Items' }, { sw: 'sqft.groupSubtotals', label: 'Group Subtotals' },
+    { sw: 'sqft.summary', label: 'Summary' }, { sw: 'sqft.estimateTotal', label: 'Estimate Total' },
+    { sec: 'Edit Mode' },
+    { sw: 'editMode', label: 'Edit Mode' }
+  ];
+  function getPath(o, p) { return p.split('.').reduce(function(a, k) { return a == null ? a : a[k]; }, o); }
+  function setPath(o, p, v) { var ks = p.split('.'), cur = o; for (var i = 0; i < ks.length - 1; i++) { if (!cur[ks[i]] || typeof cur[ks[i]] !== 'object') cur[ks[i]] = {}; cur = cur[ks[i]]; } cur[ks[ks.length - 1]] = v; }
+
+  function defaultPropSettings() {
+    var d = (window.NWProposal && typeof NWProposal.defaultSettings === 'function') ? NWProposal.defaultSettings() : {};
+    return Object.assign({
+      groupsOnly: false, lumpSum: false, quantity: true, assemblyItems: false, itemTotalCost: true, combinedUnitCost: false, groupSubtotals: false,
+      manufacturer: false, catalogNumber: false, description: false, groupBy: 'groups',
+      summary: { laborMaterials: true, taxes: true, overhead: false, profit: false, acceptedBy: true, date: true },
+      rounding: { twoDecimals: true, roundTotal: false },
+      sqft: { costItems: false, groupSubtotals: false, summary: false, estimateTotal: false },
+      editMode: false, htmlOverride: false, coverFileId: null, appendixFileId: null, contactName: '', contactEmail: ''
+    }, d);
+  }
+  function loadPropSettings() {
+    var def = defaultPropSettings();
+    var stored = settingsOf(currentVersion).proposal || {};
+    var s = Object.assign({}, def, stored);
+    ['summary', 'rounding', 'sqft'].forEach(function(k) { s[k] = Object.assign({}, def[k] || {}, stored[k] || {}); });
+    s.editMode = false;   // never start in edit mode
+    propSettings = s;
+  }
+  function savePropSettings() {
+    clearTimeout(propSaveTimer);
+    propSaveTimer = setTimeout(function() {
+      var copy = JSON.parse(JSON.stringify(propSettings)); copy.editMode = false;
+      saveSettings({ proposal: copy });
+    }, 600);
+  }
+
+  function bindProposal() {
+    Array.prototype.forEach.call(document.querySelectorAll('.prop-btn[data-cmd]'), function(b) {
+      b.addEventListener('mousedown', function(e) { e.preventDefault(); });
+      b.addEventListener('click', function() { document.execCommand(b.getAttribute('data-cmd'), false, null); markPropDirty(); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.prop-btn[data-block]'), function(b) {
+      b.addEventListener('mousedown', function(e) { e.preventDefault(); });
+      b.addEventListener('click', function() { document.execCommand('formatBlock', false, b.getAttribute('data-block')); markPropDirty(); });
+    });
+    $('propPaper').addEventListener('input', function() { if (propSettings && propSettings.editMode) markPropDirty(); });
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && currentTab === 'proposal') { e.preventDefault(); saveProposalHtml(true); }
+    });
+    // kebab items are functions so 'Save proposal' is only enabled while Edit Mode is on (saving the live render would freeze the proposal)
+    $('propKebab').innerHTML = PC.kebab(function() { return [
+      { label: 'Save proposal', icon: 'check', disabled: !canEdit || !(propSettings && propSettings.editMode), onClick: function() { saveProposalHtml(true); } },
+      { label: 'Regenerate from estimate', icon: 'refresh', disabled: !canEdit, onClick: regenerateProposal },
+      { sep: true },
+      { label: 'Copy link', icon: 'content_copy', onClick: function() {
+        var link = location.origin + location.pathname + '?id=' + rootId() + (currentVersion.id !== rootId() ? '&est=' + currentVersion.id : '') + '#proposal';
+        if (navigator.clipboard) navigator.clipboard.writeText(link).then(function() { toast('Link copied', 'success'); }, function() { toast(link); });
+        else toast(link);
+      } }
+    ]; });
+  }
+
+  async function openProposal() {
+    if (!propSettings || propLoadedFor !== currentVersion.id) { loadPropSettings(); propLoadedFor = currentVersion.id; }
+    renderPropSettings();
+    await renderProposal();
+  }
+
+  function renderPropSettings() {
+    var host = $('propSettingsHost');
+    var s = propSettings;
+    var html = '';
+    PROP_SCHEMA.forEach(function(it) {
+      if (it.sec) { html += '<div class="bp-ps-sec">' + esc(it.sec) + '</div>'; return; }
+      if (it.sel) {
+        html += '<select class="pc-select" data-psel="' + it.sel + '">' + it.options.map(function(o) { return '<option value="' + o[0] + '"' + (getPath(s, it.sel) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+        return;
+      }
+      var on = !!getPath(s, it.sw);
+      html += '<label class="bp-switch' + (it.disabled ? ' off' : '') + '"' + (it.tip ? ' title="' + esc(it.tip) + '"' : '') + '><input type="checkbox" data-psw="' + it.sw + '"' + (on ? ' checked' : '') + (it.disabled ? ' disabled' : '') + '><i></i><span>' + esc(it.label) + '</span></label>';
+    });
+    html += '<div class="bp-ps-sub">Proposal Builder</div>';
+    html += '<div class="bp-ps-sec">Cover and Appendix Pages</div>';
+    html += '<div class="pc-field"><label class="pc-label">Cover page</label><select class="pc-select" id="propCover"><option value="">None</option></select></div>';
+    html += '<div class="pc-field"><label class="pc-label">Appendix page</label><select class="pc-select" id="propAppendix"><option value="">None</option></select></div>';
+    html += '<div class="bp-ps-sec">Customer Information</div><div id="propCustHost"></div>';
+    html += '<button type="button" class="bp-add-btn" id="propAddContact"' + (canEdit ? '' : ' disabled') + '>' + icon('add', 14) + ' Add Contact</button><div class="bp-cust-mini" id="propContactMini"></div>';
+    html += '<div class="bp-ps-sec">Estimator Information</div>';
+    html += '<div class="pc-field"><label class="pc-label">Office</label><select class="pc-select" id="propOffice"><option value="">— Select —</option><option>NYC</option><option>Long Island</option><option>NJ</option><option>Westchester</option><option>Other</option></select></div>';
+    host.innerHTML = html;
+
+    Array.prototype.forEach.call(host.querySelectorAll('[data-psw]'), function(cb) {
+      cb.addEventListener('change', function() {
+        var key = cb.getAttribute('data-psw');
+        if (key === 'editMode') { toggleEditMode(cb.checked); return; }
+        if (!canEdit) { cb.checked = !cb.checked; return viewOnly(); }
+        setPath(propSettings, key, cb.checked);
+        savePropSettings();
+        if (!propSettings.editMode) renderProposal();
+      });
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-psel]'), function(sel) {
+      sel.addEventListener('change', function() {
+        if (!canEdit) { sel.value = getPath(propSettings, sel.getAttribute('data-psel')); return viewOnly(); }
+        setPath(propSettings, sel.getAttribute('data-psel'), sel.value);
+        savePropSettings(); if (!propSettings.editMode) renderProposal();
+      });
+    });
+    ['propCover', 'propAppendix'].forEach(function(id) {
+      $(id).addEventListener('change', function() {
+        if (!canEdit) return viewOnly();
+        propSettings[id === 'propCover' ? 'coverFileId' : 'appendixFileId'] = $(id).value || null;
+        savePropSettings();
+      });
+    });
+    $('propOffice').value = currentVersion.office || '';
+    $('propOffice').addEventListener('change', function() {
+      if (!canEdit) return viewOnly();
+      var v = $('propOffice').value || null;
+      $('ovOffice').value = v || '';
+      queueSave('office', v);
+      if (!propSettings.editMode) setTimeout(renderProposal, 50);
+    });
+    $('propAddContact').addEventListener('click', openContactModal);
+    renderPropCustomer();
+    fillProposalFiles();
+  }
+  function renderPropCustomer() {
+    var host = $('propCustHost'); if (!host) return;
+    var e = currentVersion;
+    if (e.client_name) host.innerHTML = '<div class="bp-cust-mini"><b>' + esc(e.client_name) + '</b>' + (canEdit ? '<a href="#" id="propCustChange" class="pc-link" style="text-decoration:none">change</a>' : '') + '</div>';
+    else host.innerHTML = '<button type="button" class="bp-add-btn" id="propCustAdd"' + (canEdit ? '' : ' disabled') + '>' + icon('add', 14) + ' Add Customer</button>';
+    var a = $('propCustAdd'); if (a) a.addEventListener('click', openCustomerModal);
+    var c = $('propCustChange'); if (c) c.addEventListener('click', function(ev) { ev.preventDefault(); openCustomerModal(); });
+    var mini = $('propContactMini');
+    if (mini) mini.innerHTML = (propSettings && (propSettings.contactName || propSettings.contactEmail)) ? '<b>' + esc(propSettings.contactName || '') + '</b> ' + esc(propSettings.contactEmail || '') : '';
+  }
+  function openContactModal() {
+    if (!canEdit) return viewOnly();
+    var body = document.createElement('div');
+    body.innerHTML = '<div class="pc-field"><label class="pc-label">Contact name</label><input class="pc-input" id="ctName" value="' + esc(propSettings.contactName || '') + '"></div>' +
+      '<div class="pc-field"><label class="pc-label">Contact email</label><input class="pc-input" type="email" id="ctEmail" value="' + esc(propSettings.contactEmail || '') + '"></div>';
+    var m = PC.modal({ title: 'Add Contact', body: body, size: 'sm', buttons: [
+      { label: 'Cancel', onClick: function() { m.close(); } },
+      { label: 'Save', primary: true, onClick: function() {
+        propSettings.contactName = (body.querySelector('#ctName').value || '').trim();
+        propSettings.contactEmail = (body.querySelector('#ctEmail').value || '').trim();
+        savePropSettings(); renderPropCustomer(); if (!propSettings.editMode) renderProposal(); m.close();
+      } }
+    ] });
+  }
+  async function fillProposalFiles() {
+    var cov = $('propCover'), app = $('propAppendix');
+    if (!cov || !app || !propSettings) return;
+    if (!docsLoadedOnce) {
+      var a = await supabaseClient.from('project_files').select('id, filename, storage_path, content_type').eq('estimate_id', rootId()).order('created_at', { ascending: false });
+      attachments = a.error ? [] : (a.data || []);
+    }
+    var pdfs = attachments.filter(function(f) { return f.storage_path && (/\.pdf$/i.test(f.filename || '') || f.content_type === 'application/pdf'); });
+    var opts = '<option value="">None</option>' + pdfs.map(function(f) { return '<option value="' + f.id + '">' + esc(f.filename) + '</option>'; }).join('');
+    cov.innerHTML = opts; app.innerHTML = opts;
+    cov.value = propSettings.coverFileId || ''; app.value = propSettings.appendixFileId || '';
+  }
+
+  async function estimatorEmailFor(name) {
+    if (!name) return '';
+    if (estimatorEmailCache[name] !== undefined) return estimatorEmailCache[name];
+    var q = await supabaseClient.from('profiles').select('email').eq('full_name', name).limit(1).maybeSingle();
+    estimatorEmailCache[name] = (q.data && q.data.email) || '';
+    return estimatorEmailCache[name];
+  }
+
+  async function renderProposal() {
+    var paper = $('propPaper');
+    if (propSettings.editMode) return;
+    if (propSettings.htmlOverride && currentVersion.proposal_html) {
+      paper.innerHTML = currentVersion.proposal_html;
+      $('propModeLabel').textContent = 'Saved edits (not live)';
+      $('propModeLabel').classList.remove('on');
+      return;
+    }
+    if (!window.NWProposal || typeof NWProposal.render !== 'function') { paper.innerHTML = '<div class="pc-empty">nw-proposal.js not loaded.</div>'; return; }
+    var lines = await loadLines();
+    var email = await estimatorEmailFor(currentVersion.estimator_name);
+    try {
+      paper.innerHTML = NWProposal.render(currentVersion, lines, propSettings, { estimatorEmail: email, catalogById: {} });
+    } catch(e) { paper.innerHTML = '<div class="pc-empty" style="color:#dc2626">Proposal render failed: ' + esc(e.message || e) + '</div>'; }
+    $('propModeLabel').textContent = 'Live preview';
+    $('propModeLabel').classList.remove('on');
+  }
+
+  async function toggleEditMode(on) {
+    var paper = $('propPaper');
+    if (on && !canEdit) { viewOnly(); var cb = document.querySelector('[data-psw="editMode"]'); if (cb) cb.checked = false; return; }
+    propSettings.editMode = on;
+    if (on) {
+      if (propSettings.htmlOverride && currentVersion.proposal_html) paper.innerHTML = currentVersion.proposal_html;
+      paper.setAttribute('contenteditable', 'true');
+      $('propToolbar').classList.add('show');
+      $('propModeLabel').textContent = 'Edit Mode — changes autosave';
+      $('propModeLabel').classList.add('on');
+      paper.focus();
+    } else {
+      paper.removeAttribute('contenteditable');
+      $('propToolbar').classList.remove('show');
+      // await the pending save first so htmlOverride is set before the re-render (else the live render overwrites the edits on screen)
+      if (propDirty) await saveProposalHtml(false);
+      await renderProposal();
+    }
+  }
+  function markPropDirty() {
+    propDirty = true;
+    clearTimeout(propHtmlTimer);
+    propHtmlTimer = setTimeout(function() { saveProposalHtml(false); }, 1500);
+  }
+  async function saveProposalHtml(announce) {
+    if (!canEdit) { if (announce) viewOnly(); return; }
+    // Only custom edits get stored: saving the live render (Ctrl+S out of habit) would set htmlOverride and
+    // silently stop the proposal from following the estimate lines / Detail Settings.
+    if (!propSettings || (!propSettings.editMode && !propDirty)) {
+      if (announce) toast('Turn on Edit Mode to save custom proposal text');
+      return;
+    }
+    clearTimeout(propHtmlTimer);
+    var wasDirty = propDirty;
+    var html = $('propPaper').innerHTML;
+    var upd = await supabaseClient.from('estimates').update({ proposal_html: html }).eq('id', currentVersion.id);
+    if (upd.error) { toast('Save failed: ' + upd.error.message, 'error'); return; }
+    currentVersion.proposal_html = html;
+    propDirty = false;
+    if (wasDirty && !propSettings.htmlOverride) { propSettings.htmlOverride = true; savePropSettings(); }
+    if (announce) toast(wasDirty ? 'Proposal saved' : 'No changes to save');
+  }
+  async function regenerateProposal() {
+    if (!canEdit) return viewOnly();
+    if (!(await PC.confirm({ title: 'Regenerate from estimate', message: 'Discard the manually edited proposal text and rebuild it from the current estimate lines and Detail Settings?', okLabel: 'Regenerate' }))) return;
+    propSettings.htmlOverride = false; propDirty = false;
+    if (propSettings.editMode) { propSettings.editMode = false; $('propPaper').removeAttribute('contenteditable'); $('propToolbar').classList.remove('show'); var cb = document.querySelector('[data-psw="editMode"]'); if (cb) cb.checked = false; }
+    savePropSettings();
+    linesCache = null;
+    await renderProposal();
+    toast('Proposal regenerated', 'success');
+  }
+
+  async function fileBytes(fileId) {
+    if (!fileId) return null;
+    var f = attachments.find(function(x) { return x.id === fileId; });
+    if (!f) { var q = await supabaseClient.from('project_files').select('id, filename, storage_path').eq('id', fileId).maybeSingle(); f = q.data; }
+    if (!f || !f.storage_path) return null;
+    var r = await supabaseClient.storage.from('project-files').createSignedUrl(f.storage_path, 600);
+    if (r.error || !r.data) return null;
+    var res = await fetch(r.data.signedUrl);
+    return await res.arrayBuffer();
+  }
+  function proposalFilename(ext) {
+    return (currentVersion.quote_number ? 'Q' + currentVersion.quote_number + '_' : '') + (currentVersion.name || 'Proposal').replace(/[^A-Za-z0-9_-]+/g, '_') + '.' + ext;
+  }
+  async function exportProposalPdf() {
+    if (!window.NWProposal || typeof NWProposal.exportPdf !== 'function') { toast('nw-proposal.js not loaded', 'error'); return; }
+    if (currentTab !== 'proposal') { setTab('proposal'); await openProposal(); }
+    var paper = $('propPaper');
+    if (!paper.innerHTML.trim()) { toast('Nothing to export', 'error'); return; }
+    toast('Building PDF…');
+    try {
+      var cover = await fileBytes(propSettings.coverFileId), appendix = await fileBytes(propSettings.appendixFileId);
+      await NWProposal.exportPdf(paper, { filename: proposalFilename('pdf'), coverBytes: cover, appendixBytes: appendix });
+    } catch(e) { toast('Export failed: ' + (e.message || e), 'error'); }
+  }
+  async function exportProposalLetter() {
+    if (!window.NWProposal || typeof NWProposal.exportLetter !== 'function') { toast('nw-proposal.js not loaded', 'error'); return; }
+    try {
+      var lines = await loadLines();
+      var email = await estimatorEmailFor(currentVersion.estimator_name);
+      await NWProposal.exportLetter(currentVersion, lines, { estimatorEmail: email, estimatorName: currentVersion.estimator_name || '' });
+    }
+    catch(e) { toast('Export failed: ' + (e.message || e), 'error'); }
+  }
+  async function exportProposalXlsx() {
+    if (!window.NWProposal || typeof NWProposal.exportXlsx !== 'function') { toast('nw-proposal.js not loaded', 'error'); return; }
+    if (!propSettings) loadPropSettings();
+    try { var lines = await loadLines(); await NWProposal.exportXlsx(currentVersion, lines, propSettings); }
+    catch(e) { toast('Export failed: ' + (e.message || e), 'error'); }
   }
 })();
 </script>
-<script src="sw-register.js?v=319"></script>
+<script src="sw-register.js?v=332"></script>
 </body>
 </html>

@@ -8,319 +8,212 @@
 <meta name="apple-mobile-web-app-title" content="NW Field">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#0696D7">
+<meta name="theme-color" content="#ffffff">
 <title>Bid Board — Northern Wolves AC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="procore-ui.css?v=332">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=173"></script>
-<script src="auth.js?v=173"></script>
+<script src="supabase-config.js?v=332"></script>
+<script src="auth.js?v=332"></script>
+<script src="est-totals.js?v=332"></script>
+<script src="procore-ui.js?v=332"></script>
+<script src="bid-actions.js?v=332"></script>
 <style>
-  body { padding-bottom: 24px; background: #f8fafc; }
-  .bb-wrap { max-width: 1600px; margin: 0 auto; }
+  /* ═══════ Title row (PC.renderTitleRow) + helpers emitted by procore-ui.js ═══════
+     Duplicated here as fallbacks so the page renders even if procore-ui.css lags. */
+  .pc-head-block { background: #fff; border-bottom: 1px solid var(--pc-border); }
+  .pc-head-block .pc-title-row { padding-left: 0; padding-right: 0; border-bottom: 0; }
+  .pc-title-ic { color: var(--pc-primary); display: inline-flex; }
+  .pc-h1-sub { font-size: 12px; color: var(--pc-muted); margin-top: 2px; }
+  .pc-hint { font-size: 12px; color: var(--pc-muted); margin-top: 4px; line-height: 1.4; }
+  .pc-empty .pc-empty-title { font-size: 15px; font-weight: 600; color: var(--pc-text); margin-bottom: 4px; }
+  .pc-popover.bb-pop, .pc-popover.bb-filter-pop { padding: 12px 14px; width: auto; min-width: 260px; }
+  .pc-pop-title { font-weight: 600; margin-bottom: 8px; }
+  .pc-pop-row { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; font-size: 13px; }
+  .pc-pop-row span:first-child { color: var(--pc-muted); }
+  .pc-due-past { color: var(--pc-danger); font-weight: 700; font-size: 12px; }
+  .pc-due-soon { color: var(--pc-primary-hover); font-weight: 700; font-size: 12px; }
+  .pc-loadmore { padding: 12px; text-align: center; border-top: 1px solid var(--pc-row-sep); }
+  .pc-avatar-row { display: inline-flex; align-items: center; gap: 8px; }
+  .pc-table th .pc-sort-ic { margin-left: 6px; color: #9ca3af; vertical-align: middle; }
+  .pc-table th.sortable { cursor: pointer; user-select: none; }
+  .pc-table th.sorted .pc-sort-ic { color: var(--pc-link); }
+  .pc-table td.pc-td-actions { text-align: right; white-space: nowrap; }
+  .pc-table tr.pc-row-link { cursor: pointer; }
+  .bb-create .pc-radio { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; cursor: pointer; }
+  .bb-create .pc-radio input { margin-top: 3px; }
+  .bb-create .pc-radio + .pc-radio { margin-left: 0; }
 
-  /* ═══════ HEADER (title + Create New Project) ═══════ */
-  .bb-head {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 20px 8px;
-  }
-  .bb-head h1 { margin: 0; font-size: 24px; font-weight: 800; color: #0f172a; flex: 1; }
-  .btn-create {
-    background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; border: none;
-    padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 13px;
-    cursor: pointer; box-shadow: 0 2px 8px rgba(249,115,22,.3); display: flex; align-items: center; gap: 6px;
-  }
-  .btn-create:hover { filter: brightness(1.05); }
-
-  /* ═══════ PIPELINE — 10-stage tab strip ═══════ */
-  .bb-pipeline {
-    display: flex; overflow-x: auto; gap: 0; padding: 0 20px;
-    border-bottom: 1px solid #e2e8f0; background: #fff;
-    scrollbar-width: thin;
-  }
+  /* ═══════ PIPELINE — 10-stage strip (white bar under the title row) ═══════ */
+  .bb-pipeline-bar { background: #fff; border-bottom: 1px solid var(--pc-border); }
+  .bb-pipeline { display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: thin; }
   .bb-stage {
-    padding: 12px 16px 10px; cursor: pointer;
-    border-bottom: 3px solid transparent; white-space: nowrap;
-    min-width: 110px; text-align: left;
-    transition: background .15s;
+    padding: 10px 14px 8px 0; margin-right: 22px; cursor: pointer; white-space: nowrap;
+    border-bottom: 3px solid transparent; min-width: 96px; display: flex; flex-direction: column; justify-content: flex-start; gap: 3px;
   }
-  .bb-stage:hover { background: #f8fafc; }
-  .bb-stage.active { border-bottom-color: #0696D7; background: #f0f9ff; }
-  .bb-stage .stage-name {
-    font-size: 12px; font-weight: 600; color: #475569; text-transform: none;
-  }
-  .bb-stage.active .stage-name { color: #0696D7; font-weight: 700; }
-  .bb-stage .stage-count { font-weight: 700; color: #0f172a; margin-left: 4px; }
-  .bb-stage .stage-sum {
-    font-size: 12px; color: #94a3b8; margin-top: 2px; font-family: 'Courier New', monospace;
-  }
-  .bb-stage.active .stage-sum { color: #64748b; }
-  .stage-new-pill {
-    display: inline-block; background: #dbeafe; color: #1e40af;
-    font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 6px; margin-top: 3px;
-  }
+  .bb-stage:hover .bb-stage-name { color: var(--pc-text); }
+  .bb-stage.active { border-bottom-color: var(--pc-link); }
+  .bb-stage-name { font-size: 13px; color: var(--pc-head); }
+  .bb-stage.active .bb-stage-name { color: var(--pc-text); font-weight: 500; }
+  .bb-stage-sum { font-size: 13px; color: var(--pc-muted); font-variant-numeric: tabular-nums; }
+  .bb-stage.active .bb-stage-sum { color: var(--pc-link); }
+  .bb-stage .pc-pill-new { align-self: flex-start; }
+  .bb-pipeline .bb-strip-kebab { margin-left: auto; align-self: center; }
 
-  /* ═══════ TOOLBAR (search / sort / filter) ═══════ */
-  .bb-toolbar {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 20px; background: #fff; border-bottom: 1px solid #e2e8f0;
+  /* ═══════ CARD: toolbar + table ═══════ */
+  .bb-main { padding-top: 16px; padding-bottom: 32px; }
+  .bb-card { margin-top: 0; }
+  .bb-toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 16px; flex-wrap: wrap; }
+  .bb-toolbar .pc-search { width: 230px; }
+  .bb-toolbar .pc-search input { height: 34px; }
+  .bb-sort { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--pc-border-strong); border-radius: var(--pc-radius); height: 34px; padding: 0 4px 0 8px; background: #fff; color: var(--pc-head); }
+  .bb-sort select { border: 0; height: 32px; font: inherit; color: var(--pc-text); background: transparent; padding: 0 4px; outline: none; cursor: pointer; }
+  .bb-table-wrap { border-left: 0; border-right: 0; border-radius: 0; border-top: 1px solid var(--pc-border); border-bottom: 0; }
+  .bb-table-wrap .pc-table { min-width: 1080px; }
+  .pc-table th.bb-th-caret { width: 20px; padding-right: 0; color: var(--pc-muted); }
+  .pc-table td.bb-td-caret { width: 20px; padding-right: 0; color: var(--pc-muted); }
+  .pc-table td.bb-td-name { min-width: 240px; }
+  .pc-table td.bb-td-name a { font-weight: 500; }
+  .pc-table td.bb-td-name .pc-pill-new { margin-left: 6px; vertical-align: 1px; }
+  .pc-table td.bb-td-info { width: 44px; }
+  .pc-table td.bb-td-info .pc-btn { color: var(--pc-head); width: 28px; height: 28px; }
+  .pc-table td.bb-td-status { white-space: nowrap; }
+  .pc-table td.bb-td-actions { width: 44px; text-align: right; }
+  .bb-foot { padding: 10px 16px; font-size: 12px; color: var(--pc-muted); display: flex; gap: 12px; align-items: center; border-top: 1px solid var(--pc-row-sep); }
+  .bb-filter-pop { min-width: 260px; }
+  .bb-filter-pop .pc-field { margin-bottom: 0; }
+  #filterBtn.active, #sortDirBtn.active { color: var(--pc-link); background: var(--pc-link-bg); }
+  .bb-tpl-default { margin-left: 6px; }
+  @media (max-width: 700px) {
+    .bb-toolbar .pc-search { width: 100%; }
   }
-  .bb-search {
-    flex: 0 0 260px; padding: 7px 12px; border: 1px solid #cbd5e1;
-    border-radius: 7px; font-size: 13px; background: #f8fafc;
-  }
-  .bb-toolbar select {
-    padding: 7px 11px; font-size: 12px; border: 1px solid #cbd5e1;
-    border-radius: 7px; background: #fff;
-  }
-
-  /* ═══════ TABLE ═══════ */
-  .bb-table-wrap {
-    background: #fff; border: 1px solid #e2e8f0; border-top: none;
-    overflow: auto; max-height: calc(100vh - 260px);
-  }
-  .bb-table { width: 100%; border-collapse: collapse; }
-  .bb-table thead th {
-    background: #f8fafc; text-align: left; padding: 10px 12px;
-    font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;
-    letter-spacing: 0.4px; border-bottom: 1px solid #e2e8f0;
-    position: sticky; top: 0; z-index: 5;
-  }
-  .bb-table tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: middle; }
-  .bb-table tbody tr:hover { background: #f0f9ff; cursor: pointer; }
-  .bb-table .col-name { min-width: 260px; }
-  .bb-table .col-name a { color: #0696D7; font-weight: 600; text-decoration: none; }
-  .bb-table .col-name a:hover { text-decoration: underline; }
-  .bb-table .col-name .sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
-  .bb-table .col-num { text-align: right; font-family: 'Courier New', monospace; font-variant-numeric: tabular-nums; }
-  .bb-table .col-due .past { color: #dc2626; font-size: 11px; font-weight: 700; }
-  .bb-table .col-due .soon { color: #ea580c; font-size: 11px; font-weight: 700; }
-
-  /* Status pill (row-level, editable) */
-  .stage-pill {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.4px;
-    border: 1px solid transparent; cursor: pointer;
-    background: #f1f5f9; color: #475569;
-  }
-  .stage-pill.invitation    { background: #f5f3ff; color: #6d28d9; border-color: #c4b5fd; }
-  .stage-pill.to_do         { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
-  .stage-pill.estimating    { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
-  .stage-pill.bid_submitted { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .stage-pill.accepted      { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-  .stage-pill.in_progress   { background: #cffafe; color: #155e75; border-color: #67e8f9; }
-  .stage-pill.complete      { background: #dcfce7; color: #14532d; border-color: #86efac; }
-  .stage-pill.delayed       { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
-  .stage-pill.lost          { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
-  .stage-pill.archived      { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
-
-  .intent-pill {
-    display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid transparent; background: #f1f5f9; color: #64748b;
-  }
-  .intent-pill.will_bid   { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .intent-pill.no_bid     { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
-  .intent-pill.undecided  { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
-
-  .bb-empty {
-    padding: 80px 20px; text-align: center; color: #64748b;
-    background: #fff; border: 1px solid #e2e8f0; border-top: none;
-  }
-  .bb-empty .icon { font-size: 56px; margin-bottom: 12px; opacity: 0.4; }
-  .bb-empty h3 { margin: 0 0 6px; font-size: 16px; color: #334155; }
-  .bb-empty p  { margin: 0; font-size: 13px; }
-
-  /* Small chart icon in Info column */
-  .info-ic { color: #cbd5e1; font-size: 14px; }
-
-  /* Modal (Create New Project) */
-  .modal-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.55);
-    align-items: center; justify-content: center; z-index: 500;
-  }
-  .modal-overlay.open { display: flex; }
-  .modal-card {
-    background: #fff; border-radius: 12px; padding: 20px 22px; width: min(560px, 92vw);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-height: 88vh; overflow-y: auto;
-  }
-  .modal-card h2 { margin: 0 0 14px; font-size: 18px; color: #0f172a; }
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px; }
-  .field input, .field select, .field textarea {
-    width: 100%; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 6px;
-    font-size: 13px; background: #fff; box-sizing: border-box; font-family: inherit;
-  }
-  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-  .btn-primary { background: linear-gradient(135deg, #0696D7, #0479B2); color: #fff; border: none;
-                 padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer; }
-  .btn-secondary { background: #fff; color: #475569; border: 1px solid #cbd5e1;
-                   padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; }
-
-  .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 8px;
-    font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.3);
-    opacity: 0; transition: opacity .2s; z-index: 700;
-  }
-  .toast.show { opacity: 1; }
-  .toast.error { background: #dc2626; }
-  .toast.success { background: #059669; }
 </style>
 </head>
-<body>
+<body class="pc-page">
 
-<div class="bb-wrap">
-  <div class="bb-head">
-    <a href="index.html" style="text-decoration:none;color:#0696D7;font-weight:700;font-size:13px;margin-right:8px">← Home</a>
-    <h1>Bid Board</h1>
-    <button class="btn-create" id="createBtn">＋ Create New Project</button>
-  </div>
+<!-- Title row (crumb-less): gear + H1 'Bid Board' + Create New Project + kebab — filled by PC.renderTitleRow -->
+<div id="pcHead"></div>
 
-  <!-- Pipeline stages -->
-  <div class="bb-pipeline" id="pipeline"></div>
+<!-- Pipeline stages -->
+<div class="bb-pipeline-bar"><div class="pc-wrap"><div class="bb-pipeline" id="pipeline"></div></div></div>
 
-  <!-- Toolbar -->
-  <div class="bb-toolbar">
-    <input class="bb-search" id="searchInput" placeholder="Search projects…">
-    <label style="font-size:12px;color:#64748b">Sort by
-      <select id="sortSelect">
-        <option value="name">Name</option>
-        <option value="due">Due Date</option>
-        <option value="updated" selected>Recently updated</option>
-        <option value="value">Total Sales ↓</option>
-      </select>
-    </label>
-    <label style="font-size:12px;color:#64748b">Estimator
-      <select id="estimatorFilter">
-        <option value="">All</option>
-      </select>
-    </label>
-    <span style="flex:1"></span>
-    <span id="rowCount" style="font-size:12px;color:#94a3b8"></span>
-  </div>
+<div class="pc-wrap bb-main">
+  <div class="pc-banner-warn" id="schemaBanner" style="display:none;margin-bottom:12px"></div>
 
-  <!-- Table -->
-  <div class="bb-table-wrap">
-    <table class="bb-table" id="bbTable" style="display:none">
-      <thead>
-        <tr>
-          <th class="col-name">Name</th>
-          <th style="width:44px">Info</th>
-          <th>Requester Company</th>
-          <th>Project</th>
-          <th>Due Date</th>
-          <th id="thContext">Total Sales</th>
-          <th>Estimator</th>
-          <th id="thStatus">Status</th>
-        </tr>
-      </thead>
-      <tbody id="bbBody"></tbody>
-    </table>
-    <div class="bb-empty" id="bbEmpty">
-      <div class="icon">📋</div>
-      <h3>No projects in this stage</h3>
-      <p>Click <b>＋ Create New Project</b> to start a new bid.</p>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════ Create New Project modal ═══════ -->
-<div class="modal-overlay" id="createModal">
-  <div class="modal-card">
-    <h2>New Bid Project</h2>
-    <div class="field">
-      <label>Start from template (optional)</label>
-      <select id="npTemplate">
-        <option value="">— Blank project —</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Estimate name</label>
-      <input type="text" id="npName" placeholder="e.g. Yeshiva University Gym" autofocus>
-    </div>
-    <div class="field-row">
-      <div class="field">
-        <label>Project number (customer's, optional)</label>
-        <input type="text" id="npNumber" placeholder="e.g. 11010174">
+  <div class="pc-card bb-card">
+    <!-- Toolbar -->
+    <div class="bb-toolbar">
+      <div class="pc-search">
+        <input class="pc-input" id="searchInput" placeholder="Search projects" autocomplete="off">
+        <span id="searchIcon"></span>
       </div>
-      <div class="field">
-        <label>Starting stage</label>
-        <select id="npStage">
-          <option value="invitation">Invitation</option>
-          <option value="to_do">To Do</option>
-          <option value="estimating" selected>Estimating</option>
+      <div class="bb-sort" title="Sort by">
+        <span id="sortIcon"></span>
+        <select id="sortSelect">
+          <option value="name">Name</option>
+          <option value="project">Project</option>
+          <option value="due">Due Date</option>
+          <option value="value">Total Sales</option>
+          <option value="updated" selected>Updated</option>
         </select>
       </div>
-    </div>
-    <div class="field">
-      <label>Project address</label>
-      <input type="text" id="npAddress" placeholder="e.g. 2540 Amsterdam Ave, New York, NY">
-    </div>
-    <div class="field-row">
-      <div class="field">
-        <label>Requester (GC) — optional</label>
-        <input type="text" id="npGc" placeholder="e.g. Vanguard Construction">
-      </div>
-      <div class="field">
-        <label>Bid due date</label>
-        <input type="date" id="npDue">
+      <button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" id="sortDirBtn" title="Sort direction"></button>
+      <button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" id="filterBtn" title="Filters"></button>
+      <!-- the estimator filter lives here hidden and is moved into the Filters popover while it is open -->
+      <div id="filterHost" style="display:none">
+        <div class="pc-field" id="filterFields">
+          <label class="pc-label" for="estimatorFilter">Estimator</label>
+          <select class="pc-select" id="estimatorFilter">
+            <option value="">All estimators</option>
+          </select>
+        </div>
       </div>
     </div>
-    <div class="modal-actions">
-      <button class="btn-secondary" id="createCancel">Cancel</button>
-      <button class="btn-primary" id="createSave">Create & open</button>
+
+    <!-- Table -->
+    <div class="pc-table-wrap bb-table-wrap">
+      <table class="pc-table" id="bbTable" style="display:none">
+        <thead>
+          <tr>
+            <th class="bb-th-caret"><span id="thCaret"></span></th>
+            <th class="sortable" data-sort="name">Name<span class="pc-sort-ic" data-sort-ic="name"></span></th>
+            <th style="width:44px">Info</th>
+            <th>Requester Company</th>
+            <th class="sortable" data-sort="project">Project<span class="pc-sort-ic" data-sort-ic="project"></span></th>
+            <th class="sortable" data-sort="due">Due Date<span class="pc-sort-ic" data-sort-ic="due"></span></th>
+            <th class="sortable" data-sort="value" id="thContext">Total Sales<span class="pc-sort-ic" data-sort-ic="value"></span></th>
+            <th>Estimator</th>
+            <th id="thStatus">Status</th>
+            <th style="width:44px"></th>
+          </tr>
+        </thead>
+        <tbody id="bbBody"></tbody>
+      </table>
+      <div class="pc-empty" id="bbEmpty">
+        <div class="pc-empty-title">No projects in this stage</div>
+        <div id="bbEmptyHint">Use Create New Project to start a new bid, or pick another stage above.</div>
+      </div>
+      <div class="pc-loadmore" id="loadMore" style="display:none">
+        <button type="button" class="pc-btn pc-btn-secondary" id="loadMoreBtn">Load more</button>
+      </div>
     </div>
+    <div class="bb-foot"><span id="rowCount"></span></div>
   </div>
 </div>
-
-<div class="toast" id="toast"></div>
 
 <script>
 requireAuth().catch(function(){});
 (function() {
   'use strict';
 
-  var MGMT_ROLES = ['admin','manager','lead_pm','project_manager','apm'];
-
-  // 10 stages — order matters (matches Procore)
-  var STAGES = [
-    { key: 'invitation',    label: 'Invitations',    context: 'invitation' },
-    { key: 'to_do',         label: 'To Do',          context: 'internal'   },
-    { key: 'estimating',    label: 'Estimating',     context: 'internal'   },
-    { key: 'bid_submitted', label: 'Bid Submitted',  context: 'internal'   },
-    { key: 'accepted',      label: 'Accepted',       context: 'internal'   },
-    { key: 'in_progress',   label: 'In Progress',    context: 'internal'   },
-    { key: 'complete',      label: 'Complete',       context: 'internal'   },
-    { key: 'delayed',       label: 'Delayed',        context: 'internal'   },
-    { key: 'lost',          label: 'Lost',           context: 'internal'   },
-    { key: 'archived',      label: 'Archived',       context: 'internal'   }
-  ];
-  var STAGE_LABEL = {};
-  STAGES.forEach(function(s){ STAGE_LABEL[s.key] = s.label; });
+  var STAGES = PC.STAGES;
+  var STAGE_LABEL = PC.STAGE_LABEL;
+  var PAGE_SIZE = 100;
 
   var currentUser = null, canEdit = false, userProfile = null;
   var currentStage = 'estimating';
-  var estimates = [];   // all
-  var stageCounts = {}, stageSums = {};
+  var estimates = [];            // primary, non-template rows
+  var linesById = {};            // estimate_id → line rows
+  var altCountById = {};         // root id → number of alternates
+  var projectNameById = {};      // projects.id → project_name
+  var stageCounts = {}, stageSums = {}, newInvites = 0;
+  var sortField = 'updated', sortDir = 'desc';
+  var shown = PAGE_SIZE;         // client-side paging
+  var lastRows = [];             // rows of the current stage after filter+sort
+  var schemaMissing = false;
+  var ROW_KEBAB = '';            // kebab button HTML shared by every row (menu resolved by row id)
 
   init();
 
   async function init() {
+    // NW logo header as the first child of <body>
+    PC.mountHeader();
     try {
       var u = await supabaseClient.auth.getUser();
       if (u && u.data && u.data.user) currentUser = u.data.user;
       var prof = await supabaseClient.from('profiles')
-        .select('id,role,full_name').eq('id', currentUser.id).maybeSingle();
+        .select('id,role,full_name,email').eq('id', currentUser.id).maybeSingle();
       if (prof.data) {
         userProfile = prof.data;
-        canEdit = MGMT_ROLES.indexOf(prof.data.role) >= 0;
+        canEdit = PC.canEdit(prof.data);
       }
     } catch(e){ console.warn(e); }
 
-    // Deep-link: ?stage=estimating
+    renderHead();
+
+    // Deep-link ?stage= wins, then the last stage used on this device
     var q = new URLSearchParams(location.search);
+    var saved = null;
+    try { saved = localStorage.getItem('bb_stage'); } catch(e) {}
     if (q.get('stage') && STAGE_LABEL[q.get('stage')]) currentStage = q.get('stage');
+    else if (saved && STAGE_LABEL[saved]) currentStage = saved;
+
+    ROW_KEBAB = PC.kebab(function(btn) {
+      var tr = btn.closest('tr');
+      return rowMenuItems(tr ? tr.getAttribute('data-id') : null);
+    }, { size: 20 });
 
     bindEvents();
     await loadEstimates();
@@ -328,345 +221,656 @@ requireAuth().catch(function(){});
     renderTable();
   }
 
-  function bindEvents() {
-    document.getElementById('createBtn').addEventListener('click', openCreate);
-    document.getElementById('createCancel').addEventListener('click', function() {
-      document.getElementById('createModal').classList.remove('open');
+  /* ─── Title row: gear + Bid Board + Create New Project + kebab ─────── */
+  function renderHead() {
+    PC.renderTitleRow(document.getElementById('pcHead'), {
+      icon: 'settings',
+      title: 'Bid Board',
+      actions: [{ id: 'createBtn', label: 'Create New Project', icon: 'add', primary: true, onClick: openCreate }],
+      kebab: boardMenuItems,
+      kebabId: 'bbMenuBtn'
     });
-    document.getElementById('createSave').addEventListener('click', createProject);
-    document.getElementById('searchInput').addEventListener('input', renderTable);
-    document.getElementById('sortSelect').addEventListener('change', renderTable);
-    document.getElementById('estimatorFilter').addEventListener('change', renderTable);
   }
 
-  async function loadEstimates() {
-    // Pull primary estimate rows only (alternate versions handled inside bid-project.html)
-    // and exclude templates (shown in the New Project dropdown instead)
-    var { data, error } = await supabaseClient
-      .from('estimates')
-      .select('id, name, quote_number, project_number, bid_stage, bid_intent, ' +
-              'requester_company, requester_email, invitation_date, ' +
-              'bid_due_date, due_time, project_address, client_name, ' +
-              'estimator_name, created_at, updated_at, ' +
-              'labor_rate, overhead_pct, miscellaneous_pct, tax_rate, is_ofci, ' +
-              'parent_estimate_id, is_template')
-      .is('parent_estimate_id', null)
-      .eq('is_template', false)
-      .order('updated_at', { ascending: false });
-    if (error) { toast('Load failed: ' + error.message, 'error'); return; }
-    estimates = data || [];
+  function boardMenuItems() {
+    return [
+      { label: 'Manage Templates', icon: 'content_paste', onClick: openTemplates },
+      { label: 'Export to Excel', icon: 'download', onClick: exportExcel },
+      { sep: true },
+      { label: 'Refresh', icon: 'refresh', onClick: function() { reloadAll(); } }
+    ];
+  }
 
-    // Roll up line items for totals per estimate (single query)
-    var ids = estimates.map(function(e){ return e.id; });
-    var totalsById = {};
-    if (ids.length) {
-      var li = await supabaseClient.from('estimate_line_items')
-        .select('estimate_id, quantity, unit_material_cost, unit_labor_hours, is_wet_tap')
-        .in('estimate_id', ids);
-      (li.data || []).forEach(function(r) {
-        totalsById[r.estimate_id] = (totalsById[r.estimate_id] || 0) +
-          (Number(r.quantity)||0) * ((Number(r.unit_material_cost)||0) + (Number(r.unit_labor_hours)||0) * 60);
+  function bindEvents() {
+    document.getElementById('searchIcon').innerHTML = PC.icon('search', 18);
+    document.getElementById('sortIcon').innerHTML = PC.icon('sort', 18);
+    document.getElementById('filterBtn').innerHTML = PC.icon('filter_list', 20);
+    document.getElementById('thCaret').innerHTML = PC.icon('expand_more', 16);
+    document.getElementById('searchInput').addEventListener('input', PC.debounce(function() { shown = PAGE_SIZE; renderTable(); }, 120));
+    document.getElementById('sortSelect').addEventListener('change', function() {
+      sortField = this.value;
+      sortDir = (sortField === 'updated' || sortField === 'value') ? 'desc' : 'asc';
+      renderTable();
+    });
+    document.getElementById('sortDirBtn').addEventListener('click', function() {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      renderTable();
+    });
+    document.getElementById('estimatorFilter').addEventListener('change', function() { shown = PAGE_SIZE; renderTable(); });
+    document.getElementById('filterBtn').addEventListener('click', openFilterPopover);
+    document.getElementById('loadMoreBtn').addEventListener('click', function() { shown += PAGE_SIZE; renderTable(); });
+    document.querySelectorAll('#bbTable th.sortable').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var f = th.getAttribute('data-sort');
+        if (sortField === f) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        else { sortField = f; sortDir = (f === 'value') ? 'desc' : 'asc'; }
+        var sel = document.getElementById('sortSelect');
+        if (sel.querySelector('option[value="' + f + '"]')) sel.value = f;
+        renderTable();
+      });
+    });
+    updateSortUi();
+  }
+
+  function updateSortUi() {
+    var btn = document.getElementById('sortDirBtn');
+    btn.innerHTML = PC.icon(sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward', 20);
+    btn.title = sortDir === 'asc' ? 'Ascending' : 'Descending';
+    document.querySelectorAll('#bbTable th.sortable').forEach(function(th) {
+      var f = th.getAttribute('data-sort');
+      var ic = th.querySelector('.pc-sort-ic');
+      var on = f === sortField;
+      th.classList.toggle('sorted', on);
+      ic.innerHTML = on ? PC.icon(sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward', 14) : PC.icon('swap_vert', 14);
+    });
+    var estF = document.getElementById('estimatorFilter').value;
+    document.getElementById('filterBtn').classList.toggle('active', !!estF);
+  }
+
+  /* Filters popover — holds the existing #estimatorFilter select */
+  function openFilterPopover() {
+    var host = document.getElementById('filterHost');
+    var fields = document.getElementById('filterFields');
+    var wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="pc-pop-title">Filters</div>';
+    wrap.appendChild(fields);
+    var foot = document.createElement('div');
+    foot.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:12px';
+    foot.innerHTML = '<button type="button" class="pc-btn pc-btn-secondary" id="filterClear">Clear</button>';
+    wrap.appendChild(foot);
+    var pop = PC.popover(document.getElementById('filterBtn'), wrap, {
+      className: 'bb-filter-pop', align: 'left',
+      onClose: function() { host.appendChild(fields); }
+    });
+    foot.querySelector('#filterClear').addEventListener('click', function() {
+      document.getElementById('estimatorFilter').value = '';
+      shown = PAGE_SIZE; renderTable(); pop.close();
+    });
+  }
+
+  /* ─── Data ─────────────────────────────────────────────────────────── */
+  var EST_COLS = 'id, name, quote_number, project_number, bid_stage, bid_intent, ' +
+    'requester_company, requester_email, invitation_date, bid_due_date, due_time, ' +
+    'project_address, client_name, estimator_name, created_at, updated_at, ' +
+    'labor_rate, overhead_pct, miscellaneous_pct, tax_rate, is_ofci, ' +
+    'parent_estimate_id, is_template, project_description, project_id, square_footage';
+  var LINE_COLS_EXT = 'estimate_id, category, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, ' +
+    'is_wet_tap, is_optional, waste_pct, markup_pct, labor_markup_pct, labor_factor, is_taxable, group_name';
+  var LINE_COLS_BASE = 'estimate_id, category, quantity, unit_material_cost, unit_labor_hours, labor_crew_type, is_wet_tap, is_optional';
+
+  /* Fetch every row of a query in pages of 1000 (Supabase caps a single select at 1000) */
+  async function fetchAll(build) {
+    var out = [], page = 0, size = 1000;
+    while (true) {
+      var r = await build().range(page * size, page * size + size - 1);
+      if (r.error) return { error: r.error, data: out };
+      out = out.concat(r.data || []);
+      if (!r.data || r.data.length < size) break;
+      page++;
+    }
+    return { data: out };
+  }
+  function chunk(arr, n) { var o = []; for (var i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; }
+
+  async function loadEstimates() {
+    schemaMissing = false;
+    var r = await fetchAll(function() {
+      return supabaseClient.from('estimates').select(EST_COLS + ', settings')
+        .is('parent_estimate_id', null).eq('is_template', false)
+        .order('updated_at', { ascending: false }).order('id');
+    });
+    if (r.error && PC.isSchemaError(r.error)) {
+      schemaMissing = true;
+      r = await fetchAll(function() {
+        return supabaseClient.from('estimates').select(EST_COLS)
+          .is('parent_estimate_id', null).eq('is_template', false)
+          .order('updated_at', { ascending: false }).order('id');
       });
     }
+    if (r.error) { PC.toast('Load failed: ' + r.error.message, 'error'); return; }
+    estimates = r.data || [];
+    var ids = estimates.map(function(e){ return e.id; });
+
+    // Line items of every primary estimate (chunked ids, paged rows)
+    linesById = {};
+    var lineCols = schemaMissing ? LINE_COLS_BASE : LINE_COLS_EXT;
+    var chunks = chunk(ids, 150);
+    for (var c = 0; c < chunks.length; c++) {
+      var idsC = chunks[c];
+      // deterministic ORDER BY so .range() pages never duplicate/skip rows
+      var li = await fetchAll(function() {
+        return supabaseClient.from('estimate_line_items').select(lineCols).in('estimate_id', idsC)
+          .order('estimate_id').order('id');
+      });
+      if (li.error && PC.isSchemaError(li.error) && lineCols === LINE_COLS_EXT) {
+        schemaMissing = true; lineCols = LINE_COLS_BASE; c--; continue;
+      }
+      if (li.error) { PC.toast('Line items load failed: ' + li.error.message, 'error'); break; }
+      li.data.forEach(function(row) { (linesById[row.estimate_id] = linesById[row.estimate_id] || []).push(row); });
+    }
     estimates.forEach(function(e) {
-      var subtotal = totalsById[e.id] || 0;
-      // Apply overhead + misc + tax roughly for the pipeline totals column
-      var ovh   = subtotal * (Number(e.overhead_pct)      || 0.20);
-      var misc  = subtotal * (Number(e.miscellaneous_pct) || 0.02);
-      var tax   = subtotal * (Number(e.tax_rate)          || 0.08875);
-      e._total_sales = subtotal + ovh + misc + tax;
+      var t = nwEstTotals(linesById[e.id] || [], e);
+      e._total_sales = Number(t.total != null ? t.total : t.bidPrice) || 0;
+      e._line_count = (linesById[e.id] || []).length;
+      e._desc_line = firstLine(e.project_description);
     });
 
-    // Build stage counts + sums
-    stageCounts = {}; stageSums = {};
+    // Linked project names
+    projectNameById = {};
+    var pids = {};
+    estimates.forEach(function(e){ if (e.project_id) pids[e.project_id] = true; });
+    var pidList = Object.keys(pids);
+    var pch = chunk(pidList, 200);
+    for (var p = 0; p < pch.length; p++) {
+      var pr = await supabaseClient.from('projects').select('id, project_name').in('id', pch[p]);
+      (pr.data || []).forEach(function(row){ projectNameById[row.id] = row.project_name; });
+    }
+
+    // Alternate versions count per root (Info popover)
+    altCountById = {};
+    var alts = await fetchAll(function() {
+      return supabaseClient.from('estimates').select('parent_estimate_id').not('parent_estimate_id', 'is', null).order('id');
+    });
+    (alts.data || []).forEach(function(a){ altCountById[a.parent_estimate_id] = (altCountById[a.parent_estimate_id] || 0) + 1; });
+
+    recomputeCounts();
+    populateEstimatorFilter();
+    showSchemaBanner();
+  }
+
+  async function reloadAll() {
+    await loadEstimates();
+    renderPipeline();
+    renderTable();
+  }
+
+  function showSchemaBanner() {
+    var b = document.getElementById('schemaBanner');
+    if (!schemaMissing) { b.style.display = 'none'; return; }
+    b.style.display = '';
+    b.innerHTML = PC.icon('warning', 16) + ' <b>Schema update pending.</b> estimates.settings / line markup columns are missing — run <code>procore-ui-schema.sql</code> in Supabase. Totals fall back to the legacy formula and Manage Templates cannot set a default template until then.';
+  }
+
+  function firstLine(s) {
+    if (!s) return '';
+    var t = String(s).split(/\r?\n/).map(function(x){ return x.trim(); }).filter(Boolean)[0] || '';
+    return t.length > 90 ? t.slice(0, 88) + '…' : t;
+  }
+
+  function recomputeCounts() {
+    stageCounts = {}; stageSums = {}; newInvites = 0;
     STAGES.forEach(function(s){ stageCounts[s.key] = 0; stageSums[s.key] = 0; });
     estimates.forEach(function(e) {
       var st = e.bid_stage || 'estimating';
       if (stageCounts.hasOwnProperty(st)) {
         stageCounts[st]++;
         stageSums[st] += Number(e._total_sales) || 0;
+        if (st === 'invitation' && (!e.bid_intent || e.bid_intent === 'undecided')) newInvites++;
       }
     });
+  }
 
-    // Populate estimator filter
+  function populateEstimatorFilter() {
     var estSel = document.getElementById('estimatorFilter');
+    var keep = estSel.value;
+    estSel.innerHTML = '<option value="">All estimators</option>';
     var uniq = {};
     estimates.forEach(function(e){ if (e.estimator_name) uniq[e.estimator_name] = true; });
     Object.keys(uniq).sort().forEach(function(n) {
       var o = document.createElement('option'); o.value = n; o.textContent = n;
       estSel.appendChild(o);
     });
+    if (keep && uniq[keep]) estSel.value = keep;
   }
 
+  /* ─── Pipeline strip ───────────────────────────────────────────────── */
   function renderPipeline() {
     var host = document.getElementById('pipeline');
     host.innerHTML = STAGES.map(function(s) {
-      var newPill = s.key === 'invitation' && stageCounts[s.key]
-        ? '<div class="stage-new-pill">' + stageCounts[s.key] + ' NEW</div>' : '';
-      return '<div class="bb-stage' + (s.key === currentStage ? ' active' : '') +
-             '" data-stage="' + s.key + '">' +
-        '<div class="stage-name">' + s.label +
-          ' <span class="stage-count">(' + (stageCounts[s.key] || 0) + ')</span></div>' +
-        '<div class="stage-sum">' + fmt$(stageSums[s.key] || 0) + '</div>' +
-        newPill +
-      '</div>';
-    }).join('');
+      var second;
+      if (s.key === 'invitation') {
+        // Procore shows only the "N New" pill under Invitations, never a dollar sum
+        second = newInvites ? '<span class="pc-pill pc-pill-new">' + newInvites + ' New</span>' : '<div class="bb-stage-sum">&nbsp;</div>';
+      } else {
+        second = '<div class="bb-stage-sum">' + PC.compact(stageSums[s.key] || 0) + '</div>';
+      }
+      return '<div class="bb-stage' + (s.key === currentStage ? ' active' : '') + '" data-stage="' + s.key + '" role="tab">' +
+        '<div class="bb-stage-name">' + s.label + ' (' + (stageCounts[s.key] || 0) + ')</div>' + second + '</div>';
+    }).join('') +
+    '<button type="button" class="pc-btn pc-btn-ghost pc-btn-icon pc-kebab bb-strip-kebab" id="stripMenuBtn" aria-label="More">' + PC.icon('more_vert', 22) + '</button>';
     host.querySelectorAll('.bb-stage').forEach(function(el) {
       el.addEventListener('click', function() {
         currentStage = el.getAttribute('data-stage');
         var url = new URL(location.href);
         url.searchParams.set('stage', currentStage);
         history.replaceState({}, '', url);
+        try { localStorage.setItem('bb_stage', currentStage); } catch(e) {}
+        shown = PAGE_SIZE;
         renderPipeline(); renderTable();
       });
     });
+    var kb = document.getElementById('stripMenuBtn');
+    kb.addEventListener('click', function() { PC.menu(kb, boardMenuItems(), { align: 'right' }); });
   }
 
-  function renderTable() {
+  /* ─── Table ────────────────────────────────────────────────────────── */
+  function filteredRows() {
     var q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
     var estFilter = document.getElementById('estimatorFilter').value;
-    var sort = document.getElementById('sortSelect').value;
-    var isInvitationStage = currentStage === 'invitation';
-
-    document.getElementById('thContext').textContent = isInvitationStage ? 'Invitation Date' : 'Total Sales';
-    document.getElementById('thStatus').textContent  = isInvitationStage ? 'Bid Intent' : 'Status';
-
     var rows = estimates.filter(function(e) {
       if ((e.bid_stage || 'estimating') !== currentStage) return false;
       if (estFilter && e.estimator_name !== estFilter) return false;
       if (q) {
-        var hay = [(e.name||''), (e.project_address||''), (e.client_name||''),
-                   (e.requester_company||''), String(e.quote_number || ''),
-                   (e.project_number||'')].join(' ').toLowerCase();
+        var hay = [(e.name||''), (e.project_address||''), (e.client_name||''), (e.requester_company||''),
+                   String(e.quote_number || ''), (e.project_number||''), projectName(e), (e.estimator_name||'')].join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
     });
+    var dir = sortDir === 'asc' ? 1 : -1;
+    var cmp;
+    if (sortField === 'name') cmp = function(a,b){ return (a.name||'').localeCompare(b.name||''); };
+    else if (sortField === 'project') cmp = function(a,b){ return (projectName(a) || a.project_address || '').localeCompare(projectName(b) || b.project_address || ''); };
+    else if (sortField === 'due') cmp = function(a,b){ return (a.bid_due_date||'9999-12-31').localeCompare(b.bid_due_date||'9999-12-31'); };
+    else if (sortField === 'value') cmp = function(a,b){
+      if (currentStage === 'invitation') return (a.invitation_date||'').localeCompare(b.invitation_date||'');
+      return (a._total_sales||0) - (b._total_sales||0);
+    };
+    else cmp = function(a,b){ return (a.updated_at||'').localeCompare(b.updated_at||''); };
+    rows.sort(function(a,b){ return cmp(a,b) * dir; });
+    return rows;
+  }
 
-    // Sort
-    if (sort === 'name') rows.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
-    else if (sort === 'due') rows.sort(function(a,b){
-      return (a.bid_due_date||'9999-12-31').localeCompare(b.bid_due_date||'9999-12-31');
-    });
-    else if (sort === 'value') rows.sort(function(a,b){ return (b._total_sales||0) - (a._total_sales||0); });
-    else rows.sort(function(a,b){ return (b.updated_at||'').localeCompare(a.updated_at||''); });
+  function projectName(e) { return e.project_id ? (projectNameById[e.project_id] || '') : ''; }
 
-    document.getElementById('rowCount').textContent = rows.length + ' project' + (rows.length === 1 ? '' : 's');
+  function renderTable() {
+    var isInvitationStage = currentStage === 'invitation';
+    var thCtx = document.getElementById('thContext');
+    thCtx.firstChild.nodeValue = isInvitationStage ? 'Invitation Date' : 'Total Sales';
+    var sortValueOpt = document.querySelector('#sortSelect option[value="value"]');
+    if (sortValueOpt) sortValueOpt.textContent = isInvitationStage ? 'Invitation Date' : 'Total Sales';
+    document.getElementById('thStatus').textContent = isInvitationStage ? 'Bid Intent' : 'Status';
+    updateSortUi();
 
+    var rows = filteredRows();
+    lastRows = rows;
     var body = document.getElementById('bbBody');
+    var table = document.getElementById('bbTable');
+    var empty = document.getElementById('bbEmpty');
+    var more = document.getElementById('loadMore');
+    var count = document.getElementById('rowCount');
+
     if (!rows.length) {
-      document.getElementById('bbTable').style.display = 'none';
-      document.getElementById('bbEmpty').style.display = '';
+      table.style.display = 'none'; more.style.display = 'none';
+      empty.style.display = '';
+      var q = (document.getElementById('searchInput').value || '').trim();
+      document.getElementById('bbEmptyHint').textContent = q
+        ? 'No ' + STAGE_LABEL[currentStage] + ' projects match "' + q + '".'
+        : (canEdit ? 'Use Create New Project to start a new bid, or pick another stage above.' : 'Pick another stage above.');
+      count.textContent = '0 projects';
+      body.innerHTML = '';
       return;
     }
-    document.getElementById('bbTable').style.display = '';
-    document.getElementById('bbEmpty').style.display = 'none';
+    table.style.display = '';
+    empty.style.display = 'none';
+    var visible = rows.slice(0, shown);
+    more.style.display = rows.length > shown ? '' : 'none';
+    count.textContent = (rows.length > visible.length ? 'Showing 1-' + visible.length + ' of ' : '') +
+      rows.length + ' project' + (rows.length === 1 ? '' : 's') +
+      (rows.length > visible.length ? '' : ' in ' + STAGE_LABEL[currentStage]);
 
-    body.innerHTML = rows.map(function(e) {
-      var due = e.bid_due_date ? fmtDate(e.bid_due_date) : '<span style="color:#94a3b8">—</span>';
-      var duePill = '';
-      if (e.bid_due_date) {
-        var days = Math.floor((new Date(e.bid_due_date) - new Date()) / 86400000);
-        if (days < 0)      duePill = '<div class="past">Past Due</div>';
-        else if (days < 3) duePill = '<div class="soon">Due in ' + days + 'd</div>';
-      }
-      var contextCell, statusCell;
+    body.innerHTML = visible.map(function(e) { return rowHtml(e, isInvitationStage); }).join('');
+
+    // Status / Bid Intent pill dropdowns (DOM elements)
+    body.querySelectorAll('td.bb-td-status').forEach(function(td) {
+      var id = td.getAttribute('data-id');
+      var e = estimates.find(function(x){ return x.id === id; });
+      if (!e) return;
+      var dd;
       if (isInvitationStage) {
-        contextCell = e.invitation_date ? fmtDate(e.invitation_date) : '<span style="color:#94a3b8">—</span>';
-        statusCell = intentPillHtml(e.bid_intent || 'undecided', e.id);
+        dd = PC.pillDropdown({
+          value: e.bid_intent || 'undecided', options: PC.INTENTS, readOnly: !canEdit,
+          onChange: function(k) { return updateIntent(id, k); }
+        });
       } else {
-        contextCell = '<span class="col-num">' + fmt$(e._total_sales || 0) + '</span>';
-        statusCell = stagePillHtml(e.bid_stage || 'estimating', e.id);
+        var stage = e.bid_stage || 'estimating';
+        var opts = PC.STAGE_PICKABLE.slice();
+        if (stage === 'archived') opts = opts.concat(STAGES.filter(function(s){ return s.key === 'archived'; }));
+        dd = PC.pillDropdown({
+          value: stage, options: opts, readOnly: !canEdit,
+          onChange: function(k) { return updateStage(id, k); }
+        });
       }
-      var estimator = e.estimator_name
-        ? '<span style="display:inline-flex;align-items:center;gap:6px">' +
-          '<span style="width:22px;height:22px;background:#dbeafe;color:#1e40af;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">' +
-          initials(e.estimator_name) + '</span>' +
-          esc(e.estimator_name) + '</span>'
-        : '<span style="color:#cbd5e1">—</span>';
-      var name = e.name || '(untitled)';
-      var sub = e.quote_number ? 'Q#' + e.quote_number : (e.project_number || '--');
-      return '<tr data-id="' + e.id + '">' +
-        '<td class="col-name"><a href="bid-project.html?id=' + e.id + '">' + esc(name) + '</a>' +
-          '<div class="sub">' + esc(sub) + '</div></td>' +
-        '<td><span class="info-ic">📊</span></td>' +
-        '<td>' + (e.requester_company ? esc(e.requester_company) : '<span style="color:#cbd5e1">—</span>') +
-          (e.requester_email ? '<div style="font-size:11px;color:#94a3b8">' + esc(e.requester_email) + '</div>' : '') +
-          '</td>' +
-        '<td style="font-size:12px;color:#64748b">' + (e.project_address ? esc(e.project_address) : '<span style="color:#cbd5e1">—</span>') + '</td>' +
-        '<td class="col-due">' + due + duePill + '</td>' +
-        '<td>' + contextCell + '</td>' +
-        '<td>' + estimator + '</td>' +
-        '<td>' + statusCell + '</td>' +
-      '</tr>';
-    }).join('');
+      td.appendChild(dd);
+    });
 
-    // Row click → open project (but ignore clicks on links/pills)
-    body.querySelectorAll('tr').forEach(function(tr) {
-      tr.addEventListener('click', function(ev) {
-        if (ev.target.closest('a') || ev.target.closest('select') || ev.target.closest('.stage-pill') || ev.target.closest('.intent-pill')) return;
-        location.href = 'bid-project.html?id=' + tr.getAttribute('data-id');
+    // Info popover
+    body.querySelectorAll('button[data-info]').forEach(function(btn) {
+      btn.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        openInfo(btn, btn.getAttribute('data-info'));
       });
     });
-    // Wire pill dropdown changes
-    body.querySelectorAll('select[data-stage-for]').forEach(function(sel) {
-      sel.addEventListener('change', function(e) { updateStage(sel.getAttribute('data-stage-for'), sel.value); });
+
+    // Row click → open project (ignore clicks on controls)
+    body.querySelectorAll('tr.pc-row-link').forEach(function(tr) {
+      tr.addEventListener('click', function(ev) {
+        if (ev.target.closest('.pc-kebab,.pc-menu,.pc-pill-dd,a,button')) return;
+        location.href = 'bid-project.html?id=' + tr.getAttribute('data-id') + '#overview';
+      });
     });
-    body.querySelectorAll('select[data-intent-for]').forEach(function(sel) {
-      sel.addEventListener('change', function(e) { updateIntent(sel.getAttribute('data-intent-for'), sel.value); });
-    });
   }
 
-  function stagePillHtml(stage, id) {
-    if (!canEdit) {
-      return '<span class="stage-pill ' + stage + '">' + STAGE_LABEL[stage] + '</span>';
+  function rowHtml(e, isInvitationStage) {
+    var name = e.name || '(untitled)';
+    var isNew = isInvitationStage && (!e.bid_intent || e.bid_intent === 'undecided');
+    var nameCell = '<a href="bid-project.html?id=' + e.id + '#overview">' + PC.esc(name) + '</a>' +
+      (isNew ? '<span class="pc-pill pc-pill-new">New</span>' : '') +
+      '<div class="sub">' + (e._desc_line ? PC.esc(e._desc_line) : '--') + '</div>';
+
+    var req = e.requester_company ? PC.esc(e.requester_company) : '<span class="pc-muted">--</span>';
+    if (e.requester_email) req += '<div class="sub">' + PC.esc(e.requester_email) + '</div>';
+
+    var pn = projectName(e);
+    var proj = pn ? PC.esc(pn) : (e.project_address ? '' : '<span class="pc-muted">--</span>');
+    if (e.project_address) proj += (pn ? '<div class="sub">' : '<div class="sub" style="margin-top:0">') + PC.esc(e.project_address) + '</div>';
+
+    var due;
+    if (e.bid_due_date) {
+      var di = PC.dueInfo(e.bid_due_date);
+      due = PC.date(e.bid_due_date) + (di.label ? '<div class="' + (di.cls === 'past' ? 'pc-due-past' : 'pc-due-soon') + '">' + di.label + '</div>' : '');
+    } else {
+      due = '<span class="pc-muted">To be determined</span>';
     }
-    var opts = STAGES.map(function(s){
-      return '<option value="' + s.key + '"' + (s.key === stage ? ' selected' : '') + '>' + s.label + '</option>';
-    }).join('');
-    return '<select data-stage-for="' + id + '" class="stage-pill ' + stage + '"' +
-      ' style="border:1px solid;font-family:inherit;font-size:11px;padding:3px 8px;cursor:pointer">' + opts + '</select>';
+
+    var ctx = isInvitationStage
+      ? (e.invitation_date ? PC.date(e.invitation_date) : '<span class="pc-muted">--</span>')
+      : '<span class="pc-mono">' + PC.money0(e._total_sales || 0) + '</span>';
+
+    var estimator = e.estimator_name
+      ? '<span class="pc-avatar-row">' + PC.avatar(e.estimator_name, 26) + '<span>' + PC.esc(e.estimator_name) + '</span></span>'
+      : '<span class="pc-muted">--</span>';
+
+    return '<tr data-id="' + e.id + '" class="pc-row-link">' +
+      '<td class="bb-td-caret"></td>' +
+      '<td class="bb-td-name">' + nameCell + '</td>' +
+      '<td class="bb-td-info"><button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" data-info="' + e.id + '" title="Estimate info">' + PC.icon('bar_chart', 20) + '</button></td>' +
+      '<td>' + req + '</td>' +
+      '<td>' + proj + '</td>' +
+      '<td>' + due + '</td>' +
+      '<td>' + ctx + '</td>' +
+      '<td>' + estimator + '</td>' +
+      '<td class="bb-td-status" data-id="' + e.id + '"></td>' +
+      '<td class="pc-td-actions bb-td-actions">' + (canEdit ? ROW_KEBAB : '') + '</td>' +
+    '</tr>';
   }
 
-  function intentPillHtml(intent, id) {
-    if (!canEdit) {
-      return '<span class="intent-pill ' + intent + '">' + intent.replace('_',' ') + '</span>';
+  function openInfo(anchor, id) {
+    var e = estimates.find(function(x){ return x.id === id; });
+    if (!e) return;
+    var versions = 1 + (altCountById[e.id] || 0);
+    var html = '<div class="pc-pop-title">' + PC.esc(e.name || '(untitled)') + '</div>' +
+      row('Quote #', e.quote_number ? String(e.quote_number) : '--') +
+      row('Estimate Total', PC.money(e._total_sales || 0)) +
+      row('Line items', String(e._line_count || 0)) +
+      row('Estimate versions', String(versions)) +
+      row('Estimator', e.estimator_name || '--') +
+      row('Stage', STAGE_LABEL[e.bid_stage || 'estimating']) +
+      row('Last updated', e.updated_at ? PC.dateTime(e.updated_at) : '--') +
+      '<div style="margin-top:10px;text-align:right"><a href="bid-project.html?id=' + e.id + '#estimating">Open estimate</a></div>';
+    PC.popover(anchor, html, { align: 'left', className: 'bb-pop' });
+    function row(k, v) { return '<div class="pc-pop-row"><span>' + PC.esc(k) + '</span><span>' + PC.esc(v) + '</span></div>'; }
+  }
+
+  /* ─── Row kebab ────────────────────────────────────────────────────── */
+  function rowMenuItems(id) {
+    var e = estimates.find(function(x){ return x.id === id; });
+    if (!e) return [];
+    var name = e.name || '(untitled)';
+    var items = [
+      { label: 'Copy Project', icon: 'content_copy', onClick: function() {
+          BidActions.copyProject(id, { name: name + ' (copy)', estimator_name: e.estimator_name })
+            .then(function() { PC.toast('Project copied', 'success'); reloadAll(); })
+            .catch(function(){});
+        } },
+      { label: 'Copy Project to Template', icon: 'content_paste', onClick: function() {
+          PC.prompt({ title: 'Copy to template', label: 'Template name', value: name + ' Template', okLabel: 'Create' }).then(function(tn) {
+            if (!tn) return;
+            BidActions.copyProject(id, { name: tn.trim(), asTemplate: true })
+              .then(function() { PC.toast('Template "' + tn.trim() + '" created', 'success'); })
+              .catch(function(){});
+          });
+        } },
+      { label: 'Set Project as Template', icon: 'description', onClick: function() {
+          PC.confirm({ title: 'Set as template', message: '"' + name + '" will leave the Bid Board and appear under Manage Templates. Continue?' }).then(function(ok) {
+            if (!ok) return;
+            BidActions.setTemplate(id).then(function() { PC.toast('Now a template', 'success'); reloadAll(); }).catch(function(){});
+          });
+        } },
+      { sep: true }
+    ];
+    if ((e.bid_stage || 'estimating') === 'archived') {
+      items.push({ label: 'Restore to Estimating', icon: 'undo', onClick: function() {
+        BidActions.unarchive(id, 'estimating').then(function() { PC.toast('Restored', 'success'); reloadAll(); }).catch(function(){});
+      } });
+    } else {
+      items.push({ label: 'Archive', icon: 'folder', onClick: function() {
+        BidActions.archive(id).then(function() {
+          e.bid_stage = 'archived'; recomputeCounts(); renderPipeline(); renderTable();
+          PC.toast('Moved to Archived', 'success');
+        }).catch(function(){});
+      } });
     }
-    var opts = [
-      ['undecided','Undecided'],['will_bid','Will Bid'],['no_bid','No Bid']
-    ].map(function(pair){
-      return '<option value="' + pair[0] + '"' + (pair[0] === intent ? ' selected' : '') + '>' + pair[1] + '</option>';
-    }).join('');
-    return '<select data-intent-for="' + id + '" class="intent-pill ' + intent + '"' +
-      ' style="border:1px solid;font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">' + opts + '</select>';
+    items.push({ label: 'Delete', icon: 'delete', danger: true, onClick: function() {
+      BidActions.del(id, name).then(function(done) {
+        if (!done) return;
+        estimates = estimates.filter(function(x){ return x.id !== id; });
+        recomputeCounts(); renderPipeline(); renderTable();
+      }).catch(function(){});
+    } });
+    return items;
   }
 
+  /* ─── Stage / intent updates ───────────────────────────────────────── */
   async function updateStage(id, newStage) {
-    var upd = await supabaseClient.from('estimates').update({ bid_stage: newStage }).eq('id', id);
-    if (upd.error) { toast('Update failed: ' + upd.error.message, 'error'); return; }
-    // Refresh in-memory + re-render
+    var patch = { bid_stage: newStage, archived_at: newStage === 'archived' ? new Date().toISOString() : null };
+    var upd = await supabaseClient.from('estimates').update(patch).eq('id', id);
+    if (upd.error) { PC.toast('Update failed: ' + upd.error.message, 'error'); throw upd.error; }
     var row = estimates.find(function(e){ return e.id === id; });
     if (row) row.bid_stage = newStage;
-    toast('Moved to ' + STAGE_LABEL[newStage], 'success');
-    // Rebuild counts
-    stageCounts = {}; stageSums = {};
-    STAGES.forEach(function(s){ stageCounts[s.key] = 0; stageSums[s.key] = 0; });
-    estimates.forEach(function(e) {
-      var st = e.bid_stage || 'estimating';
-      if (stageCounts.hasOwnProperty(st)) {
-        stageCounts[st]++;
-        stageSums[st] += Number(e._total_sales) || 0;
-      }
-    });
+    PC.toast('Moved to ' + STAGE_LABEL[newStage], 'success');
+    recomputeCounts();
     renderPipeline(); renderTable();
   }
 
   async function updateIntent(id, newIntent) {
-    var upd = await supabaseClient.from('estimates').update({ bid_intent: newIntent }).eq('id', id);
-    if (upd.error) { toast('Update failed: ' + upd.error.message, 'error'); return; }
+    var patch = { bid_intent: newIntent };
+    if (newIntent === 'will_bid') patch.bid_stage = 'to_do';
+    var upd = await supabaseClient.from('estimates').update(patch).eq('id', id);
+    if (upd.error) { PC.toast('Update failed: ' + upd.error.message, 'error'); throw upd.error; }
     var row = estimates.find(function(e){ return e.id === id; });
-    if (row) row.bid_intent = newIntent;
-    toast('Bid intent updated', 'success');
-    renderTable();
+    if (row) { row.bid_intent = newIntent; if (patch.bid_stage) row.bid_stage = patch.bid_stage; }
+    PC.toast(patch.bid_stage ? 'Will bid — moved to To Do' : 'Bid intent updated', 'success');
+    recomputeCounts();
+    renderPipeline(); renderTable();
   }
 
-  async function openCreate() {
-    if (!canEdit) { toast('Only management can create bid projects', 'error'); return; }
-    document.getElementById('npName').value = '';
-    document.getElementById('npNumber').value = '';
-    document.getElementById('npAddress').value = '';
-    document.getElementById('npGc').value = '';
-    document.getElementById('npDue').value = '';
-    document.getElementById('npStage').value = currentStage === 'invitation' ? 'invitation' : 'estimating';
-    // Populate templates
-    var tplSel = document.getElementById('npTemplate');
-    tplSel.innerHTML = '<option value="">— Blank project —</option>';
-    var t = await supabaseClient.from('estimates')
-      .select('id, name, quote_number').eq('is_template', true).order('name');
-    (t.data || []).forEach(function(tpl) {
-      var o = document.createElement('option');
-      o.value = tpl.id;
-      o.textContent = tpl.name + (tpl.quote_number ? ' (Q' + tpl.quote_number + ')' : '');
-      tplSel.appendChild(o);
+  /* ─── Templates ────────────────────────────────────────────────────── */
+  async function loadTemplates() {
+    var t = await supabaseClient.from('estimates').select('id, name, quote_number, template_source_id, updated_at, settings')
+      .eq('is_template', true).is('parent_estimate_id', null).order('name');
+    if (t.error && PC.isSchemaError(t.error)) {
+      t = await supabaseClient.from('estimates').select('id, name, quote_number, template_source_id, updated_at')
+        .eq('is_template', true).is('parent_estimate_id', null).order('name');
+    }
+    if (t.error) { PC.toast('Templates load failed: ' + t.error.message, 'error'); return []; }
+    return t.data || [];
+  }
+  function isDefaultTpl(t) { return !!(t.settings && t.settings.is_default_template); }
+
+  async function openTemplates() {
+    var m = PC.modal({
+      title: 'Manage Templates', size: 'lg',
+      body: '<div class="pc-hint" style="margin-bottom:12px">Templates seed new projects with their takeoff layers and estimate items. Use a project row\'s menu (Copy Project to Template / Set Project as Template) to add one.</div><div id="tplList"><div class="pc-empty">Loading…</div></div>',
+      buttons: [{ label: 'Close' }]
     });
-    document.getElementById('createModal').classList.add('open');
+    await renderTplList(m.body.querySelector('#tplList'));
   }
 
-  async function createProject() {
-    var name = document.getElementById('npName').value.trim();
-    if (!name) { toast('Estimate name required', 'error'); return; }
-    var templateId = document.getElementById('npTemplate').value || null;
-    var payload;
-    if (templateId) {
-      // Duplicate the template row + its line items
-      var tpl = await supabaseClient.from('estimates').select('*').eq('id', templateId).single();
-      if (tpl.error || !tpl.data) { toast('Template load failed: ' + (tpl.error && tpl.error.message), 'error'); return; }
-      payload = Object.assign({}, tpl.data);
-      delete payload.id; delete payload.quote_number;
-      delete payload.created_at; delete payload.updated_at;
-      delete payload.sent_at; delete payload.awarded_at; delete payload.aia_project_id;
-      payload.is_template = false;
-      payload.template_source_id = templateId;
-      payload.parent_estimate_id = null;
-      payload.version_number = 1;
-      payload.archived_at = null;
-    } else {
-      payload = {};
-    }
-    payload.name              = name;
-    payload.project_number    = document.getElementById('npNumber').value.trim() || null;
-    payload.project_address   = document.getElementById('npAddress').value.trim() || null;
-    payload.requester_company = document.getElementById('npGc').value.trim() || null;
-    payload.bid_due_date      = document.getElementById('npDue').value || null;
-    payload.bid_stage         = document.getElementById('npStage').value;
-    payload.bid_intent        = payload.bid_stage === 'invitation' ? 'undecided' : null;
-    payload.invitation_date   = payload.bid_stage === 'invitation'
-                                  ? new Date().toISOString().slice(0,10) : null;
-    payload.estimator_name    = (userProfile && userProfile.full_name) || (currentUser && currentUser.email) || null;
-    payload.created_by        = currentUser ? currentUser.id : null;
-    var ins = await supabaseClient.from('estimates').insert(payload).select().single();
-    if (ins.error) { toast('Create failed: ' + ins.error.message, 'error'); return; }
-    // Copy line items from template
-    if (templateId) {
-      var li = await supabaseClient.from('estimate_line_items').select('*').eq('estimate_id', templateId);
-      if (li.data && li.data.length) {
-        var copies = li.data.map(function(r) {
-          var c = Object.assign({}, r); delete c.id; delete c.created_at; delete c.updated_at;
-          c.estimate_id = ins.data.id;
-          return c;
+  async function renderTplList(host) {
+    var tpls = await loadTemplates();
+    if (!tpls.length) { host.innerHTML = '<div class="pc-empty">No templates yet.</div>'; return; }
+    var kebab = PC.kebab(function(btn) {
+      var tr = btn.closest('tr'); var id = tr.getAttribute('data-id');
+      var t = tpls.find(function(x){ return x.id === id; });
+      return [
+        { label: 'Rename', icon: 'edit', onClick: function() {
+            PC.prompt({ title: 'Rename template', label: 'Name', value: t.name || '' }).then(function(n) {
+              if (!n) return;
+              PC.saveField('estimates', id, { name: n.trim() }, { msg: 'Renamed' }).then(function(){ renderTplList(host); }).catch(function(){});
+            });
+          } },
+        { label: isDefaultTpl(t) ? 'Default template' : 'Set as default', icon: 'check_circle', disabled: isDefaultTpl(t) || schemaMissing, onClick: function() {
+            BidActions.setDefaultTemplate(id).then(function(){ PC.toast('Default template set', 'success'); renderTplList(host); }).catch(function(){});
+          } },
+        { label: 'Use for a new project', icon: 'add', onClick: function() { openCreate(id); } },
+        { sep: true },
+        { label: 'Delete', icon: 'delete', danger: true, onClick: function() {
+            BidActions.del(id, t.name).then(function(done){ if (done) renderTplList(host); }).catch(function(){});
+          } }
+      ];
+    });
+    host.innerHTML = '<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Template</th><th>Quote #</th><th>Updated</th><th></th></tr></thead><tbody>' +
+      tpls.map(function(t) {
+        return '<tr data-id="' + t.id + '"><td>' + PC.esc(t.name || '(untitled)') +
+          (isDefaultTpl(t) ? '<span class="pc-pill pc-pill-new bb-tpl-default">Default</span>' : '') + '</td>' +
+          '<td>' + (t.quote_number ? PC.esc(String(t.quote_number)) : '--') + '</td>' +
+          '<td class="pc-muted">' + (t.updated_at ? PC.date(t.updated_at) : '--') + '</td>' +
+          '<td class="pc-td-actions">' + (canEdit ? kebab : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  /* ─── Create New Project ───────────────────────────────────────────── */
+  async function openCreate(preselectId) {
+    if (!canEdit) { PC.toast('Only management and estimators can create bid projects', 'error'); return; }
+    var tpls = await loadTemplates();
+    var def = tpls.filter(isDefaultTpl)[0];
+    var sel = (typeof preselectId === 'string' && preselectId) ? preselectId : (def ? def.id : '');
+    var opts = tpls.map(function(t) {
+      return '<option value="' + t.id + '"' + (t.id === sel ? ' selected' : '') + '>' + PC.esc(t.name || '(untitled)') + (isDefaultTpl(t) ? ' (default)' : '') + '</option>';
+    }).join('');
+    var body =
+      '<label class="pc-radio" style="margin-bottom:8px"><input type="radio" name="npMode" value="template" id="npModeTemplate"' + (sel ? ' checked' : '') + (tpls.length ? '' : ' disabled') + '>' +
+        '<span><b>Create project from template</b><div class="pc-hint">Select project template you want to apply on your project' + (tpls.length ? '' : ' (no templates yet)') + '</div></span></label>' +
+      '<div class="pc-field" style="margin-left:24px">' +
+        '<select class="pc-select" id="npTemplate"' + (tpls.length ? '' : ' disabled') + '><option value="">Select a template</option>' + opts + '</select>' +
+        '<div class="pc-hint">Takeoff and estimate items from the template will be merged into the primary estimate. Any other estimate tabs from the template will be added to the project as well.</div>' +
+      '</div>' +
+      '<label class="pc-radio"><input type="radio" name="npMode" value="empty" id="npModeEmpty"' + (sel ? '' : ' checked') + '><span><b>Create empty new project</b></span></label>';
+    PC.modal({
+      title: 'Create new project', enterSubmits: true, className: 'bb-create',
+      body: body,
+      buttons: [
+        { label: 'Cancel' },
+        { label: 'Confirm', primary: true, onClick: function(ctx) {
+            var useTpl = ctx.body.querySelector('#npModeTemplate').checked;
+            var tplId = ctx.body.querySelector('#npTemplate').value || null;
+            if (useTpl && !tplId) { PC.toast('Pick a template or choose "Create empty new project"', 'error'); return false; }
+            return createProject(useTpl ? tplId : null);
+          } }
+      ]
+    });
+    var tplSel = document.getElementById('npTemplate');
+    if (tplSel) tplSel.addEventListener('change', function() { if (tplSel.value) document.getElementById('npModeTemplate').checked = true; });
+  }
+
+  async function createProject(templateId) {
+    var stage = ['invitation','to_do','estimating'].indexOf(currentStage) >= 0 ? currentStage : 'estimating';
+    var estimator = (userProfile && userProfile.full_name) || (currentUser && currentUser.email) || null;
+    var patch = {
+      name: 'New Project',
+      bid_stage: stage,
+      bid_intent: stage === 'invitation' ? 'undecided' : null,
+      invitation_date: stage === 'invitation' ? PC.todayIso() : null,
+      estimator_name: estimator,
+      created_by: currentUser ? currentUser.id : null
+    };
+    var newId;
+    try {
+      if (templateId) {
+        newId = await BidActions.copyProject(templateId, { name: 'New Project', bid_stage: stage, estimator_name: estimator });
+        patch.is_template = false;
+        patch.template_source_id = templateId;
+        // A template contributes only takeoff + estimate items (Procore dialog wording);
+        // Overview / Customer fields of the fresh project start empty.
+        Object.assign(patch, {
+          project_id: null, project_address: null, requester_company: null, requester_email: null,
+          client_name: null, project_number: null, bid_due_date: null, due_time: null,
+          project_description: null, proposal_html: null, square_footage: null
         });
-        await supabaseClient.from('estimate_line_items').insert(copies);
+        var up = await supabaseClient.from('estimates').update(patch).eq('id', newId);
+        if (up.error) { PC.toast('Create failed: ' + up.error.message, 'error'); return false; }
+      } else {
+        var ins = await supabaseClient.from('estimates').insert(patch).select('id').single();
+        if (ins.error || !ins.data) { PC.toast('Create failed: ' + (ins.error && ins.error.message), 'error'); return false; }
+        newId = ins.data.id;
       }
-    }
-    location.href = 'bid-project.html?id=' + ins.data.id;
+    } catch(err) { return false; }
+    location.href = 'bid-project.html?id=' + newId + '#overview';
+    return true;
   }
 
-  function fmt$(n) {
-    if (!n) return '$0';
-    if (n >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
-    if (n >= 1000)    return '$' + (n/1000).toFixed(0) + 'k';
-    return '$' + Math.round(n).toLocaleString();
-  }
-  function fmtDate(iso) {
-    if (!iso) return '';
-    var d = new Date(iso);
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  }
-  function initials(name) {
-    return (name || '').split(/\s+/).slice(0,2).map(function(w){ return w[0] || ''; }).join('').toUpperCase();
-  }
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-  function toast(msg, kind) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast show' + (kind ? ' ' + kind : '');
-    setTimeout(function(){ t.classList.remove('show'); }, 3200);
+  /* ─── Export to Excel (current stage, filtered + sorted) ───────────── */
+  async function exportExcel() {
+    var rows = lastRows.length ? lastRows : filteredRows();
+    if (!rows.length) { PC.toast('Nothing to export in this stage', 'error'); return; }
+    PC.toast('Preparing Excel…');
+    try {
+      await PC.loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    } catch(e) { PC.toast('Could not load the Excel library', 'error'); return; }
+    var isInv = currentStage === 'invitation';
+    var data = [['Name', 'Requester Company', 'Project', 'Due Date', isInv ? 'Invitation Date' : 'Total Sales', 'Estimator', isInv ? 'Bid Intent' : 'Status']];
+    rows.forEach(function(e) {
+      var proj = [projectName(e), e.project_address].filter(Boolean).join(' — ');
+      data.push([
+        e.name || '',
+        [e.requester_company, e.requester_email].filter(Boolean).join(' · '),
+        proj,
+        e.bid_due_date ? PC.dateShort(e.bid_due_date) : 'To be determined',
+        isInv ? (e.invitation_date ? PC.dateShort(e.invitation_date) : '') : Math.round(e._total_sales || 0),
+        e.estimator_name || '',
+        isInv ? (PC.INTENTS.filter(function(i){ return i.key === (e.bid_intent || 'undecided'); })[0] || {}).label || '' : STAGE_LABEL[e.bid_stage || 'estimating']
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{ wch: 40 }, { wch: 30 }, { wch: 40 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 14 }];
+    if (!isInv) for (var r = 1; r < data.length; r++) { var c = ws[XLSX.utils.encode_cell({ r: r, c: 4 })]; if (c) c.z = '$#,##0'; }
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, STAGE_LABEL[currentStage].slice(0, 30));
+    XLSX.writeFile(wb, 'bid-board-' + currentStage + '-' + PC.todayIso() + '.xlsx');
   }
 })();
 </script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=332"></script>
 </body>
 </html>
