@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=333">
+<link rel="stylesheet" href="procore-ui.css?v=334">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="supabase-config.js?v=333"></script>
-<script src="auth.js?v=333"></script>
-<script src="est-totals.js?v=333"></script>
-<script src="procore-ui.js?v=333"></script>
-<script src="nw-catalog-picker.js?v=333"></script>
-<script src="nw-proposal.js?v=333"></script>
-<script src="bid-actions.js?v=333"></script>
+<script src="supabase-config.js?v=334"></script>
+<script src="auth.js?v=334"></script>
+<script src="est-totals.js?v=334"></script>
+<script src="procore-ui.js?v=334"></script>
+<script src="nw-catalog-picker.js?v=334"></script>
+<script src="nw-proposal.js?v=334"></script>
+<script src="bid-actions.js?v=334"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -43,7 +43,7 @@
 
   /* ── DETAIL workspace ───────────────────────────────────────── */
   .es-layout { display: flex; gap: 0; padding: 12px 24px 12px; align-items: stretch; min-height: 420px; }
-  body.pc-embed .es-layout { padding: 8px; box-sizing: border-box; }   /* height set by fitWorkspace() */
+  body.pc-embed .es-layout { padding: 4px; box-sizing: border-box; }   /* height set by fitWorkspace() */
   .es-views { width: 330px; flex: none; display: none; margin-right: 12px; flex-direction: column; }
   .es-layout.views-open .es-views { display: flex; }
   .es-views .pc-card-b { padding: 8px 0; overflow: auto; flex: 1; }
@@ -3404,6 +3404,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=333"></script>
+<script src="sw-register.js?v=334"></script>
 </body>
 </html>

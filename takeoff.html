@@ -6,19 +6,19 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=332">
+<link rel="stylesheet" href="procore-ui.css?v=334">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=332"></script>
-<script src="auth.js?v=332"></script>
-<script src="est-totals.js?v=332"></script>
-<script src="procore-ui.js?v=332"></script>
+<script src="supabase-config.js?v=334"></script>
+<script src="auth.js?v=334"></script>
+<script src="est-totals.js?v=334"></script>
+<script src="procore-ui.js?v=334"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="bid-actions.js?v=332"></script>
-<script src="est-drawings.js?v=332"></script>
-<script src="nw-catalog-picker.js?v=332"></script>
-<script src="geo-takeoff.js?v=332"></script>
+<script src="bid-actions.js?v=334"></script>
+<script src="est-drawings.js?v=334"></script>
+<script src="nw-catalog-picker.js?v=334"></script>
+<script src="geo-takeoff.js?v=334"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -87,7 +87,10 @@
   .scale-chip.unset { color: var(--pc-danger, #dc2626); }
   .tk-stage { flex: 1; position: relative; min-height: 0; }
   /* .tk-vp / .tk-toolrail: local names on purpose — procore-ui.css owns .tk-viewport / .tk-rail for its own layout helpers */
-  .tk-vp { position: absolute; inset: 0; overflow: auto; padding: 16px; background: #e9ecef; margin: 0; border: 0; border-radius: 0; display: block; }
+  .tk-vp { position: absolute; inset: 0; overflow: auto; padding: 0; background: #e9ecef; margin: 0; border: 0; border-radius: 0; display: block; }
+  #planPad { display: block; width: max-content; box-sizing: content-box; }   /* padding = free space around the sheet (set by updatePad) */
+  .tk-vp.hand, .tk-vp.hand #overlayCanvas { cursor: grab; }
+  .tk-vp.panning, .tk-vp.panning * { cursor: grabbing !important; }
   .canvas-wrap { position: relative; background: #fff; box-shadow: 0 4px 24px rgba(15,23,42,.18); margin: 0 auto; width: max-content; }
   #pdfCanvas, #compareCanvas, #overlayCanvas { display: block; }
   #compareCanvas, #overlayCanvas { position: absolute; top: 0; left: 0; }
@@ -232,8 +235,10 @@
     <div class="tk-stage" id="stage">
       <div class="tk-vp" id="viewport">
         <div class="tk-empty" id="emptyState"><div id="emptyIcon"></div>No plans loaded.<br>Upload the drawing set (PDF) from the page menu to start the takeoff.</div>
+        <div id="planPad" style="display:none">
         <div class="canvas-wrap" id="canvasWrap" style="display:none">
           <canvas id="pdfCanvas"></canvas><canvas id="compareCanvas"></canvas><canvas id="overlayCanvas"></canvas>
+        </div>
         </div>
       </div>
       <div class="tk-float tk-modebar" id="modebar"></div>
@@ -932,7 +937,7 @@ requireAuth().catch(function(){});
     if (curKey) {
       planIdx = plans.findIndex(function(x) { return x.key === curKey; });
       if (planIdx >= 0) { var cp = plans[planIdx]; meas = allMeas.filter(function(m) { return m.drawing_id === cp.drawing.id && m.page_number === cp.page; }); selectedIds.clear(); loadScale(); }
-      else { pdfPage = null; meas = []; selectedIds.clear(); $('canvasWrap').style.display = 'none'; $('emptyState').style.display = ''; }   // the open drawing was deleted elsewhere
+      else { pdfPage = null; meas = []; selectedIds.clear(); $('canvasWrap').style.display = 'none'; showPad(false); $('emptyState').style.display = ''; }   // the open drawing was deleted elsewhere
     }
     updatePlanLabel(); renderLayerTree(); renderTotals();
     if (plans.length && planIdx < 0) await openPlan(0);
@@ -981,6 +986,7 @@ requireAuth().catch(function(){});
     loadScale();
     try { await renderPage(); } catch (e) { console.warn('render', e); }
     if (my !== openSeq) return;
+    centerOnOpen();
     if (!p.sheet || (!scalePpf && !p.scaleChecked)) detectPageMeta(p);
     renderLayerTree(); renderProps(); renderLegend(); updateStatus();
     if (thumbsOn) { var host = $('thumbs'); host.querySelectorAll('.thumb').forEach(function(el) { el.classList.toggle('on', +el.getAttribute('data-plan') === planIdx); }); var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }
@@ -1002,22 +1008,28 @@ requireAuth().catch(function(){});
     if (!pdfPage) return;
     var seq = ++renderSeq;
     if (renderTask) { try { renderTask.cancel(); } catch (e) {} renderTask = null; }
-    $('emptyState').style.display = 'none'; $('canvasWrap').style.display = '';
-    var vp = $('viewport'), maxW = vp.clientWidth - 32, fit = maxW / viewport1.width;
-    renderScale = Math.min(fit * zoom, 8000 / Math.max(viewport1.width, viewport1.height));
-    var v = pdfPage.getViewport({ scale: renderScale });
-    pdfCanvas = $('pdfCanvas'); overlayCanvas = $('overlayCanvas');
-    pdfCanvas.width = overlayCanvas.width = Math.floor(v.width); pdfCanvas.height = overlayCanvas.height = Math.floor(v.height);
-    ctx = overlayCanvas.getContext('2d');
+    showPad(true); $('emptyState').style.display = 'none'; $('canvasWrap').style.display = '';
+    var vp = $('viewport'), fit = Math.max(1, vp.clientWidth - 32) / viewport1.width, cap = 8000 / Math.max(viewport1.width, viewport1.height);
+    var newScale = Math.min(fit * zoom, cap);
+    var v = pdfPage.getViewport({ scale: newScale }), W = Math.floor(v.width), H = Math.floor(v.height);
+    // paint off-screen first: the previous bitmap (CSS-scaled while the wheel is turning) stays visible until the new one is ready → no blank flash
+    var tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
     // intent 'print': pdf.js paints with timers instead of requestAnimationFrame, so a background tab still finishes
-    renderTask = pdfPage.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: v, intent: 'print' });
+    renderTask = pdfPage.render({ canvasContext: tmp.getContext('2d'), viewport: v, intent: 'print' });
     try { await renderTask.promise; } catch (e) { if (e && e.name === 'RenderingCancelledException') return; throw e; }
     if (seq !== renderSeq) return;                  // a newer render took over
     renderTask = null;
-    var cc = $('compareCanvas'); cc.width = pdfCanvas.width; cc.height = pdfCanvas.height;
+    var want = Math.min((Math.max(1, vp.clientWidth - 32) / viewport1.width) * zoom, cap);
+    if (Math.abs(want - newScale) > 1e-6) { tmp.width = tmp.height = 0; return renderPage(); }   // zoomed again while this one was painting
+    pdfCanvas = $('pdfCanvas'); overlayCanvas = $('overlayCanvas');
+    renderScale = newScale;
+    pdfCanvas.width = overlayCanvas.width = W; pdfCanvas.height = overlayCanvas.height = H;
+    ctx = overlayCanvas.getContext('2d');
+    pdfCanvas.getContext('2d').drawImage(tmp, 0, 0); tmp.width = tmp.height = 0;
+    vis = 1; applyVis();
+    var cc = $('compareCanvas'); cc.width = W; cc.height = H;
     if (compareIdx >= 0) await renderCompare();
-    bindOverlay(); redraw(); positionMarkCard();
-    var zl = $('zoomRange'); if (zl) zl.value = Math.round(zoom * 100); var zt = $('zoomText'); if (zt) zt.textContent = Math.round(zoom * 100) + '%';
+    bindOverlay(); redraw(); positionMarkCard(); zoomUi();
   }
   async function renderCompare() {
     var p = plans[compareIdx]; if (!p || !pdfPage) { compareIdx = -1; return; }
@@ -1039,12 +1051,75 @@ requireAuth().catch(function(){});
     if (compareIdx < 0) { toast('Pick a plan to compare first'); return; }
     var other = compareIdx, cur = planIdx; await openPlan(other); setCompare(cur);
   }
-  async function setZoom(z, cx, cy) {
-    var vp = $('viewport'), before = renderScale, sx = vp.scrollLeft, sy = vp.scrollTop;
-    zoom = Math.max(.2, Math.min(8, z));
-    await renderPage();
-    var k = renderScale / before;
-    if (cx != null) { vp.scrollLeft = (sx + cx) * k - cx; vp.scrollTop = (sy + cy) * k - cy; }
+  // ── free-space canvas: wheel = zoom at the cursor, wheel-press = hand / pan, empty margin around the sheet ──
+  var padX = 0, padY = 0, vis = 1, zoomTimer = null, panDrag = null, vpExtras = false;
+  var ZMIN = 0.1, ZMAX = 16;
+  function updatePad() {   // free margin = 85 % of the viewport on every side, so the sheet can be dragged well away from the edges
+    var vp = $('viewport'), pad = $('planPad'); if (!vp || !pad) return;
+    var px = Math.round(vp.clientWidth * 0.85), py = Math.round(vp.clientHeight * 0.85);
+    if (px === padX && py === padY) return;
+    var dx = px - padX, dy = py - padY; padX = px; padY = py;
+    pad.style.padding = py + 'px ' + px + 'px';
+    if (pad.style.display !== 'none') { vp.scrollLeft += dx; vp.scrollTop += dy; }   // keep the sheet where it was on screen
+  }
+  function showPad(on) { var pad = $('planPad'); if (!pad) return; pad.style.display = on ? '' : 'none'; if (on) updatePad(); }
+  function applyVis() {   // interim CSS zoom of the current bitmap (vis = displayed size / bitmap size)
+    ['pdfCanvas', 'compareCanvas', 'overlayCanvas'].forEach(function(id) { var c = $(id); if (!c) return;
+      if (vis === 1) { c.style.width = ''; c.style.height = ''; } else { c.style.width = (c.width * vis) + 'px'; c.style.height = (c.height * vis) + 'px'; } });
+  }
+  function zoomUi() { var zl = $('zoomRange'); if (zl) zl.value = Math.round(zoom * 100); var zt = $('zoomText'); if (zt) zt.textContent = Math.round(zoom * 100) + '%'; }
+  // zoom by factor f keeping the viewport point (cx, cy) fixed under the cursor; the bitmap is re-rendered sharp after a short pause
+  function zoomBy(f, cx, cy) {
+    if (!pdfPage) return;
+    var vp = $('viewport');
+    if (cx == null) { cx = vp.clientWidth / 2; cy = vp.clientHeight / 2; }
+    var fit = Math.max(1, vp.clientWidth - 32) / viewport1.width, cap = 8000 / Math.max(viewport1.width, viewport1.height);
+    var newZoom = Math.max(ZMIN, Math.min(ZMAX, cap / fit, zoom * f));
+    var newScale = Math.min(fit * newZoom, cap), oldDisp = renderScale * vis;
+    zoom = newZoom; zoomUi();
+    if (Math.abs(newScale - oldDisp) < 1e-9) return;
+    var k = newScale / oldDisp, u = vp.scrollLeft + cx - padX, w = vp.scrollTop + cy - padY;
+    vis = newScale / renderScale; applyVis();
+    vp.scrollLeft = padX + u * k - cx; vp.scrollTop = padY + w * k - cy;
+    clearTimeout(zoomTimer); zoomTimer = setTimeout(commitZoom, 160);
+  }
+  async function commitZoom() { zoomTimer = null; if (pdfPage && vis !== 1) await renderPage(); }
+  async function setZoom(z, cx, cy) { clearTimeout(zoomTimer); zoomTimer = null; zoomBy(z / zoom, cx, cy); if (vis !== 1) await renderPage(); }
+  function centerOnOpen() {   // sheet width-fitted; centred in the free space when smaller than the window, top-left aligned when larger
+    var vp = $('viewport'); if (!vp || !pdfCanvas) return;
+    updatePad();
+    var cw = pdfCanvas.width * vis, ch = pdfCanvas.height * vis;
+    var ox = Math.max(16, (vp.clientWidth - cw) / 2), oy = (ch + 32 <= vp.clientHeight) ? (vp.clientHeight - ch) / 2 : 16;
+    vp.scrollLeft = padX - ox; vp.scrollTop = padY - oy;
+    positionMarkCard();
+  }
+  async function fitView() { clearTimeout(zoomTimer); zoomTimer = null; zoom = 1; await renderPage(); centerOnOpen(); }
+  function onWheel(e) {   // wheel = zoom at the cursor (Procore); sideways swipe = pan
+    if (!pdfPage) return;
+    e.preventDefault();
+    var vp = $('viewport'), r = vp.getBoundingClientRect(), dx = e.deltaX, dy = e.deltaY;
+    if (e.deltaMode === 1) { dx *= 33; dy *= 33; } else if (e.deltaMode === 2) { dx *= vp.clientWidth; dy *= vp.clientHeight; }
+    if (!e.ctrlKey && !e.metaKey && Math.abs(dx) > Math.abs(dy) * 2) { vp.scrollLeft += dx; return; }
+    zoomBy(Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0016)), e.clientX - r.left, e.clientY - r.top);
+  }
+  function startPan(e) {   // wheel-press (or Space / Alt / Hand tool + drag): the hand opens and the sheet follows the mouse anywhere in the free space
+    e.preventDefault(); var vp = $('viewport');
+    panDrag = { x: e.clientX, y: e.clientY, l: vp.scrollLeft, t: vp.scrollTop };
+    vp.classList.add('panning');
+    document.addEventListener('mousemove', panMove, true); document.addEventListener('mouseup', panEnd, true); window.addEventListener('blur', panEnd);
+  }
+  function panMove(e) {
+    if (!panDrag) return;
+    if (e.buttons === 0) { panEnd(); return; }
+    var vp = $('viewport'); vp.scrollLeft = panDrag.l - (e.clientX - panDrag.x); vp.scrollTop = panDrag.t - (e.clientY - panDrag.y); e.preventDefault();
+  }
+  function panEnd() {
+    if (!panDrag) return; panDrag = null; $('viewport').classList.remove('panning');
+    document.removeEventListener('mousemove', panMove, true); document.removeEventListener('mouseup', panEnd, true); window.removeEventListener('blur', panEnd);
+  }
+  function onVpDown(e) {   // presses on the empty margin (the canvas handler covers presses on the sheet itself)
+    if (e.target && e.target.id === 'overlayCanvas') return;
+    if (e.button === 1 || (e.button === 0 && (e.altKey || spaceDown || tool === 'pan'))) startPan(e);
   }
 
   // ─── scale ───
@@ -1101,7 +1176,7 @@ requireAuth().catch(function(){});
       '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
       '<div class="tk-float">' + ib('legendBtn', 'description', 'Legend of the layers on this plan') + ib('pasteBtn', 'content_paste', 'Paste copied marks (Ctrl+V)') + '</div>' +
       '<div class="tk-float tk-rail-last">' + ib('swapBtn', 'swap_horiz', 'Swap the compared plans') + ib('railCollapse', 'chevron_right', 'Collapse the tool rail') + '</div>';
-    $('bottombar').innerHTML = ib('zoomFit', 'fit_screen', 'Fit width (0)') + ib('zoomOut', 'remove', 'Zoom out (−)') + '<input type="range" id="zoomRange" min="20" max="800" step="5" value="100" title="Zoom"><span id="zoomText" class="pc-muted" style="font-size:11px;min-width:34px;text-align:center">100%</span>' + ib('zoomIn', 'add', 'Zoom in (+)') +
+    $('bottombar').innerHTML = ib('zoomFit', 'fit_screen', 'Fit width (0)') + ib('zoomOut', 'remove', 'Zoom out (−)') + '<input type="range" id="zoomRange" min="10" max="1200" step="5" value="100" title="Zoom"><span id="zoomText" class="pc-muted" style="font-size:11px;min-width:34px;text-align:center">100%</span>' + ib('zoomIn', 'add', 'Zoom in (+)') +
       ib('thumbsBtn', 'picture_in_picture', 'Sheet thumbnails (B)') + ib('orthoBtn', 'grid_on', 'Force 90° lines (or hold Shift)') + ib('panelBtn', 'view_column', 'Properties / totals drawer') + ib('settingsBtn', 'tune', 'View settings') + ib('swapBtn2', 'swap_horiz', 'Swap the compared plans') +
       ib('bottomCollapse', 'chevron_left', 'Collapse this bar', 'keep') + ib('scrollTop', 'expand_more', 'Scroll to the top of the plan', 'keep', 'transform:rotate(180deg)');
     $('viewSettings').innerHTML = '<div style="font-weight:600;margin-bottom:6px">View settings</div><label><span>Show labels</span><input type="checkbox" id="vsLabels"' + (VS.labels ? ' checked' : '') + '></label><label><span>Mark opacity</span><input type="number" id="vsOpacity" min="0.2" max="1" step="0.1" value="' + VS.opacity + '"></label><label><span>Default line width</span><input type="number" id="vsWidth" min="1" max="12" step="1" value="' + VS.lineWidth + '"></label><label><span>Number marks</span><input type="checkbox" id="vsNumber"' + (VS.numberMarks ? ' checked' : '') + '></label>';
@@ -1144,7 +1219,7 @@ requireAuth().catch(function(){});
   function setTool(t) { tool = t; draft = []; draftDrops = []; measureLine = null; marquee = null; if (t !== 'linear') draftDeduct = false;
     document.querySelectorAll('[data-tool]').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-tool') === t); });
     var db = $('deductBtn'); if (db) db.classList.toggle('on', draftDeduct);
-    if (overlayCanvas) { overlayCanvas.classList.toggle('hand', t === 'pan'); overlayCanvas.classList.toggle('sel', t === 'select' || t === 'marquee'); } updateStatus(); redraw(); }
+    if (overlayCanvas) { overlayCanvas.classList.toggle('hand', t === 'pan'); $('viewport').classList.toggle('hand', t === 'pan'); overlayCanvas.classList.toggle('sel', t === 'select' || t === 'marquee'); } updateStatus(); redraw(); }
   function updateStatus() {
     var l = layerById(activeLayerId), h = $('statusHint'), who = l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first';
     var hints = { select: 'Click a mark to select it, drag its points to move, <span class="kbd">Del</span> deletes, <span class="kbd">Ctrl+C</span>/<span class="kbd">Ctrl+V</span> copy & paste.', marquee: 'Drag a rectangle to select the marks inside it, then drag them, <span class="kbd">Del</span> or <span class="kbd">Ctrl+C</span>.',
@@ -1164,8 +1239,8 @@ requireAuth().catch(function(){});
     overlayCanvas.ondblclick = function(e) { e.preventDefault(); if (DRAFT_TOOLS.indexOf(tool) >= 0 && draft.length >= 2) finishDraft(); };
     overlayCanvas.oncontextmenu = function(e) { e.preventDefault(); if (draft.length >= 2 && tool !== 'highlight' && tool !== 'rect') finishDraft(); else { draft = []; redraw(); } };
     overlayCanvas.onclick = onClick;
-    $('viewport').onwheel = function(e) { if (e.ctrlKey || e.metaKey) { e.preventDefault(); var r = $('viewport').getBoundingClientRect(); setZoom(zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX - r.left, e.clientY - r.top); } };
-    $('viewport').onscroll = positionMarkCard;
+    var vpEl = $('viewport'); vpEl.onwheel = onWheel; vpEl.onmousedown = onVpDown; vpEl.onscroll = positionMarkCard;
+    if (!vpExtras) { vpExtras = true; try { new ResizeObserver(function() { updatePad(); }).observe(vpEl); } catch (e) {} vpEl.addEventListener('auxclick', function(e) { if (e.button === 1) e.preventDefault(); }); }
   }
   function pt(e) { var r = overlayCanvas.getBoundingClientRect(); return [(e.clientX - r.left) * (overlayCanvas.width / r.width) / renderScale, (e.clientY - r.top) * (overlayCanvas.height / r.height) / renderScale]; }
   function ortho(p) { if (!draft.length) return p; var a = draft[draft.length - 1]; return Math.abs(p[0] - a[0]) > Math.abs(p[1] - a[1]) ? [p[0], a[1]] : [a[0], p[1]]; }
@@ -1173,7 +1248,7 @@ requireAuth().catch(function(){});
   function lockedMark(m) { var l = layerById(m.layer_id); return !!(l && l.is_locked); }
   var spaceDown = false;
   function onDown(e) {
-    if (e.button === 1 || e.altKey || spaceDown || tool === 'pan') { e.preventDefault(); var vp = $('viewport'); panState = { x: e.clientX, y: e.clientY, l: vp.scrollLeft, t: vp.scrollTop }; overlayCanvas.classList.add('grabbing'); return; }
+    if (e.button === 1 || e.altKey || spaceDown || tool === 'pan') { startPan(e); return; }
     if (e.button !== 0) return;
     var p = pt(e);
     if (tool === 'marquee') { marquee = { a: p, b: p }; if (!e.shiftKey) selectedIds.clear(); redraw(); return; }
@@ -1702,7 +1777,7 @@ requireAuth().catch(function(){});
     $('undoBtn').onclick = undo; $('layersBtn').onclick = toggleLeft; $('railMore').onclick = function(e) { e.stopPropagation(); railMenu(this); };
     $('legendBtn').onclick = toggleLegend; $('pasteBtn').onclick = pasteMarks; $('swapBtn').onclick = swapCompare; $('swapBtn2').onclick = swapCompare;
     $('railCollapse').onclick = function() { var c = document.body.classList.toggle('tk-rail-collapsed'); this.innerHTML = ic(c ? 'chevron_left' : 'chevron_right', 20); };
-    $('zoomIn').onclick = function() { setZoom(zoom * 1.25); }; $('zoomOut').onclick = function() { setZoom(zoom / 1.25); }; $('zoomFit').onclick = function() { setZoom(1); };
+    $('zoomIn').onclick = function() { setZoom(zoom * 1.25); }; $('zoomOut').onclick = function() { setZoom(zoom / 1.25); }; $('zoomFit').onclick = function() { fitView(); };
     var zr = $('zoomRange'), zT = null; zr.oninput = function() { $('zoomText').textContent = zr.value + '%'; clearTimeout(zT); var v = +zr.value / 100; zT = setTimeout(function() { setZoom(v); }, 120); };
     $('thumbsBtn').onclick = function() { thumbsOn = !thumbsOn; try { localStorage.setItem('tk_thumbs', thumbsOn ? '1' : '0'); } catch (e) {} renderThumbs(); fitHeight(); if (pdfPage) renderPage(); };
     $('orthoBtn').onclick = function() { orthoOn = !orthoOn; this.classList.toggle('on', orthoOn); };
@@ -1712,13 +1787,13 @@ requireAuth().catch(function(){});
     $('vsLabels').onchange = function() { VS.labels = this.checked; saveVS(); }; $('vsNumber').onchange = function() { VS.numberMarks = this.checked; saveVS(); };
     $('vsOpacity').onchange = function() { VS.opacity = Math.max(.2, Math.min(1, Number(this.value) || 1)); this.value = VS.opacity; saveVS(); }; $('vsWidth').onchange = function() { VS.lineWidth = Math.max(1, Math.min(12, Number(this.value) || 3)); this.value = VS.lineWidth; saveVS(); };
     $('bottomCollapse').onclick = function() { var c = document.body.classList.toggle('tk-bottom-collapsed'); this.innerHTML = ic(c ? 'chevron_right' : 'chevron_left', 20); };
-    $('scrollTop').onclick = function() { $('viewport').scrollTo({ top: 0, behavior: 'smooth' }); };
+    $('scrollTop').onclick = function() { $('viewport').scrollTo({ top: Math.max(0, padY - 16), behavior: 'smooth' }); };
     document.addEventListener('click', function(e) {
       if (pop && !pop.contains(e.target) && !e.target.closest('.pc-menu') && !e.target.closest('.pc-backdrop') && !e.target.closest('[data-lmenu]')) closePopover();
       if ($('viewSettings').classList.contains('show') && !e.target.closest('#settingsBtn')) { $('viewSettings').classList.remove('show'); $('settingsBtn').classList.remove('on'); }
     });
     document.addEventListener('keydown', function(e) {
-      if (e.code === 'Space' && !e.repeat && !inField(e)) { spaceDown = true; if (overlayCanvas) overlayCanvas.classList.add('hand'); }
+      if (e.code === 'Space' && !e.repeat && !inField(e)) { spaceDown = true; if (overlayCanvas) overlayCanvas.classList.add('hand'); $('viewport').classList.add('hand'); }
       if (document.querySelector('.pc-backdrop') || inField(e)) return;
       var k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
       if (e.key === 'Enter' && DRAFT_TOOLS.indexOf(tool) >= 0 && draft.length >= 2) finishDraft();
@@ -1732,10 +1807,10 @@ requireAuth().catch(function(){});
       else if (k === 'd' && tool === 'linear' && draft.length) { var i = draft.length - 1; if (draftDrops.indexOf(i) < 0) draftDrops.push(i); redraw(); }
       else if (k === 'v') setTool('select'); else if (k === 'h') setTool('pan'); else if (k === 'c') setTool('count'); else if (k === 'l') setTool('linear'); else if (k === 'a') setTool('area'); else if (k === 'm') setTool('measure'); else if (k === 'n') setTool('note');
       else if (k === 'k') setTool('countline'); else if (k === 't') setTool('stamp'); else if (k === 'u') setTool('cloud'); else if (k === 'g') setTool('highlight'); else if (k === 'b') $('thumbsBtn').click();
-      else if (e.key === '+' || e.key === '=') setZoom(zoom * 1.25); else if (e.key === '-') setZoom(zoom / 1.25); else if (e.key === '0') setZoom(1);
+      else if (e.key === '+' || e.key === '=') setZoom(zoom * 1.25); else if (e.key === '-') setZoom(zoom / 1.25); else if (e.key === '0') fitView();
       else if (e.key === 'PageUp') { e.preventDefault(); openPlan(planIdx - 1); } else if (e.key === 'PageDown') { e.preventDefault(); openPlan(planIdx + 1); }
     });
-    document.addEventListener('keyup', function(e) { if (e.code === 'Space') { spaceDown = false; if (overlayCanvas && tool !== 'pan') overlayCanvas.classList.remove('hand'); } });
+    document.addEventListener('keyup', function(e) { if (e.code === 'Space') { spaceDown = false; if (overlayCanvas && tool !== 'pan') overlayCanvas.classList.remove('hand'); if (tool !== 'pan') $('viewport').classList.remove('hand'); } });
     setTool('select');
   }
   function inField(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
@@ -1756,6 +1831,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=332"></script>
+<script src="sw-register.js?v=334"></script>
 </body>
 </html>

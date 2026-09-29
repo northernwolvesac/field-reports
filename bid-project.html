@@ -11,20 +11,20 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=332">
+<link rel="stylesheet" href="procore-ui.css?v=334">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=332"></script>
-<script src="auth.js?v=332"></script>
-<script src="est-totals.js?v=332"></script>
-<script src="procore-ui.js?v=332"></script>
+<script src="supabase-config.js?v=334"></script>
+<script src="auth.js?v=334"></script>
+<script src="est-totals.js?v=334"></script>
+<script src="procore-ui.js?v=334"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="bid-actions.js?v=332"></script>
-<script src="est-drawings.js?v=332"></script>
-<script src="nw-proposal.js?v=332"></script>
+<script src="bid-actions.js?v=334"></script>
+<script src="est-drawings.js?v=334"></script>
+<script src="nw-proposal.js?v=334"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -45,6 +45,25 @@
   body.bp-strip-hidden.has-est-strip { padding-bottom: 0; }
   /* frame tabs: the iframe is sized to end above the fixed strip, so the body needs no strip padding */
   body.bp-frame-mode.has-est-strip { padding-bottom: 0; }
+
+  /* ── Takeoff / Estimating: the whole shell collapses to ONE compact bar so the work area gets the screen ── */
+  .bp-fs-left, .bp-fs-right { display: none; }
+  body.bp-frame-mode .dash-header { display: none !important; }
+  body.bp-frame-mode .bp-head { display: flex; align-items: stretch; flex-wrap: nowrap; min-height: 46px; padding: 0 8px 0 0; overflow: hidden; }
+  body.bp-frame-mode .bp-head #titleHost, body.bp-frame-mode .bp-head #titleHost .pc-wrap, body.bp-frame-mode .bp-head #titleHost .pc-title-row { display: contents; }
+  body.bp-frame-mode .bp-head .pc-crumb { display: none; }
+  body.bp-frame-mode .bp-fs-left { order: 0; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 12px; border-right: 1px solid var(--pc-border, #e5e7eb); margin-right: 14px; }
+  body.bp-frame-mode .bp-fs-home img { height: 30px; width: auto; display: block; }
+  body.bp-frame-mode .bp-fs-back { font-size: 12px; color: var(--pc-link, #1a66e0); text-decoration: none; white-space: nowrap; }
+  body.bp-frame-mode .bp-fs-back:hover { text-decoration: underline; }
+  body.bp-frame-mode #titleHost .pc-title-row > div:not(.pc-title-actions) { order: 1; display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; max-width: 34vw; margin-right: 10px; }
+  body.bp-frame-mode #pcTitle { font-size: 15px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.bp-frame-mode #pcTitleSub { display: inline !important; font-size: 11px; color: var(--pc-muted, #6b7280); white-space: nowrap; margin: 0; }
+  body.bp-frame-mode #pcStageSlot { order: 2; display: flex; align-items: center; margin-right: 10px; }
+  body.bp-frame-mode #tabsHost { order: 3; flex: 1 1 auto; display: flex; align-items: stretch; padding: 0; border-bottom: 0; min-width: 0; overflow: hidden; }
+  body.bp-frame-mode #tabsHost .pc-tab { display: flex; align-items: center; padding: 0 14px; }
+  body.bp-frame-mode .pc-title-actions { order: 4; margin: 0 6px; display: flex; align-items: center; gap: 8px; width: auto; }
+  body.bp-frame-mode .bp-fs-right { order: 5; display: flex; align-items: center; }
 
   /* ── overview ── */
   .bp-2col { display: grid; grid-template-columns: 1fr 420px; gap: 16px; align-items: start; }
@@ -184,8 +203,10 @@
 <body class="pc-page">
 
 <div class="bp-head">
+  <div class="bp-fs-left"><a href="index.html" class="bp-fs-home" title="Home"><img src="logo-header.png" alt="Northern Wolves AC"></a><a href="bid-board.html" class="bp-fs-back" title="Back to the Bid Board">&#8249; Bid Board</a></div>
   <div id="titleHost"></div>
   <div id="tabsHost"></div>
+  <div class="bp-fs-right"><button type="button" class="pc-btn pc-btn-ghost pc-btn-icon" id="fsBtn" title="Full screen"></button></div>
 </div>
 
 <div id="schemaBanner" class="pc-banner-info"></div>
@@ -409,6 +430,15 @@ requireAuth().catch(function(){});
       if (TABS.indexOf(t) >= 0 && t !== currentTab) setTab(t, true);
     });
     window.addEventListener('resize', sizeFrames);
+    // Full screen button (browser Fullscreen API) — the compact bar itself is automatic on the Takeoff / Estimating tabs
+    (function() {
+      var b = $('fsBtn'); if (!b) return;
+      function paint() { var on = !!document.fullscreenElement; b.innerHTML = PC.icon(on ? 'fullscreen_exit' : 'fullscreen', 20); b.title = on ? 'Exit full screen (Esc)' : 'Full screen'; }
+      b.addEventListener('click', function() { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { PC.toast && PC.toast('Full screen is not available in this browser', 'error'); } });
+      document.addEventListener('fullscreenchange', function() { paint(); setTimeout(sizeFrames, 60); });
+      paint();
+      try { new ResizeObserver(function() { sizeFrames(); }).observe(document.querySelector('.bp-head')); } catch (e) {}
+    })();
     window.addEventListener('beforeunload', function(e) {
       if (propDirty) { e.preventDefault(); e.returnValue = ''; }
     });
@@ -1775,6 +1805,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=332"></script>
+<script src="sw-register.js?v=334"></script>
 </body>
 </html>
