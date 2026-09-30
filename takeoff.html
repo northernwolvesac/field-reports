@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=340">
+<link rel="stylesheet" href="procore-ui.css?v=342">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=340"></script>
-<script src="auth.js?v=340"></script>
-<script src="est-totals.js?v=340"></script>
-<script src="procore-ui.js?v=340"></script>
+<script src="supabase-config.js?v=342"></script>
+<script src="auth.js?v=342"></script>
+<script src="est-totals.js?v=342"></script>
+<script src="procore-ui.js?v=342"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=340"></script>
-<script src="est-drawings.js?v=340"></script>
-<script src="nw-catalog-picker.js?v=340"></script>
-<script src="geo-takeoff.js?v=340"></script>
+<script src="bid-actions.js?v=342"></script>
+<script src="est-drawings.js?v=342"></script>
+<script src="nw-catalog-picker.js?v=342"></script>
+<script src="geo-takeoff.js?v=342"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -278,7 +278,7 @@ requireAuth().catch(function(){});
   var estimateId = params.get('est') || params.get('id');
   var EMBED = !!P.isEmbed;
 
-  var me = { id: null, canEdit: false, name: '' }, est = null, rootId = null, schemaOk = true, catalogOk = true, syncOk = true, settingsOk = true;
+  var me = { id: null, canEdit: false, name: '' }, est = null, rootId = null, schemaOk = true, catalogOk = true, syncOk = true, settingsOk = true, measLoadOk = true, keptWarned = false;
   var extCols = false;   // estimate_takeoff_layers has params / tag / is_locked (procore-ui-schema.sql applied) — decides what copy paths may INSERT
   var drawings = [], plans = [], planIdx = -1, layers = [], allMeas = [], meas = [], groupOrder = [];
   var pdfPage = null, pdfCanvas, overlayCanvas, ctx, renderScale = 1, zoom = 1, viewport1 = null;
@@ -930,9 +930,9 @@ requireAuth().catch(function(){});
     // keep the per-plan caches (thumbnail, scale check) of the plans that are still there
     prev.forEach(function(o) { var n = plans.find(function(x) { return x.key === o.key; }); if (n) { if (o.thumb) n.thumb = o.thumb; if (o.scaleChecked) n.scaleChecked = true; } });
     var ids = drawings.map(function(d) { return d.id; });
-    allMeas = [];
+    allMeas = []; measLoadOk = true;
     // PostgREST returns at most 1,000 rows per request — an auto-measured set has thousands of marks, so page through
-    if (ids.length) for (var from = 0; ; from += 1000) { var m = await sb.from('estimate_measurements').select('*').in('drawing_id', ids).order('created_at').order('id').range(from, from + 999); if (m.error) { toast(m.error.message, 'error'); break; } allMeas = allMeas.concat(m.data || []); if (!m.data || m.data.length < 1000) break; }
+    if (ids.length) for (var from = 0; ; from += 1000) { var m = await sb.from('estimate_measurements').select('*').in('drawing_id', ids).order('created_at').order('id').range(from, from + 999); if (m.error) { measLoadOk = false; toast(m.error.message, 'error'); break; } allMeas = allMeas.concat(m.data || []); if (!m.data || m.data.length < 1000) break; }
     // a reload (embed 'refresh', upload) must not leave the overlay drawing stale marks: re-derive `meas` for the plan that is open
     if (curKey) {
       planIdx = plans.findIndex(function(x) { return x.key === curKey; });
@@ -1627,6 +1627,7 @@ requireAuth().catch(function(){});
   // own rates changed since the last sync (rates tag in notes) — or on an explicit Roll up (force).
   async function syncLayerLines(force) {
     if (!syncOk || !me.canEdit || !schemaOk) { await emitTotals(); return; }
+    if (!measLoadOk) { await emitTotals(); return; }   // marks only partly loaded → quantities would be rewritten from a partial set
     if (syncing) { syncAgain = true; return; } syncing = true;
     try {
       var ex = await sb.from('estimate_line_items').select('id,layer_id,quantity,unit_material_cost,unit_labor_hours,group_name,description,category,catalog_item_id,notes').eq('estimate_id', estimateId).not('layer_id', 'is', null);
@@ -1643,6 +1644,12 @@ requireAuth().catch(function(){});
           if (changed) updates.push({ id: cur.id, row: patch }); }
         else inserts.push(Object.assign(row, { estimate_id: estimateId, layer_id: l.id })); });
       (ex.data || []).forEach(function(r) { if (!layerById(r.layer_id)) deletes.push(r.id); });
+      // safety net: no layer has any quantity (no marks, nothing 'by hand') yet the estimate still carries takeoff lines → the takeoff is
+      // empty or incomplete, not meant to erase the estimate. Keep the lines (Roll up still replaces them on request).
+      if (deletes.length && (ex.data || []).length && !layers.some(function(l) { return Math.abs(layerTotals(l).qty) > 0.004; })) {
+        if (!keptWarned) { keptWarned = true; toast('Takeoff layers have no quantities — kept the ' + ex.data.length + ' estimate lines as they are', 'error'); }
+        deletes = [];
+      }
       if (deletes.length) { var d = await sb.from('estimate_line_items').delete().in('id', deletes); if (d.error) { toast(d.error.message, 'error'); return; } }
       for (var i = 0; i < updates.length; i++) { var u = await sb.from('estimate_line_items').update(updates[i].row).eq('id', updates[i].id); if (u.error) { toast(u.error.message, 'error'); return; } }
       if (inserts.length) { var mx = await sb.from('estimate_line_items').select('sort_order').eq('estimate_id', estimateId).order('sort_order', { ascending: false }).limit(1).maybeSingle(); var so = (mx.data ? Number(mx.data.sort_order || 0) : 0) + 1;
@@ -1832,6 +1839,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=340"></script>
+<script src="sw-register.js?v=342"></script>
 </body>
 </html>
