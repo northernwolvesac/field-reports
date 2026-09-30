@@ -12,9 +12,9 @@
 <title>Workload Planner — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=162"></script>
-<script src="auth.js?v=162"></script>
-<script src="schedule-utils.js?v=162"></script>
+<script src="supabase-config.js?v=340"></script>
+<script src="auth.js?v=340"></script>
+<script src="schedule-utils.js?v=340"></script>
 <style>
   body { padding-bottom: 24px; }
   .wl-wrap { max-width: 1100px; margin: 0 auto; }
@@ -787,7 +787,7 @@ requireAuth().catch(function(){});
     try {
       var u = await supabaseClient.auth.getUser();
       if (u && u.data && u.data.user) currentUserId = u.data.user.id;
-      var prof = await supabaseClient.from('profiles')
+      var prof = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null }; if (!prof.data) prof = await supabaseClient.from('profiles')
         .select('role').eq('id', currentUserId).maybeSingle();
       if (prof.data) {
         currentUserRole = prof.data.role;
@@ -1598,6 +1598,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=340"></script>
 </body>
 </html>

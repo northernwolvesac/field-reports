@@ -14,8 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-<script src="supabase-config.js?v=337"></script>
-<script src="auth.js?v=337"></script>
+<script src="supabase-config.js?v=340"></script>
+<script src="auth.js?v=340"></script>
 <style>
   body { padding-bottom: 24px; }
   .kb-wrap { max-width: 1280px; margin: 0 auto; }
@@ -144,7 +144,7 @@ var KB = (function() {
   async function init() {
     try {
       var u = (await supabaseClient.auth.getUser()).data.user;
-      var p = u && (await supabaseClient.from('profiles').select('role').eq('id', u.id).maybeSingle()).data;
+      var p = u && ((typeof getAuthProfile === 'function' && await getAuthProfile()) || (await supabaseClient.from('profiles').select('role').eq('id', u.id).maybeSingle()).data);
       if (!p || OFFICE.indexOf(p.role) < 0) {
         document.getElementById('layout').innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="icon">🔒</div><p>Estimating knowledge is for the office team.</p></div>';
         return;
@@ -285,6 +285,6 @@ var KB = (function() {
   return { tab: tab, openKnow: openKnow, openBench: openBench, closeDetail: closeDetail };
 })();
 </script>
-<script src="sw-register.js?v=337"></script>
+<script src="sw-register.js?v=340"></script>
 </body>
 </html>

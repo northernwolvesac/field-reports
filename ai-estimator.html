@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=337"></script>
-<script src="auth.js?v=337"></script>
-<script src="est-totals.js?v=337"></script>
-<script src="est-engine.js?v=337"></script>
-<script src="geo-takeoff.js?v=337"></script>
+<script src="supabase-config.js?v=340"></script>
+<script src="auth.js?v=340"></script>
+<script src="est-totals.js?v=340"></script>
+<script src="est-engine.js?v=340"></script>
+<script src="geo-takeoff.js?v=340"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -89,7 +89,7 @@ var AE = (function() {
   init();
   async function init() {
     var u = (await supabaseClient.auth.getUser()).data.user;
-    var p = u && (await supabaseClient.from('profiles').select('role, full_name').eq('id', u.id).maybeSingle()).data;
+    var p = u && ((typeof getAuthProfile === 'function' && await getAuthProfile()) || (await supabaseClient.from('profiles').select('role, full_name').eq('id', u.id).maybeSingle()).data);
     if (!p || OFFICE.indexOf(p.role) < 0) { $('main').innerHTML = '<div class="card">🔒 The AI Estimator is for the office team.</div>'; return; }
     me = { id: u.id, name: p.full_name || u.email };
     var sid = new URLSearchParams(location.search).get('s');
@@ -790,6 +790,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=337"></script>
+<script src="sw-register.js?v=340"></script>
 </body>
 </html>

@@ -12,10 +12,10 @@
 <title>Project Files — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=175"></script>
-<script src="nw-drive.js?v=213"></script>
-<script src="nw-drive-browser.js?v=212"></script>
-<script src="auth.js?v=175"></script>
+<script src="supabase-config.js?v=340"></script>
+<script src="nw-drive.js?v=340"></script>
+<script src="nw-drive-browser.js?v=340"></script>
+<script src="auth.js?v=340"></script>
 <style>
   body { padding-bottom: 24px; }
   .pf-wrap { max-width: 1200px; margin: 0 auto; }
@@ -198,7 +198,7 @@ requireAuth().catch(function(){});
     try {
       var u = await supabaseClient.auth.getUser();
       if (u && u.data && u.data.user) currentUserId = u.data.user.id;
-      var prof = await supabaseClient.from('profiles').select('full_name').eq('id', currentUserId).maybeSingle();
+      var prof = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null }; if (!prof.data) prof = await supabaseClient.from('profiles').select('full_name').eq('id', currentUserId).maybeSingle();
       if (prof.data) currentUserName = prof.data.full_name;
     } catch(e) { console.warn(e); }
 
@@ -448,6 +448,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=340"></script>
 </body>
 </html>

@@ -371,7 +371,7 @@
       var u = await supabaseClient.auth.getUser();
       var user = u.data && u.data.user;
       if (!user) return { data: null, error: new Error('Not signed in') };
-      var profileQ = await supabaseClient.from('profiles').select('full_name,email').eq('id', user.id).single();
+      var profileQ = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null }; if (!profileQ.data) profileQ = await supabaseClient.from('profiles').select('full_name,email').eq('id', user.id).single();
       var profile = profileQ.data || {};
       var name = profile.full_name || profile.email || 'Anonymous';
       var r = await supabaseClient.from('schedule_comments').insert({
@@ -937,7 +937,7 @@
       var u = await supabaseClient.auth.getUser();
       var user = u.data && u.data.user;
       if (!user) return (_isManagerCache = false);
-      var r = await supabaseClient.from('profiles').select('role').eq('id', user.id).single();
+      var r = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null }; if (!r.data) r = await supabaseClient.from('profiles').select('role').eq('id', user.id).single();
       var role = r.data && r.data.role;
       _isManagerCache = (role === 'manager' || role === 'admin');
       return _isManagerCache;

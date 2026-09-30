@@ -12,9 +12,9 @@
 <title>Field Orders — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=163"></script>
-<script src="auth.js?v=163"></script>
-<script src="schedule-utils.js?v=163"></script>
+<script src="supabase-config.js?v=340"></script>
+<script src="auth.js?v=340"></script>
+<script src="schedule-utils.js?v=340"></script>
 <style>
   body { padding-bottom: 24px; }
   .fo-wrap { max-width: 1100px; margin: 0 auto; }
@@ -463,7 +463,7 @@ requireAuth().catch(function(){});
         currentUserId = u.data.user.id;
         currentUserEmail = u.data.user.email;
       }
-      var profRes = await supabaseClient.from('profiles').select('full_name,role').eq('id', currentUserId).maybeSingle();
+      var profRes = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null }; if (!profRes.data) profRes = await supabaseClient.from('profiles').select('full_name,role').eq('id', currentUserId).maybeSingle();
       if (profRes.data) {
         currentUserName = profRes.data.full_name || currentUserEmail;
       }
@@ -942,6 +942,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=258"></script>
+<script src="sw-register.js?v=340"></script>
 </body>
 </html>
