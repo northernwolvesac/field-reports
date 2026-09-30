@@ -1,12 +1,13 @@
 # IPA Church (Syosset) - ERU-1,2,3 Greenheck RVE: replacing the lost wall-sensor kit with duct sensors
 
-Diagram: `ERU-ducted-sensor-wiring.pdf` (page 1 wiring, page 2 section detail), built by `build_eru_sensor_diagram.py`.
+Diagram (current): `ERU-ducted-sensor-wiring-R1.pdf` rev 1 for installation 09/30/2026 (p.1 wiring, p.2 placement, p.3 purchase list), built by
+`build_eru_sensor_diagram.py`. Rev 0 `ERU-ducted-sensor-wiring.pdf` (issued to ADE 09/25, duct temp/RH + pressure) is superseded.
 Sources: Greenheck submittal 230000-13 (P281653R03, ADE, reviewed by DMG 4/22/2025), drawings M2.1-M2.4, M6.1, M7.1 (DMG, IFC 2025.03.05).
 Units: 3 x Greenheck RVE-85-52D-20I-J-A2, 20 ton inverter DX, 300 MBH modulating IG furnace, 100% OA, no recirculation.
 ERU-1 and ERU-2 serve the basement (multi-purpose space 012 and support rooms). ERU-3 serves first and second floors. All three sit on the roof; OA
 and EA ducts (36x16 and 42x16) drop through shafts to the floors served. Supply discharge and exhaust intake are through the bottom of the unit (curb).
 
-## Current basis after ADE's answers of 2026-09-30 (supersedes the sections below where they differ)
+## Current basis after ADE's answers of 2026-09-30 (APPROVED BY THE CLIENT 09/30; supersedes the sections below where they differ)
 
 ADE (Ryan Adams) answered the 7 questions on 09/30 and sent the G31 controller schematic, the Y07 expansion board schematic and Greenheck
 DOAS FAQs 5 (Web UI), 6 (SAT install) and 12 (fan control mode). Copies: `Reference/Projects/IPA Church - Syosset/source/ADE 2026-09-30/`.
@@ -204,3 +205,6 @@ Do not order until DMG answers the RFI; the RFI turnaround is a week, the parts 
 - Next: send the RFI to DMG (Rob DuBoice, copy CCC) with the base case (duct CO2, delete space temp/RH, exhaust tracking, web UI, high static
   switch) -> order CO2 sensors and high static switches (needed in every option) -> relocate SAT, install and wire by 10/23 -> ADE start-up 10/29.
   Ask Ryan to confirm the supply-tracking option in the exhaust fan Type list.
+- 2026-09-30: Client approved the base case (duct CO2, no space temp/RH, exhaust tracking, web UI instead of remote displays, high static
+  switch). Diagram rev 1 for installation issued with the purchase list (`ERU-ducted-sensor-wiring-R1.pdf` p.3), material about
+  $2,000-3,400 for 3 units. Next: order, install by 10/23, ADE start-up 10/29. Ask Ryan to confirm supply tracking in the exhaust Type list.
