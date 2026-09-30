@@ -11,8 +11,8 @@
 <title>WIP Report — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=339"></script>
-<script src="auth.js?v=339"></script>
+<script src="supabase-config.js?v=343"></script>
+<script src="auth.js?v=343"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: none; margin: 0; padding: 0 14px; }
@@ -66,10 +66,15 @@
   @media print {
     body { background: #fff; padding: 0; } .top, .tools, .noprint { display: none !important; }
     .wrap { max-width: none; padding: 0; } .tblwrap { border: 0; overflow: visible; } table { min-width: 0; font-size: 8.5px; } th, td { padding: 3px 4px; } .bar { display: none; }
-    .cards { grid-template-columns: repeat(8, 1fr); } .card .v { font-size: 12px; } .print-title { display: block !important; }
+    .cards { grid-template-columns: repeat(8, 1fr); } .card .v { font-size: 12px; } .print-title { display: flex !important; } .print-foot { display: block !important; } .warn { display: none !important; }
     @page { size: landscape; margin: 8mm; }
   }
-  .print-title { display: none; font-size: 16px; font-weight: 800; margin: 0 0 8px; }
+  .print-title { display: none; font-size: 16px; font-weight: 800; margin: 0 0 8px; align-items: center; gap: 12px; }
+  .print-title img { height: 30px; width: auto; }
+  .print-title small { display: block; font-size: 11px; font-weight: 600; color: #4b5563; }
+  .print-foot { display: none; font-size: 9px; line-height: 1.45; color: #374151; margin-top: 10px; }
+  .print-foot .sig { display: flex; gap: 40px; margin-top: 22px; font-size: 10px; } .print-foot .sig span { flex: 1; border-top: 1px solid #111318; padding-top: 3px; }
+  .warn { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; margin: 0 0 12px; line-height: 1.45; }
 </style>
 </head>
 <body>
@@ -81,6 +86,7 @@
 <div class="wrap" id="main" style="display:none">
   <div class="tools">
     <span class="lbl">As of</span><input type="date" id="asOf">
+    <select id="fView" title="Internal view = everything; Lender format = the columns a bank / lender expects on a WIP schedule"><option value="internal">Internal view</option><option value="lender">Lender format</option></select>
     <select id="fStatus"><option value="open">Active + On hold</option><option value="active">Active only</option><option value="completed">Completed</option><option value="all">All projects</option></select>
     <select id="fPm"><option value="">All PMs</option></select>
     <input type="text" id="q" placeholder="Search project, customer, job #…">
@@ -89,7 +95,8 @@
     <button class="btn light" id="btnCsv" type="button">Export CSV</button>
     <button class="btn" id="btnPrint" type="button">Print / PDF</button>
   </div>
-  <div class="print-title" id="printTitle"></div>
+  <div class="print-title" id="printTitle"><img src="logo-header.png?v=258" alt=""><div><span id="printTitleText"></span><small id="printTitleSub"></small></div></div>
+  <div class="warn noprint" id="dataWarn" style="display:none"></div>
   <div class="cards" id="cards"></div>
   <div class="scrollbar noprint" id="scrollbar"><button type="button" id="scrollL" title="Scroll left">&#9664;</button><div class="track" id="scrollTrack"><div id="scrollSpacer"></div></div><span class="hint" id="scrollHint"></span><button type="button" id="scrollR" title="Scroll right">&#9654;</button></div>
   <div class="tblwrap" id="tblwrap"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
@@ -97,10 +104,11 @@
     <b>Revised contract</b> = original + change orders (G702 line 3 of the latest application; without applications: original + approved COs).
     <b>Billed to date</b> = G702 line 4 of the latest application dated on or before the as-of date (drafts excluded unless checked); <b>backlog under contract</b> = revised − billed.
     <b>Est. total cost / cost to date</b> come from Projects → Costs (labor by hand, materials and subs from vendor invoices); <b>% complete</b> = cost to date ÷ est. total cost;
-    <b>earned revenue</b> = revised × % complete; <b>over / (under) billed</b> = billed − earned (positive = billings in excess of costs, negative = costs in excess of billings);
+    <b>earned revenue</b> = revised × % complete; <b>overbillings</b> = billings in excess of earned revenue (billed − earned, a liability); <b>underbillings</b> = earned revenue in excess of billings (an asset); <b>backlog (lender format)</b> = revised contract − earned revenue;
     <b>est. gross profit</b> = revised − est. total cost; <b>GP to date</b> = earned − cost to date. Projects without cost data fall back to the PM % complete from the Workload Planner (marked "PM %").
     <b>Paid</b> = payments dated on or before the as-of date; <b>A/R</b> = net billed (less retainage) − paid.
   </p>
+  <div class="print-foot" id="printFoot"></div>
 </div>
 <div class="blocked" id="blocked" style="display:none">This report is available to the office team only.</div>
 
@@ -211,6 +219,8 @@
       }
       r.earned = r.pctComplete != null ? r.revised * Math.min(1, r.pctComplete) : null;
       r.overUnder = r.earned != null ? r.billed - r.earned : null;
+      r.over = r.overUnder != null ? Math.max(0, r.overUnder) : null; r.under = r.overUnder != null ? Math.max(0, -r.overUnder) : null;
+      r.backlogEarned = r.earned != null ? r.revised - r.earned : null;
       r.estGP = r.hasCost ? r.revised - r.estCost : null; r.gpPct = (r.hasCost && r.revised) ? r.estGP / r.revised : null;
       r.gpToDate = (r.hasCost && r.earned != null) ? r.earned - r.costToDate : null;
       if (r.pm) pmSet[r.pm] = true;
@@ -220,17 +230,26 @@
     render();
   }
 
-  // [key, label, class, group]
-  var COLS = [
-    ['job', 'Job #', 'l'], ['name', 'Project / Customer', 'l'], ['pm', 'PM', 'l'], ['status', 'Status', 'l'],
-    ['original', 'Original Contract', 'b'], ['cos', 'Change Orders'], ['revised', 'Revised Contract'],
-    ['billed', 'Billed to Date', 'b'], ['pctBilled', '% Billed'], ['backlog', 'Backlog Under Contract'],
-    ['estCost', 'Est. Total Cost', 'b'], ['costToDate', 'Cost to Date'], ['costToComplete', 'Cost to Complete'], ['pctComplete', '% Complete'],
-    ['earned', 'Earned Revenue', 'b'], ['overUnder', 'Over / (Under) Billed'],
-    ['estGP', 'Est. Gross Profit', 'b'], ['gpPct', 'GP %'], ['gpToDate', 'GP to Date'],
-    ['retainage', 'Retainage Held', 'b'], ['paid', 'Paid to Date'], ['ar', 'A/R Open'], ['finish', 'Est. Finish', 'l']
-  ];
-  var GROUPS = [['', 4], ['Contract', 3], ['Billing', 3], ['Costs', 4], ['Revenue recognition', 2], ['Gross profit', 3], ['Cash', 4]];
+  // column sets: Internal view (everything) and Lender format (the standard WIP schedule columns)
+  var LABELS = {
+    job: ['Job #', 'l'], name: ['Project / Customer', 'l'], pm: ['PM', 'l'], status: ['Status', 'l'],
+    original: ['Original Contract'], cos: ['Change Orders'], revised: ['Revised Contract'],
+    billed: ['Billed to Date'], pctBilled: ['% Billed'], backlog: ['Backlog Under Contract'], backlogEarned: ['Backlog (Revised − Earned)'],
+    estCost: ['Est. Total Cost'], costToDate: ['Cost to Date'], costToComplete: ['Cost to Complete'], pctComplete: ['% Complete'],
+    earned: ['Earned Revenue'], over: ['Overbillings'], under: ['Underbillings'],
+    estGP: ['Est. Gross Profit'], gpPct: ['GP %'], gpToDate: ['GP to Date'],
+    retainage: ['Retainage Held'], paid: ['Paid to Date'], ar: ['A/R Open'], finish: ['Est. Finish', 'l']
+  };
+  var MODES = {
+    internal: { lead: 4,
+      cols: ['job', 'name', 'pm', 'status', 'original', 'cos', 'revised', 'billed', 'pctBilled', 'backlog', 'estCost', 'costToDate', 'costToComplete', 'pctComplete', 'earned', 'over', 'under', 'estGP', 'gpPct', 'gpToDate', 'retainage', 'paid', 'ar', 'finish'],
+      groups: [['', 4], ['Contract', 3], ['Billing', 3], ['Costs', 4], ['Revenue recognition', 3], ['Gross profit', 3], ['Cash', 4]] },
+    lender: { lead: 2,
+      cols: ['job', 'name', 'revised', 'estCost', 'estGP', 'gpPct', 'costToDate', 'pctComplete', 'earned', 'billed', 'over', 'under', 'costToComplete', 'backlogEarned', 'finish'],
+      groups: [['', 2], ['Contract', 4], ['Progress', 3], ['Billings', 3], ['Remaining', 3]] }
+  };
+  function mode() { return MODES[$('fView').value] || MODES.internal; }
+  function starts(m) { var out = {}, i = 0; m.groups.forEach(function(g, gi) { if (gi > 0) out[m.cols[i]] = true; i += g[1]; }); return out; }
   function filtered() {
     var st = $('fStatus').value, pm = $('fPm').value, q = ($('q').value || '').toLowerCase(), hideZero = $('hideZero').checked;
     return rows.filter(function(r) {
@@ -244,66 +263,89 @@
     });
   }
   function render() {
-    var list = filtered();
+    var M = mode(), st = starts(M), list = filtered();
+    if (M.cols.indexOf(sortKey) < 0) { sortKey = 'revised'; sortAsc = false; }
     list.sort(function(a, b) { var x = a[sortKey], y = b[sortKey]; if (x == null) x = -Infinity; if (y == null) y = -Infinity; if (typeof x === 'string') { x = x.toLowerCase(); y = String(y || '').toLowerCase(); } return (x < y ? -1 : x > y ? 1 : 0) * (sortAsc ? 1 : -1); });
-    $('thead').innerHTML = '<tr>' + GROUPS.map(function(g) { return '<th class="grp" colspan="' + g[1] + '">' + g[0] + '</th>'; }).join('') + '</tr>' +
-      '<tr>' + COLS.map(function(c) { return '<th class="' + (c[2] || '') + (sortKey === c[0] ? ' sorted' + (sortAsc ? ' asc' : '') : '') + '" data-k="' + c[0] + '">' + c[1] + '</th>'; }).join('') + '</tr>';
+    $('thead').innerHTML = '<tr>' + M.groups.map(function(g) { return '<th class="grp" colspan="' + g[1] + '">' + g[0] + '</th>'; }).join('') + '</tr>' +
+      '<tr>' + M.cols.map(function(k) { var d = LABELS[k]; return '<th class="' + (d[1] || '') + (st[k] ? ' b' : '') + (sortKey === k ? ' sorted' + (sortAsc ? ' asc' : '') : '') + '" data-k="' + k + '">' + d[0] + '</th>'; }).join('') + '</tr>';
     $('thead').querySelectorAll('th[data-k]').forEach(function(th) { th.addEventListener('click', function() { var k = th.getAttribute('data-k'); if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = (k === 'name' || k === 'job' || k === 'pm' || k === 'status' || k === 'finish'); } render(); }); });
     var groups = [['active', 'Active'], ['on-hold', 'On hold'], ['completed', 'Completed']], html = '', grand = sum([]);
     groups.forEach(function(g) {
       var gl = list.filter(function(r) { return r.status === g[0]; }); if (!gl.length) return;
-      html += '<tr class="sec"><td colspan="' + COLS.length + '">' + g[1] + ' · ' + gl.length + '</td></tr>';
-      gl.forEach(function(r) { html += rowHtml(r); });
-      var t = sum(gl); html += totHtml(t, g[1] + ' total');
+      html += '<tr class="sec"><td colspan="' + M.cols.length + '">' + g[1] + ' · ' + gl.length + '</td></tr>';
+      gl.forEach(function(r) { html += rowHtml(r, M, st); });
+      var t = sum(gl); html += totHtml(t, g[1] + ' total', false, M, st);
       Object.keys(t).forEach(function(k) { grand[k] += t[k]; });
     });
-    if (!list.length) html = '<tr><td colspan="' + COLS.length + '" class="empty">No projects match.</td></tr>';
-    else if (list.length > 1) html += totHtml(grand, 'Grand total', true);
+    if (!list.length) html = '<tr><td colspan="' + M.cols.length + '" class="empty">No projects match.</td></tr>';
+    else if (list.length > 1) html += totHtml(grand, 'Grand total', true, M, st);
     $('tbody').innerHTML = html;
-    var all = sum(list), withCost = list.filter(function(r) { return r.hasCost; }).length;
+    var all = sum(list), withCost = list.filter(function(r) { return r.hasCost; }).length, noCost = list.length - withCost;
     $('cards').innerHTML = card('Revised contracts', money(all.revised), list.length + ' projects') + card('Billed to date', money(all.billed), pct(all.revised ? all.billed / all.revised : null) + ' of contracts')
-      + card('Backlog under contract', money(all.backlog), '', true) + card('Cost to date', money(all.costToDate), withCost + ' of ' + list.length + ' with cost data')
+      + card('Backlog under contract', money(all.backlog), 'revised − billed', true) + card('Cost to date', money(all.costToDate), withCost + ' of ' + list.length + ' with cost data')
       + card('Cost to complete', money(all.costToComplete), pct(all.estCost ? all.costToDate / all.estCost : null) + ' complete by cost')
-      + card('Over / (under) billed', money(all.overUnder), all.overUnder >= 0 ? 'billings in excess of costs' : 'costs in excess of billings')
-      + card('Est. gross profit', money(all.estGP), pct(all.revised && withCost ? all.estGP / all.revisedWithCost : null) + ' on projects with costs') + card('A/R open', money(all.ar), 'net billed − paid');
-    $('printTitle').textContent = 'Northern Wolves AC — WIP Report as of ' + fmtDate($('asOf').value) + ' (' + $('fStatus').options[$('fStatus').selectedIndex].text + ')';
-    $('sub').textContent = 'As of ' + fmtDate($('asOf').value) + ' · ' + list.length + ' projects · backlog ' + money(all.backlog) + ' · over/(under) billed ' + money(all.overUnder);
+      + card('Overbillings', money(all.over), 'billings in excess of earned') + card('Underbillings', money(all.under), 'earned in excess of billings')
+      + card('Est. gross profit', money(all.estGP), pct(all.revised && withCost ? all.estGP / all.revisedWithCost : null) + ' on projects with costs');
+    var dw = $('dataWarn');
+    if (noCost) { dw.style.display = ''; dw.innerHTML = '<b>' + noCost + ' of ' + list.length + ' projects have no cost data.</b> Their % complete is the PM estimate (marked “PM %”) and their cost / gross-profit columns are blank, so the totals understate cost and GP. Enter the costs in Projects → Costs before this report goes to the lender.'; } else dw.style.display = 'none';
+    $('printTitleText').textContent = 'Northern Wolves AC — Work-in-Progress Schedule';
+    $('printTitleSub').textContent = 'As of ' + fmtDate($('asOf').value) + ' · ' + $('fStatus').options[$('fStatus').selectedIndex].text + ' · prepared ' + fmtDate(new Date().toISOString().slice(0, 10));
+    $('printFoot').innerHTML = '<b>Basis of presentation.</b> Percentage-of-completion, cost-to-cost method: % complete = cost to date ÷ estimated total cost; earned revenue = revised contract × % complete; overbillings = billings in excess of earned revenue; underbillings = earned revenue in excess of billings; backlog = revised contract − earned revenue. Estimated total costs, costs to complete and gross profit are management estimates and have not been audited or reviewed.'
+      + (noCost ? ' Projects marked “PM %” have no job-cost data; their % complete is management’s estimate of completion and their cost and gross-profit figures are not shown.' : '')
+      + '<div class="sig"><span>Prepared by</span><span>Title</span><span>Date</span></div>';
+    $('sub').textContent = 'As of ' + fmtDate($('asOf').value) + ' · ' + list.length + ' projects · backlog ' + money(all.backlog) + ' · over ' + money(all.over) + ' / under ' + money(all.under) + ' billed';
   }
   function sum(list) {
-    var t = { original: 0, cos: 0, revised: 0, billed: 0, backlog: 0, estCost: 0, costToDate: 0, costToComplete: 0, earned: 0, overUnder: 0, estGP: 0, gpToDate: 0, retainage: 0, paid: 0, ar: 0, revisedWithCost: 0 };
+    var t = { original: 0, cos: 0, revised: 0, billed: 0, backlog: 0, backlogEarned: 0, estCost: 0, costToDate: 0, costToComplete: 0, earned: 0, over: 0, under: 0, estGP: 0, gpToDate: 0, retainage: 0, paid: 0, ar: 0, revisedWithCost: 0 };
     list.forEach(function(r) { Object.keys(t).forEach(function(k) { if (k === 'revisedWithCost') { if (r.hasCost) t[k] += r.revised; } else t[k] += Number(r[k] || 0); }); });
     return t;
   }
   function card(k, v, s, hi) { return '<div class="card' + (hi ? ' hi' : '') + '"><div class="k">' + k + '</div><div class="v">$' + v + '</div><div class="s">' + s + '</div></div>'; }
   function cell(v, cls) { var n = Number(v || 0); return '<td class="' + (cls || '') + (n < 0 ? ' neg' : '') + '">' + (v == null ? '<span class="muted">—</span>' : money(v)) + '</td>'; }
   function pctCell(v, cls, extra) { return '<td class="' + (cls || '') + '">' + pct(v) + (v != null && isFinite(v) ? '<span class="bar"><i style="width:' + Math.min(100, Math.max(0, v * 100)) + '%"></i></span>' : '') + (extra || '') + '</td>'; }
-  function rowHtml(r) {
-    var link = r.aiaId ? '<a class="pl" href="invoicing.html?project=' + r.id + '">' + esc(r.name) + '</a>' : esc(r.name);
-    return '<tr>' +
-      '<td class="l">' + esc(r.job) + (r.appNo ? '<span class="sub">App #' + r.appNo + ' · ' + fmtDate(r.appDate) + '</span>' : '') + '</td>' +
-      '<td class="l"><span class="nm">' + link + '</span><span class="sub">' + esc(r.customer) + (r.setup ? '' : ' · <span class="pill nosetup">no contract setup</span>') + (r.hasCost ? '' : ' · <span class="pill nocost">no cost data</span>') + '</span></td>' +
-      '<td class="l">' + esc(r.pm) + '</td><td class="l"><span class="pill ' + r.status + '">' + r.status + '</span></td>' +
-      cell(r.original, 'b') + cell(r.cos) + cell(r.revised) +
-      cell(r.billed, 'b') + pctCell(r.pctBilled) + cell(r.backlog, r.backlog > 0 ? 'pos' : '') +
-      cell(r.estCost, 'b') + cell(r.costToDate) + cell(r.costToComplete, r.costToComplete != null && r.costToComplete < 0 ? 'neg' : '') +
-      pctCell(r.pctComplete, '', r.basis === 'pm' ? ' <span class="muted" style="font-size:10px">PM %</span>' : '') +
-      cell(r.earned, 'b') + cell(r.overUnder) +
-      cell(r.estGP, 'b') + '<td>' + (r.gpPct != null ? (r.gpPct * 100).toFixed(1) + '%' : '<span class="muted">—</span>') + '</td>' + cell(r.gpToDate) +
-      cell(r.retainage, 'b') + cell(r.paid) + cell(r.ar) +
-      '<td class="l">' + fmtDate(r.finish) + '</td></tr>';
+  function nz(v) { return v ? v : null; }   // zero overbilling / underbilling shows as —
+  function cellHtml(k, r, b) {
+    var c = b ? 'b' : '';
+    switch (k) {
+      case 'job': return '<td class="l">' + esc(r.job) + (r.appNo ? '<span class="sub">App #' + r.appNo + ' · ' + fmtDate(r.appDate) + '</span>' : '') + '</td>';
+      case 'name':
+        var link = r.aiaId ? '<a class="pl" href="invoicing.html?project=' + r.id + '">' + esc(r.name) + '</a>' : esc(r.name);
+        return '<td class="l"><span class="nm">' + link + '</span><span class="sub">' + esc(r.customer) + (r.setup ? '' : ' · <span class="pill nosetup">no contract setup</span>') + (r.hasCost ? '' : ' · <span class="pill nocost">no cost data</span>') + '</span></td>';
+      case 'pm': return '<td class="l">' + esc(r.pm) + '</td>';
+      case 'status': return '<td class="l"><span class="pill ' + r.status + '">' + r.status + '</span></td>';
+      case 'pctBilled': return pctCell(r.pctBilled, c);
+      case 'backlog': return cell(r.backlog, (c + (r.backlog > 0 ? ' pos' : '')).trim());
+      case 'costToComplete': return cell(r.costToComplete, (c + (r.costToComplete != null && r.costToComplete < 0 ? ' neg' : '')).trim());
+      case 'pctComplete': return pctCell(r.pctComplete, c, r.basis === 'pm' ? ' <span class="muted" style="font-size:10px">PM %</span>' : '');
+      case 'over': case 'under': return cell(r.earned == null ? null : nz(r[k]), c);
+      case 'gpPct': return '<td class="' + c + '">' + (r.gpPct != null ? (r.gpPct * 100).toFixed(1) + '%' : '<span class="muted">—</span>') + '</td>';
+      case 'finish': return '<td class="l' + (b ? ' b' : '') + '">' + fmtDate(r.finish) + '</td>';
+      default: return cell(r[k], c);
+    }
   }
-  function totHtml(t, label, grand) {
-    return '<tr class="' + (grand ? 'grand' : 'tot') + '"><td class="l" colspan="4">' + label + '</td>' + cell(t.original, 'b') + cell(t.cos) + cell(t.revised) + cell(t.billed, 'b') + '<td>' + pct(t.revised ? t.billed / t.revised : null) + '</td>' +
-      cell(t.backlog) + cell(t.estCost, 'b') + cell(t.costToDate) + cell(t.costToComplete) + '<td>' + pct(t.estCost ? t.costToDate / t.estCost : null) + '</td>' + cell(t.earned, 'b') + cell(t.overUnder) +
-      cell(t.estGP, 'b') + '<td>' + (t.revisedWithCost ? (t.estGP / t.revisedWithCost * 100).toFixed(1) + '%' : '—') + '</td>' + cell(t.gpToDate) + cell(t.retainage, 'b') + cell(t.paid) + cell(t.ar) + '<td></td></tr>';
+  function rowHtml(r, M, st) { return '<tr>' + M.cols.map(function(k) { return cellHtml(k, r, st[k]); }).join('') + '</tr>'; }
+  function totHtml(t, label, grand, M, st) {
+    var h = '<tr class="' + (grand ? 'grand' : 'tot') + '"><td class="l" colspan="' + M.lead + '">' + label + '</td>';
+    M.cols.slice(M.lead).forEach(function(k) {
+      var c = st[k] ? 'b' : '';
+      switch (k) {
+        case 'pctBilled': h += '<td class="' + c + '">' + pct(t.revised ? t.billed / t.revised : null) + '</td>'; break;
+        case 'pctComplete': h += '<td class="' + c + '">' + pct(t.estCost ? t.costToDate / t.estCost : null) + '</td>'; break;
+        case 'gpPct': h += '<td class="' + c + '">' + (t.revisedWithCost ? (t.estGP / t.revisedWithCost * 100).toFixed(1) + '%' : '—') + '</td>'; break;
+        case 'finish': h += '<td></td>'; break;
+        case 'over': case 'under': h += cell(nz(t[k]), c); break;
+        default: h += cell(t[k], c);
+      }
+    });
+    return h + '</tr>';
   }
 
   function exportCsv() {
-    var list = filtered(), head = ['Job #', 'Project', 'Customer', 'PM', 'Status', 'Original Contract', 'Change Orders', 'Revised Contract', 'Billed to Date', '% Billed', 'Backlog Under Contract', 'Est. Total Cost', 'Cost to Date', 'Cost to Complete', '% Complete', '% Basis', 'Earned Revenue', 'Over/(Under) Billed', 'Est. Gross Profit', 'GP %', 'GP to Date', 'Retainage Held', 'Paid to Date', 'A/R Open', 'Est. Finish', 'Latest App #', 'App Date', 'Costs as of', 'Contract Setup'];
+    var list = filtered(), head = ['Job #', 'Project', 'Customer', 'PM', 'Status', 'Original Contract', 'Change Orders', 'Revised Contract', 'Billed to Date', '% Billed', 'Backlog Under Contract', 'Est. Total Cost', 'Cost to Date', 'Cost to Complete', '% Complete', '% Basis', 'Earned Revenue', 'Over/(Under) Billed', 'Overbillings', 'Underbillings', 'Backlog (Revised - Earned)', 'Est. Gross Profit', 'GP %', 'GP to Date', 'Retainage Held', 'Paid to Date', 'A/R Open', 'Est. Finish', 'Latest App #', 'App Date', 'Costs as of', 'Contract Setup'];
     var esc2 = function(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var num = function(v) { return v == null ? '' : Number(v).toFixed(2); }, pc = function(v) { return v == null ? '' : (v * 100).toFixed(1); };
     var out = [head.join(',')];
-    list.forEach(function(r) { out.push([r.job, r.name, r.customer, r.pm, r.status, num(r.original), num(r.cos), num(r.revised), num(r.billed), pc(r.pctBilled), num(r.backlog), num(r.estCost), num(r.costToDate), num(r.costToComplete), pc(r.pctComplete), r.basis, num(r.earned), num(r.overUnder), num(r.estGP), pc(r.gpPct), num(r.gpToDate), num(r.retainage), num(r.paid), num(r.ar), r.finish || '', r.appNo || '', r.appDate || '', r.costAsOf || '', r.setup ? 'yes' : 'no'].map(esc2).join(',')); });
+    list.forEach(function(r) { out.push([r.job, r.name, r.customer, r.pm, r.status, num(r.original), num(r.cos), num(r.revised), num(r.billed), pc(r.pctBilled), num(r.backlog), num(r.estCost), num(r.costToDate), num(r.costToComplete), pc(r.pctComplete), r.basis, num(r.earned), num(r.overUnder), num(r.over), num(r.under), num(r.backlogEarned), num(r.estGP), pc(r.gpPct), num(r.gpToDate), num(r.retainage), num(r.paid), num(r.ar), r.finish || '', r.appNo || '', r.appDate || '', r.costAsOf || '', r.setup ? 'yes' : 'no'].map(esc2).join(',')); });
     var blob = new Blob(['﻿' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'WIP Report ' + $('asOf').value + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
@@ -314,10 +356,10 @@
     if (!prof || OFFICE_ROLES.indexOf(prof.role) < 0) { $('blocked').style.display = 'block'; return; }
     $('main').style.display = 'block';
     $('asOf').value = new Date().toISOString().slice(0, 10);
-    $('tbody').innerHTML = '<tr><td class="empty" colspan="23">Loading prime contracts and costs…</td></tr>';
-    try { await loadData(); await build(); } catch (e) { $('tbody').innerHTML = '<tr><td class="empty" colspan="23">' + esc(e.message) + '</td></tr>'; return; }
+    $('tbody').innerHTML = '<tr><td class="empty" colspan="24">Loading prime contracts and costs…</td></tr>';
+    try { await loadData(); await build(); } catch (e) { $('tbody').innerHTML = '<tr><td class="empty" colspan="24">' + esc(e.message) + '</td></tr>'; return; }
     ['asOf', 'incDrafts'].forEach(function(id) { $(id).addEventListener('change', function() { build(); }); });
-    ['fStatus', 'fPm', 'hideZero'].forEach(function(id) { $(id).addEventListener('change', render); });
+    ['fStatus', 'fPm', 'hideZero', 'fView'].forEach(function(id) { $(id).addEventListener('change', render); });
     $('q').addEventListener('input', render);
     $('btnCsv').addEventListener('click', exportCsv);
     // horizontal scrolling: arrows + a top scrollbar synced with the table
@@ -339,6 +381,6 @@
   init().catch(function(e) { console.error(e); });
 })();
 </script>
-<script src="sw-register.js?v=339"></script>
+<script src="sw-register.js?v=343"></script>
 </body>
 </html>
