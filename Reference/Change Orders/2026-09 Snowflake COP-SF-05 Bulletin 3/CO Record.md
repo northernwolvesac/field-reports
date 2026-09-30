@@ -33,3 +33,9 @@
 - 31-3 $4,200 (removal line deleted), 31-4 $5,450 (install 24 MH), 31-5 $3,150 (removal 4 MH),
   31-6 $3,025 unchanged in total (removal 5 MH $625, material incl. air outlets $900, labor line covers air outlets).
 - 31st floor stays $19,080; total stays $66,780.
+
+## Rev 3 - 09/30/2026 (condensed format, amounts unchanged)
+- PDF cut from 16 pages to 6, per Ruslan: 2 pages per floor. Page 1 = before (Addendum 1) / after (Bulletin 3)
+  crops of each change area with its total; page 2 = scope of work (before / after / work) and cost per area
+  (disconnect MH, material, install MH, total), shop drawings, floor total, key plan and COP summary.
+- Cover page, full-floor overlays and the red/blue overlay views were dropped. The xlsx is unchanged.

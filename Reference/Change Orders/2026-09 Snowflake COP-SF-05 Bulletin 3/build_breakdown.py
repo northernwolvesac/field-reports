@@ -1,7 +1,9 @@
-"""Build the COP-SF-05 (Bulletin 3) detailed breakdown: before/after/overlay by floor and area.
+"""Build the COP-SF-05 (Bulletin 3) breakdown: 6 pages, 2 per floor.
+
+Page 1 of each floor = before / after crops of every change area (vector, from the drawings).
+Page 2 of each floor = scope of work and cost per area, key plan with the areas, COP summary.
 
 Before = Addendum 1 M-529/530/531, After = Bulletin 3 (rev 4, 08/10/2026) M-529/530/531.
-Overlay: gray = unchanged, red = Addendum 1 only (installed, removed), blue = Bulletin 3 only (new).
 
 Run:  python3 build_breakdown.py
 Out:  COP-SF-05 Bulletin 3 - Detailed Breakdown.pdf and .xlsx next to this script.
@@ -10,6 +12,7 @@ Costs are the COP-SF-05 line items spread over the change areas; floor totals ma
 breakdown already sent to Structure Tone (29 = $29,600, 30 = $20,150, 31 = $17,030).
 Rev 1 (09/30): area amounts adjusted per Ruslan's markup; 29th floor and COP total unchanged,
 30th = $18,100, 31st = $19,080. Category totals no longer follow the COP-SF-05 line split.
+Rev 3 (09/30): condensed from 16 pages (cover, floor overlays, one page per area) to 6 pages.
 """
 import io, json, os
 import numpy as np
@@ -181,14 +184,6 @@ def render(doc, page, clip, z, sx=1, sy=1):
     return _gray(doc[page].get_pixmap(matrix=pymupdf.Matrix(z / sx, z / sy), clip=clip, colorspace=pymupdf.csGRAY))
 
 
-def dil(m, r):
-    o = m.copy()
-    for dy in range(-r, r + 1):
-        for dx in range(-r, r + 1):
-            o |= np.roll(np.roll(m, dy, 0), dx, 1)
-    return o
-
-
 def local_offset(page, rect):
     """Best sub-point translation of B against A inside rect (searched at 4x)."""
     (sx, _), (sy, _) = XF[str(page)]
@@ -205,78 +200,25 @@ def local_offset(page, rect):
     return best[1], best[2]
 
 
-def local_offset_fast(page, rect, z=2, n=4):
-    (sx, _), (sy, _) = XF[str(page)]
-    a = render(A, page, pymupdf.Rect(rect), z) < 170
-    b = render(B, page, b_clip(page, rect, (0, 0)), z, sx, sy) < 170
-    h = min(a.shape[0], b.shape[0]) - 2 * n; w = min(a.shape[1], b.shape[1]) - 2 * n
-    if a[n:n + h, n:n + w].sum() < 200:
-        return (0, 0)
-    best = None
-    for dy in range(-n, n + 1):
-        for dx in range(-n, n + 1):
-            v = (a[n:n + h, n:n + w] ^ b[n + dy:n + dy + h, n + dx:n + dx + w]).sum()
-            if best is None or v < best[0]:
-                best = (v, dx / z, dy / z)
-    return best[1], best[2]
-
-
-def overlay_tiled(page, rect, dpi, tile=200):
-    x0, y0, x1, y1 = rect
-    z = dpi / 72
-    W = int(round((x1 - x0) * z)); H = int(round((y1 - y0) * z))
-    out = np.full((H, W, 3), 255, np.uint8)
-    y = y0
-    while y < y1:
-        x = x0
-        while x < x1:
-            r = (x, y, min(x + tile, x1), min(y + tile, y1))
-            off = local_offset_fast(page, r)
-            im = np.array(Image.open(overlay_png(page, r, dpi, off, r_min=2)))
-            px = int(round((x - x0) * z)); py = int(round((y - y0) * z))
-            hh = min(im.shape[0], H - py); ww = min(im.shape[1], W - px)
-            out[py:py + hh, px:px + ww] = im[:hh, :ww]
-            x += tile
-        y += tile
-    buf = io.BytesIO(); Image.fromarray(out).save(buf, 'PNG', optimize=True); buf.seek(0)
-    return buf
-
-
-def overlay_png(page, rect, dpi, off, r_min=1):
-    (sx, _), (sy, _) = XF[str(page)]
-    z = dpi / 72
-    a = render(A, page, pymupdf.Rect(rect), z)
-    b = render(B, page, b_clip(page, rect, off), z, sx, sy)
-    h = min(a.shape[0], b.shape[0]); w = min(a.shape[1], b.shape[1]); a = a[:h, :w]; b = b[:h, :w]
-    da = a < 170; db = b < 170
-    r = max(r_min, round(dpi / 90))
-    # ductwork is drawn black, the architectural background gray: only black linework is flagged as a change
-    rem = (a < 110) & ~dil(db, r); add = (b < 110) & ~dil(da, r)
-    rgb = np.full((h, w, 3), 255, np.uint8)
-    rgb[da | db] = (175, 175, 175)
-    k = max(0, round(dpi / 150))
-    rgb[dil(rem, k)] = (215, 25, 25)
-    rgb[dil(add, k)] = (20, 85, 225)
-    buf = io.BytesIO(); Image.fromarray(rgb).save(buf, 'PNG', optimize=True); buf.seek(0)
-    return buf
-
-
 # ---------------- page layout ----------------
 pdfmetrics.registerFont(TTFont('LS', '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'))
 pdfmetrics.registerFont(TTFont('LSB', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'))
 pdfmetrics.registerFontFamily('LS', normal='LS', bold='LSB', italic='LS', boldItalic='LSB')
 PW, PH = landscape(TABLOID)          # 1224 x 792
 M = 30
-NAVY = colors.HexColor('#1F3A5F'); RED = colors.HexColor('#D71919'); BLUE = colors.HexColor('#1455E1')
+NAVY = colors.HexColor('#1F3A5F'); ORANGE = colors.HexColor('#E08A00'); GRAY = colors.HexColor('#555555')
 LIGHT = colors.HexColor('#EEF2F7')
-st = ParagraphStyle('b', fontName='LS', fontSize=9, leading=11.5)
+st = ParagraphStyle('b', fontName='LS', fontSize=8.5, leading=10.5)
 stb = ParagraphStyle('bb', parent=st, fontName='LSB')
+sts = ParagraphStyle('s', parent=st, fontSize=9.5, leading=12.5)
+str_ = ParagraphStyle('r', parent=sts, alignment=2)
 sth = ParagraphStyle('h', fontName='LSB', fontSize=10, leading=12.5, textColor=NAVY)
 ordn = lambda n: f'{n}' + ('st' if n % 10 == 1 and n % 100 != 11 else 'nd' if n % 10 == 2 and n % 100 != 12 else 'rd' if n % 10 == 3 and n % 100 != 13 else 'th')
 esc = lambda t: t.replace('&', '&amp;')
 money = lambda v: f'${v:,.0f}' if v else '-'
 vector_jobs = []   # (page_no, rect top-left coords, doc, src_page, clip)
 page_no = [0]
+TOP, BOT = 62, 34                    # usable band below the header / above the footer
 
 
 def header(c, title, sub):
@@ -292,20 +234,10 @@ def footer(c):
     page_no[0] += 1
     c.setFillColor(colors.gray); c.setFont('LS', 8)
     c.drawString(M, 16, f'Northern Wolves AC  |  55 9th St, 55-A2, Brooklyn, NY 11215  |  (347) 463-9248  |  {DATE}')
-    c.drawRightString(PW - M, 16, f'Page {page_no[0]}')
+    c.drawRightString(PW - M, 16, f'Page {page_no[0]} of {2 * len(FLOORS)}')
 
 
-def legend(c, x, y):
-    c.setFont('LS', 8.5)
-    for i, (col, txt) in enumerate([(colors.HexColor('#AFAFAF'), 'Unchanged'),
-                                    (RED, 'Addendum 1 only - installed, removed'),
-                                    (BLUE, 'Bulletin 3 only - new work')]):
-        c.setStrokeColor(col); c.setLineWidth(3); c.line(x, y - i * 13, x + 22, y - i * 13)
-        c.setFillColor(colors.black); c.drawString(x + 28, y - i * 13 - 3, txt)
-    c.setLineWidth(1)
-
-
-def table(c, data, x, ytop, widths, bold_last=True, head=True, zebra=True):
+def table(c, data, x, ytop, widths, bold_last=True, head=True, extra=()):
     t = Table(data, colWidths=widths)
     s = [('FONT', (0, 0), (-1, -1), 'LS', 8.5), ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
          ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#9AA5B1')),
@@ -315,7 +247,7 @@ def table(c, data, x, ytop, widths, bold_last=True, head=True, zebra=True):
               ('FONT', (0, 0), (-1, 0), 'LSB', 8.5), ('ALIGN', (0, 0), (-1, 0), 'CENTER')]
     if bold_last:
         s += [('FONT', (0, -1), (-1, -1), 'LSB', 8.5), ('BACKGROUND', (0, -1), (-1, -1), LIGHT)]
-    t.setStyle(TableStyle(s))
+    t.setStyle(TableStyle(s + list(extra)))
     w, h = t.wrapOn(c, 0, 0); t.drawOn(c, x, ytop - h)
     return h
 
@@ -324,13 +256,14 @@ def para(c, text, style, x, ytop, w):
     p = Paragraph(text, style); _, h = p.wrap(w, 1000); p.drawOn(c, x, ytop - h); return h
 
 
-def panel(c, x, y, w, h, label, color):
-    """x,y bottom-left (reportlab). Returns top-left based rect for pymupdf."""
-    c.setStrokeColor(color); c.setLineWidth(1.2); c.rect(x, y, w, h)
-    c.setFillColor(color); c.rect(x, y + h, w, 16, stroke=0, fill=1)
-    c.setFillColor(colors.white); c.setFont('LSB', 9); c.drawString(x + 6, y + h + 4.5, label)
-    c.setLineWidth(1)
-    return pymupdf.Rect(x, PH - (y + h), x + w, PH - y)
+def panel(c, x, y, w, h, label, color, right=''):
+    """x,y bottom-left (reportlab), label bar on top inside the box. Returns the image area, top-left coords."""
+    c.setStrokeColor(color); c.setLineWidth(1); c.rect(x, y, w, h)
+    c.setFillColor(color); c.rect(x, y + h - 14, w, 14, stroke=0, fill=1)
+    c.setFillColor(colors.white); c.setFont('LSB', 8.5); c.drawString(x + 5, y + h - 10.5, label)
+    if right:
+        c.drawRightString(x + w - 5, y + h - 10.5, right)
+    return pymupdf.Rect(x + 3, PH - (y + h - 17), x + w - 3, PH - y - 3)
 
 
 def fit(rect, box):
@@ -341,166 +274,140 @@ def fit(rect, box):
     return pymupdf.Rect(x0, y0, x0 + w, y0 + h)
 
 
-COLS = ['Area', 'Description', 'Disconnect /\nremoval labor', 'Ductwork\nmaterial', 'Ductwork install\nlabor',
-        'Air outlet\nmaterial', 'Air outlet\nlabor', 'Shop\ndrawings', 'Total']
+def floor_areas(f):
+    return [a for a in AREAS if a['floor'] == f]
 
 
-def cover(c):
-    header(c, 'COP-SF-05 - Bulletin 3 Revision: Detailed Breakdown by Floor and Area',
-           f'Project 11010174 - Snowflake Fitout, 7 Times Square 29th-31st Floor  |  Submitted to Structure Tone  |  {DATE}')
-    y = PH - 80
-    y -= para(c, 'Basis of this breakdown', sth, M, y, 560) + 4
-    notes = [
-        'Bulletin 3 (M-529 / M-530 / M-531, revision 4, 08/10/2026) was issued after the ductwork in the affected '
-        'areas had been fabricated and installed per the Addendum 1 drawings. The change therefore includes '
-        '<b>disconnecting and removing installed ductwork</b>, in addition to fabricating and installing the revised work.',
-        'Each floor is shown with the Addendum 1 drawing ("Before") overlaid on the Bulletin 3 drawing ("After"). '
-        'Every change area is numbered and has its own detail page with the before, after and overlay views and the '
-        'cost for that area.',
-        'Each area is broken down into disconnect / removal labor, ductwork material (fabricated duct, fittings, '
-        'insulation, accessories), ductwork relocation / install labor and air outlet material; shop drawings are '
-        'listed per floor. Labor is at $125.00 per man-hour as submitted. The total equals COP-SF-05, $66,780.',
-        'Quantities (LF) are approximate, taken from the drawings at 1/8" = 1\'-0".',
-        'Red revision clouds in the overlays are Addendum 1 clouds that were dropped from Bulletin 3; moved tags and '
-        'labels also show in red / blue. Only the ductwork within the numbered areas is priced.',
-    ]
-    for i, n in enumerate(notes, 1):
-        y -= para(c, f'{i}. {n}', st, M, y, 560) + 5
-    legend(c, M + 4, y - 10); y -= 50
+# ---- page 1 of each floor: before / after crops of every change area ----
+G = 10          # gap between cells
+TB = 16         # area title bar
 
 
-    # summary table on the right
-    x = 620; y = PH - 80
-    y -= para(c, 'Summary by floor', sth, x, y, 560) + 4
-    hdr = ['Floor', 'Disconnect /\nremoval labor', 'Ductwork\nmaterial', 'Ductwork\ninstall labor',
-           'Air outlet\nmaterial', 'Shop\ndrawings', 'Total']
-    rows = [hdr]
-    keys = ['demo', 'mat', 'inst', 'omat', 'draft']
-    assert not any(a['omh'] for a in AREAS)
-    for f, d in FLOORS.items():
-        rows.append([f'{ordn(f)} floor ({d["sheet"]})'] + [money(floor_sum(f, k)) for k in keys] + [money(floor_total(f))])
-    rows.append(['Total'] + [money(sum(floor_sum(f, k) for f in FLOORS)) for k in keys] + [money(COP_TOTAL)])
-    y -= table(c, rows, x, y, [124, 72, 72, 72, 64, 56, 74]) + 10
-    mh = ['Man-hours', f'{sum(a["demo"] for a in AREAS)} MH', '', f'{sum(a["inst"] for a in AREAS)} MH', '', '', '']
-    y -= table(c, [mh], x, y, [124, 72, 72, 72, 64, 56, 74], bold_last=False, head=False) + 18
+def pair_scale(r, w, h, stacked):
+    """Scale of one area's before/after pair inside a w x h cell (below the title bar)."""
+    rw, rh = r[2] - r[0], r[3] - r[1]
+    if stacked:
+        pw, ph = w - 6, (h - TB - G) / 2 - 20
+    else:
+        pw, ph = (w - G) / 2 - 6, h - TB - 20
+    return min(pw / rw, ph / rh)
 
-    y -= para(c, 'Change areas', sth, x, y, 560) + 4
-    rows = [['Area', 'Description', 'Total']]
-    for a in AREAS:
-        rows.append([a['id'], Paragraph(esc(a['title']), st), money(area_total(a))])
-    rows.append(['', 'Shop drawings (29 / 30 / 31, $1,000 each)', money(sum(DRAFTING.values()))])
-    rows.append(['', 'Total', money(COP_TOTAL)])
-    t_h = table(c, rows, x, y, [40, 390, 74])
+
+def grid(areas):
+    """Pick columns / rows and pair orientation that give the largest minimum drawing scale."""
+    W, H = PW - 2 * M, PH - TOP - BOT
+    best = None
+    for cols in range(1, len(areas) + 1):
+        rows = -(-len(areas) // cols)
+        cw, ch = (W - (cols - 1) * G) / cols, (H - (rows - 1) * G) / rows
+        orient = [max((pair_scale(a['rect'], cw, ch, s), s) for s in (False, True)) for a in areas]
+        score = min(o[0] for o in orient)
+        if best is None or score > best[0]:
+            best = (score, cols, cw, ch, [o[1] for o in orient])
+    return best[1:]
+
+
+def screens_page(c, f):
+    d = FLOORS[f]; p = d['page']; areas = floor_areas(f)
+    header(c, f'{ordn(f)} Floor - {d["sheet"]}: Change Areas, Before and After',
+           f'Before = Addendum 1 (fabricated and installed)   After = Bulletin 3 (rev 4, 08/10/2026)   |   '
+           f'{ordn(f)} floor total {money(d["total"])} - scope and costs on next page')
+    cols, cw, ch, orient = grid(areas)
+    for i, a in enumerate(areas):
+        cx = M + (i % cols) * (cw + G); cy = TOP + (i // cols) * (ch + G)     # top-left coords
+        c.setFillColor(ORANGE); c.rect(cx, PH - cy - TB, cw, TB, stroke=0, fill=1)
+        c.setFillColor(colors.white); c.setFont('LSB', 9.5)
+        c.drawString(cx + 5, PH - cy - 11.5, f'{a["id"]}  {a["title"]}')
+        c.drawRightString(cx + cw - 5, PH - cy - 11.5, money(area_total(a)))
+        r = pymupdf.Rect(a['rect']); off = local_offset(p, a['rect'])
+        y0 = cy + TB + 4; hh = ch - TB - 4
+        if orient[i]:
+            ph_ = (hh - G) / 2
+            boxes = [(cx, y0, cw, ph_), (cx, y0 + ph_ + G, cw, ph_)]
+        else:
+            pw_ = (cw - G) / 2
+            boxes = [(cx, y0, pw_, hh), (cx + pw_ + G, y0, pw_, hh)]
+        for j, (bx, by, bw, bh) in enumerate(boxes):
+            lab = 'BEFORE - Addendum 1 (installed)' if j == 0 else 'AFTER - Bulletin 3'
+            inner = fit(r, panel(c, bx, PH - by - bh, bw, bh, lab, GRAY if j == 0 else NAVY))
+            vector_jobs.append((page_no[0], inner, A if j == 0 else B, p, r if j == 0 else b_clip(p, r, off)))
     footer(c); c.showPage()
 
 
-def floor_page(c, f):
+# ---- page 2 of each floor: scope of work and cost breakdown ----
+def key_plan(c, f, x, ytop, w, hmax):
     d = FLOORS[f]; p = d['page']; key = d['key']
-    header(c, f'{ordn(f)} Floor - {d["sheet"]}: Addendum 1 vs Bulletin 3 overlay',
-           'Gray = unchanged   Red = Addendum 1 only (installed, removed)   Blue = Bulletin 3 only (new)   '
-           'Numbered boxes = change areas, see detail pages')
-    box = pymupdf.Rect(M, 70, 700, PH - 30)
-    r = fit(key, box)
-    img = overlay_tiled(p, key, 110)
-    c.drawImage(ImageReader(img), r.x0, PH - r.y1, r.width, r.height)
-    c.setStrokeColor(colors.black); c.rect(r.x0, PH - r.y1, r.width, r.height)
+    r = fit(key, pymupdf.Rect(x, PH - ytop, x + w, PH - ytop + hmax))
+    z = r.width / (key[2] - key[0]) * 150 / 72
+    g = render(B, p, b_clip(p, key, (0, 0)), z, XF[str(p)][0][0], XF[str(p)][1][0])
+    g = (255 - (255 - g.astype(np.int16)) * 0.55).astype(np.uint8)          # lighten the plan under the boxes
+    buf = io.BytesIO(); Image.fromarray(g).save(buf, 'PNG', optimize=True); buf.seek(0)
+    c.drawImage(ImageReader(buf), r.x0, PH - r.y1, r.width, r.height)
+    c.setStrokeColor(colors.black); c.setLineWidth(0.6); c.rect(r.x0, PH - r.y1, r.width, r.height)
     s = r.width / (key[2] - key[0])
-    for a in [a for a in AREAS if a['floor'] == f]:
+    for a in floor_areas(f):
         ax0 = r.x0 + (a['rect'][0] - key[0]) * s; ay0 = r.y0 + (a['rect'][1] - key[1]) * s
         ax1 = r.x0 + (a['rect'][2] - key[0]) * s; ay1 = r.y0 + (a['rect'][3] - key[1]) * s
-        c.setStrokeColor(colors.HexColor('#E08A00')); c.setLineWidth(1.6); c.setDash(4, 2)
+        c.setStrokeColor(ORANGE); c.setLineWidth(1.4); c.setDash(3, 2)
         c.rect(ax0, PH - ay1, ax1 - ax0, ay1 - ay0); c.setDash()
-        c.setFillColor(colors.HexColor('#E08A00')); c.rect(ax0, PH - ay0, 30, 13, stroke=0, fill=1)
-        c.setFillColor(colors.white); c.setFont('LSB', 8.5); c.drawString(ax0 + 3, PH - ay0 + 3.5, a['id'])
+        c.setFillColor(ORANGE); c.rect(ax0, PH - ay0, 26, 11, stroke=0, fill=1)
+        c.setFillColor(colors.white); c.setFont('LSB', 7.5); c.drawString(ax0 + 2.5, PH - ay0 + 3, a['id'])
     c.setLineWidth(1)
-    x = 730; y = PH - 80
-    y -= para(c, f'{ordn(f)} floor - cost by area', sth, x, y, 460) + 4
-    rows = [['Area', 'Description', 'Disconnect', 'Material', 'Labor', 'Total']]
-    for a in [a for a in AREAS if a['floor'] == f]:
+    return r.height
+
+
+def mh(n, rate=RATE):
+    return f'{n} MH<br/>{money(n * rate)}' if n else '-'
+
+
+def scope_page(c, f):
+    d = FLOORS[f]; areas = floor_areas(f)
+    header(c, f'{ordn(f)} Floor - {d["sheet"]}: Scope of Work and Cost Breakdown',
+           f'Labor at $125.00 per man-hour   |   Disconnect = removal of installed Addendum 1 work incl. haul away   |   '
+           f'Material = fabricated ductwork, fittings, insulation, accessories and air outlets')
+    tw = [40, 482, 70, 70, 70, 70]
+    rows = [['Area', 'Scope of work', 'Disconnect /\nremoval', 'Material', 'Install\nlabor', 'Total']]
+    for a in areas:
         am = amounts(a)
-        rows.append([a['id'], Paragraph(esc(a['title']), st), money(am['demo']), money(am['mat'] + am['omat']),
-                     money(am['inst'] + am['omh']), money(area_total(a))])
+        txt = (f'<b>{esc(a["title"])}</b><br/><b>Before:</b> {esc(a["before"])}<br/><b>After:</b> {esc(a["after"])}'
+               f'<br/><b>Work:</b> {esc(a["work"])}')
+        rows.append([Paragraph(f'<b>{a["id"]}</b>', sts), Paragraph(txt, sts), Paragraph(mh(a['demo']), str_),
+                     money(am['mat'] + am['omat']), Paragraph(mh(a['inst'] + a['omh']), str_), money(area_total(a))])
     rows.append(['', 'Shop drawings for revised design', '', '', '', money(DRAFTING[f])])
-    rows.append(['', f'{ordn(f)} floor total', money(floor_sum(f, 'demo')), money(floor_sum(f, 'mat') + floor_sum(f, 'omat')),
-                 money(floor_sum(f, 'inst') + floor_sum(f, 'omh')), money(floor_total(f))])
-    y -= table(c, rows, x, y, [36, 200, 58, 58, 58, 54]) + 14
-    para(c, 'Disconnect = disconnect / removal labor of installed Addendum 1 work incl. haul away and clean up. '
-            'Material = fabricated ductwork, fittings, insulation, accessories and air outlets. '
-            'Labor = relocation / installation of ductwork, terminal units and air outlets.', st, x, y, 464)
-    footer(c); c.showPage()
-
-
-def area_page(c, a):
-    f = a['floor']; p = FLOORS[f]['page']; am = amounts(a)
-    header(c, f'Area {a["id"]} - {a["title"]}', f'{ordn(f)} floor, {FLOORS[f]["sheet"]}  |  Before = Addendum 1   After = Bulletin 3 (rev 4, 08/10/2026)')
-    off = local_offset(p, a['rect'])
-    r = pymupdf.Rect(a['rect'])
-    top, bottom = 70, 250                   # panel band in top-left page coords
-    gap = 12
-    wide = r.width / r.height > 1.25
-    boxes = []
-    if wide:   # before / after side by side, overlay underneath at left, text at right
-        bw = (PW - 2 * M - gap) / 2; bh = (PH - top - 34 - 32 - gap) / 2
-        boxes = [(M, top + 16, bw, bh), (M + bw + gap, top + 16, bw, bh), (M, top + 16 + bh + gap + 16, bw, bh)]
-    else:
-        bw = (PW - 2 * M - 2 * gap) / 3; bh = PH - top - 16 - bottom
-        boxes = [(M + i * (bw + gap), top + 16, bw, bh) for i in range(3)]
-    labels = [('BEFORE - Addendum 1 (as installed)', colors.HexColor('#555555')),
-              ('AFTER - Bulletin 3', colors.HexColor('#555555')), ('OVERLAY', NAVY)]
-    for i, (bx, by, bw_, bh_) in enumerate(boxes):
-        fr = panel(c, bx, PH - by - bh_, bw_, bh_, labels[i][0], labels[i][1])
-        inner = fit(r, fr + (3, 3, -3, -3))
-        if i == 0:
-            vector_jobs.append((page_no[0], inner, A, p, r))
-        elif i == 1:
-            vector_jobs.append((page_no[0], inner, B, p, b_clip(p, r, off)))
-        else:
-            img = overlay_png(p, r, 220, off)
-            c.drawImage(ImageReader(img), inner.x0, PH - inner.y1, inner.width, inner.height)
-    if wide:
-        legend(c, M + bw + gap + 10, PH - (boxes[2][1] + 16) + 4)
-        tx = M + bw + gap; ty = PH - (boxes[2][1] + 60); tw = bw
-    else:
-        legend(c, M + 4, PH - (top + 16 + bh + 22))
-        tx = M; ty = PH - (top + 16 + bh + 20); tw = 560
-        y0 = ty
-        ty = ty - 44
-    y = ty
-    for lab, txt in [('Before (Addendum 1, installed):', a['before']), ('After (Bulletin 3):', a['after']),
-                     ('Work required:', a['work'])]:
-        y -= para(c, f'<b>{lab}</b> {esc(txt)}', st, tx, y, tw if wide else 560) + 4
-    rows = [['Cost item', 'Qty', 'Unit', 'Rate', 'Amount']]
-    if a['demo']:
-        rows.append(['Disconnect / removal of installed ductwork, haul away (labor)', a['demo'], 'MH', '$125', money(am['demo'])])
-    if a['mat']:
-        rows.append([a.get('mat_label', 'Fabricated ductwork, fittings, insulation, accessories (material)'), 1, 'LS', '', money(am['mat'])])
-    rows.append([a.get('inst_label', 'Relocation / installation of ductwork (labor)'), a['inst'], 'MH', '$125', money(am['inst'])])
-    if a['omat']:
-        rows.append(['Air outlets (material)', 1, 'LS', '', money(am['omat'])])
-    if a['omh']:
-        rows.append(['Air outlet installation (labor)', a['omh'], 'MH', '$125', money(am['omh'])])
-    rows.append([f'Area {a["id"]} total', '', '', '', money(area_total(a))])
-    if wide:
-        table(c, rows, tx, y - 6, [330, 36, 36, 44, 70])
-    else:
-        table(c, rows, 620, y0, [330, 40, 40, 50, 80 - 6])
+    dm = sum(a['demo'] for a in areas); im = sum(a['inst'] + a['omh'] for a in areas)
+    rows.append(['', f'{ordn(f)} floor total  ({dm} MH disconnect, {im} MH install)', money(floor_sum(f, 'demo')),
+                 money(floor_sum(f, 'mat') + floor_sum(f, 'omat')), money(floor_sum(f, 'inst') + floor_sum(f, 'omh')),
+                 money(floor_total(f))])
+    table(c, rows, M, PH - TOP, tw, extra=[('FONT', (0, 0), (-1, -1), 'LS', 9.5), ('FONT', (0, 0), (-1, 0), 'LSB', 9),
+                                           ('FONT', (0, -1), (-1, -1), 'LSB', 9.5),('VALIGN', (0, 1), (-1, -1), 'TOP'), ('VALIGN', (0, -2), (-1, -1), 'MIDDLE'),
+                                           ('FONT', (-1, 1), (-1, -1), 'LSB', 9.5)])
+    x = M + sum(tw) + 20; w = PW - M - x; y = PH - TOP
+    y -= para(c, 'Key plan - Bulletin 3', sth, x, y, w) + 3
+    y -= key_plan(c, f, x, y, w, 430) + 14
+    y -= para(c, 'COP-SF-05 summary', sth, x, y, w) + 3
+    rows = [['Floor', 'Total']] + [[f'{ordn(g)} floor ({FLOORS[g]["sheet"]})', money(floor_total(g))] for g in FLOORS]
+    rows.append(['COP-SF-05 total', money(COP_TOTAL)])
+    y -= table(c, rows, x, y, [w - 80, 80], extra=[('BACKGROUND', (0, list(FLOORS).index(f) + 1),
+                                                     (-1, list(FLOORS).index(f) + 1), colors.HexColor('#FCEBD2'))]) + 10
+    para(c, 'Bulletin 3 was issued after the ductwork in these areas had been fabricated and installed per Addendum 1, '
+            'so each area includes disconnecting and removing the installed work. Quantities are approximate, taken from '
+            'the drawings at 1/8" = 1\'-0".', st, x, y, w)
     footer(c); c.showPage()
 
 
 def build_pdf():
     c = canvas.Canvas(OUT + '.pdf', pagesize=(PW, PH))
-    c.setTitle('COP-SF-05 Bulletin 3 - Detailed Breakdown'); c.setAuthor('Northern Wolves AC')
-    cover(c)
+    c.setTitle('COP-SF-05 Bulletin 3 - Breakdown by Floor'); c.setAuthor('Northern Wolves AC')
     for f in FLOORS:
-        floor_page(c, f)
-        for a in [a for a in AREAS if a['floor'] == f]:
-            area_page(c, a)
+        screens_page(c, f)
+        scope_page(c, f)
     c.save()
     doc = pymupdf.open(OUT + '.pdf')
     for pno, rect, src, sp, clip in vector_jobs:
         doc[pno].show_pdf_page(rect, src, sp, clip=clip, keep_proportion=False)
     tmp = OUT + '.tmp.pdf'
     doc.save(tmp, garbage=4, deflate=True); doc.close(); os.replace(tmp, OUT + '.pdf')
+
 
 
 def build_xlsx():
