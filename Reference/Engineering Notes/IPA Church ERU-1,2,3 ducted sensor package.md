@@ -214,3 +214,6 @@ Do not order until DMG answers the RFI; the RFI turnaround is a week, the parts 
 - 2026-09-30: High static switch selected: Cleveland AFS-460-142, Grainger item 3ZM94 (manual reset, SPST-N.C., set point 0.40-12.0 in wc,
   1/4 in OD compression ports, UL). Qty 3. Wire the two N.C. terminals in S1 (R-G). Static tip on the high (+) port, low port open to the shaft,
   mount with the diaphragm vertical. Also listed at Zoro (G1313882) and Stromquist.
+- 2026-09-30: Cat6 CMP 1000 ft price check (search listings, vendor pages blocked here): TSCables ~$190 (eBay/Amazon), Infinite Cables $307,
+  trueCABLE $357 (ETL), Cmple $362-370, Monoprice UL/TAA (price not shown). Buy only 23 AWG solid 100% bare copper, UL or ETL listed CMP; no CCA.
+  500 ft box (~$170-220) only if the 3 measured runs total under ~450 ft.
