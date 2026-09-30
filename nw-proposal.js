@@ -89,6 +89,7 @@
       var qty = num(l.quantity) * groupMultiplier(est, l.group_name);
       if (!(qty > 0)) return;
       if (cat === 'equipment' && d) {
+        d = d.replace(/\s*[—-]\s*quote$/i, '');   // lump-sum vendor quote lines ("ADE — quote") read as the group name
         var k = d.toLowerCase();
         if (!byName[k]) { byName[k] = { name: d, qty: 0, unit: uom(l.unit) }; equip.push(byName[k]); }
         byName[k].qty += qty;
