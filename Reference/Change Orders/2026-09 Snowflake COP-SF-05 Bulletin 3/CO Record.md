@@ -28,3 +28,8 @@
   Floor $19,080 (was $17,030).
 - The per-category totals no longer follow the COP-SF-05 line split (removal 60 MH, install 283 MH), so the
   as-submitted line item table was taken off the cover.
+
+## Rev 2 - 09/30/2026 (second markup)
+- 31-3 $4,200 (removal line deleted), 31-4 $5,450 (install 24 MH), 31-5 $3,150 (removal 4 MH),
+  31-6 $3,025 unchanged in total (removal 5 MH $625, material incl. air outlets $900, labor line covers air outlets).
+- 31st floor stays $19,080; total stays $66,780.

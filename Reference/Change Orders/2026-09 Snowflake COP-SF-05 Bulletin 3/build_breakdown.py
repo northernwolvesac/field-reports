@@ -107,27 +107,29 @@ AREAS = [
          title='Storage 31.02 - new transfer ducts',
          before='No transfer ducts; volume damper at FPB-HW-B (500) branch.',
          after='(2) new 44x22 transfer ducts.',
-         work='Remove affected branch fitting; fabricate and install (2) 44x22 lined transfer ducts.',
-         demo=4, mat=1700, inst=20, omat=0, omh=0),
+         work='Fabricate and install (2) 44x22 lined transfer ducts.',
+         demo=0, mat=1700, inst=20, omat=0, omh=0),
     dict(id='31-4', floor=31, rect=(1180, 1050, 1350, 1300),
          title='Coffee Bar 31.12 - transfer ducts and main fitting',
          before='36x18 main with elbow at Coffee Bar 31.12; no transfer ducts.',
          after='(2) new TD 28x16; 36x18 main elbow reconfigured.',
          work='Disconnect and remove 36x18 elbow; fabricate and install new fitting and (2) TD 28x16.',
-         demo=6, mat=1700, inst=22, omat=0, omh=0),
+         demo=6, mat=1700, inst=24, omat=0, omh=0),
     dict(id='31-5', floor=31, rect=(740, 1090, 920, 1240),
          title='Transfer duct TD 32x16, southwest',
          before='Transfer duct and duct elbow as installed per Addendum 1, next to the 12x8 branch.',
          after='Transfer duct revised to TD 32x16; elbow deleted.',
          work='Remove installed transfer duct and elbow; fabricate and install TD 32x16.',
-         demo=2, mat=650, inst=16, omat=0, omh=0),
+         demo=4, mat=650, inst=16, omat=0, omh=0),
     dict(id='31-6', floor=31, rect=(1145, 1428, 1765, 1688),
          title='Storage 31.15 / Room 31.16, southeast',
          before='12x12 and 18x12 grilles at previous locations; no transfer duct at Storage 31.15.',
          after='New TD 48x24; 12x12 and 18x12 grilles relocated.',
          work='Remove grilles and their duct connections; fabricate and install TD 48x24, relocate 12x12 and 18x12 '
               'grilles with duct connections at new locations.',
-         demo=3, mat=1150, inst=12, omat=0, omh=0),
+         demo=5, mat=900, inst=12, omat=0, omh=0,
+         mat_label='Material and air outlets',
+         inst_label='Relocation / installation of ductwork and air outlets (labor)'),
 ]
 
 COP_LINES = [('Labor for demolition work (40 MH @ $125)', 5000),
@@ -270,6 +272,7 @@ LIGHT = colors.HexColor('#EEF2F7')
 st = ParagraphStyle('b', fontName='LS', fontSize=9, leading=11.5)
 stb = ParagraphStyle('bb', parent=st, fontName='LSB')
 sth = ParagraphStyle('h', fontName='LSB', fontSize=10, leading=12.5, textColor=NAVY)
+ordn = lambda n: f'{n}' + ('st' if n % 10 == 1 and n % 100 != 11 else 'nd' if n % 10 == 2 and n % 100 != 12 else 'rd' if n % 10 == 3 and n % 100 != 13 else 'th')
 esc = lambda t: t.replace('&', '&amp;')
 money = lambda v: f'${v:,.0f}' if v else '-'
 vector_jobs = []   # (page_no, rect top-left coords, doc, src_page, clip)
@@ -375,7 +378,7 @@ def cover(c):
     keys = ['demo', 'mat', 'inst', 'omat', 'draft']
     assert not any(a['omh'] for a in AREAS)
     for f, d in FLOORS.items():
-        rows.append([f'{f}th floor ({d["sheet"]})'] + [money(floor_sum(f, k)) for k in keys] + [money(floor_total(f))])
+        rows.append([f'{ordn(f)} floor ({d["sheet"]})'] + [money(floor_sum(f, k)) for k in keys] + [money(floor_total(f))])
     rows.append(['Total'] + [money(sum(floor_sum(f, k) for f in FLOORS)) for k in keys] + [money(COP_TOTAL)])
     y -= table(c, rows, x, y, [124, 72, 72, 72, 64, 56, 74]) + 10
     mh = ['Man-hours', f'{sum(a["demo"] for a in AREAS)} MH', '', f'{sum(a["inst"] for a in AREAS)} MH', '', '', '']
@@ -393,7 +396,7 @@ def cover(c):
 
 def floor_page(c, f):
     d = FLOORS[f]; p = d['page']; key = d['key']
-    header(c, f'{f}th Floor - {d["sheet"]}: Addendum 1 vs Bulletin 3 overlay',
+    header(c, f'{ordn(f)} Floor - {d["sheet"]}: Addendum 1 vs Bulletin 3 overlay',
            'Gray = unchanged   Red = Addendum 1 only (installed, removed)   Blue = Bulletin 3 only (new)   '
            'Numbered boxes = change areas, see detail pages')
     box = pymupdf.Rect(M, 70, 700, PH - 30)
@@ -411,14 +414,14 @@ def floor_page(c, f):
         c.setFillColor(colors.white); c.setFont('LSB', 8.5); c.drawString(ax0 + 3, PH - ay0 + 3.5, a['id'])
     c.setLineWidth(1)
     x = 730; y = PH - 80
-    y -= para(c, f'{f}th floor - cost by area', sth, x, y, 460) + 4
+    y -= para(c, f'{ordn(f)} floor - cost by area', sth, x, y, 460) + 4
     rows = [['Area', 'Description', 'Disconnect', 'Material', 'Labor', 'Total']]
     for a in [a for a in AREAS if a['floor'] == f]:
         am = amounts(a)
         rows.append([a['id'], Paragraph(esc(a['title']), st), money(am['demo']), money(am['mat'] + am['omat']),
                      money(am['inst'] + am['omh']), money(area_total(a))])
     rows.append(['', 'Shop drawings for revised design', '', '', '', money(DRAFTING[f])])
-    rows.append(['', f'{f}th floor total', money(floor_sum(f, 'demo')), money(floor_sum(f, 'mat') + floor_sum(f, 'omat')),
+    rows.append(['', f'{ordn(f)} floor total', money(floor_sum(f, 'demo')), money(floor_sum(f, 'mat') + floor_sum(f, 'omat')),
                  money(floor_sum(f, 'inst') + floor_sum(f, 'omh')), money(floor_total(f))])
     y -= table(c, rows, x, y, [36, 200, 58, 58, 58, 54]) + 14
     para(c, 'Disconnect = disconnect / removal labor of installed Addendum 1 work incl. haul away and clean up. '
@@ -429,7 +432,7 @@ def floor_page(c, f):
 
 def area_page(c, a):
     f = a['floor']; p = FLOORS[f]['page']; am = amounts(a)
-    header(c, f'Area {a["id"]} - {a["title"]}', f'{f}th floor, {FLOORS[f]["sheet"]}  |  Before = Addendum 1   After = Bulletin 3 (rev 4, 08/10/2026)')
+    header(c, f'Area {a["id"]} - {a["title"]}', f'{ordn(f)} floor, {FLOORS[f]["sheet"]}  |  Before = Addendum 1   After = Bulletin 3 (rev 4, 08/10/2026)')
     off = local_offset(p, a['rect'])
     r = pymupdf.Rect(a['rect'])
     top, bottom = 70, 250                   # panel band in top-left page coords
@@ -470,7 +473,7 @@ def area_page(c, a):
     if a['demo']:
         rows.append(['Disconnect / removal of installed ductwork, haul away (labor)', a['demo'], 'MH', '$125', money(am['demo'])])
     if a['mat']:
-        rows.append(['Fabricated ductwork, fittings, insulation, accessories (material)', 1, 'LS', '', money(am['mat'])])
+        rows.append([a.get('mat_label', 'Fabricated ductwork, fittings, insulation, accessories (material)'), 1, 'LS', '', money(am['mat'])])
     rows.append([a.get('inst_label', 'Relocation / installation of ductwork (labor)'), a['inst'], 'MH', '$125', money(am['inst'])])
     if a['omat']:
         rows.append(['Air outlets (material)', 1, 'LS', '', money(am['omat'])])
@@ -520,7 +523,7 @@ def build_xlsx():
             row += 1
         ws.append([f, '', 'Shop drawings for revised design', 0, 0, 0, 0, 0, 0, 0, 0, DRAFTING[f], f'=L{row}'])
         row += 1
-        ws.append([f, '', f'{f}th floor total'] + [f'=SUM({col}{start}:{col}{row - 1})' for col in 'DEFGHIJKLM'])
+        ws.append([f, '', f'{ordn(f)} floor total'] + [f'=SUM({col}{start}:{col}{row - 1})' for col in 'DEFGHIJKLM'])
         for cell in ws[row]:
             cell.font = bold
         floor_rows[f] = row; row += 1
