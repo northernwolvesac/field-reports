@@ -208,3 +208,6 @@ Do not order until DMG answers the RFI; the RFI turnaround is a week, the parts 
 - 2026-09-30: Client approved the base case (duct CO2, no space temp/RH, exhaust tracking, web UI instead of remote displays, high static
   switch). Diagram rev 1 for installation issued with the purchase list (`ERU-ducted-sensor-wiring-R1.pdf` p.3), material about
   $2,000-3,400 for 3 units. Next: order, install by 10/23, ADE start-up 10/29. Ask Ryan to confirm supply tracking in the exhaust Type list.
+- 2026-09-30: Grainger 3ZM92 = Cleveland AFS-222-139 checked for the high static switch: range and SPDT fine, but AUTO reset - rejected. On S1 an
+  auto-reset switch recloses as soon as the fan stops and duct pressure falls, so the unit short-cycles on a closed damper. Buy the manual reset
+  version (Cleveland AFS-460 family, or Dwyer 1831 manual reset) with a range covering 2.0 in wg.
