@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supabase-config.js?v=338"></script>
-<script src="nw-drive.js?v=338"></script>
-<script src="auth.js?v=338"></script>
-<script src="labor-rates.js?v=338"></script>
+<script src="supabase-config.js?v=339"></script>
+<script src="nw-drive.js?v=339"></script>
+<script src="auth.js?v=339"></script>
+<script src="labor-rates.js?v=339"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -2178,6 +2178,9 @@ requireAuth().catch(function(){});
         }
         return out;
       }
+      // change orders and payments do not depend on the applications → start them now, await them below
+      var pCos = fetchAll(function() { return supabaseClient.from('aia_change_orders').select('aia_project_id, status, amount').in('aia_project_id', ids); });
+      var pPays = fetchAll(function() { return supabaseClient.from('aia_payments').select('aia_project_id, amount').in('aia_project_id', ids); });
       apps = await fetchAll(function() { return supabaseClient.from('aia_applications').select('*').in('aia_project_id', ids); });
       var latestByC = {};
       apps.forEach(function(a) {
@@ -2192,8 +2195,8 @@ requireAuth().catch(function(){});
             .in('application_id', appIds);
         });
       }
-      cos = await fetchAll(function() { return supabaseClient.from('aia_change_orders').select('aia_project_id, status, amount').in('aia_project_id', ids); });
-      pays = await fetchAll(function() { return supabaseClient.from('aia_payments').select('aia_project_id, amount').in('aia_project_id', ids); });
+      cos = await pCos;
+      pays = await pPays;
     }
     var appsByC = groupBy(apps, 'aia_project_id'), linesByApp = groupBy(lines, 'application_id');
     var cosByC = groupBy(cos, 'aia_project_id'), paysByC = groupBy(pays, 'aia_project_id');
@@ -3362,6 +3365,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=338"></script>
+<script src="sw-register.js?v=339"></script>
 </body>
 </html>

@@ -11,8 +11,8 @@
 <title>WIP Report — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=331"></script>
-<script src="auth.js?v=331"></script>
+<script src="supabase-config.js?v=339"></script>
+<script src="auth.js?v=339"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: none; margin: 0; padding: 0 14px; }
@@ -145,22 +145,26 @@
 
   var data = null;
   async function loadData() {
-    var projects = await fetchAll('projects', 'id, project_name, short_code, status, pm_name, gc_name, contract_value, estimated_completion, target_completion_date, percent_complete');
-    var setups = await fetchAll('aia_projects', '*');
-    var apps = await fetchAll('aia_applications', '*', function(q) { return q.neq('status', 'void'); });
-    var pays = await fetchAll('aia_payments', 'aia_project_id, amount, date_paid');
-    var cos = await fetchAll('aia_change_orders', 'aia_project_id, amount, status');
-    var costs = []; try { costs = await fetchAll('project_costs', '*'); } catch (e) { console.warn('[wip] project_costs unavailable:', e.message); }
-    data = { projects: projects, setups: setups, apps: apps, pays: pays, cos: cos, costs: costs, linesByApp: {} };
+    // six independent tables → one round trip's worth of waiting instead of six
+    var R = await Promise.all([
+      fetchAll('projects', 'id, project_name, short_code, status, pm_name, gc_name, contract_value, estimated_completion, target_completion_date, percent_complete'),
+      fetchAll('aia_projects', '*'),
+      fetchAll('aia_applications', '*', function(q) { return q.neq('status', 'void'); }),
+      fetchAll('aia_payments', 'aia_project_id, amount, date_paid'),
+      fetchAll('aia_change_orders', 'aia_project_id, amount, status'),
+      fetchAll('project_costs', '*').catch(function(e) { console.warn('[wip] project_costs unavailable:', e.message); return []; })
+    ]);
+    data = { projects: R[0], setups: R[1], apps: R[2], pays: R[3], cos: R[4], costs: R[5], linesByApp: {} };
   }
   async function ensureLines(appIds) {
     var need = appIds.filter(function(id) { return !data.linesByApp[id]; });
-    for (var i = 0; i < need.length; i += 20) {
-      var chunk = need.slice(i, i + 20);
+    var chunks = [];
+    for (var i = 0; i < need.length; i += 20) chunks.push(need.slice(i, i + 20));
+    await Promise.all(chunks.map(async function(chunk) {
       var lines = await fetchAll('aia_line_items', 'application_id, prev_amount, this_amount, stored_amount, is_parent, retainage_release_pct', function(q) { return q.in('application_id', chunk); });
       chunk.forEach(function(id) { data.linesByApp[id] = []; });
       lines.forEach(function(l) { data.linesByApp[l.application_id].push(l); });
-    }
+    }));
   }
 
   async function build() {
@@ -335,6 +339,6 @@
   init().catch(function(e) { console.error(e); });
 })();
 </script>
-<script src="sw-register.js?v=331"></script>
+<script src="sw-register.js?v=339"></script>
 </body>
 </html>
