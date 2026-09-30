@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=340">
+<link rel="stylesheet" href="procore-ui.css?v=341">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=340"></script>
-<script src="auth.js?v=340"></script>
-<script src="est-totals.js?v=340"></script>
-<script src="procore-ui.js?v=340"></script>
-<script src="nw-catalog-picker.js?v=340"></script>
-<script src="nw-proposal.js?v=340"></script>
-<script src="bid-actions.js?v=340"></script>
+<script src="supabase-config.js?v=341"></script>
+<script src="auth.js?v=341"></script>
+<script src="est-totals.js?v=341"></script>
+<script src="procore-ui.js?v=341"></script>
+<script src="nw-catalog-picker.js?v=341"></script>
+<script src="nw-proposal.js?v=341"></script>
+<script src="bid-actions.js?v=341"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -533,7 +533,7 @@ requireAuth().catch(function(){});
     { key: 'material_waste',   label: 'Material Waste',     visible: false, width: 110, num: true, editable: 'waste_pct', type: 'pct' },
     { key: 'unit_cost',        label: 'Unit Cost',          visible: true,  width: 100, num: true, money: true, editable: 'unit_material_cost', type: 'money', rate: true },
     { key: 'waste',            label: 'Waste',              visible: true,  width: 90,  num: true, editable: 'waste_pct', type: 'pct', rate: true },
-    { key: 'sub_item_cost',    label: 'Subtotal Item Cost', visible: true,  width: 130, num: true, money: true, agg: 'subtotalItemCost' },
+    { key: 'sub_item_cost',    label: 'Subtotal Item Cost', visible: true,  width: 130, num: true, money: true, agg: 'subtotalItemCost', editable: 'subtotal_cost', type: 'money', rate: true },
     { key: 'margin',           label: 'Margin',             visible: false, width: 90,  num: true, aggPct: 'marginPct' },
     { key: 'markup',           label: 'Markup',             visible: true,  width: 90,  num: true, editable: 'markup_pct', type: 'pct', rate: true },
     { key: 'unit_sales',       label: 'Unit Sales',         visible: true,  width: 100, num: true, money: true },
@@ -590,7 +590,7 @@ requireAuth().catch(function(){});
   var lastTotals = null;
   var cmdBound = false;            // PC.onCmd(handleCmd) registered (embed only, once per page)
   // Columns takeoff.html syncLayerLines() rewrites on every layer-linked line (layer_id) — read-only here, see est-totals.js header
-  var LAYER_FIELDS = ['quantity','unit_material_cost','unit_labor_hours','unit','group_name','description','category','catalog_item_id','notes','waste_pct','labor_factor'];
+  var LAYER_FIELDS = ['subtotal_cost','quantity','unit_material_cost','unit_labor_hours','unit','group_name','description','category','catalog_item_id','notes','waste_pct','labor_factor'];
   var ASSEMBLY_FOLDER = 'NW Assemblies';   // est_catalog_folders name seeded by procore-ui-schema.sql
 
   var state = {
@@ -1525,6 +1525,7 @@ requireAuth().catch(function(){});
   function isCellEditable(col, li) {
     if (!canEdit || !col.editable) return false;
     if (col.editable === 'labor_rate') return !!esSettings().individual_labor_rates && schemaOk;
+    if (col.editable === 'subtotal_cost' && li && lineTotals(li).materialDropped) return false;   // material not priced on this line
     if (SCHEMA_FIELDS.indexOf(col.editable) >= 0 && !schemaOk) return false;
     if (col.rate && isLocked()) return false;
     if (layerLocked(li) && LAYER_FIELDS.indexOf(col.editable) >= 0) return false;
@@ -1587,7 +1588,8 @@ requireAuth().catch(function(){});
         var txt = groupCellText(c, g, agg);
         var isAgg = !!(c.agg && c.agg !== 'uom') || !!c.aggPct;
         var ed = c.key === 'group_mult' && g.manual && canEdit && schemaOk && !isLocked();
-        html += '<td class="' + (c.num ? 'num ' : '') + (isAgg ? 'agg' : (txt === '--' ? 'muted' : '')) + (ed ? ' editable' : '') + '"' + (ed ? ' data-gmult="' + escAttr(g.key) + '"' : '') + '>' + escHtml(txt) + '</td>';
+        var gq = c.key === 'sub_item_cost' && g.manual && canEdit && schemaOk && !isLocked() && !(g.all || g.lines).length;
+        html += '<td class="' + (c.num ? 'num ' : '') + (isAgg ? 'agg' : (txt === '--' ? 'muted' : '')) + ((ed || gq) ? ' editable' : '') + '"' + (ed ? ' data-gmult="' + escAttr(g.key) + '"' : '') + (gq ? ' data-gquote="' + escAttr(g.key) + '" title="Click to enter a quote price"' : '') + '>' + escHtml(txt) + '</td>';
       });
       html += '</tr>';
       if (collapsed) return;
@@ -1700,6 +1702,9 @@ requireAuth().catch(function(){});
     table.querySelectorAll('td[data-gmult]').forEach(function(td) {
       td.addEventListener('click', function() { if (!td.querySelector('.cell-in')) startGroupMultEdit(td, td.getAttribute('data-gmult')); });
     });
+    table.querySelectorAll('td[data-gquote]').forEach(function(td) {
+      td.addEventListener('click', function() { if (!td.querySelector('.cell-in')) startGroupQuoteEdit(td, td.getAttribute('data-gquote')); });
+    });
     table.querySelectorAll('[data-budget]').forEach(function(el) {
       el.addEventListener('click', function(e) { e.stopPropagation(); showToast('Budget codes are not used at NWAC'); });
     });
@@ -1724,12 +1729,53 @@ requireAuth().catch(function(){});
     var f = col.editable;
     if (col.type === 'text') return li[f] == null ? '' : String(li[f]);
     if (col.type === 'bool') return li.is_taxable == null ? 'auto' : (li.is_taxable ? 'yes' : 'no');
+    if (f === 'subtotal_cost') return lineTotals(li).subtotalItemCost.toFixed(2);
     var v = li[f];
     if (f === 'labor_rate') v = lineTotals(li).laborRate;
     if (f === 'labor_factor' && (v == null || v === '')) v = 1;
     if (col.type === 'pct') return (num(v) * 100).toFixed(2);
     if (col.type === 'money') return num(v).toFixed(2);
     return v == null ? '' : String(num(v));
+  }
+  // "Subtotal Item Cost" is computed (qty x unit cost x waste); a typed quote is turned into the unit cost that gives it.
+  // A line without a quantity becomes a lump sum (qty 1, unit ls) so the quote is not lost.
+  function subtotalPatch(li, v) {
+    var lt = lineTotals(li);
+    if (Math.abs(lt.subtotalItemCost - v) < 0.005) return { patch: null };
+    var tmp = li, patch = { updated_at: nowIso() };
+    if (!(lt.totalQty > 0)) {
+      tmp = Object.assign({}, li, { quantity: 1, unit: li.unit || 'ls' });
+      patch.quantity = 1; if (!li.unit) patch.unit = 'ls';
+    }
+    var t = nwLineTotals(tmp, currentEst, lineCtx(li));
+    var div = t.totalQty * (1 + t.wastePct);
+    if (!(div > 0)) return { error: 'Set a quantity first — the quote is divided across it' };
+    patch.unit_material_cost = Math.round(v / div * 10000) / 10000;
+    return { patch: patch };
+  }
+  // an empty group has nothing to edit: the quote becomes one lump-sum line (same shape as an imported Procore group price)
+  function startGroupQuoteEdit(td, key) {
+    var orig = td.innerHTML;
+    var inp = document.createElement('input'); inp.className = 'cell-in'; inp.placeholder = 'Quote $';
+    td.innerHTML = ''; td.appendChild(inp); inp.focus();
+    var done = false;
+    async function commit() {
+      if (done) return; done = true;
+      var v = Number(inp.value.replace(/[$,\s]/g, ''));
+      if (!inp.value.trim() || v === 0) { td.innerHTML = orig; return; }
+      if (!isFinite(v)) { showToast('Enter a number', 'error'); td.innerHTML = orig; return; }
+      var gm = groupMultiplier(key);
+      var r = await supabaseClient.from('estimate_line_items').insert(cleanPatch({
+        estimate_id: currentEst.id, category: /service/i.test(key) ? 'services' : 'equipment', description: key + ' — quote',
+        quantity: 1, unit: 'ls', unit_material_cost: Math.round(v / gm * 10000) / 10000, unit_labor_hours: 0, labor_crew_type: 'none',
+        is_firm: true, is_wet_tap: false, group_name: key, sort_order: maxSort() + 1
+      }));
+      if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); td.innerHTML = orig; return; }
+      showToast('Quote added to "' + key + '"', 'success');
+      await loadLines(); refreshAll();
+    }
+    inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { done = true; td.innerHTML = orig; } });
+    inp.addEventListener('blur', commit);
   }
   function startInlineEdit(td, col, li) {
     var done = false, orig = td.innerHTML;
@@ -1754,6 +1800,19 @@ requireAuth().catch(function(){});
       var v = parseEdit(col, inp.value);
       if (typeof v === 'number' && isNaN(v)) { showToast('Enter a number', 'error'); td.innerHTML = orig; return; }
       var f = col.editable;
+      if (f === 'subtotal_cost') {
+        var sp = subtotalPatch(li, v);
+        if (sp.error) { showToast(sp.error, 'error'); td.innerHTML = orig; return; }
+        if (!sp.patch) { td.innerHTML = orig; moveFocus(next, td); return; }
+        var rs = await supabaseClient.from('estimate_line_items').update(cleanPatch(sp.patch)).eq('id', li.id);
+        if (rs.error) { showToast('Save failed: ' + rs.error.message, 'error'); td.innerHTML = orig; return; }
+        Object.assign(li, sp.patch);
+        var shown = lineTotals(li).subtotalItemCost;
+        updateRowAndTotals(li.id);
+        if (Math.abs(shown - v) >= 0.005) showToast('Unit cost is stored to 4 decimals, so the subtotal shows ' + money(shown));
+        moveFocus(next, td, li.id, col.key);
+        return;
+      }
       var cur = li[f];
       var same = (col.type === 'text') ? ((cur == null ? '' : String(cur)) === (v == null ? '' : v))
                : (col.type === 'bool') ? (cur === v)
@@ -3406,6 +3465,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=340"></script>
+<script src="sw-register.js?v=341"></script>
 </body>
 </html>
