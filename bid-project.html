@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=340">
+<link rel="stylesheet" href="procore-ui.css?v=344">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=340"></script>
-<script src="auth.js?v=340"></script>
-<script src="est-totals.js?v=340"></script>
-<script src="procore-ui.js?v=340"></script>
+<script src="supabase-config.js?v=344"></script>
+<script src="auth.js?v=344"></script>
+<script src="est-totals.js?v=344"></script>
+<script src="procore-ui.js?v=344"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=340"></script>
-<script src="est-drawings.js?v=340"></script>
-<script src="nw-proposal.js?v=340"></script>
+<script src="bid-actions.js?v=344"></script>
+<script src="est-drawings.js?v=344"></script>
+<script src="nw-proposal.js?v=344"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -534,7 +534,7 @@ requireAuth().catch(function(){});
     if (tab === 'proposal') return [
       { id: 'export', label: 'Export', primary: true, menu: [
         { label: 'PDF', icon: 'description', onClick: exportProposalPdf },
-        { label: 'NWAC letter (2-page PDF)', icon: 'description', onClick: exportProposalLetter },
+        { label: 'NWAC letter (PDF)', icon: 'description', onClick: exportProposalLetter },
         { label: 'Excel (line items)', icon: 'grid_on', onClick: exportProposalXlsx }
       ] }
     ];
@@ -1508,6 +1508,9 @@ requireAuth().catch(function(){});
   var propSaveTimer = null, propHtmlTimer = null;
 
   var PROP_SCHEMA = [
+    { sec: 'Layout' },
+    { sel: 'layout', options: [['letter', 'NWAC letter (template)'], ['detailed', 'Detailed (by group)']] },
+    { sel: 'r410a', options: [['auto', 'R-410A notes: automatic'], ['on', 'R-410A notes: always'], ['off', 'R-410A notes: never']] },
     { sec: 'Quick Simplification' },
     { sw: 'groupsOnly', label: 'Groups Only' }, { sw: 'lumpSum', label: 'Lump Sum' },
     { sec: 'Material Details' },
@@ -1529,6 +1532,8 @@ requireAuth().catch(function(){});
     { sec: 'Edit Mode' },
     { sw: 'editMode', label: 'Edit Mode' }
   ];
+  var DETAIL_SECS = ['Quick Simplification', 'Material Details', 'Group By', 'Price / sq ft'];
+  var DETAIL_SW = ['summary.laborMaterials', 'summary.taxes', 'summary.overhead', 'summary.profit'];
   function getPath(o, p) { return p.split('.').reduce(function(a, k) { return a == null ? a : a[k]; }, o); }
   function setPath(o, p, v) { var ks = p.split('.'), cur = o; for (var i = 0; i < ks.length - 1; i++) { if (!cur[ks[i]] || typeof cur[ks[i]] !== 'object') cur[ks[i]] = {}; cur = cur[ks[i]]; } cur[ks[ks.length - 1]] = v; }
 
@@ -1595,8 +1600,10 @@ requireAuth().catch(function(){});
     var host = $('propSettingsHost');
     var s = propSettings;
     var html = '';
+    var letter = s.layout !== 'detailed', skipSec = false;
     PROP_SCHEMA.forEach(function(it) {
-      if (it.sec) { html += '<div class="bp-ps-sec">' + esc(it.sec) + '</div>'; return; }
+      if (it.sec) { skipSec = letter && DETAIL_SECS.indexOf(it.sec) >= 0; if (!skipSec) html += '<div class="bp-ps-sec">' + esc(it.sec) + '</div>'; return; }
+      if (skipSec || (letter && it.sw && DETAIL_SW.indexOf(it.sw) >= 0)) return;
       if (it.sel) {
         html += '<select class="pc-select" data-psel="' + it.sel + '">' + it.options.map(function(o) { return '<option value="' + o[0] + '"' + (getPath(s, it.sel) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
         return;
@@ -1604,6 +1611,12 @@ requireAuth().catch(function(){});
       var on = !!getPath(s, it.sw);
       html += '<label class="bp-switch' + (it.disabled ? ' off' : '') + '"' + (it.tip ? ' title="' + esc(it.tip) + '"' : '') + '><input type="checkbox" data-psw="' + it.sw + '"' + (on ? ' checked' : '') + (it.disabled ? ' disabled' : '') + '><i></i><span>' + esc(it.label) + '</span></label>';
     });
+    if (letter) {
+      html += '<div class="bp-ps-sec">Letter content</div>';
+      html += '<div class="pc-field"><label class="pc-label">Mechanical drawings dated</label><input class="pc-input" id="propDrawDate" placeholder="e.g. 2/21/2025"' + (canEdit ? '' : ' disabled') + '></div>';
+      html += '<div class="pc-field"><label class="pc-label">Scope of Work <a href="#" id="propScopeReset" class="pc-link" style="font-weight:400;margin-left:6px">reset to automatic</a></label><textarea class="pc-input" id="propScope" rows="9" style="font:inherit;line-height:1.4"' + (canEdit ? '' : ' disabled') + '></textarea></div>';
+      html += '<div class="pc-field"><label class="pc-label">Exclusions / Notes <a href="#" id="propExclReset" class="pc-link" style="font-weight:400;margin-left:6px">reset to standard</a></label><textarea class="pc-input" id="propExcl" rows="9" style="font:inherit;line-height:1.4"' + (canEdit ? '' : ' disabled') + '></textarea></div>';
+    }
     html += '<div class="bp-ps-sub">Proposal Builder</div>';
     html += '<div class="bp-ps-sec">Cover and Appendix Pages</div>';
     html += '<div class="pc-field"><label class="pc-label">Cover page</label><select class="pc-select" id="propCover"><option value="">None</option></select></div>';
@@ -1629,6 +1642,7 @@ requireAuth().catch(function(){});
         if (!canEdit) { sel.value = getPath(propSettings, sel.getAttribute('data-psel')); return viewOnly(); }
         setPath(propSettings, sel.getAttribute('data-psel'), sel.value);
         savePropSettings(); if (!propSettings.editMode) renderProposal();
+        if (sel.getAttribute('data-psel') === 'layout') renderPropSettings();
       });
     });
     ['propCover', 'propAppendix'].forEach(function(id) {
@@ -1649,6 +1663,43 @@ requireAuth().catch(function(){});
     $('propAddContact').addEventListener('click', openContactModal);
     renderPropCustomer();
     fillProposalFiles();
+    if (letter) fillLetterFields();
+  }
+
+  // Letter content fields: drawings date (proposal settings) · scope / exclusions (estimates.scope_summary / exclusions; empty = automatic / standard)
+  var letterRenderTimer = null;
+  function rerenderSoon() { clearTimeout(letterRenderTimer); letterRenderTimer = setTimeout(function() { if (!propSettings.editMode) renderProposal(); }, 350); }
+  async function fillLetterFields() {
+    var sc = $('propScope'), ex = $('propExcl'), dd = $('propDrawDate');
+    if (!sc || !ex || !dd || !window.NWProposal) return;
+    var lines = await loadLines();
+    function autoScope() { return NWProposal.buildScope(currentVersion, lines).join('\n'); }
+    function stdExcl() { return NWProposal.DEFAULT_EXCLUSIONS.join('\n'); }
+    sc.value = (currentVersion.scope_summary || '').trim() || autoScope(); sc.dataset.orig = sc.value;
+    ex.value = (currentVersion.exclusions || '').trim() || stdExcl(); ex.dataset.orig = ex.value;
+    dd.value = propSettings.drawingsDate || '';
+    dd.addEventListener('input', function() {
+      if (!canEdit) return;
+      propSettings.drawingsDate = dd.value.trim(); savePropSettings(); rerenderSoon();
+    });
+    function bindArea(el, col, autoFn) {
+      el.addEventListener('change', function() {
+        if (!canEdit) { el.value = el.dataset.orig; return viewOnly(); }
+        var v = el.value.trim();
+        var saved = (v && v !== autoFn()) ? v : null;      // text equal to the automatic one stays automatic
+        currentVersion[col] = saved; queueSave(col, saved); el.dataset.orig = el.value; rerenderSoon();
+      });
+    }
+    bindArea(sc, 'scope_summary', autoScope);
+    bindArea(ex, 'exclusions', stdExcl);
+    $('propScopeReset').addEventListener('click', function(ev) {
+      ev.preventDefault(); if (!canEdit) return viewOnly();
+      currentVersion.scope_summary = null; queueSave('scope_summary', null); sc.value = autoScope(); sc.dataset.orig = sc.value; rerenderSoon();
+    });
+    $('propExclReset').addEventListener('click', function(ev) {
+      ev.preventDefault(); if (!canEdit) return viewOnly();
+      currentVersion.exclusions = null; queueSave('exclusions', null); ex.value = stdExcl(); ex.dataset.orig = ex.value; rerenderSoon();
+    });
   }
   function renderPropCustomer() {
     var host = $('propCustHost'); if (!host) return;
@@ -1792,13 +1843,22 @@ requireAuth().catch(function(){});
     } catch(e) { toast('Export failed: ' + (e.message || e), 'error'); }
   }
   async function exportProposalLetter() {
-    if (!window.NWProposal || typeof NWProposal.exportLetter !== 'function') { toast('nw-proposal.js not loaded', 'error'); return; }
+    if (!window.NWProposal || typeof NWProposal.render !== 'function' || typeof NWProposal.exportPdf !== 'function') { toast('nw-proposal.js not loaded', 'error'); return; }
+    if (!propSettings) loadPropSettings();
+    var host = null;
     try {
+      toast('Building PDF…');
       var lines = await loadLines();
       var email = await estimatorEmailFor(currentVersion.estimator_name);
-      await NWProposal.exportLetter(currentVersion, lines, { estimatorEmail: email, estimatorName: currentVersion.estimator_name || '' });
-    }
-    catch(e) { toast('Export failed: ' + (e.message || e), 'error'); }
+      var st = Object.assign({}, propSettings, { layout: 'letter', editMode: false });
+      host = document.createElement('div');
+      host.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;background:#fff';
+      host.innerHTML = NWProposal.render(currentVersion, lines, st, { estimatorEmail: email, catalogById: {} });
+      document.body.appendChild(host);
+      var cover = await fileBytes(propSettings.coverFileId), appendix = await fileBytes(propSettings.appendixFileId);
+      await NWProposal.exportPdf(host.querySelector('#nwpPaper'), { filename: proposalFilename('pdf'), coverBytes: cover, appendixBytes: appendix });
+    } catch(e) { toast('Export failed: ' + (e.message || e), 'error'); }
+    finally { if (host) host.remove(); }
   }
   async function exportProposalXlsx() {
     if (!window.NWProposal || typeof NWProposal.exportXlsx !== 'function') { toast('nw-proposal.js not loaded', 'error'); return; }
@@ -1808,6 +1868,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=340"></script>
+<script src="sw-register.js?v=344"></script>
 </body>
 </html>

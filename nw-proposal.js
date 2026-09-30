@@ -55,14 +55,74 @@
 
   // Moved from estimating.html exportProposalPDF (Kastriot's standard exclusions).
   var DEFAULT_EXCLUSIONS = [
-    'Gas Piping, Gas Meter',
-    'BACnet Integration, BMS, EMS and other special Control works',
-    'Scaffolding, hoisting equipment and permits',
-    'Structural work, roof dunnage',
-    'Overtime, off-hours, weekends',
-    'Bonds, insurance riders',
-    'Existing equipment warranty'
+    'BACnet Integration, BMS, EMS and others special Control works.',
+    'Overtime (OT work can be performed by demand for NWAC Overtime/Weekend special rates).',
+    'Scaffolding with permits.',
+    'Cutting and patching roof, structural walls, partitions, and floors',
+    'Roof dunnage/steel/iron beams for outdoor equipment.',
+    'Structural work for equipment supports',
+    'Permits (DOB, DOT, Mechanical Permits, Equipment Use Permits)',
+    'Permits and Inspection Fees',
+    'Performance and Payment Bonds',
+    'Gas Piping, Gas Meter.',
+    'Manufacturer Guarantees and Warranties',
+    'Warranty for existing equipment'
   ];
+
+  // Page-2 text of the NWAC proposal template (quote 3766, 1810 Randall Ave)
+  var R410A_NOTES = [
+    'R-410A systems need to be installed by the end of 2026 to comply with NY DEC Variance.',
+    'R-410A availability is subject to change. Inventory is not reserved until material is RELEASED.',
+    'Pricing is only valid while R-410A units are in stock. Once stock is sold out, no replacements will be made available and pricing is subject to change corresponding to any new units'
+  ];
+  var TERMS_TEXT = 'Northern Wolves Inc provides one year warranty for the system it will install. In case of technical fault after one year all the repairing cost will be additional. The firm will not be responsible for the warranty claim if the system is externally damaged by any means. Firm only caters the internal design faults.';
+
+  // Scope of Work lines built from the estimate: every equipment item with its quantity, then one standard line per trade present.
+  // Order and wording follow the template; the estimator can edit the result (estimates.scope_summary).
+  function buildScope(est, lines) {
+    est = est || {};
+    var sorted = (lines || []).filter(function (l) { return l && !l.is_optional; })
+      .sort(function (a, b) { return num(a.sort_order) - num(b.sort_order); });
+    var equip = [], byName = {}, has = {};
+    sorted.forEach(function (l) {
+      var d = String(l.description || '').trim(), cat = l.category || '';
+      var qty = num(l.quantity) * groupMultiplier(est, l.group_name);
+      if (!(qty > 0)) return;
+      if (cat === 'equipment' && d) {
+        var k = d.toLowerCase();
+        if (!byName[k]) { byName[k] = { name: d, qty: 0, unit: uom(l.unit) }; equip.push(byName[k]); }
+        byName[k].qty += qty;
+      }
+      if (cat === 'ductwork') has.duct = true;
+      if (cat === 'pipework') has.pipe = true;
+      if (cat === 'air_outlets' || /diffuser|grille|register|damper/i.test(d)) has.outlets = true;
+      if (/control|thermostat/i.test(d) && !/bms|bacnet/i.test(d)) has.controls = true;
+      if (/crane|boom ?truck|rigging/i.test(d)) has.crane = true;
+      if (/shop drawing|submittal/i.test(d)) has.submittals = true;
+      if (/balanc|testing/i.test(d)) has.tab = true;
+      if (/start.?up|commission/i.test(d)) has.startup = true;
+    });
+    var out = [];
+    equip.forEach(function (e) {
+      var q = Math.round(e.qty * 100) / 100;
+      out.push('Furnish and install ' + e.name + ((e.unit && e.unit !== 'ea') ? '' : ' (' + q + ')') + '.');
+    });
+    if (has.duct) out.push('Furnish and install All Ductwork with accessories and insulation.');
+    if (has.pipe) out.push('Furnish and install All Pipework with accessories and insulation.');
+    if (has.outlets) out.push('Furnish and install All air outlets, diffusers, linear diffusers and dampers.');
+    if (has.controls) out.push('Furnish and install standalone controls');
+    if (has.crane) out.push('Provide Crane rigging');
+    if (has.submittals) out.push('Provide all Submittals and Shop Drawings.');
+    if (has.tab) out.push('Providing Testing and 3rd Party Air Balancing with reports.');
+    if (has.startup) out.push('Provide Start Up.');
+    out.push('Provide 1 year Labor Warranty.');
+    return out;
+  }
+  function hasR410a(est, lines) {
+    var re = /410\s*-?\s*a/i;
+    if (re.test([est && est.name, est && est.scope_summary, est && est.notes, est && est.project_description].join(' '))) return true;
+    return (lines || []).some(function (l) { return l && re.test((l.description || '') + ' ' + (l.notes || '')); });
+  }
 
   var TAXABLE_CATS = ['equipment', 'ductwork', 'pipework'];
   var CATEGORIES = [
@@ -90,6 +150,9 @@
       summary: { laborMaterials: true, taxes: true, overhead: false, profit: false, acceptedBy: true, date: true },
       rounding: { twoDecimals: true, roundTotal: false },
       sqft: { costItems: false, groupSubtotals: false, summary: false, estimateTotal: false },
+      layout: 'letter',                       // letter (NWAC template) | detailed (per-group tables)
+      drawingsDate: '',                       // 'Mechanical drawings dated:' line of the letter
+      r410a: 'auto',                          // auto | on | off — page-2 R-410A system notes
       editMode: false,
       htmlOverride: false,
       coverFileId: null,
@@ -360,6 +423,7 @@
 
     return {
       est: est,
+      lines: lines,
       settings: settings,
       totals: T,
       groups: ordered,
@@ -430,6 +494,14 @@
     '.nwp-sign{display:flex;gap:40px;margin-top:44px;page-break-inside:avoid}' +
     '.nwp-sign .line{flex:1 1 0;border-top:1px solid #1f2933;padding-top:6px;font-size:11px}' +
     '.nwp-sign .line.date{flex:0 0 2.2in}' +
+    '.nwp-info p{margin:0 0 3px}.nwp-info .lbl{color:#6b7280}' +
+    '.nwp-lines p{margin:0 0 6px;line-height:1.4}' +
+    '.nwp-lines.ex p{font-style:italic}' +
+    '.nwp-page2{page-break-before:always;padding-top:4px}' +
+    '.nwp-page2 .nwp-lines.n410 p{margin:0 0 5px}' +
+    '.nwp-page2 .nwp-terms{margin:0 0 6px;line-height:1.5}' +
+    '.nwp-price{text-align:right;font-size:20px;font-weight:700;margin:28px 0 4px;font-variant-numeric:tabular-nums;page-break-inside:avoid}' +
+    '.nwp-alt-row{display:flex;justify-content:space-between;border-bottom:1px solid #eceff3;padding:4px 0;font-variant-numeric:tabular-nums}' +
     '@media print{.nwp-paper{width:auto;min-height:0;margin:0;padding:0}}';
 
   function sqftSuffix(model, amount) {
@@ -437,8 +509,84 @@
     return '<span class="nwp-sqft">' + (T.sqft > 0 ? money(amount / T.sqft, 2) : '--') + ' / sq ft</span>';
   }
 
+  // NWAC letter — the layout of quote 3766 (1810 Randall Ave): lump-sum price, scope as a list, standard exclusions, terms, acceptance.
+  function renderLetter(m, ctx) {
+    ctx = ctx || {};
+    var S = m.settings, T = m.totals, e = m.est, o = m.office;
+    var clean = function (t) { return String(t || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean); };
+    var scope = (e.scope_summary && String(e.scope_summary).trim()) ? clean(e.scope_summary) : buildScope(e, m.lines);
+    var excl = clean(m.exclusions);
+    var show410 = S.r410a === 'on' || (S.r410a !== 'off' && hasR410a(e, m.lines));
+    var cust = e.requester_company || e.client_name || '';
+
+    var h = '<style id="nwp-style">' + PAPER_CSS + '</style>';
+    h += '<div class="nwp-paper nwp-letter" id="nwpPaper">';
+
+    // header: logo | Quote / Date
+    h += '<div class="nwp-head"><img class="nwp-logo" src="logo-full.png" alt="Northern Wolves Air Conditioning">';
+    h += '<div class="nwp-quote"><b>Quote:</b> ' + esc(m.quote) + ' / <b>Date:</b> ' + esc(m.date) + '</div></div>';
+
+    // office + prepared by (left) · customer (right)
+    h += '<div class="nwp-cols"><div>';
+    h += '<div class="nwp-office">' + esc(o.name) + '<br>' + esc(o.addr1) + '<br>' + esc(o.city) + '<br>' + esc(o.zip) + '<br>' + esc(o.phone) + '</div>';
+    h += '<div class="nwp-block"><span class="lbl">Prepared By:</span><br>' + esc(m.estimatorName || '--');
+    h += '<br>' + esc(ctx.estimatorPhone || o.phone);
+    if (m.estimatorEmail) h += '<br>' + esc(m.estimatorEmail);
+    h += '</div></div>';
+    h += '<div class="nwp-customer"><span style="color:#6b7280">Customer</span><br>' + (cust ? '<b>' + esc(cust) + '</b>' : '<span style="color:#9ca3af">—</span>');
+    if (S.contactName) h += '<br>' + esc(S.contactName);
+    if (S.contactEmail) h += '<br>' + esc(S.contactEmail);
+    h += '</div></div>';
+
+    h += '<hr class="nwp-rule">';
+
+    // project block
+    h += '<div class="nwp-info">';
+    h += '<p><span class="lbl">Project:</span> <b>' + esc(e.name || '') + '</b></p>';
+    if (e.project_address) h += '<p><span class="lbl">Address:</span> ' + esc(String(e.project_address).replace(/\r?\n/g, ', ')) + '</p>';
+    if (S.drawingsDate) h += '<p><span class="lbl">Mechanical drawings dated:</span> ' + esc(S.drawingsDate) + '</p>';
+    h += '</div>';
+
+    h += '<div class="nwp-h">Scope of Work</div><div class="nwp-lines">';
+    scope.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
+    h += '</div>';
+
+    h += '<div class="nwp-h">Exclusions / Notes</div><div class="nwp-lines ex">';
+    excl.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
+    h += '</div>';
+
+    // page 2
+    h += '<div class="nwp-page2">';
+    if (show410) {
+      h += '<div class="nwp-h" style="margin-top:0">410A System Notes:</div><div class="nwp-lines n410">';
+      R410A_NOTES.forEach(function (t, i) { h += '<p>' + (i + 1) + '. ' + esc(t) + '</p>'; });
+      h += '</div>';
+    }
+    h += '<div class="nwp-h">Terms</div><p class="nwp-terms">' + esc(TERMS_TEXT) + '</p>';
+    if (m.alternates.length) {
+      h += '<div class="nwp-h">Alternates</div>';
+      m.alternates.forEach(function (r) {
+        h += '<div class="nwp-alt-row"><span>' + esc(r.line.description || '') + '</span><span>' + money(r.total, 2) + '</span></div>';
+      });
+      h += '<p class="nwp-foot">Alternate pricing excludes taxes; add or deduct from the price below on acceptance.</p>';
+    }
+    var grand = S.rounding.roundTotal ? Math.round(T.total) : T.total;
+    h += '<div class="nwp-price">' + money(grand, S.rounding.roundTotal ? 0 : 2) + '</div>';
+    if (S.summary.acceptedBy || S.summary.date) {
+      h += '<div class="nwp-sign">';
+      if (S.summary.acceptedBy) h += '<div class="line">Accepted By</div>';
+      if (S.summary.date) h += '<div class="line date">Date</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
   function render(est, lines, settings, ctx) {
     var m = compute(est, lines, settings, ctx);
+    if (m.settings.layout !== 'detailed') return renderLetter(m, ctx);
     var S = m.settings, T = m.totals;
     var dec = S.rounding.twoDecimals ? 2 : 0;
     var $ = function (n) { return money(n, dec); };
@@ -868,7 +1016,7 @@
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor.apply(doc, COLOR_BODY);
-    var terms = 'This proposal is valid for 30 days. A standard one-year (1) warranty on installation labor is included; equipment carries the manufacturer’s warranty. Change orders in writing before work begins. Progress billing per AIA G702/G703 on 30-day cycles. Sales tax on materials and equipment is included in the total price shown below. Price does not include items listed under Exclusions above.';
+    var terms = TERMS_TEXT;
     var tw = doc.splitTextToSize(terms, RIGHT_X - BODY_X);
     tw.forEach(function(line) { doc.text(line, BODY_X, y); y += 11; });
     y += 14;
@@ -978,6 +1126,10 @@
   window.NWProposal = {
     OFFICES: OFFICES,
     DEFAULT_EXCLUSIONS: DEFAULT_EXCLUSIONS,
+    R410A_NOTES: R410A_NOTES,
+    TERMS_TEXT: TERMS_TEXT,
+    buildScope: buildScope,
+    hasR410a: hasR410a,
     CATEGORIES: CATEGORIES,
     PAPER_CSS: PAPER_CSS,
     defaultSettings: defaultSettings,
