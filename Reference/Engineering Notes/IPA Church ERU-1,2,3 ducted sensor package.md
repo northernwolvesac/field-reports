@@ -211,3 +211,6 @@ Do not order until DMG answers the RFI; the RFI turnaround is a week, the parts 
 - 2026-09-30: Grainger 3ZM92 = Cleveland AFS-222-139 checked for the high static switch: range and SPDT fine, but AUTO reset - rejected. On S1 an
   auto-reset switch recloses as soon as the fan stops and duct pressure falls, so the unit short-cycles on a closed damper. Buy the manual reset
   version (Cleveland AFS-460 family, or Dwyer 1831 manual reset) with a range covering 2.0 in wg.
+- 2026-09-30: High static switch selected: Cleveland AFS-460-142, Grainger item 3ZM94 (manual reset, SPST-N.C., set point 0.40-12.0 in wc,
+  1/4 in OD compression ports, UL). Qty 3. Wire the two N.C. terminals in S1 (R-G). Static tip on the high (+) port, low port open to the shaft,
+  mount with the diaphragm vertical. Also listed at Zoro (G1313882) and Stromquist.
