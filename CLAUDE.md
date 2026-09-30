@@ -9,6 +9,8 @@ Read these before doing estimating, proposal, RFI or engineering work:
 - `Reference/Estimating Standards/Labor Rates.md` - T&M billed rates (service and change orders only, not bids).
 - `Reference/Bids/` - one folder per bid or RFI with the record, the issued PDF and the build script.
 - `Reference/Engineering Notes/` - technical facts established on jobs (equipment, wiring, code items).
+- `Reference/Projects/` - one folder per active job: `Project Record.md` (status, people, open items) and `source/` documents. Read it first when working on that job.
+- `Reference/Change Orders/` - one folder per CO breakdown with the record, build script and issued PDF.
 
 Working rules learned from the team:
 
