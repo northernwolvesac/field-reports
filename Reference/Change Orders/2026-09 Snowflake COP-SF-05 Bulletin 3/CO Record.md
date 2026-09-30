@@ -16,3 +16,15 @@
 - Areas, quantities and man-hours are in the `AREAS` list in the script; it asserts that the floor totals and
   the COP line totals still match.
 - Overlay alignment: `source/align.json` (B = s*A + t per sheet) plus a local offset search per area.
+
+## Rev 1 - 09/30/2026 (Ruslan markup of the 09/29 draft)
+- 29th floor total kept at $29,600: 29-1 raised to $15,075 (removal doubled to 12 MH, material $6,075),
+  29-3 cut to $2,500. 29-2 unchanged at $11,025.
+- 30th: 30-1 $6,700 (air outlets $500, outlet labor deleted, "relocation" dropped from the labor line),
+  30-2 $5,400, 30-3 $5,000 (removal 16 MH + install 24 MH only; FPB-HW-B relocation and new grilles deleted).
+  Floor $18,100 (was $20,150).
+- 31st: 31-3 $4,700, 31-4 $5,200, 31-5 $2,900, 31-6 $3,025 (grilles relocated, not new). The markup targets
+  (4,800 / 5,340 / 3,000 / 3,200) were trimmed $515 in total so the grand total stays at the COP amount $66,780.
+  Floor $19,080 (was $17,030).
+- The per-category totals no longer follow the COP-SF-05 line split (removal 60 MH, install 283 MH), so the
+  as-submitted line item table was taken off the cover.

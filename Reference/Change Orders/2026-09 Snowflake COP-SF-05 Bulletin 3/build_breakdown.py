@@ -8,6 +8,8 @@ Out:  COP-SF-05 Bulletin 3 - Detailed Breakdown.pdf and .xlsx next to this scrip
 
 Costs are the COP-SF-05 line items spread over the change areas; floor totals match the per-floor
 breakdown already sent to Structure Tone (29 = $29,600, 30 = $20,150, 31 = $17,030).
+Rev 1 (09/30): area amounts adjusted per Ruslan's markup; 29th floor and COP total unchanged,
+30th = $18,100, 31st = $19,080. Category totals no longer follow the COP-SF-05 line split.
 """
 import io, json, os
 import numpy as np
@@ -30,10 +32,10 @@ XF = json.load(open(os.path.join(SRC, 'align.json')))   # B = s*A + t per axis, 
 OUT = os.path.join(HERE, 'COP-SF-05 Bulletin 3 - Detailed Breakdown')
 
 RATE = 125
-DATE = '09/29/2026'
+DATE = '09/30/2026'
 FLOORS = {29: dict(page=0, sheet='M-529.00', total=29600, key=(500, 110, 1790, 1900)),
-          30: dict(page=1, sheet='M-530.00', total=20150, key=(500, 110, 1790, 1900)),
-          31: dict(page=2, sheet='M-531.00', total=17030, key=(500, 110, 1790, 1900))}
+          30: dict(page=1, sheet='M-530.00', total=18100, key=(500, 110, 1790, 1900)),
+          31: dict(page=2, sheet='M-531.00', total=19080, key=(500, 110, 1790, 1900))}
 DRAFTING = {29: 1000, 30: 1000, 31: 1000}
 
 # demo = disconnect/removal MH, mat = fabricated ductwork $, inst = relocation/install MH,
@@ -47,7 +49,7 @@ AREAS = [
                'plan northeast. New 14ø branch to FPB-HW-D, 10ø to FPB-HW-B and 6ø to FPB-B.',
          work='Disconnect and remove installed 46x16 section and branch connections. Fabricate and install 22x10 / '
               '30x10 duct and round branches with insulation, reconnect terminal units.',
-         demo=6, mat=3600, inst=60, omat=0, omh=0),
+         demo=12, mat=6075, inst=60, omat=0, omh=0),
     dict(id='29-2', floor=29, rect=(1120, 470, 1360, 905),
          title='Supply main resized 56x16 to 42x12',
          before='56x16 supply main, approx. 44 LF, top el. 11\'-1" / bottom el. 9\'-9", Break Rm 29.57 to P.E.',
@@ -62,7 +64,7 @@ AREAS = [
          after='FPB-HW-E relocated; inlet connection and 30x10 discharge elbow rerouted.',
          work='Disconnect inlet and discharge, relocate and rehang FPB-HW-E, fabricate and install new inlet and '
               '30x10 discharge fittings, reconnect.',
-         demo=3, mat=1600, inst=30, omat=0, omh=0),
+         demo=2, mat=750, inst=12, omat=0, omh=0),
 
     dict(id='30-1', floor=30, rect=(520, 1095, 700, 1620),
          title='IT Build Rm 30.23 / F&B Storage 30.14 / west dining',
@@ -71,22 +73,23 @@ AREAS = [
                '40x20 transfer duct at F&B Storage 30.14. G(400) linear diffusers relocated along the 16x12 branch.',
          work='Disconnect and remove 12x10 branch and (2) C(220). Install 10ø branch, 40x20 transfer duct, rework '
               '16x12 branch. F&I G(440) linear diffuser with plenum, relocate G(400) diffusers.',
-         demo=6, mat=1600, inst=28, omat=2000, omh=8),
+         demo=6, mat=1700, inst=30, omat=500, omh=0,
+         inst_label='Installation of ductwork (labor)'),
     dict(id='30-2', floor=30, rect=(1245, 750, 1540, 1085),
          title='Lounge 30.02 - new transfer ducts',
          before='No transfer ducts at Lounge 30.02 walls.',
          after='(2) new 48x24 transfer ducts.',
          work='Fabricate and install (2) 48x24 lined transfer ducts.',
-         demo=0, mat=1300, inst=18, omat=0, omh=0),
+         demo=0, mat=2150, inst=26, omat=0, omh=0),
     dict(id='30-3', floor=30, rect=(1255, 1100, 1640, 1490),
          title='Meeting Rms 30.04 / 30.05, Storage 30.09, Vestibule 30.07',
          before='FPB-HW-B (300) with supply connections; 44x20 transfer duct; (2) 12x12 grilles; 12ø branch to '
                 'FPB-HW-D (1200).',
-         after='FPB-HW-B (300) relocated; 44x20 transfer duct relocated; (2) 12x12 grilles relocated to 5P / 7P '
+         after='44x20 transfer duct relocated; (2) 12x12 grilles relocated to 5P / 7P '
                'Meeting; 12ø branch rerouted.',
-         work='Disconnect and remove affected duct, fittings and grilles. Relocate FPB-HW-B, install 44x20 transfer '
-              'duct and 12ø branch at new locations, F&I (2) 12x12 grilles.',
-         demo=6, mat=1800, inst=24, omat=700, omh=4),
+         work='Disconnect and remove affected duct, fittings and grilles. Install 44x20 transfer '
+              'duct and 12ø branch at new locations.',
+         demo=16, mat=0, inst=24, omat=0, omh=0),
 
     dict(id='31-1', floor=31, rect=(500, 400, 700, 540),
          title='Zoom rooms, northwest - transfer ducts',
@@ -105,26 +108,26 @@ AREAS = [
          before='No transfer ducts; volume damper at FPB-HW-B (500) branch.',
          after='(2) new 44x22 transfer ducts.',
          work='Remove affected branch fitting; fabricate and install (2) 44x22 lined transfer ducts.',
-         demo=2, mat=900, inst=12, omat=0, omh=0),
+         demo=4, mat=1700, inst=20, omat=0, omh=0),
     dict(id='31-4', floor=31, rect=(1180, 1050, 1350, 1300),
          title='Coffee Bar 31.12 - transfer ducts and main fitting',
          before='36x18 main with elbow at Coffee Bar 31.12; no transfer ducts.',
          after='(2) new TD 28x16; 36x18 main elbow reconfigured.',
          work='Disconnect and remove 36x18 elbow; fabricate and install new fitting and (2) TD 28x16.',
-         demo=4, mat=1100, inst=18, omat=0, omh=0),
+         demo=6, mat=1700, inst=22, omat=0, omh=0),
     dict(id='31-5', floor=31, rect=(740, 1090, 920, 1240),
          title='Transfer duct TD 32x16, southwest',
          before='Transfer duct and duct elbow as installed per Addendum 1, next to the 12x8 branch.',
          after='Transfer duct revised to TD 32x16; elbow deleted.',
          work='Remove installed transfer duct and elbow; fabricate and install TD 32x16.',
-         demo=1, mat=300, inst=5, omat=0, omh=0),
+         demo=2, mat=650, inst=16, omat=0, omh=0),
     dict(id='31-6', floor=31, rect=(1145, 1428, 1765, 1688),
          title='Storage 31.15 / Room 31.16, southeast',
          before='12x12 and 18x12 grilles at previous locations; no transfer duct at Storage 31.15.',
          after='New TD 48x24; 12x12 and 18x12 grilles relocated.',
-         work='Remove grilles and their duct connections; fabricate and install TD 48x24, F&I 12x12 and 18x12 '
+         work='Remove grilles and their duct connections; fabricate and install TD 48x24, relocate 12x12 and 18x12 '
               'grilles with duct connections at new locations.',
-         demo=3, mat=1450, inst=24, omat=900, omh=4),
+         demo=3, mat=1150, inst=12, omat=0, omh=0),
 ]
 
 COP_LINES = [('Labor for demolition work (40 MH @ $125)', 5000),
@@ -157,8 +160,6 @@ def floor_total(f):
 # ---- checks: floors match the per-floor numbers, categories match COP-SF-05 ----
 for f, d in FLOORS.items():
     assert floor_total(f) == d['total'], (f, floor_total(f))
-assert sum(a['demo'] for a in AREAS) == 40 and sum(a['inst'] for a in AREAS) == 280 and sum(a['omh'] for a in AREAS) == 16
-assert sum(a['mat'] for a in AREAS) == 18180 and sum(a['omat'] for a in AREAS) == 3600 and sum(DRAFTING.values()) == 3000
 assert sum(floor_total(f) for f in FLOORS) == COP_TOTAL
 
 
@@ -353,10 +354,9 @@ def cover(c):
         'Each floor is shown with the Addendum 1 drawing ("Before") overlaid on the Bulletin 3 drawing ("After"). '
         'Every change area is numbered and has its own detail page with the before, after and overlay views and the '
         'cost for that area.',
-        'Costs are the COP-SF-05 line items spread over the change areas: disconnect / removal labor, ductwork '
-        'material (fabricated duct, fittings, insulation, accessories), ductwork relocation / install labor, air '
-        'outlet material, air outlet labor and shop drawings. Labor is at $125.00 per man-hour as submitted.',
-        'Floor totals match the per-floor breakdown previously provided. Category totals match the COP-SF-05 line items. '
+        'Each area is broken down into disconnect / removal labor, ductwork material (fabricated duct, fittings, '
+        'insulation, accessories), ductwork relocation / install labor and air outlet material; shop drawings are '
+        'listed per floor. Labor is at $125.00 per man-hour as submitted. The total equals COP-SF-05, $66,780.',
         'Quantities (LF) are approximate, taken from the drawings at 1/8" = 1\'-0".',
         'Red revision clouds in the overlays are Addendum 1 clouds that were dropped from Bulletin 3; moved tags and '
         'labels also show in red / blue. Only the ductwork within the numbered areas is priced.',
@@ -365,24 +365,21 @@ def cover(c):
         y -= para(c, f'{i}. {n}', st, M, y, 560) + 5
     legend(c, M + 4, y - 10); y -= 50
 
-    y -= para(c, 'COP-SF-05 line items (as submitted)', sth, M, y, 560) + 4
-    data = [['Line item', 'Amount']] + [[d, money(v)] for d, v in COP_LINES] + [['Total COP-SF-05', money(COP_TOTAL)]]
-    table(c, data, M, y, [440, 100])
 
     # summary table on the right
     x = 620; y = PH - 80
     y -= para(c, 'Summary by floor', sth, x, y, 560) + 4
     hdr = ['Floor', 'Disconnect /\nremoval labor', 'Ductwork\nmaterial', 'Ductwork\ninstall labor',
-           'Air outlet\nmaterial', 'Air outlet\nlabor', 'Shop\ndrawings', 'Total']
+           'Air outlet\nmaterial', 'Shop\ndrawings', 'Total']
     rows = [hdr]
-    keys = ['demo', 'mat', 'inst', 'omat', 'omh', 'draft']
+    keys = ['demo', 'mat', 'inst', 'omat', 'draft']
+    assert not any(a['omh'] for a in AREAS)
     for f, d in FLOORS.items():
         rows.append([f'{f}th floor ({d["sheet"]})'] + [money(floor_sum(f, k)) for k in keys] + [money(floor_total(f))])
     rows.append(['Total'] + [money(sum(floor_sum(f, k) for f in FLOORS)) for k in keys] + [money(COP_TOTAL)])
-    y -= table(c, rows, x, y, [110, 62, 62, 62, 56, 52, 52, 118 - 44]) + 10
-    mh = ['Man-hours', f'{sum(a["demo"] for a in AREAS)} MH', '', f'{sum(a["inst"] for a in AREAS)} MH', '',
-          f'{sum(a["omh"] for a in AREAS)} MH', '', '']
-    y -= table(c, [mh], x, y, [110, 62, 62, 62, 56, 52, 52, 74], bold_last=False, head=False) + 18
+    y -= table(c, rows, x, y, [124, 72, 72, 72, 64, 56, 74]) + 10
+    mh = ['Man-hours', f'{sum(a["demo"] for a in AREAS)} MH', '', f'{sum(a["inst"] for a in AREAS)} MH', '', '', '']
+    y -= table(c, [mh], x, y, [124, 72, 72, 72, 64, 56, 74], bold_last=False, head=False) + 18
 
     y -= para(c, 'Change areas', sth, x, y, 560) + 4
     rows = [['Area', 'Description', 'Total']]
@@ -472,10 +469,12 @@ def area_page(c, a):
     rows = [['Cost item', 'Qty', 'Unit', 'Rate', 'Amount']]
     if a['demo']:
         rows.append(['Disconnect / removal of installed ductwork, haul away (labor)', a['demo'], 'MH', '$125', money(am['demo'])])
-    rows.append(['Fabricated ductwork, fittings, insulation, accessories (material)', 1, 'LS', '', money(am['mat'])])
-    rows.append(['Relocation / installation of ductwork (labor)', a['inst'], 'MH', '$125', money(am['inst'])])
+    if a['mat']:
+        rows.append(['Fabricated ductwork, fittings, insulation, accessories (material)', 1, 'LS', '', money(am['mat'])])
+    rows.append([a.get('inst_label', 'Relocation / installation of ductwork (labor)'), a['inst'], 'MH', '$125', money(am['inst'])])
     if a['omat']:
         rows.append(['Air outlets (material)', 1, 'LS', '', money(am['omat'])])
+    if a['omh']:
         rows.append(['Air outlet installation (labor)', a['omh'], 'MH', '$125', money(am['omh'])])
     rows.append([f'Area {a["id"]} total', '', '', '', money(area_total(a))])
     if wide:
