@@ -60,10 +60,14 @@
 
   // Register and check for updates
   navigator.serviceWorker.register('sw.js').then(function(reg) {
-    // Check for updates every 10 seconds while page is open
+    // Look for a new version every minute while the page is open, and whenever the tab comes back to the foreground
+    // (was every 10 s: constant background traffic on slow connections)
     setInterval(function() {
-      reg.update().catch(function() {});
-    }, 10000);
+      if (!document.hidden) reg.update().catch(function() {});
+    }, 60000);
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) reg.update().catch(function() {});
+    });
 
     // If there's a waiting SW (installed but not yet active), activate it
     if (reg.waiting) {

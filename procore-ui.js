@@ -1099,10 +1099,25 @@
           catch (e) { console.warn('[estStrip] totals', e); t = { total: 0 }; }
           st.totals[v.id] = (t.total != null ? t.total : t.bidPrice) || 0;
         });
+        persistTotals(st.versions, by);
         stripRender();
       });
     });
   };
+  /* estimates.total_sales / line_count (perf-totals.sql) — the Bid Board lists totals without loading a single line item.
+     The strip already computes every version's total after each edit, so it stores them (only when they changed). */
+  var totalsWritten = {}, totalsColOk = true;
+  function persistTotals(versions, by) {
+    if (!totalsColOk || !window.supabaseClient || !stripState) return;
+    versions.forEach(function (v) {
+      var total = Math.round((stripState.totals[v.id] || 0) * 100) / 100, n = (by[v.id] || []).length, key = total + '|' + n;
+      if (totalsWritten[v.id] === key) return;
+      totalsWritten[v.id] = key;
+      window.supabaseClient.from('estimates').update({ total_sales: total, line_count: n }).eq('id', v.id).then(function (r) {
+        if (r.error) { delete totalsWritten[v.id]; if (/total_sales|line_count/i.test(r.error.message || '')) totalsColOk = false; }
+      }, function () { delete totalsWritten[v.id]; });
+    });
+  }
   PC.estStrip.setCurrent = function (id) { if (stripState) { stripState.opts.currentId = id; stripRender(); } };
   PC.estStrip.versions = function () { return stripState ? stripState.versions : []; };
   PC.estStrip.totals = function () { return stripState ? stripState.totals : {}; };

@@ -44,6 +44,25 @@ var REPORT_TYPE_PREFIX = {
 };
 
 // ---------------------------------------------------------------------------
+// Performance: auth.getUser() without a token is a NETWORK round trip (120–450 ms) — and pages call it once or twice on every load.
+// The session already carries the user object; the database (RLS) is what enforces access, so serve getUser() from the local
+// session (getSession() refreshes an expired token by itself). getUser(jwt) with an explicit token still goes to the server.
+// ---------------------------------------------------------------------------
+(function () {
+    try {
+        var a = supabaseClient.auth, orig = a.getUser.bind(a);
+        a.getUser = async function (jwt) {
+            if (jwt) return orig(jwt);
+            try {
+                var s = await a.getSession();
+                if (s && s.data && s.data.session && s.data.session.user) return { data: { user: s.data.session.user }, error: null };
+            } catch (e) { /* fall through to the server */ }
+            return orig();
+        };
+    } catch (e) { console.warn('[supabase-config] getUser shim not installed', e); }
+})();
+
+// ---------------------------------------------------------------------------
 // Auth helpers
 // ---------------------------------------------------------------------------
 

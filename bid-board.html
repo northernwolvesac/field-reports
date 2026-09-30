@@ -13,13 +13,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=332">
+<link rel="stylesheet" href="procore-ui.css?v=338">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=332"></script>
-<script src="auth.js?v=332"></script>
-<script src="est-totals.js?v=332"></script>
-<script src="procore-ui.js?v=332"></script>
-<script src="bid-actions.js?v=332"></script>
+<script src="supabase-config.js?v=338"></script>
+<script src="auth.js?v=338"></script>
+<script src="est-totals.js?v=338"></script>
+<script src="procore-ui.js?v=338"></script>
+<script src="bid-actions.js?v=338"></script>
 <style>
   /* ═══════ Title row (PC.renderTitleRow) + helpers emitted by procore-ui.js ═══════
      Duplicated here as fallbacks so the page renders even if procore-ui.css lags. */
@@ -193,8 +193,8 @@ requireAuth().catch(function(){});
     try {
       var u = await supabaseClient.auth.getUser();
       if (u && u.data && u.data.user) currentUser = u.data.user;
-      var prof = await supabaseClient.from('profiles')
-        .select('id,role,full_name,email').eq('id', currentUser.id).maybeSingle();
+      var prof = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null };
+      if (!prof.data) prof = await supabaseClient.from('profiles').select('id,role,full_name,email').eq('id', currentUser.id).maybeSingle();
       if (prof.data) {
         userProfile = prof.data;
         canEdit = PC.canEdit(prof.data);
@@ -332,66 +332,112 @@ requireAuth().catch(function(){});
   }
   function chunk(arr, n) { var o = []; for (var i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; }
 
-  async function loadEstimates() {
-    schemaMissing = false;
-    var r = await fetchAll(function() {
-      return supabaseClient.from('estimates').select(EST_COLS + ', settings')
+  // Roots for the list. estimates.total_sales / line_count (perf-totals.sql) are kept current by the estimate strip, so the
+  // list needs no line items at all; `settings` (big JSON, only used by the totals maths) is left out unless we must compute.
+  async function listRoots(withSettings, withTotals) {
+    var cols = EST_COLS + (withTotals ? ', total_sales, line_count' : '') + (withSettings ? ', settings' : '');
+    return fetchAll(function() {
+      return supabaseClient.from('estimates').select(cols)
         .is('parent_estimate_id', null).eq('is_template', false)
         .order('updated_at', { ascending: false }).order('id');
     });
-    if (r.error && PC.isSchemaError(r.error)) {
-      schemaMissing = true;
-      r = await fetchAll(function() {
-        return supabaseClient.from('estimates').select(EST_COLS)
-          .is('parent_estimate_id', null).eq('is_template', false)
-          .order('updated_at', { ascending: false }).order('id');
-      });
-    }
-    if (r.error) { PC.toast('Load failed: ' + r.error.message, 'error'); return; }
-    estimates = r.data || [];
-    var ids = estimates.map(function(e){ return e.id; });
+  }
 
-    // Line items of every primary estimate (chunked ids, paged rows)
-    linesById = {};
+  // Run async jobs with at most `limit` in flight (the old code fetched line-item pages one after another: ~14 s for 600 estimates)
+  async function pool(items, limit, worker) {
+    var i = 0;
+    async function run() { while (i < items.length) { var it = items[i++]; await worker(it); } }
+    var runners = []; for (var k = 0; k < Math.min(limit, items.length); k++) runners.push(run());
+    await Promise.all(runners);
+  }
+
+  // Totals for estimates that have none stored: lines fetched in parallel chunks, computed with the same maths as the
+  // Estimating page, and written back so the next load is instant (writers only; readers just see the numbers).
+  async function computeTotals(list, persist) {
     var lineCols = schemaMissing ? LINE_COLS_BASE : LINE_COLS_EXT;
-    var chunks = chunk(ids, 150);
-    for (var c = 0; c < chunks.length; c++) {
-      var idsC = chunks[c];
-      // deterministic ORDER BY so .range() pages never duplicate/skip rows
+    var linesBy = {}, settingsBy = {};
+    var needSettings = !schemaMissing && list.some(function(e) { return e.settings === undefined; });
+    await pool(chunk(list.map(function(e){ return e.id; }), 60), 4, async function(idsC) {
       var li = await fetchAll(function() {
         return supabaseClient.from('estimate_line_items').select(lineCols).in('estimate_id', idsC)
           .order('estimate_id').order('id');
       });
       if (li.error && PC.isSchemaError(li.error) && lineCols === LINE_COLS_EXT) {
-        schemaMissing = true; lineCols = LINE_COLS_BASE; c--; continue;
+        schemaMissing = true; lineCols = LINE_COLS_BASE;
+        li = await fetchAll(function() {
+          return supabaseClient.from('estimate_line_items').select(lineCols).in('estimate_id', idsC)
+            .order('estimate_id').order('id');
+        });
       }
-      if (li.error) { PC.toast('Line items load failed: ' + li.error.message, 'error'); break; }
-      li.data.forEach(function(row) { (linesById[row.estimate_id] = linesById[row.estimate_id] || []).push(row); });
-    }
-    estimates.forEach(function(e) {
-      var t = nwEstTotals(linesById[e.id] || [], e);
-      e._total_sales = Number(t.total != null ? t.total : t.bidPrice) || 0;
-      e._line_count = (linesById[e.id] || []).length;
-      e._desc_line = firstLine(e.project_description);
+      if (li.error) { PC.toast('Line items load failed: ' + li.error.message, 'error'); return; }
+      li.data.forEach(function(row) { (linesBy[row.estimate_id] = linesBy[row.estimate_id] || []).push(row); });
+      if (needSettings) {
+        var st = await supabaseClient.from('estimates').select('id, settings').in('id', idsC);
+        (st.data || []).forEach(function(x) { settingsBy[x.id] = x.settings; });
+      }
     });
+    var writes = [];
+    list.forEach(function(e) {
+      if (settingsBy[e.id] !== undefined) e.settings = settingsBy[e.id];
+      var lines = linesBy[e.id] || [];
+      var t = nwEstTotals(lines, e);
+      e._total_sales = Number(t.total != null ? t.total : t.bidPrice) || 0;
+      e._line_count = lines.length;
+      if (persist && canEdit) writes.push({ id: e.id, total_sales: Math.round(e._total_sales * 100) / 100, line_count: lines.length });
+      delete e.settings;
+    });
+    if (writes.length) {
+      // fire and forget — never blocks the list
+      pool(writes, 6, function(w) {
+        return supabaseClient.from('estimates').update({ total_sales: w.total_sales, line_count: w.line_count }).eq('id', w.id).then(function(){}, function(){});
+      });
+    }
+  }
 
-    // Linked project names
+  async function loadProjectNames() {
     projectNameById = {};
     var pids = {};
     estimates.forEach(function(e){ if (e.project_id) pids[e.project_id] = true; });
-    var pidList = Object.keys(pids);
-    var pch = chunk(pidList, 200);
-    for (var p = 0; p < pch.length; p++) {
-      var pr = await supabaseClient.from('projects').select('id, project_name').in('id', pch[p]);
+    await pool(chunk(Object.keys(pids), 200), 3, async function(ids) {
+      var pr = await supabaseClient.from('projects').select('id, project_name').in('id', ids);
       (pr.data || []).forEach(function(row){ projectNameById[row.id] = row.project_name; });
-    }
+    });
+  }
 
-    // Alternate versions count per root (Info popover)
+  async function loadAltCounts() {
     altCountById = {};
     var alts = await fetchAll(function() {
       return supabaseClient.from('estimates').select('parent_estimate_id').not('parent_estimate_id', 'is', null).order('id');
     });
     (alts.data || []).forEach(function(a){ altCountById[a.parent_estimate_id] = (altCountById[a.parent_estimate_id] || 0) + 1; });
+  }
+
+  async function loadEstimates() {
+    schemaMissing = false;
+    var withTotals = true;
+    var r = await listRoots(false, true);
+    if (r.error && /total_sales|line_count/i.test(r.error.message || '')) {   // perf-totals.sql not run yet: old behaviour (totals computed from lines)
+      withTotals = false;
+      r = await listRoots(true, false);
+      if (r.error && PC.isSchemaError(r.error)) { schemaMissing = true; r = await listRoots(false, false); }
+    }
+    if (r.error) { PC.toast('Load failed: ' + r.error.message, 'error'); return; }
+    estimates = r.data || [];
+    linesById = {};
+
+    var todo = [];
+    estimates.forEach(function(e) {
+      e._desc_line = firstLine(e.project_description);
+      if (withTotals && e.total_sales != null) { e._total_sales = Number(e.total_sales) || 0; e._line_count = Number(e.line_count) || 0; }
+      else todo.push(e);
+    });
+
+    // the three independent loads run together
+    await Promise.all([
+      todo.length ? computeTotals(todo, withTotals) : Promise.resolve(),
+      loadProjectNames(),
+      loadAltCounts()
+    ]);
 
     recomputeCounts();
     populateEstimatorFilter();
@@ -871,6 +917,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=332"></script>
+<script src="sw-register.js?v=338"></script>
 </body>
 </html>

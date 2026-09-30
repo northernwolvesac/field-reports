@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supabase-config.js?v=186"></script>
-<script src="nw-drive.js?v=213"></script>
-<script src="auth.js?v=186"></script>
-<script src="labor-rates.js?v=186"></script>
+<script src="supabase-config.js?v=338"></script>
+<script src="nw-drive.js?v=338"></script>
+<script src="auth.js?v=338"></script>
+<script src="labor-rates.js?v=338"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -818,8 +818,8 @@ requireAuth().catch(function(){});
     try {
       var u = await supabaseClient.auth.getUser();
       if (u && u.data && u.data.user) currentUserId = u.data.user.id;
-      var prof = await supabaseClient.from('profiles').select('full_name,role')
-        .eq('id', currentUserId).maybeSingle();
+      var prof = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null };
+      if (!prof.data) prof = await supabaseClient.from('profiles').select('full_name,role').eq('id', currentUserId).maybeSingle();
       if (prof.data) {
         currentUserName = prof.data.full_name;
         currentUserRole = prof.data.role;
@@ -3362,6 +3362,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=259"></script>
+<script src="sw-register.js?v=338"></script>
 </body>
 </html>

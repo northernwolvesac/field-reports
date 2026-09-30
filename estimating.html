@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=336">
+<link rel="stylesheet" href="procore-ui.css?v=338">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="supabase-config.js?v=336"></script>
-<script src="auth.js?v=336"></script>
-<script src="est-totals.js?v=336"></script>
-<script src="procore-ui.js?v=336"></script>
-<script src="nw-catalog-picker.js?v=336"></script>
-<script src="nw-proposal.js?v=336"></script>
-<script src="bid-actions.js?v=336"></script>
+<script src="supabase-config.js?v=338"></script>
+<script src="auth.js?v=338"></script>
+<script src="est-totals.js?v=338"></script>
+<script src="procore-ui.js?v=338"></script>
+<script src="nw-catalog-picker.js?v=338"></script>
+<script src="nw-proposal.js?v=338"></script>
+<script src="bid-actions.js?v=338"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -614,7 +614,8 @@ requireAuth().catch(function(){});
       var u = await supabaseClient.auth.getUser();
       var user = u && u.data && u.data.user;
       if (user) currentUserId = user.id;
-      var prof = await supabaseClient.from('profiles').select('role, full_name, email').eq('id', currentUserId).maybeSingle();
+      var prof = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null };
+      if (!prof.data) prof = await supabaseClient.from('profiles').select('role, full_name, email').eq('id', currentUserId).maybeSingle();
       if (prof.data) {
         currentUserRole = prof.data.role;
         currentUserName = prof.data.full_name || (user && user.email) || null;
@@ -3405,6 +3406,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=336"></script>
+<script src="sw-register.js?v=338"></script>
 </body>
 </html>
