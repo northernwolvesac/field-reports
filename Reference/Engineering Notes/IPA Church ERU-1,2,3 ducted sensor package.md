@@ -6,13 +6,52 @@ Units: 3 x Greenheck RVE-85-52D-20I-J-A2, 20 ton inverter DX, 300 MBH modulating
 ERU-1 and ERU-2 serve the basement (multi-purpose space 012 and support rooms). ERU-3 serves first and second floors. All three sit on the roof; OA
 and EA ducts (36x16 and 42x16) drop through shafts to the floors served. Supply discharge and exhaust intake are through the bottom of the unit (curb).
 
+## Current basis after ADE's answers of 2026-09-30 (supersedes the sections below where they differ)
+
+ADE (Ryan Adams) answered the 7 questions on 09/30 and sent the G31 controller schematic, the Y07 expansion board schematic and Greenheck
+DOAS FAQs 5 (Web UI), 6 (SAT install) and 12 (fan control mode). Copies: `Reference/Projects/IPA Church - Syosset/source/ADE 2026-09-30/`.
+Return start-up visit booked for **Thu 10/29/2026, 7:00-7:30 am arrival** (date requested by Christino). Everything below has to be installed,
+wired and checked before that morning.
+
+| # | Question | ADE answer | What it means for us |
+|---|---|---|---|
+| 1 | SAT location | Supply duct, 3-5 duct widths downstream of the unit, away from elbows, transitions and major turns (FAQ 6). SAT is factory landed on J3 U4 / GND; excess lead is coiled in the control cabinet | Move each unit's SAT probe out of the unit into the vertical supply riser, on a straight run 3-5 widths below the curb (36 in wide riser: 9-15 ft; 42 in wide: 10.5-17.5 ft), with a 12x12 access door. If the whip is short, extend with 18/2 shielded CMP spliced in a box. Dashed (field) on G31 |
+| 2 | HU-226 duct temp/RH inputs | "The supply temp is the duct temperature. There is no input for duct RH." Unit was ordered for the BAPI Modbus space thermostat (J24/J26). Ryan can add a space RH input to the configuration if we want it | The unit runs on its own SAT (discharge control). With the VRF carrying the space load, space temp/RH are only a reset. **Proposal: delete the space temp/RH sensor** (no HU-226). Fallback if DMG insists: HU-226 in the EA riser on spare inputs (main controller U2 or expansion U2-U10), Ryan configures |
+| 3 | C7232B on U9 | Yes, CO2 is on U9 and is read as space CO2 | Duct C7232B1022 in the EA riser lands on U9 exactly like the wall model. Wiring per G31 legend "CO2 MODEL C7232": R -> G+ (red), C -> GO (black), C -> M (brown), OUT1 -> U9 (yellow). Jumper to 0-10 V |
+| 4 | Exhaust tracking | Exhaust fan was ordered as space pressure control; land the shipped-loose pressure sensor (PS8) on expansion board U1. Fan control mode can be changed at the controller (FAQ 12: Main Menu > Ctrl Variables > Advanced > Login, service level > Unit Config > Service Config > Exhaust Fan Control > Type; leave K Factor as found) | PS8 was in the lost kit, so Ryan's answer assumes a part we do not have. **Proposal: change the exhaust fan to supply tracking** (schedule already sets exhaust at 90% of supply) - no transducer, probe, tubing or pickup. Needs DMG acceptance (M7.1 note 1 lists a building static pressure sensor) and Ryan to confirm the tracking option is in the Type list (controls IOM). Fallback: PR-274 + A-306 per Y07: + to R, - to C and expansion GND, output O -> expansion U1 |
+| 5 | Web UI instead of remote panels | Web UI needs no license, has all controls available at the unit and mirrors the display (FAQ 5). Ethernet (network) or USB-B printer cable (local only) | Replace the 3 remote displays (~$1,400 each) with web UI: Cat6 from each unit's controller Ethernet port down the shaft to a small switch (utility room 008 or a 2nd floor closet), static IP per unit (set at start-up), owner PC/laptop on that switch. Off-site access only through the owner's network / VPN, by others. Needs DMG acceptance (M7.1 note 1 lists "REMOTE DISPLAY (150FT CORD)") |
+| 6 | High static setpoint | R to G turns the unit on/off for any reason and can be used for high duct pressure shutdown. No recommended setting, site dependent | N.C. manual reset switch in series with S1 (R-G, ID4), remove factory jumper. Scheduled supply ESP is 1.50 in wc on all 3 units (M7.1), so set **2.0 in wg** with the tap in the supply riser near the unit; at start-up confirm the full-speed reading there is 1.6 or less and never set above the duct pressure class |
+| 7 | I/O map | G31 controller + Y07 expansion schematics; dashed lines are field wiring; also posted on the unit control door | Field items on G31: S1 remote start (R-G), S6 fire (R-70, E.C. / jumper), SAT (U4-GND), CO2 (U9, R, C), BAPI thermostat (J24 PWR/GND, J26 NETA/NETB, not used if deleted). Y07: PS8 (R, C, U1) only if building pressure stays. PR-274 R2 vs R2A not answered; moot if tracking is accepted |
+
+Revised field pack per unit (x3):
+
+| Item | Needed | Approx. cost, 3 units |
+|---|---|---|
+| Honeywell C7232B1022 duct CO2 in EA riser -> U9 | always | $850-1,700 |
+| Manual reset high static switch (Cleveland AFS-460 / Dwyer 1831), set 2.0 in wg -> S1 | always | $300-500 |
+| Relocate factory SAT into supply riser, extension cable | always | labor + cable |
+| 12x12 access doors (SAT, CO2), 18/4 and 18/2 shielded CMP | always | ~$300 |
+| Cat6 CMP + 5-8 port switch | if web UI accepted (else 3 remote displays ~$4,200) | ~$150 |
+| Mamac PR-274 + Dwyer A-306 + tubing + A-489 | only if DMG keeps building pressure control | $700-1,000 |
+| Mamac HU-226-3-VDC-8 | only if DMG keeps space temp/RH | $750-1,050 |
+
+Base case (tracking + web UI + no space temp/RH) is about $1,600-2,700 of material against ADE's $10,500 + tax plus $4,200 of panels.
+
+Checklist for ADE on 10/29 (programming is included in our PO start-up):
+- Space temp/RH source: none (or duct inputs if DMG requires); clear any Modbus thermostat comm alarm.
+- CO2 on U9: verify 0-10 V = 0-2000 ppm, setpoint 800-1000 ppm, supply fan minimum per schedule.
+- Exhaust fan control Type: supply tracking at 90% (or space pressure on expansion U1 if DMG keeps it).
+- SAT reading after relocation; discharge setpoints 70 F cooling / 68 F heating neutral.
+- Web UI: static IP per unit, check from the owner PC through the switch.
+- Test the high static switch trip and manual reset, S1 and S6 (fire) stops.
+
 ## What the factory package contained (submittal p.4 "Field installed features" and p.7 accessories)
 
 | Item | How it connects to the unit controller (wiring diagram G31, p.15) | Status |
 |---|---|---|
 | Room thermostat, space temp + RH (Greenheck part 387004, BAPI BA/BS4MBX-H2-FN-Z, Modbus) | Modbus RTU on the FieldBus: J26 T+ / T-, powered from J24 +Vterm / GND ("THERMOSTAT(S) FIELD WIRED TO") | lost |
 | 3 additional space temp sensors, averaging (10k thermistors into the BS4 aux input) | into the Modbus room sensor, not the controller | lost |
-| CO2 sensor, Honeywell C7232 wall model (supply fan VFD control by CO2) | 4 wires: R -> G+, C -> GO, OUT1 -> U9, M -> GND. Diagram already shows both C7232 and C7233 wiring | lost |
+| CO2 sensor, Honeywell C7232 wall model (supply fan VFD control by CO2) | 4 wires per G31 legend: R -> G+, C -> GO, C -> M, OUT1 -> U9. Diagram already shows both C7232 and C7233 wiring | lost |
 | Space static pressure transducer PS8 (exhaust fan VFD control) | expansion board c.pCOe: R -> "+", C -> "-", output -> U1, GND -> "-". Tubing to space and to outdoor reference | lost |
 | Remote display with 150 ft cord (Carel pGD, required by schedule note 1 on M7.1) | telephone-style cable to the controller display port | check if lost |
 | Duct smoke detectors, both airstreams, shipped loose (System Sensor D4120 with sampling tubes for 1-2 ft ducts) | contacts to R-G (or R-70 fire input S6). M7.1 note 3 says furnished and wired by E.C. | check if lost |
@@ -44,7 +83,7 @@ Order the same models Greenheck quoted. They match the controller's input config
 | 4 | 381659 | Dwyer A-306 outdoor static pressure sensor (probe, bracket, 50 ft tubing) | outdoor reference for #3 | tubing only | $90-125 |
 
 Hardware per unit about $800-1,250, three units $2,400-3,700 plus about $300 of cable, tubing, duct access doors and a NEMA box.
-Greenheck's package price of $10,000 is $3,300 per unit. Ask ADE what is in it besides the five parts: if it includes a Greenheck tech visit or the
+Greenheck's reduced package price of $10,500 + tax is $3,500 per unit. Ask ADE what is in it besides the five parts: if it includes a Greenheck tech visit or the
 controller reconfiguration, buy the parts ourselves and pay only for the configuration (Greenheck DOAS tech support does this over the phone with the unit
 serial number; ADE startup can also do it).
 
@@ -53,7 +92,7 @@ temp/RH Dwyer RHP-3D1A or BAPI BA/H310-D; CO2 Senva CO2D-A or Dwyer CDTR-D; pres
 the controller diagram is drawn for it.
 
 Not in the pack:
-- Duct smoke detectors: already installed and wired by the E.C. (2025-09-24). The sampling tube in Greenheck's list is not needed.
+- Duct smoke detectors: already installed and wired by the E.C. (2026-09-24). The sampling tube in Greenheck's list is not needed.
 - Remote display with 150 ft cord. The unit has a web UI over Ethernet, but the schedule calls for the display. Options: mount the displays in the basement
   utility room 008 / a second floor closet next to the shaft, or ask DMG to accept the web UI in lieu.
 - High static cutoff on the supply duct: the sequence (p.25) says "mechanical high static protection cutoffs must be installed by others". One manual reset
@@ -89,7 +128,7 @@ Not in the pack:
 | Circuit | Cable | Notes |
 |---|---|---|
 | Duct temp/RH #1 | 18/4 or 22/4 stranded shielded, CMP (plenum), one cable | R -> power +, C -> power -, RH out -> spare universal input, temp out -> spare universal input (Greenheck assigns U2/U6 or expansion board inputs when they reconfigure). Shield drain to controller GND at the unit end only |
-| Duct CO2 #2 | 18/4 shielded CMP | R -> G+, C -> GO, OUT1 -> U9, M -> GND (per diagram G31, "CO2 MODEL C7232"). Set the jumper to 0-10 V |
+| Duct CO2 #2 | 18/4 shielded CMP | R -> G+, C -> GO, C -> M, OUT1 -> U9 (per diagram G31, "CO2 MODEL C7232"). Set the jumper to 0-10 V |
 | Pressure transducer #3 | 18/3 shielded CMP if not inside the unit | R -> +, C -> -, OUT -> expansion board U1 (PS8 per diagram Y07, p.18) |
 | Pressure tubing | 1/4 in OD FR polyethylene, plenum rated, two runs | reference to A-306, sensing to space. No kinks, no low points |
 | Smoke detectors | already installed and wired by E.C. | if their contacts are to stop the unit, E.C. lands them on R-70 (S6) or R-G |
@@ -112,16 +151,24 @@ duct sensor locations above give 20-60 ft.
 
 ## Paper trail
 
-RFI to DMG (Rob DuBoice), copy CCC: "M7.1 note 1 lists space temperature, space humidity and CO2 sensors for ERU-1,2,3. The units are 100% OA DOAS
-supporting VRF; walls and ceilings are finished. We propose to install the temperature/RH and CO2 sensors in each unit's exhaust air riser (mixed
-representative sample of the served zones), with the building static pressure transducer at the unit, outdoor reference probe on the roof and the space
-pickup in the ceiling plenum. Sensors: Mamac HU-226-3-VDC-8, Honeywell C7232B1022, Mamac PR-274-R2A-VDC with Dwyer A-306, as offered by the unit
-manufacturer. Please confirm acceptable. No change to sequences or setpoints." Attach the ADE screenshot as backup.
+RFI to DMG (Rob DuBoice), copy CCC (draft, updated 2026-09-30 after ADE's answers; not sent yet):
+"M7.1 note 1 lists building static pressure, space humidity, space temperature and CO2 sensors and a remote display (150 ft cord) for ERU-1,2,3.
+The field-installed sensor kit was lost before installation; walls and ceilings are finished. The units are 100% OA DOAS supporting the VRF system.
+We propose, per the unit manufacturer's (Greenheck / ADE) input:
+1. CO2: duct-mounted CO2 sensor (Honeywell C7232B1022) in each unit's exhaust air riser, a mixed sample of the zones served, on the controller's
+   existing space CO2 input. Supply fan CO2 control unchanged.
+2. Space temperature / humidity: delete. The unit controls to its supply air temperature sensor, which will be relocated into the supply duct per the
+   manufacturer; the VRF carries the space load. (Alternative if required: duct temp/RH sensor in the exhaust riser.)
+3. Building static pressure: delete, and run the exhaust fan tracking the supply fan at the scheduled ratio (4,800/5,375 ERU-1/2, 5,775/6,370 ERU-3),
+   which holds the design balance at every CO2-driven supply speed. (Alternative: building pressure transducer at the unit with outdoor reference
+   probe and a pickup in a central corridor.)
+4. Remote display: replace with the unit's built-in web interface over Ethernet (no license, full unit controls, mirrors the display), one network
+   connection per unit to an owner PC.
+5. Add a manual reset high static cutoff in the supply duct of each unit wired to the unit shutdown, per the manufacturer's sequence.
+Please confirm acceptable."
+Attach: ADE 09/30 email, G31 and Y07 schematics, FAQ 5 (Web UI), FAQ 12 (fan control mode).
 
-Email to ADE (Julio Enriquez / Ryan Adams): ask for the itemized $10,000 (parts vs. controller configuration / tech time), the input assignments for the
-duct temp/RH on this controller program, confirmation that the remote displays and D4120 detectors were in the lost crate, and a price for those alone.
-
-## Where to buy (links checked 2025-09-24, prices move)
+## Where to buy (links checked 2026-09-24, prices move)
 
 Per unit x3 unless noted. Greenheck part-store links are the exact factory part numbers from ADE's list; the others are the same device from stock distributors.
 
@@ -151,7 +198,9 @@ Do not order until DMG answers the RFI; the RFI turnaround is a week, the parts 
   duct temp/RH, space pressure) $10,500 + tax; remote panels about $1,400 each. Smoke detectors already installed by the E.C.
 - 2026-09-25: Discharge air temp sensors confirmed to be in the units (need relocating into the supply riser). Ruslan sent Ryan the 7-point
   technical questions email with `ERU-ducted-sensor-wiring.pdf` attached (issued for ADE / Greenheck review). We buy the sensors ourselves.
-- Waiting on ADE: SAT location, HU-226 input assignment (U2*/U6*), C7232B on U9, exhaust tracking availability, PR-274 R2 vs R2A, web UI /
-  remote access requirements instead of remote panels, high static switch setpoint, I/O map.
-- Next: on ADE's answer, send the RFI to DMG (Rob DuBoice, copy CCC) with the duct-sensor option and the exhaust tracking alternative, then
-  order the sensors, then schedule the final start-up with ADE.
+- 2026-09-30: Ryan (ADE) answered all 7 questions (see "Current basis" above) and sent G31 / Y07 schematics and FAQs 5, 6, 12. Return start-up
+  booked for 10/29 7:00-7:30 am arrival (Christino's date). No duct RH input exists; SAT stays on U4; CO2 on U9; exhaust ordered as space pressure
+  on expansion U1, mode changeable in the field; web UI free; high static via R-G, setpoint ours.
+- Next: send the RFI to DMG (Rob DuBoice, copy CCC) with the base case (duct CO2, delete space temp/RH, exhaust tracking, web UI, high static
+  switch) -> order CO2 sensors and high static switches (needed in every option) -> relocate SAT, install and wire by 10/23 -> ADE start-up 10/29.
+  Ask Ryan to confirm the supply-tracking option in the exhaust fan Type list.

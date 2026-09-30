@@ -2,9 +2,10 @@
 
 MEP engineer: DMG (Design Management Group, Pittston PA), Rob DuBoice; drawings M0.1-M8.2 IFC 2025-03-05. Copy CCC on RFIs.
 Equipment rep: ADE (Ryan Adams radams@adehvac.com, Julio Enriquez), Greenheck ERU supplier and start-up.
+Christino and Andrei are on the ADE threads (Christino set the 10/29 start-up date).
 Our PO with ADE still owes one start-up visit, which includes programming (not part of any add cost).
 
-## Current issue: ERU-1,2,3 lost field-sensor kit (status 09/25)
+## Current issue: ERU-1,2,3 lost field-sensor kit (status 09/30)
 
 3 x Greenheck RVE-85-52D-20I-J-A2 (100% OA DOAS with VRF, Carel c.pCO controller). The loose wall-sensor kit
 (room temp/RH + 3 averaging sensors, wall CO2, space static transducer, possibly remote displays) was lost.
@@ -15,24 +16,31 @@ Full engineering detail, parts list with purchase links, wiring, mounting locati
 Wiring / placement diagram sent to ADE: `Reference/Engineering Notes/ERU-ducted-sensor-wiring.pdf`
 (built by `build_eru_sensor_diagram.py`, stamped issued for ADE / Greenheck review 09/25/2026).
 
-- Sensors per unit: Mamac HU-226-3-VDC-8 duct temp/RH, Honeywell C7232B1022 duct CO2, Mamac PR-274-R2A-VDC with
-  Dwyer A-306 outdoor probe (building pressure via A-489 pickup in a central corridor, or exhaust tracking at 90% of supply
-  as the preferred alternative), manual-reset high static cutoff. 18/4 stranded shielded CMP cable.
-- Smoke detectors: already installed and wired by the E.C.; not in our scope.
-- Discharge air temp sensors are in the units; they need relocating into the supply riser.
-- Remote displays: asked ADE whether the client can get web UI / remote access to all 3 ERUs instead.
+**ADE start-up return visit: Thu 10/29/2026, 7:00-7:30 am arrival.** All field sensors installed and wired before then.
+
+Base case after ADE's 09/30 answers (to be put to DMG in the RFI), per unit:
+- CO2: Honeywell C7232B1022 duct sensor in the EA riser on U9 (read as space CO2). Needed in every option.
+- SAT: relocate the factory sensor (J3 U4) into the supply riser, 3-5 duct widths below the unit, straight run, access door.
+- Space temp/RH: delete (no duct RH input on this program; unit runs on SAT, VRF does the space). Fallback HU-226 in EA riser, ADE configures.
+- Exhaust fan: change from space pressure (lost PS8 on expansion U1) to supply tracking at 90%. Fallback PR-274 + A-306 on expansion U1.
+- Remote displays: replace with web UI over Ethernet (no license, full control), Cat6 to a switch, static IPs.
+- High static: manual reset switch set 2.0 in wg (supply ESP 1.50) in series with S1 R-G.
+- Smoke detectors: E.C. (installed). Material about $1,600-2,700 vs ADE $10,500 + tax + $4,200 panels.
 
 **History:** 09/09 first ADE start-up visit (no gas, sensors not wired, day 2 cancelled). 09/14 ADE full replacement
 quote $17,650 + tax. 09/24 reduced package $10,500 + tax, remote panels ~$1,400 each. 09/25 Ruslan emailed Ryan the
-7 technical questions with the diagram.
+7 technical questions with the diagram. 09/30 Ryan answered all 7, sent G31/Y07 schematics and
+Greenheck FAQs 5 (web UI), 6 (SAT install), 12 (fan control mode), and booked the return start-up for 10/29 7-7:30 am.
 
-**Waiting on ADE:** SAT location, HU-226 input assignment (U2/U6), C7232B on U9, exhaust tracking availability,
-PR-274 R2 vs R2A, web UI / remote access instead of remote panels, high static switch setpoint, I/O map.
+**Open with ADE:** confirm supply-tracking is in the exhaust fan control Type list; 10/29 programming checklist is in the engineering note.
 
-**Next:** on ADE's answer, send the RFI to DMG (Rob DuBoice, copy CCC) with the duct-sensor option and the exhaust
-tracking alternative -> order the sensors -> schedule the final start-up with ADE.
+**Next:** (1) send the RFI to DMG (Rob DuBoice, copy CCC), draft in the engineering note "Paper trail"; (2) order the CO2 sensors and high static
+switches now (needed in every option), the rest after DMG answers; (3) relocate SAT, install and wire everything, Cat6 to a switch, by 10/23;
+(4) ADE start-up 10/29.
 
 ## Files in `source/`
 
 - `Greenheck ERU submittal 230000-13 (reviewed DMG 2025-04-22).pdf`: P281653R03, wiring diagrams G31 (p.15), Y07 (p.18), sequence p.25.
 - `DMG mechanical drawings M0.1-M8.2 (IFC 2025-03-05).pdf`: plans M2.1-M2.4, schedules M6.1, M7.1 (ERU notes).
+- `ADE 2026-09-30/`: Greenheck controller schematic G31, expansion board schematic Y07 (dashed = field wiring), DOAS FAQs 5 (web UI),
+  6 (supply discharge temp sensor install), 12 (change fan control mode).
