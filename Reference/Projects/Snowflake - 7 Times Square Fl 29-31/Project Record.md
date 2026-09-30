@@ -81,4 +81,5 @@ Detailed before/after breakdown by floor and area, rev 2 09/30 after two rounds 
 29th $29,600, 30th $18,100, 31st $19,080. Area 29-2 (56x16 -> 42x12, $11,025) is the run Structure Tone says was
 not taken down - still in the breakdown; Bunker asked (09/29) for a revised CO for work not performed.
 Ruslan / Alikhan promised Samuel the breakdown by afternoon 09/30.
-Rev 3 09/30: PDF condensed to 6 pages (per floor: before/after crops page + scope and cost page), amounts unchanged.
+Rev 3 09/30: PDF condensed to 6 pages (per floor: before/after/color overlay page + scope and cost page with
+overlay key plan), amounts unchanged.

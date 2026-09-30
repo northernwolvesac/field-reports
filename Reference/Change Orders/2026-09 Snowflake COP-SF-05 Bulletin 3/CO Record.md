@@ -38,4 +38,7 @@
 - PDF cut from 16 pages to 6, per Ruslan: 2 pages per floor. Page 1 = before (Addendum 1) / after (Bulletin 3)
   crops of each change area with its total; page 2 = scope of work (before / after / work) and cost per area
   (disconnect MH, material, install MH, total), shop drawings, floor total, key plan and COP summary.
-- Cover page, full-floor overlays and the red/blue overlay views were dropped. The xlsx is unchanged.
+- Cover page and the separate floor overlay pages were dropped. The xlsx is unchanged.
+- Overlays put back per Ruslan: each area shows before / after / color overlay (gray unchanged, red Addendum 1
+  only, blue Bulletin 3 only); the key plan on the scope page is the full-floor color overlay with legend.
+  Build takes about 2 minutes (the tiled floor overlay).

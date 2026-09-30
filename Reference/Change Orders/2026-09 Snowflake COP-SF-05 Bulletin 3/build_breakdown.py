@@ -1,7 +1,8 @@
 """Build the COP-SF-05 (Bulletin 3) breakdown: 6 pages, 2 per floor.
 
-Page 1 of each floor = before / after crops of every change area (vector, from the drawings).
-Page 2 of each floor = scope of work and cost per area, key plan with the areas, COP summary.
+Page 1 of each floor = before / after (vector, from the drawings) and color overlay of every change area.
+Overlay: gray = unchanged, red = Addendum 1 only (installed, removed), blue = Bulletin 3 only (new).
+Page 2 of each floor = scope of work and cost per area, color overlay key plan with the areas, COP summary.
 
 Before = Addendum 1 M-529/530/531, After = Bulletin 3 (rev 4, 08/10/2026) M-529/530/531.
 
@@ -200,6 +201,71 @@ def local_offset(page, rect):
     return best[1], best[2]
 
 
+def dil(m, r):
+    o = m.copy()
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            o |= np.roll(np.roll(m, dy, 0), dx, 1)
+    return o
+
+
+
+def local_offset_fast(page, rect, z=2, n=4):
+    (sx, _), (sy, _) = XF[str(page)]
+    a = render(A, page, pymupdf.Rect(rect), z) < 170
+    b = render(B, page, b_clip(page, rect, (0, 0)), z, sx, sy) < 170
+    h = min(a.shape[0], b.shape[0]) - 2 * n; w = min(a.shape[1], b.shape[1]) - 2 * n
+    if a[n:n + h, n:n + w].sum() < 200:
+        return (0, 0)
+    best = None
+    for dy in range(-n, n + 1):
+        for dx in range(-n, n + 1):
+            v = (a[n:n + h, n:n + w] ^ b[n + dy:n + dy + h, n + dx:n + dx + w]).sum()
+            if best is None or v < best[0]:
+                best = (v, dx / z, dy / z)
+    return best[1], best[2]
+
+
+def overlay_tiled(page, rect, dpi, tile=200):
+    x0, y0, x1, y1 = rect
+    z = dpi / 72
+    W = int(round((x1 - x0) * z)); H = int(round((y1 - y0) * z))
+    out = np.full((H, W, 3), 255, np.uint8)
+    y = y0
+    while y < y1:
+        x = x0
+        while x < x1:
+            r = (x, y, min(x + tile, x1), min(y + tile, y1))
+            off = local_offset_fast(page, r)
+            im = np.array(Image.open(overlay_png(page, r, dpi, off, r_min=2)))
+            px = int(round((x - x0) * z)); py = int(round((y - y0) * z))
+            hh = min(im.shape[0], H - py); ww = min(im.shape[1], W - px)
+            out[py:py + hh, px:px + ww] = im[:hh, :ww]
+            x += tile
+        y += tile
+    buf = io.BytesIO(); Image.fromarray(out).save(buf, 'PNG', optimize=True); buf.seek(0)
+    return buf
+
+
+def overlay_png(page, rect, dpi, off, r_min=1):
+    (sx, _), (sy, _) = XF[str(page)]
+    z = dpi / 72
+    a = render(A, page, pymupdf.Rect(rect), z)
+    b = render(B, page, b_clip(page, rect, off), z, sx, sy)
+    h = min(a.shape[0], b.shape[0]); w = min(a.shape[1], b.shape[1]); a = a[:h, :w]; b = b[:h, :w]
+    da = a < 170; db = b < 170
+    r = max(r_min, round(dpi / 90))
+    # ductwork is drawn black, the architectural background gray: only black linework is flagged as a change
+    rem = (a < 110) & ~dil(db, r); add = (b < 110) & ~dil(da, r)
+    rgb = np.full((h, w, 3), 255, np.uint8)
+    rgb[da | db] = (175, 175, 175)
+    k = max(0, round(dpi / 150))
+    rgb[dil(rem, k)] = (215, 25, 25)
+    rgb[dil(add, k)] = (20, 85, 225)
+    buf = io.BytesIO(); Image.fromarray(rgb).save(buf, 'PNG', optimize=True); buf.seek(0)
+    return buf
+
+
 # ---------------- page layout ----------------
 pdfmetrics.registerFont(TTFont('LS', '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'))
 pdfmetrics.registerFont(TTFont('LSB', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'))
@@ -207,7 +273,7 @@ pdfmetrics.registerFontFamily('LS', normal='LS', bold='LSB', italic='LS', boldIt
 PW, PH = landscape(TABLOID)          # 1224 x 792
 M = 30
 NAVY = colors.HexColor('#1F3A5F'); ORANGE = colors.HexColor('#E08A00'); GRAY = colors.HexColor('#555555')
-LIGHT = colors.HexColor('#EEF2F7')
+LIGHT = colors.HexColor('#EEF2F7'); RED = colors.HexColor('#D71919'); BLUE = colors.HexColor('#1455E1')
 st = ParagraphStyle('b', fontName='LS', fontSize=8.5, leading=10.5)
 stb = ParagraphStyle('bb', parent=st, fontName='LSB')
 sts = ParagraphStyle('s', parent=st, fontSize=9.5, leading=12.5)
@@ -235,6 +301,16 @@ def footer(c):
     c.setFillColor(colors.gray); c.setFont('LS', 8)
     c.drawString(M, 16, f'Northern Wolves AC  |  55 9th St, 55-A2, Brooklyn, NY 11215  |  (347) 463-9248  |  {DATE}')
     c.drawRightString(PW - M, 16, f'Page {page_no[0]} of {2 * len(FLOORS)}')
+
+
+def legend(c, x, y):
+    c.setFont('LS', 8.5)
+    for i, (col, txt) in enumerate([(colors.HexColor('#AFAFAF'), 'Unchanged'),
+                                    (RED, 'Addendum 1 only - installed, removed'),
+                                    (BLUE, 'Bulletin 3 only - new work')]):
+        c.setStrokeColor(col); c.setLineWidth(3); c.line(x, y - i * 13, x + 22, y - i * 13)
+        c.setFillColor(colors.black); c.drawString(x + 28, y - i * 13 - 3, txt)
+    c.setLineWidth(1)
 
 
 def table(c, data, x, ytop, widths, bold_last=True, head=True, extra=()):
@@ -284,12 +360,12 @@ TB = 16         # area title bar
 
 
 def pair_scale(r, w, h, stacked):
-    """Scale of one area's before/after pair inside a w x h cell (below the title bar)."""
+    """Scale of one area's before/after/overlay set inside a w x h cell (below the title bar)."""
     rw, rh = r[2] - r[0], r[3] - r[1]
     if stacked:
-        pw, ph = w - 6, (h - TB - G) / 2 - 20
+        pw, ph = w - 6, (h - TB - 2 * G) / 3 - 20
     else:
-        pw, ph = (w - G) / 2 - 6, h - TB - 20
+        pw, ph = (w - 2 * G) / 3 - 6, h - TB - 20
     return min(pw / rw, ph / rh)
 
 
@@ -310,8 +386,8 @@ def grid(areas):
 def screens_page(c, f):
     d = FLOORS[f]; p = d['page']; areas = floor_areas(f)
     header(c, f'{ordn(f)} Floor - {d["sheet"]}: Change Areas, Before and After',
-           f'Before = Addendum 1 (fabricated and installed)   After = Bulletin 3 (rev 4, 08/10/2026)   |   '
-           f'{ordn(f)} floor total {money(d["total"])} - scope and costs on next page')
+           f'Before = Addendum 1 (installed)   After = Bulletin 3 (rev 4, 08/10/2026)   |   Overlay: gray = unchanged, '
+           f'red = Addendum 1 only (installed, removed), blue = Bulletin 3 only (new)')
     cols, cw, ch, orient = grid(areas)
     for i, a in enumerate(areas):
         cx = M + (i % cols) * (cw + G); cy = TOP + (i // cols) * (ch + G)     # top-left coords
@@ -322,15 +398,18 @@ def screens_page(c, f):
         r = pymupdf.Rect(a['rect']); off = local_offset(p, a['rect'])
         y0 = cy + TB + 4; hh = ch - TB - 4
         if orient[i]:
-            ph_ = (hh - G) / 2
-            boxes = [(cx, y0, cw, ph_), (cx, y0 + ph_ + G, cw, ph_)]
+            ph_ = (hh - 2 * G) / 3
+            boxes = [(cx, y0 + j * (ph_ + G), cw, ph_) for j in range(3)]
         else:
-            pw_ = (cw - G) / 2
-            boxes = [(cx, y0, pw_, hh), (cx + pw_ + G, y0, pw_, hh)]
+            pw_ = (cw - 2 * G) / 3
+            boxes = [(cx + j * (pw_ + G), y0, pw_, hh) for j in range(3)]
+        labels = [('BEFORE - Add. 1', GRAY), ('AFTER - Bull. 3', GRAY), ('OVERLAY', NAVY)]
         for j, (bx, by, bw, bh) in enumerate(boxes):
-            lab = 'BEFORE - Addendum 1 (installed)' if j == 0 else 'AFTER - Bulletin 3'
-            inner = fit(r, panel(c, bx, PH - by - bh, bw, bh, lab, GRAY if j == 0 else NAVY))
-            vector_jobs.append((page_no[0], inner, A if j == 0 else B, p, r if j == 0 else b_clip(p, r, off)))
+            inner = fit(r, panel(c, bx, PH - by - bh, bw, bh, *labels[j]))
+            if j < 2:
+                vector_jobs.append((page_no[0], inner, A if j == 0 else B, p, r if j == 0 else b_clip(p, r, off)))
+            else:
+                c.drawImage(ImageReader(overlay_png(p, a['rect'], 220, off)), inner.x0, PH - inner.y1, inner.width, inner.height)
     footer(c); c.showPage()
 
 
@@ -338,11 +417,7 @@ def screens_page(c, f):
 def key_plan(c, f, x, ytop, w, hmax):
     d = FLOORS[f]; p = d['page']; key = d['key']
     r = fit(key, pymupdf.Rect(x, PH - ytop, x + w, PH - ytop + hmax))
-    z = r.width / (key[2] - key[0]) * 150 / 72
-    g = render(B, p, b_clip(p, key, (0, 0)), z, XF[str(p)][0][0], XF[str(p)][1][0])
-    g = (255 - (255 - g.astype(np.int16)) * 0.55).astype(np.uint8)          # lighten the plan under the boxes
-    buf = io.BytesIO(); Image.fromarray(g).save(buf, 'PNG', optimize=True); buf.seek(0)
-    c.drawImage(ImageReader(buf), r.x0, PH - r.y1, r.width, r.height)
+    c.drawImage(ImageReader(overlay_tiled(p, key, 110)), r.x0, PH - r.y1, r.width, r.height)
     c.setStrokeColor(colors.black); c.setLineWidth(0.6); c.rect(r.x0, PH - r.y1, r.width, r.height)
     s = r.width / (key[2] - key[0])
     for a in floor_areas(f):
@@ -382,8 +457,9 @@ def scope_page(c, f):
                                            ('FONT', (0, -1), (-1, -1), 'LSB', 9.5),('VALIGN', (0, 1), (-1, -1), 'TOP'), ('VALIGN', (0, -2), (-1, -1), 'MIDDLE'),
                                            ('FONT', (-1, 1), (-1, -1), 'LSB', 9.5)])
     x = M + sum(tw) + 20; w = PW - M - x; y = PH - TOP
-    y -= para(c, 'Key plan - Bulletin 3', sth, x, y, w) + 3
-    y -= key_plan(c, f, x, y, w, 430) + 14
+    y -= para(c, 'Key plan - Addendum 1 / Bulletin 3 overlay', sth, x, y, w) + 3
+    y -= key_plan(c, f, x, y, w, 400) + 12
+    legend(c, x + 4, y - 2); y -= 46
     y -= para(c, 'COP-SF-05 summary', sth, x, y, w) + 3
     rows = [['Floor', 'Total']] + [[f'{ordn(g)} floor ({FLOORS[g]["sheet"]})', money(floor_total(g))] for g in FLOORS]
     rows.append(['COP-SF-05 total', money(COP_TOTAL)])
