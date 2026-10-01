@@ -84,7 +84,11 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
 
 - Rev 0 10/01/2026 built in `VE Log/` from GMP drawing quantities (no 3112 breakdown): recommended package
   VE-1,2,3,4,5,6,9,14 = -$1,471,500 budget; VE-11 (BMS) and VE-12 (VAV zoning) TBD. Details in
-  `VE Log/VE Log Record.md`. Not sent to Callahan yet; waiting on Ruslan's review.
+  `VE Log/VE Log Record.md`. Internal; not sent.
+- 10/01/2026 Ruslan: customer report without prices, with drawing screenshots, pool / spa / sauna excluded (by
+  others) -> `VE Proposals/VE Proposals - Sunrise Rye Brook.pdf` (VE-01..VE-09). Not sent yet.
+- Found in review: AL unit plans (M2107-M2110) show DOAS return grille RG-2 in some unit types, while floor plans
+  connect the return trunk to only a few rooms (clarify with IMEG).
 
 ## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (reviewed 10/01/2026)
 
