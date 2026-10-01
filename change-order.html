@@ -8,23 +8,23 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=340"></script>
-<script src="auth.js?v=340"></script>
-<script src="labor-rates.js?v=340"></script>
-<script src="cloud-save.js?v=340"></script>
+<script src="supabase-config.js?v=346"></script>
+<script src="auth.js?v=346"></script>
+<script src="labor-rates.js?v=346"></script>
+<script src="cloud-save.js?v=346"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=340"></script>
-<script src="edit-utils.js?v=340"></script>
-<script src="project-utils.js?v=340"></script>
-<script src="customer-utils.js?v=340"></script>
+<script src="draft-utils.js?v=346"></script>
+<script src="edit-utils.js?v=346"></script>
+<script src="project-utils.js?v=346"></script>
+<script src="customer-utils.js?v=346"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=340"></script>
-<script src="ai-summary.js?v=340"></script>
-<script src="ai-chat.js?v=340"></script>
+<script src="email-utils.js?v=346"></script>
+<script src="ai-summary.js?v=346"></script>
+<script src="ai-chat.js?v=346"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=340"></script>
+<script src="pdf-utils.js?v=346"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -1209,8 +1209,7 @@ async function confirmSendEmail(){
     emailjs.init(EMAIL_CONFIG.EMAILJS_PUBLIC_KEY);
 
     // Build recipients — use editable To field + optional CC
-    var toEmails=document.getElementById('emailTo').value.trim() || EMAIL_CONFIG.MANAGEMENT_EMAILS.join(', ');
-    if(ccEmail) toEmails+=', '+ccEmail;
+    var toEmails=nwEmailList(document.getElementById('emailTo').value, ccEmail) || EMAIL_CONFIG.MANAGEMENT_EMAILS.join(', ');
 
     const fullBody=bodyText+'\n\n--- PDF Report ---\nDownload: '+driveResult.downloadUrl+'\nView: '+driveResult.viewUrl+'\n\n-- Northern Wolves Air Conditioning';
 
@@ -1330,9 +1329,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=340"></script>
-<script src="nw-drive.js?v=340"></script>
-<script src="nw-form-kit.js?v=340"></script>
-<script src="sw-register.js?v=340"></script>
+<script src="form-utils.js?v=346"></script>
+<script src="nw-drive.js?v=346"></script>
+<script src="nw-form-kit.js?v=346"></script>
+<script src="sw-register.js?v=346"></script>
 </body>
 </html>

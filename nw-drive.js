@@ -8,7 +8,11 @@ window.NWDrive = {
   },
   request: async function(body) {
     body = Object.assign({}, body, { token: await NWDrive.token() });
-    var resp = await fetch(NW_DRIVE_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    // the Apps Script can stall: give up after 2 minutes instead of leaving the screen spinning
+    var ctrl = new AbortController(), timer = setTimeout(function() { ctrl.abort(); }, 120000), resp;
+    try { resp = await fetch(NW_DRIVE_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), signal: ctrl.signal }); }
+    catch (e) { throw new Error(e && e.name === 'AbortError' ? 'Google Drive did not answer within 2 minutes — try again' : e.message); }
+    finally { clearTimeout(timer); }
     var j = await resp.json();
     if (j && j.success === false) throw new Error(j.error || 'Drive error');
     if (j && j.ok === false) throw new Error('Drive proxy is not deployed (' + (j.error || j.skipped || 'wrong script') + ')');

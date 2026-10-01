@@ -27,6 +27,17 @@ const EMAIL_CONFIG = {
   ]
 };
 
+// Recipient lists: people type 'a@x.com b@y.com', 'a@x.com; b@y.com' or one per line — EmailJS / Gmail only accept commas.
+// nwEmailList('a@x.com b@y.com', 'c@z.com') -> 'a@x.com, b@y.com, c@z.com' (de-duplicated, anything without an @ dropped)
+function nwEmailList() {
+  var seen = {}, out = [];
+  Array.prototype.slice.call(arguments).join(',').split(/[\s,;]+/).forEach(function(e) {
+    e = e.replace(/^[<"']+|[>"']+$/g, '');
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !seen[e.toLowerCase()]) { seen[e.toLowerCase()] = 1; out.push(e); }
+  });
+  return out.join(', ');
+}
+
 // ========== EMAIL PREVIEW MODAL ==========
 
 var _emailPreviewResolve = null;
@@ -194,11 +205,18 @@ async function uploadToGoogleDrive(pdfDoc, filename) {
 
   console.log('Uploading PDF to Google Drive...', filename);
 
-  const response = await fetch(EMAIL_CONFIG.APPS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({ filename: filename, base64: base64 }),
-    headers: { 'Content-Type': 'text/plain' }
-  });
+  var ctrl = new AbortController(), timer = setTimeout(function() { ctrl.abort(); }, 120000);
+  let response;
+  try {
+    response = await fetch(EMAIL_CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ filename: filename, base64: base64 }),
+      headers: { 'Content-Type': 'text/plain' },
+      signal: ctrl.signal
+    });
+  } catch (e) {
+    throw new Error(e && e.name === 'AbortError' ? 'Drive upload timed out after 2 minutes — try again' : e.message);
+  } finally { clearTimeout(timer); }
 
   // Apps Script redirects, so we follow it and parse the JSON
   const text = await response.text();
@@ -272,10 +290,7 @@ async function sendReportToManagement({ reportType, subject, bodyText, customerN
       + '\n\n-- Northern Wolves Air Conditioning';
 
     // Build recipient list (To + CC)
-    var toEmails = finalParams.toEmails || EMAIL_CONFIG.MANAGEMENT_EMAILS.join(', ');
-    if (finalParams.ccEmails) {
-      toEmails += ', ' + finalParams.ccEmails;
-    }
+    var toEmails = nwEmailList(finalParams.toEmails, finalParams.ccEmails) || EMAIL_CONFIG.MANAGEMENT_EMAILS.join(', ');
 
     await emailjs.send(EMAIL_CONFIG.EMAILJS_SERVICE_ID, EMAIL_CONFIG.EMAILJS_TEMPLATE_ID, {
       to_emails:     toEmails,
