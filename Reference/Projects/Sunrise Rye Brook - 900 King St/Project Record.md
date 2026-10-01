@@ -12,12 +12,43 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   basement to roof, combustion air areaway.
 - 160 F HW loads: 47 VAV hydronic reheat (all on 1st floor: IL 33 boxes 502 MBH, AL 14 boxes 127 MBH, total 629 MBH,
   45 GPM); 12 HW cabinet heaters CH-1..12 (234 MBH) at doorways; HX-1 pool 500 MBH; HX-2 spa 245 MBH.
-- HX-3 826 MBH to 30% PG glycol: P-1/P-2 (160 F) to 17 garage ceiling FCUs (FCU-1..17; schedule "FCU-A qty 20" with
-  no data) and RAD-1/2; P-3/P-4 (120 F) to north and south garage ramp in-slab snow melt.
+- HX-3 826 MBH to 30% PG glycol: P-1/P-2 (160 F) to FCU-1..17 and RAD-1/2; P-3/P-4 (120 F) to north and south garage
+  ramp in-slab snow melt. M5000 labels FCU-1..17 "garage ceiling fan coil units", but the plans (M2000/M2002) put them
+  in basement back-of-house rooms, not the open garage (see "Basement FCUs" below).
 - RTU-1..5 Trane, gas heat (common areas, VAV); DOAS-1..7 Trane Horizon heat pump with energy wheel (residences);
   IL units mini-split (HP/AC), AL units PTAC; DH-1 Seresco 6-ton pool dehumidifier; sauna has no hydronic connection.
 - Design gaps: garage/cellar piping plan M2001 shows no glycol piping; FCU schedule blank; PP-1/2 blank; RTU-5 heating
   output 864 MBH > 600 MBH input; plant 5,700 MBH vs ~2,430 MBH connected (2.3x, still 1.6x with one boiler standby).
+
+## Basement FCUs (reviewed 10/01/2026, M2000 IL / M2002 AL basement)
+
+- Schedule M6000: FCU-A, qty 20, service "BASEMENT HEATING", horizontal, hydronic heating coil only, no cooling, all
+  data zero. M5000 riser shows 17 (FCU-1..17); plans show ~12 hydronic FCUs plus 2 DX-FCUs. Counts disagree (RFI).
+- Rooms with hydronic FCU: IL - Pool Equip B110 ("FCU to serve pool equipment room"), Res Storage B107, Trash
+  Collection B106 (FCU-A). AL - Electrical B123, Central Laundry B121, Mechanical/boiler B118 area, Team Member Lounge
+  B119A, Corridor B100, Res Storage B115, Kitchen Storage B113, 2 rooms at south end (off DOAS-4 branch).
+  DX-FCU (not hydronic): AL Trash Hold area and room north of AL elevators.
+- How they work: each FCU inlet is ducted from a small DOAS branch (10x10 DOAS-2, 12x8 / 10x6 DOAS-3, 10x8 DOAS-4) plus
+  a ceiling return grille ("provide return grille in ceiling, typ all rooms with FCUs"), ducted to room diffusers.
+  So the FCU is a booster fan + reheat for the DOAS ventilation air and recirculates the room. DOAS (Trane Horizon,
+  3,500 CFM each) serve the residences; the basement only gets small taps, not enough air to heat a room by itself.
+- No hydronic or glycol piping to these FCUs is drawn on M2001/M2003 (design gap).
+- Equipment rooms get no cooling or ventilation: FCUs are heating-only; no exhaust/transfer fan scheduled for
+  Electrical B111/B120/B123, MDF B116, Mechanical B112/B118 or Central Laundry (dryer exhaust only). Pool storage
+  exhaust GX-4 blank, GX-7 300 CFM; trash exhaust GX-6 blank (400 CFM on plan).
+- Ruslan's view (10/01): utility rooms do not need zone control or an FCU each; equipment rooms may need cooling, not
+  heat, even in winter.
+- VE-3 proposal (replaces the "garage FCU" wording): delete all 20 hydronic FCUs; run DOAS branches straight to
+  diffusers (DOAS heat pump LAT 84.6 F at design is tempered air already). Heat only where needed:
+  electric unit/wall heaters with integral stat in Trash Collection B106, Trash Hold, rooms at areaways/louvers and
+  outside walls (freeze protection); occupied rooms (Team Member Lounge, corridor) get an electric duct heater or a
+  ductless heat pump. No heat in Electrical, MDF, Mechanical, Pool Equip, Laundry, storage (internal gains, below
+  grade, ventilated with tempered DOAS air). Fan-powered boxes with electric heat would also work but cost more than
+  needed for rooms without zoning requirements.
+- Cooling/ventilation adds to raise by RFI: thermostatic exhaust/transfer fan or ductless AC for Main Electrical and
+  electrical rooms (transformer losses), MDF (ductless AC, 24/7), Central Laundry (dryer heat, make-up air), Pool
+  Equip (dedicated exhaust for chemical storage per pool designer, no recirculation through an FCU; corrosion).
+  These are adds against VE-3 deduct.
 
 ## VE review 10/01/2026 (client asked for all VE options, all-electric/gas, no hydronic)
 
@@ -33,8 +64,10 @@ Details:
   valves, balancing, insulation, flushing. Interior zones possibly cooling-only (RTUs already deliver gas-heated air) -
   only IMEG can identify. Check VAV minimums / energy code.
 - VE-2: 12 HW cabinet heaters -> electric ceiling cabinet heaters with integral stats (~70 kW), no BMS points.
-- VE-3: garage 17 FCUs + RAD-1/2 + 160 F glycol loop + P-1/P-2: delete (unheated underground garage, FP to confirm
-  dry-pipe or antifreeze sprinklers) or electric unit heaters only at ramp entries / intake louvers (30-120 kW).
+- VE-3: basement FCUs (FCU-A x20 / FCU-1..17) + RAD-1/2 + 160 F glycol loop + P-1/P-2: delete; DOAS branches straight
+  to diffusers; electric unit/wall heaters only in trash rooms, rooms at areaways/louvers and occupied BOH rooms; add
+  ventilation/cooling for electrical, MDF, laundry, pool equipment (see "Basement FCUs"). Garage itself unheated (FP
+  to confirm dry-pipe or antifreeze sprinklers at ramp entries).
 - VE-4: ramp snow melt: delete (trench drains, salting - owner call), electric cable by EC (~240 kW, storm-only,
   load-shed), or small standalone gas snow-melt boiler (removes long glycol mains).
 - VE-5: pool/spa: dedicated condensing gas pool (~600 MBH in) and spa (~300 MBH in) heaters, sidewall/areaway vent;
@@ -60,7 +93,7 @@ sprinklers; pool designer for heater scope.
 |---|---|---|
 | VE-1 | VAV reheat hydronic -> electric SCR coils (or delete on interior zones) | ~185 kW |
 | VE-2 | Cabinet heaters -> electric | ~70 kW |
-| VE-3 | Garage FCUs: delete heat (FP to confirm dry/antifreeze sprinkler) or electric unit heaters at ramp/entries | 0 to ~120 kW |
+| VE-3 | Basement FCUs: delete; DOAS direct to diffusers; electric heaters only in trash/freeze-risk/occupied rooms; add exhaust/AC to electrical, MDF, laundry, pool equip | ~30-60 kW |
 | VE-4 | Ramp snow melt: delete, electric cable by EC, or standalone gas snow-melt boiler | 0 / ~240 kW / 0 |
 | VE-5 | Pool + spa: dedicated gas pool and spa heaters (or by pool contractor) + Seresco pool-water heat recovery | ~0 |
 | VE-6 | Delete boiler plant, HW/glycol piping, HX-1/2/3, pumps, flues/chimney, combustion air, water treatment | - |
