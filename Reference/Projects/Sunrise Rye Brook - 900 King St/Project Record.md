@@ -50,6 +50,36 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   Equip (dedicated exhaust for chemical storage per pool designer, no recirculation through an FCU; corrosion).
   These are adds against VE-3 deduct.
 
+## DOAS distribution and fire/smoke dampers (reviewed 10/01/2026, M2020-M2043, unit plans M2100-M2110)
+
+- DOAS on roof, vertical supply/return risers in chases at stair cores (e.g. M2023 keynotes 2/3: 26x18 DOAS-5 supply,
+  24x18 return, up/down w/ FSD). Horizontal distribution in corridor ceilings (only continuous ceiling path to every
+  unit): parallel supply + return trunks (28x10 / 30x10 near riser, 24x8 further out).
+- Supply: one small branch to every unit (6x4 to 8x6 typ). IL units: DOAS air ducted into the return plenum of the
+  ducted mini-split indoor unit (M2102 keynote 6, 30" RA plenum). AL units: DOAS air direct to the room (PTACs).
+- Return: only a few branches, from corridor and common/back-of-house rooms (housekeeping, offices, med storage, etc.).
+  Unit air does NOT return to the DOAS: each unit bathroom has its own exhaust fan TX-A (75 CFM) ducted out the
+  exterior wall. So the corridor-long return trunk only collects a handful of grilles, and the DOAS energy wheel
+  only recovers heat from corridor/common air.
+- FSD count: about 360 FSD tags across the plan sheets (AL and IL), 0 plain FDs. AL note M2023: "provide fire/smoke
+  damper at all DOAS supply/return penetrations through demising walls (typ all AL units)"; IL plans show the same at
+  unit branches ("DOAS connections to units typ").
+- Code view (to confirm with IMEG/HKS code analysis; permit filed 12/23/25 under the NYS Uniform Code, IBC-based,
+  confirm edition): corridor walls and unit separations are fire partitions. IBC 717.5.4 exception allows NO damper
+  where the duct is <=100 sq in, min 26 ga steel, no openings into the corridor, above the ceiling, not ending at a
+  register in the rated wall, with a 12" long 0.060" steel sleeve. 6x4 / 8x4 / 8x6 unit branches qualify on size.
+  Smoke dampers are required at smoke barriers (AL is Group I-1, smoke compartments) and at shafts unless an
+  exception applies, not at every unit wall in an R-2 (IL) building. FSDs also need 120 V power, fire alarm
+  interface, access doors in finished ceilings and periodic testing.
+- VE-9 (proposed): FSDs only where code needs them (shafts, smoke barriers, rated assemblies with no exception);
+  unit branches by small-duct exception (no damper) or FD only. IL first (R-2), AL subject to occupancy / DOH /
+  NFPA 101 check. Big count (~360) -> large deduct; EC/FA deduct for damper power and FA modules too.
+- VE-10 (proposed, discuss): shorten DOAS return; corridor return grilles near riser only; housekeeping/janitor/
+  toilet rooms exhaust with corridor makeup (IBC 1020 exception), other rooms ducted only where needed. Corridors
+  cannot be used as a return plenum and transfer openings in rated corridor walls are not allowed, so rooms that must
+  return need their own duct. Alternate (energy, not cost): tie unit TX-A bath exhaust into DOAS exhaust so the
+  wheel recovers it; deletes ~280 wall caps/fans but adds risers and dampers.
+
 ## VE review 10/01/2026 (client asked for all VE options, all-electric/gas, no hydronic)
 
 Client (via Callahan) wants all possible VE options; Ruslan's view: boilers + hydronic VAV reheat + hydronic FCUs/
@@ -99,3 +129,5 @@ sprinklers; pool designer for heater scope.
 | VE-6 | Delete boiler plant, HW/glycol piping, HX-1/2/3, pumps, flues/chimney, combustion air, water treatment | - |
 | VE-7 | Controls: Trane packaged controls (Tracer Concierge / SC+) for RTU+VAV+DOAS, standalone heaters; cut ABM BMS | - |
 | VE-8 | Full VRF heat recovery for common areas - not recommended (cost, large spaces, A2L limits, redesign) | n/a |
+| VE-9 | FSDs only where code requires; unit branches by IBC 717.5.4 small-duct exception or FD (about 360 FSDs drawn) | - |
+| VE-10 | Shorten DOAS corridor return (corridor grilles at riser, exhaust small rooms with corridor makeup) | - |
