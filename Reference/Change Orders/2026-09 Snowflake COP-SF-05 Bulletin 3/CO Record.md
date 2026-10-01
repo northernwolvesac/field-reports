@@ -43,7 +43,7 @@
   only, blue Bulletin 3 only); the key plan on the scope page is the full-floor color overlay with legend.
   Build takes about 2 minutes (the tiled floor overlay).
 
-## Rev 4 - 10/01/2026 (Ruslan markup of rev 3, pages 2, 4, 6) - IN PROGRESS
+## Rev 4 - 10/01/2026 (Ruslan markups of rev 3, pages 2, 4, 6)
 - Markup file came back from Acrobat Fill & Sign partly damaged: page contents lost on pp. 2 and 4, only the red
   strike lines and the page 6 typed notes survived.
 - 31st floor applied, total $17,030 (was $19,080): transfers changed to wall openings with transfer grilles.
@@ -53,7 +53,12 @@
   material $600, (2) 48x24 transfer grilles instead of TD 48x24).
 - 30th floor text deletions applied (30-1 work "linear diffuser with plenum, relocate G(400) diffusers";
   30-3 "FPB-HW-B (300) with supply connections", "44x20 transfer duct relocated").
-- Struck numbers with no surviving replacement (asked Ruslan): 29-2 removal $875, install $6,250, total $11,025;
-  29-3 install $1,500, total $2,500; 30-1 removal $750, material $2,200, install $3,750; 30-2 install $3,250;
-  30-3 removal $2,000, install $3,000.
-- COP total now the sum of the floors ($64,730 with 29th / 30th unchanged), no longer forced to $66,780.
+- Second markup (v2) for 29th / 30th:
+  29-1 $13,875 (material $4,875, "reconnect terminal units" deleted); 29-2 $13,225 (removal 16 MH $2,000,
+  material $4,975, "reconnect branch takeoffs" deleted); 29-3 $1,500 (material $500, install 6 MH). 29th stays $29,600.
+  30-1 $10,300 (removal 8 MH, material $4,300, install 40 MH, F/I (2) 40x20 wall transfer grilles);
+  30-2 $4,900 (material $2,400, install 20 MH, 1" AL, (2) 48x24 transfer return grilles);
+  30-3 $3,950 (removal 12 MH, material $200, install 18 MH, FSD with angles). 30th $20,150 (back to the
+  original per-floor split).
+- Totals: 29th $29,600, 30th $20,150, 31st $17,030 = $66,780, equal to COP-SF-05 as submitted.
+- Overlay legend in the screenshot page headers now drawn with colored line samples (Ruslan boxed it on p.1).

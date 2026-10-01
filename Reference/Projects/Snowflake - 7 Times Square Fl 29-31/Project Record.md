@@ -83,5 +83,5 @@ not taken down - still in the breakdown; Bunker asked (09/29) for a revised CO f
 Ruslan / Alikhan promised Samuel the breakdown by afternoon 09/30.
 Rev 3 09/30: PDF condensed to 6 pages (per floor: before/after/color overlay page + scope and cost page with
 overlay key plan), amounts unchanged.
-Rev 4 10/01 in progress: 31st floor per Ruslan markup $17,030 (transfer grilles in wall openings); waiting on
-Ruslan for the 29th / 30th replacement numbers lost from the markup file (see CO Record).
+Rev 4 10/01 per Ruslan markups: 29th $29,600, 30th $20,150, 31st $17,030 = $66,780 (same as COP-SF-05).
+29-2 now $13,225. Ready to send to Samuel.

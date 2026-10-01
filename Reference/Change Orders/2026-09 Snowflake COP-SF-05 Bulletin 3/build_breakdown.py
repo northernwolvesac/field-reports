@@ -13,7 +13,7 @@ Costs are the COP-SF-05 line items spread over the change areas; floor totals ma
 breakdown already sent to Structure Tone (29 = $29,600, 30 = $20,150, 31 = $17,030).
 Rev 1 (09/30): area amounts adjusted per Ruslan's markup; 29th floor and COP total unchanged,
 30th = $18,100, 31st = $19,080. Category totals no longer follow the COP-SF-05 line split.
-Rev 4 (10/01): 31st floor per Ruslan markup, $17,030.
+Rev 4 (10/01): area amounts per Ruslan markups; 29th $29,600, 30th $20,150, 31st $17,030, total $66,780.
 Rev 3 (09/30): condensed from 16 pages (cover, floor overlays, one page per area) to 6 pages.
 """
 import io, json, os
@@ -39,7 +39,7 @@ OUT = os.path.join(HERE, 'COP-SF-05 Bulletin 3 - Detailed Breakdown')
 RATE = 125
 DATE = '10/01/2026'
 FLOORS = {29: dict(page=0, sheet='M-529.00', total=29600, key=(500, 110, 1790, 1900)),
-          30: dict(page=1, sheet='M-530.00', total=18100, key=(500, 110, 1790, 1900)),
+          30: dict(page=1, sheet='M-530.00', total=20150, key=(500, 110, 1790, 1900)),
           31: dict(page=2, sheet='M-531.00', total=17030, key=(500, 110, 1790, 1900))}
 DRAFTING = {29: 1000, 30: 1000, 31: 1000}
 
@@ -53,15 +53,14 @@ AREAS = [
          after='Main rerouted as 22x10 and 30x10 through (2) existing beam cuts, 30x10 aligned with the beam running '
                'plan northeast. New 14ø branch to FPB-HW-D, 10ø to FPB-HW-B and 6ø to FPB-B.',
          work='Disconnect and remove installed 46x16 section and branch connections. Fabricate and install 22x10 / '
-              '30x10 duct and round branches with insulation, reconnect terminal units.',
-         demo=12, mat=6075, inst=60, omat=0, omh=0),
+              '30x10 duct and round branches with insulation.',
+         demo=12, mat=4875, inst=60, omat=0, omh=0),
     dict(id='29-2', floor=29, rect=(1120, 470, 1360, 905),
          title='Supply main resized 56x16 to 42x12',
          before='56x16 supply main, approx. 44 LF, top el. 11\'-1" / bottom el. 9\'-9", Break Rm 29.57 to P.E.',
          after='Main resized to 42x12 on the same route, top el. 11\'-1" / bottom el. 10\'-1".',
-         work='Disconnect and remove installed 56x16 main. Fabricate and install 42x12 main with insulation, '
-              'reconnect branch takeoffs (FPB-HW-E, FPB-B (260)).',
-         demo=7, mat=3900, inst=50, omat=0, omh=0),
+         work='Disconnect and remove installed 56x16 main. Fabricate and install 42x12 main with insulation.',
+         demo=16, mat=4975, inst=50, omat=0, omh=0),
     dict(id='29-3', floor=29, rect=(1250, 490, 1480, 640),
          title='FPB-HW-E (1400) relocation and discharge reroute',
          before='FPB-HW-E (1400) with inlet and 30x10 discharge to the G(400) / G(200) linear diffusers along the '
@@ -69,32 +68,32 @@ AREAS = [
          after='FPB-HW-E relocated; inlet connection and 30x10 discharge elbow rerouted.',
          work='Disconnect inlet and discharge, relocate and rehang FPB-HW-E, fabricate and install new inlet and '
               '30x10 discharge fittings, reconnect.',
-         demo=2, mat=750, inst=12, omat=0, omh=0),
+         demo=2, mat=500, inst=6, omat=0, omh=0),
 
     dict(id='30-1', floor=30, rect=(520, 1095, 700, 1620),
          title='IT Build Rm 30.23 / F&B Storage 30.14 / west dining',
          before='12x10 branch with (2) C(220) ceiling diffusers; G(400) linear diffuser run on 16x12 branch.',
          after='12x10 branch and (2) C(220) deleted, replaced with 10ø branch to (1) new G(440) linear diffuser. New '
-               '40x20 transfer duct at F&B Storage 30.14. G(400) linear diffusers relocated along the 16x12 branch.',
+               '40x20 transfer duct at F&B Storage 30.14. G(400) diffusers relocated along the 16x12 branch.',
          work='Disconnect and remove 12x10 branch and (2) C(220). Install 10ø branch, 40x20 transfer duct, rework '
-              '16x12 branch. F&I G(440).',
-         demo=6, mat=1700, inst=30, omat=500, omh=0,
+              '16x12 branch. F&I G(440). F/I (2) 40x20 wall transfer grilles.',
+         demo=8, mat=3800, inst=40, omat=500, omh=0,
          inst_label='Installation of ductwork (labor)'),
     dict(id='30-2', floor=30, rect=(1245, 750, 1540, 1085),
          title='Lounge 30.02 - new transfer ducts',
          before='No transfer ducts at Lounge 30.02 walls.',
-         after='(2) new 48x24 transfer ducts.',
-         work='Fabricate and install (2) 48x24 lined transfer ducts.',
-         demo=0, mat=2150, inst=26, omat=0, omh=0),
+         after='(2) new 48x24 transfer ducts with 1" AL.',
+         work='Fabricate and install (2) 48x24 lined transfer ducts and (2) 48x24 transfer return grilles.',
+         demo=0, mat=2400, inst=20, omat=0, omh=0),
     dict(id='30-3', floor=30, rect=(1255, 1100, 1640, 1490),
          title='Meeting Rms 30.04 / 30.05, Storage 30.09, Vestibule 30.07',
          before='44x20 transfer duct; (2) 12x12 grilles; 12ø branch to '
                 'FPB-HW-D (1200).',
          after='(2) 12x12 grilles relocated to 5P / 7P '
                'Meeting; 12ø branch rerouted.',
-         work='Disconnect and remove affected duct, fittings and grilles. Install 44x20 transfer '
-              'duct and 12ø branch at new locations.',
-         demo=16, mat=0, inst=24, omat=0, omh=0),
+         work='Disconnect and remove affected duct, FSD, fittings. Install 44x20 duct, FSD with angles, '
+              'and 12ø branch at new locations.',
+         demo=12, mat=200, inst=18, omat=0, omh=0),
 
     dict(id='31-1', floor=31, rect=(500, 400, 700, 540),
          title='Zoom rooms, northwest - transfers',
@@ -143,7 +142,7 @@ COP_LINES = [('Labor for demolition work (40 MH @ $125)', 5000),
              ('Cost of air outlets', 3600),
              ('Labor for installation of air outlets (16 MH @ $125)', 2000),
              ('Drafting fees (shop drawings for revised design)', 3000)]
-COP_TOTAL = sum(d['total'] for d in FLOORS.values())   # 66,780 as submitted; rev 4 31st floor markup
+COP_TOTAL = 66780
 
 
 def amounts(a):
@@ -387,8 +386,15 @@ def grid(areas):
 def screens_page(c, f):
     d = FLOORS[f]; p = d['page']; areas = floor_areas(f)
     header(c, f'{ordn(f)} Floor - {d["sheet"]}: Change Areas, Before and After',
-           f'Before = Addendum 1 (installed)   After = Bulletin 3 (rev 4, 08/10/2026)   |   Overlay: gray = unchanged, '
-           f'red = Addendum 1 only (installed, removed), blue = Bulletin 3 only (new)')
+           'Before = Addendum 1 (installed)   After = Bulletin 3 (rev 4, 08/10/2026)   |   Overlay:')
+    x = M + pdfmetrics.stringWidth('Before = Addendum 1 (installed)   After = Bulletin 3 (rev 4, 08/10/2026)   |   Overlay:',
+                                   'LS', 10) + 10
+    c.setFont('LSB', 10)
+    for col, txt in [(colors.HexColor('#C8C8C8'), 'Unchanged'), (colors.HexColor('#FF4A4A'), 'Addendum 1 only - removed'),
+                     (colors.HexColor('#6FA0FF'), 'Bulletin 3 only - new')]:
+        c.setStrokeColor(col); c.setLineWidth(3.5); c.line(x, PH - 38.5, x + 20, PH - 38.5)
+        c.setFillColor(col); c.drawString(x + 25, PH - 42, txt); x += 25 + pdfmetrics.stringWidth(txt, 'LSB', 10) + 16
+    c.setLineWidth(1)
     cols, cw, ch, orient = grid(areas)
     for i, a in enumerate(areas):
         cx = M + (i % cols) * (cw + G); cy = TOP + (i // cols) * (ch + G)     # top-left coords
