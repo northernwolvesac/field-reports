@@ -83,5 +83,6 @@ not taken down - still in the breakdown; Bunker asked (09/29) for a revised CO f
 Ruslan / Alikhan promised Samuel the breakdown by afternoon 09/30.
 Rev 3 09/30: PDF condensed to 6 pages (per floor: before/after/color overlay page + scope and cost page with
 overlay key plan), amounts unchanged.
-Rev 4 10/01 per Ruslan markups: 29th $29,600, 30th $20,150, 31st $17,030 = $66,780 (same as COP-SF-05).
-29-2 now $13,225. Ready to send to Samuel.
+Rev 4 10/01 per Ruslan markups: 29th $29,600, 30th $20,150, 31st $17,030 = $66,780.
+Rev 5 10/01: area 29-2 excluded - per Bulletin 3 the 56x16 main stays as installed (matches Structure Tone's field
+report). Revised total $53,555 (29th $16,375, 30th $20,150, 31st $17,030). Ready to send to Samuel.

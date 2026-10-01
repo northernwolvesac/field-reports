@@ -13,6 +13,7 @@ Costs are the COP-SF-05 line items spread over the change areas; floor totals ma
 breakdown already sent to Structure Tone (29 = $29,600, 30 = $20,150, 31 = $17,030).
 Rev 1 (09/30): area amounts adjusted per Ruslan's markup; 29th floor and COP total unchanged,
 30th = $18,100, 31st = $19,080. Category totals no longer follow the COP-SF-05 line split.
+Rev 5 (10/01): area 29-2 excluded (56x16 main stays as installed per Bulletin 3); total $53,555.
 Rev 4 (10/01): area amounts per Ruslan markups; 29th $29,600, 30th $20,150, 31st $17,030, total $66,780.
 Rev 3 (09/30): condensed from 16 pages (cover, floor overlays, one page per area) to 6 pages.
 """
@@ -38,7 +39,7 @@ OUT = os.path.join(HERE, 'COP-SF-05 Bulletin 3 - Detailed Breakdown')
 
 RATE = 125
 DATE = '10/01/2026'
-FLOORS = {29: dict(page=0, sheet='M-529.00', total=29600, key=(500, 110, 1790, 1900)),
+FLOORS = {29: dict(page=0, sheet='M-529.00', total=16375, key=(500, 110, 1790, 1900)),
           30: dict(page=1, sheet='M-530.00', total=20150, key=(500, 110, 1790, 1900)),
           31: dict(page=2, sheet='M-531.00', total=17030, key=(500, 110, 1790, 1900))}
 DRAFTING = {29: 1000, 30: 1000, 31: 1000}
@@ -60,7 +61,9 @@ AREAS = [
          before='56x16 supply main, approx. 44 LF, top el. 11\'-1" / bottom el. 9\'-9", Break Rm 29.57 to P.E.',
          after='Main resized to 42x12 on the same route, top el. 11\'-1" / bottom el. 10\'-1".',
          work='Disconnect and remove installed 56x16 main. Fabricate and install 42x12 main with insulation.',
-         demo=16, mat=4975, inst=50, omat=0, omh=0),
+         demo=16, mat=4975, inst=50, omat=0, omh=0, excluded=True,
+         note='Excluded - per Bulletin 3 the existing 56x16 main on the 29th floor remains as installed; '
+              'no change to this ductwork.'),
     dict(id='29-3', floor=29, rect=(1250, 490, 1480, 640),
          title='FPB-HW-E (1400) relocation and discharge reroute',
          before='FPB-HW-E (1400) with inlet and 30x10 discharge to the G(400) / G(200) linear diffusers along the '
@@ -136,13 +139,16 @@ AREAS = [
          inst_label='Relocation / installation of ductwork and air outlets (labor)'),
 ]
 
+EXCLUDED = [a for a in AREAS if a.get('excluded')]
+AREAS = [a for a in AREAS if not a.get('excluded')]
+
 COP_LINES = [('Labor for demolition work (40 MH @ $125)', 5000),
              ('Fabricated ductwork', 18180),
              ('Labor for relocation and installation of new ductwork (280 MH @ $125)', 35000),
              ('Cost of air outlets', 3600),
              ('Labor for installation of air outlets (16 MH @ $125)', 2000),
              ('Drafting fees (shop drawings for revised design)', 3000)]
-COP_TOTAL = 66780
+COP_TOTAL = 53555        # 66,780 as submitted less area 29-2 (not changed per Bulletin 3)
 
 
 def amounts(a):
@@ -455,6 +461,9 @@ def scope_page(c, f):
                f'<br/><b>Work:</b> {esc(a["work"])}')
         rows.append([Paragraph(f'<b>{a["id"]}</b>', sts), Paragraph(txt, sts), Paragraph(mh(a['demo']), str_),
                      money(am['mat'] + am['omat']), Paragraph(mh(a['inst'] + a['omh']), str_), money(area_total(a))])
+    for a in [a for a in EXCLUDED if a['floor'] == f]:
+        rows.append([Paragraph(f'<b>{a["id"]}</b>', sts),
+                     Paragraph(f'<b>{esc(a["title"])}</b><br/>{esc(a["note"])}', sts), '-', '-', '-', 'Excluded'])
     rows.append(['', 'Shop drawings for revised design', '', '', '', money(DRAFTING[f])])
     dm = sum(a['demo'] for a in areas); im = sum(a['inst'] + a['omh'] for a in areas)
     rows.append(['', f'{ordn(f)} floor total  ({dm} MH disconnect, {im} MH install)', money(floor_sum(f, 'demo')),
@@ -469,7 +478,7 @@ def scope_page(c, f):
     legend(c, x + 4, y - 2); y -= 46
     y -= para(c, 'COP-SF-05 summary', sth, x, y, w) + 3
     rows = [['Floor', 'Total']] + [[f'{ordn(g)} floor ({FLOORS[g]["sheet"]})', money(floor_total(g))] for g in FLOORS]
-    rows.append(['COP-SF-05 total', money(COP_TOTAL)])
+    rows.append(['COP-SF-05 revised total', money(COP_TOTAL)])
     y -= table(c, rows, x, y, [w - 80, 80], extra=[('BACKGROUND', (0, list(FLOORS).index(f) + 1),
                                                      (-1, list(FLOORS).index(f) + 1), colors.HexColor('#FCEBD2'))]) + 10
     para(c, 'Bulletin 3 was issued after the ductwork in these areas had been fabricated and installed per Addendum 1, '
@@ -511,13 +520,15 @@ def build_xlsx():
             ws.append([f, a['id'], a['title'], a['demo'], f'=D{row}*{RATE}', a['mat'], a['inst'], f'=G{row}*{RATE}',
                        a['omat'], a['omh'], f'=J{row}*{RATE}', 0, f'=E{row}+F{row}+H{row}+I{row}+K{row}+L{row}'])
             row += 1
+        for x in [x for x in EXCLUDED if x['floor'] == f]:
+            ws.append([f, x['id'], x['title'] + ' - ' + x['note'], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); row += 1
         ws.append([f, '', 'Shop drawings for revised design', 0, 0, 0, 0, 0, 0, 0, 0, DRAFTING[f], f'=L{row}'])
         row += 1
         ws.append([f, '', f'{ordn(f)} floor total'] + [f'=SUM({col}{start}:{col}{row - 1})' for col in 'DEFGHIJKLM'])
         for cell in ws[row]:
             cell.font = bold
         floor_rows[f] = row; row += 1
-    ws.append(['', '', 'TOTAL COP-SF-05'] + ['=' + '+'.join(f'{col}{r}' for r in floor_rows.values()) for col in 'DEFGHIJKLM'])
+    ws.append(['', '', 'TOTAL COP-SF-05 (revised)'] + ['=' + '+'.join(f'{col}{r}' for r in floor_rows.values()) for col in 'DEFGHIJKLM'])
     for cell in ws[row]:
         cell.font = bold
     for col, w in zip('ABCDEFGHIJKLM', [7, 7, 58, 11, 12, 14, 10, 12, 14, 11, 12, 12, 12]):
