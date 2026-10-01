@@ -80,27 +80,40 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   return need their own duct. Alternate (energy, not cost): tie unit TX-A bath exhaust into DOAS exhaust so the
   wheel recovers it; deletes ~280 wall caps/fans but adds risers and dampers.
 
-## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (10/01/2026)
+## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (reviewed 10/01/2026)
 
-- GC EW Howell (Tony LaMorte), our estimator Kastriot, SRS (Mark Richter) VRF quote job 2210-0138, Addendum 2 dated
-  7/6/26. Drawings are on BuildingConnected only, not in this repo or Drive, so the design has not been reviewed here.
-- From Kastriot's 07/02/26 email to EW Howell (controls list) and Ruslan's review: no boilers, no hydronics, no VAV
-  zoning in common areas, no FSD at every rated wall. Systems: Daikin VRF (103 remote controllers = ~103 indoor
-  units), 2 Addison ERUs (energy recovery, standalone ALC controls), 5 JCI RTUs (BACnet cards only), KEF-1/2, MUA-1
-  with cellular remote monitoring. No BMS, standalone controls only. Our number: ~$2.1M material + ~$1.5M labor
-  before PW.
-- Use: same owner (Sunrise) accepted a VRF/ERU/RTU, standalone-controls building, so that is a precedent for
-  Callahan / Sunrise on Rye Brook. Get the Northport M-sheets (BuildingConnected) to confirm occupancy, damper
-  approach and what serves the AL units before quoting it to the GC.
+Source: `source/reference - Sunrise Northport HVAC 100% CD 2026-04-10.pdf` (27 sheets, CJL Engineers / Kimmel Bogrette,
+GC EW Howell, our estimator Kastriot; ~$2.1M material + ~$1.5M labor before PW). 2 floors, no cellar/garage/pool.
+
+| Item | Northport (as designed) | Rye Brook (IMEG GMP) |
+|---|---|---|
+| Apartments heat/cool | Daikin VRF heat recovery, R32, ~98 ducted/cassette indoor units, 14 CUs + BS boxes | IL 126 mini-splits, AL 157 PTACs (already cheaper per unit, not a VE target) |
+| Outdoor air | 2 Addison ERUs (5,500 / 4,700 CFM, gas heat, DX, reheat to neutral 72 F) | 7 Trane DOAS heat pump + wheel |
+| Unit exhaust | Bath (35 CFM) and kitchen (80 CFM) exhaust ducted back to the ERU exhaust trunk in the corridor (heat recovered) | Each bath own fan TX-A ducted out the wall; DOAS return only from corridor/common rooms |
+| Corridor ducts | ERU supply + exhaust trunks in corridor, small branches into each unit, corridor diffusers 65 CFM | Same idea, but return trunk serves only a few rooms |
+| Dampers at unit walls | Unit supply/exhaust branches cross the corridor wall with no damper symbol (M-2.02A, M-5.02); FSD/FD/smoke damper details exist for shafts/smoke barriers only | ~360 FSDs, every unit branch |
+| Common areas | 5 small constant-volume gas/DX RTUs (1,610-3,370 CFM), single zone, + VRF cassettes in offices/small rooms | 5 large VAV RTUs (7,000-11,000 CFM) + 47 VAV with hot water reheat |
+| Kitchen | MAU-1 (2,700 CFM) with hood control panel, KEF-1/2 | RTU-4 kitchen |
+| Stairs / vestibules | Electric cabinet heaters CUH-1..4 (10 kW), electric radiant panels, electric unit heater | 12 hot water cabinet heaters |
+| MDF / IDF | Ductless split AC each (SSAC-1/2) | Nothing scheduled |
+| Heating plant | None (gas in ERU/RTU/MAU, heat pumps) | 3 boilers, HW + glycol, 3 HX, snow melt |
+| Controls | Standalone: Daikin remotes, unit controls, BACnet cards | ABM BMS |
+
+Use: same owner (Sunrise) accepted this on Northport; cite it to Callahan as precedent.
 
 ## Aggressive VE package (Northport-style), proposed 10/01/2026
 
 - VE-11 Controls: no BMS. Equipment controls only (VRF central controller / remotes, DOAS and RTU unit controls with
   BACnet card for future monitoring, standalone stats on heaters). Supersedes VE-7. ABM scope deleted.
-- VE-12 Common areas: delete the 47 VAV boxes and their reheat (makes VE-1 unnecessary). RTUs serve the large open
-  common spaces as single-zone units (dining, lobby, activity, kitchen per RTU); smaller common rooms/offices on
-  VRF heat recovery or ductless heat pumps. Revisits VE-8: VRF for the small rooms only, not for the big spaces;
+- VE-12 Common areas (Northport model): delete the 47 VAV boxes and their reheat (makes VE-1 unnecessary). Large
+  open spaces on single-zone constant-volume gas/DX RTUs (split the 5 big VAV RTUs into smaller units per space if
+  needed); offices and small rooms on VRF cassettes / ductless heat pumps. Kitchen on a dedicated MAU with hood
+  controls. Revisits VE-8: VRF for the small rooms only, not for the big spaces;
   A2L charge limits still to be checked for AL occupied rooms (Northport precedent).
+- VE-14 Unit exhaust to DOAS (Northport model): duct apartment bath/kitchen exhaust back to the DOAS exhaust trunk
+  in the corridor instead of 283 individual TX-A fans and wall caps; the corridor return trunk then has a purpose
+  and the energy wheel recovers the unit exhaust. Roughly cost-neutral on ductwork, deletes fans/wall penetrations/
+  EC circuits, better energy code compliance.
 - VE-13 Basement/BOH: VRF or ductless heat pumps (heat + cool) where a room really needs conditioning (electrical,
   MDF, lounge, laundry), electric heaters for freeze protection only; deletes the 20 FCUs and the DOAS booster taps
   (overlaps VE-3).
@@ -163,3 +176,4 @@ sprinklers; pool designer for heater scope.
 | VE-11 | No BMS: equipment/standalone controls only (Northport precedent); supersedes VE-7 | - |
 | VE-12 | Delete 47 VAV + reheat; RTUs single-zone for big common spaces, VRF/ductless for small rooms | VRF kW TBD (less than reheat) |
 | VE-13 | Basement/BOH on VRF/ductless heat pumps where needed, electric freeze heaters only; delete FCUs | ~20-40 kW |
+| VE-14 | Apartment bath/kitchen exhaust ducted to DOAS exhaust (Northport model), delete ~283 TX-A fans and wall caps | negative (fans deleted) |
