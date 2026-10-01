@@ -80,6 +80,12 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   return need their own duct. Alternate (energy, not cost): tie unit TX-A bath exhaust into DOAS exhaust so the
   wheel recovers it; deletes ~280 wall caps/fans but adds risers and dampers.
 
+## VE log
+
+- Rev 0 10/01/2026 built in `VE Log/` from GMP drawing quantities (no 3112 breakdown): recommended package
+  VE-1,2,3,4,5,6,9,14 = -$1,471,500 budget; VE-11 (BMS) and VE-12 (VAV zoning) TBD. Details in
+  `VE Log/VE Log Record.md`. Not sent to Callahan yet; waiting on Ruslan's review.
+
 ## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (reviewed 10/01/2026)
 
 Source: `source/reference - Sunrise Northport HVAC 100% CD 2026-04-10.pdf` (27 sheets, CJL Engineers / Kimmel Bogrette,
