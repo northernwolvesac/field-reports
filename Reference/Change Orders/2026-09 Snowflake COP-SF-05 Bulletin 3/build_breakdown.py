@@ -13,6 +13,7 @@ Costs are the COP-SF-05 line items spread over the change areas; floor totals ma
 breakdown already sent to Structure Tone (29 = $29,600, 30 = $20,150, 31 = $17,030).
 Rev 1 (09/30): area amounts adjusted per Ruslan's markup; 29th floor and COP total unchanged,
 30th = $18,100, 31st = $19,080. Category totals no longer follow the COP-SF-05 line split.
+Rev 4 (10/01): 31st floor per Ruslan markup, $17,030.
 Rev 3 (09/30): condensed from 16 pages (cover, floor overlays, one page per area) to 6 pages.
 """
 import io, json, os
@@ -36,10 +37,10 @@ XF = json.load(open(os.path.join(SRC, 'align.json')))   # B = s*A + t per axis, 
 OUT = os.path.join(HERE, 'COP-SF-05 Bulletin 3 - Detailed Breakdown')
 
 RATE = 125
-DATE = '09/30/2026'
+DATE = '10/01/2026'
 FLOORS = {29: dict(page=0, sheet='M-529.00', total=29600, key=(500, 110, 1790, 1900)),
           30: dict(page=1, sheet='M-530.00', total=18100, key=(500, 110, 1790, 1900)),
-          31: dict(page=2, sheet='M-531.00', total=19080, key=(500, 110, 1790, 1900))}
+          31: dict(page=2, sheet='M-531.00', total=17030, key=(500, 110, 1790, 1900))}
 DRAFTING = {29: 1000, 30: 1000, 31: 1000}
 
 # demo = disconnect/removal MH, mat = fabricated ductwork $, inst = relocation/install MH,
@@ -76,7 +77,7 @@ AREAS = [
          after='12x10 branch and (2) C(220) deleted, replaced with 10ø branch to (1) new G(440) linear diffuser. New '
                '40x20 transfer duct at F&B Storage 30.14. G(400) linear diffusers relocated along the 16x12 branch.',
          work='Disconnect and remove 12x10 branch and (2) C(220). Install 10ø branch, 40x20 transfer duct, rework '
-              '16x12 branch. F&I G(440) linear diffuser with plenum, relocate G(400) diffusers.',
+              '16x12 branch. F&I G(440).',
          demo=6, mat=1700, inst=30, omat=500, omh=0,
          inst_label='Installation of ductwork (labor)'),
     dict(id='30-2', floor=30, rect=(1245, 750, 1540, 1085),
@@ -87,51 +88,51 @@ AREAS = [
          demo=0, mat=2150, inst=26, omat=0, omh=0),
     dict(id='30-3', floor=30, rect=(1255, 1100, 1640, 1490),
          title='Meeting Rms 30.04 / 30.05, Storage 30.09, Vestibule 30.07',
-         before='FPB-HW-B (300) with supply connections; 44x20 transfer duct; (2) 12x12 grilles; 12ø branch to '
+         before='44x20 transfer duct; (2) 12x12 grilles; 12ø branch to '
                 'FPB-HW-D (1200).',
-         after='44x20 transfer duct relocated; (2) 12x12 grilles relocated to 5P / 7P '
+         after='(2) 12x12 grilles relocated to 5P / 7P '
                'Meeting; 12ø branch rerouted.',
          work='Disconnect and remove affected duct, fittings and grilles. Install 44x20 transfer '
               'duct and 12ø branch at new locations.',
          demo=16, mat=0, inst=24, omat=0, omh=0),
 
     dict(id='31-1', floor=31, rect=(500, 400, 700, 540),
-         title='Zoom rooms, northwest - transfer ducts',
-         before='(1) transfer duct (not sized on Addendum 1).',
+         title='Zoom rooms, northwest - transfers',
+         before='(1) transfer.',
          after='TD 24x12 and new TD 18x12.',
-         work='Remove existing transfer duct; fabricate and install TD 24x12 and TD 18x12.',
-         demo=1, mat=330, inst=6, omat=0, omh=0),
+         work='Mark-up the wall openings, furnish and install (4) transfer grilles.',
+         demo=0, mat=530, inst=6, omat=0, omh=0),
     dict(id='31-2', floor=31, rect=(740, 620, 910, 760),
-         title='Transfer duct TD 32x16, north',
-         before='Transfer duct as installed per Addendum 1 (not sized on Addendum 1).',
-         after='Transfer duct revised to TD 32x16.',
-         work='Remove installed transfer duct; fabricate and install TD 32x16.',
-         demo=1, mat=300, inst=5, omat=0, omh=0),
+         title='Transfer TD 32x16, north',
+         before='Smaller transfer.',
+         after='New increased size for wall transfer and (2) grilles.',
+         work='Mark-up the wall openings, furnish and install (2) transfer grilles.',
+         demo=0, mat=300, inst=4, omat=0, omh=0),
     dict(id='31-3', floor=31, rect=(1180, 515, 1375, 700),
          title='Storage 31.02 - new transfer ducts',
-         before='No transfer ducts; volume damper at FPB-HW-B (500) branch.',
+         before='No transfer ducts.',
          after='(2) new 44x22 transfer ducts.',
          work='Fabricate and install (2) 44x22 lined transfer ducts.',
-         demo=0, mat=1700, inst=20, omat=0, omh=0),
+         demo=0, mat=1700, inst=16, omat=0, omh=0),
     dict(id='31-4', floor=31, rect=(1180, 1050, 1350, 1300),
          title='Coffee Bar 31.12 - transfer ducts and main fitting',
          before='36x18 main with elbow at Coffee Bar 31.12; no transfer ducts.',
          after='(2) new TD 28x16; 36x18 main elbow reconfigured.',
          work='Disconnect and remove 36x18 elbow; fabricate and install new fitting and (2) TD 28x16.',
-         demo=6, mat=1700, inst=24, omat=0, omh=0),
+         demo=6, mat=1750, inst=26, omat=0, omh=0),
     dict(id='31-5', floor=31, rect=(740, 1090, 920, 1240),
-         title='Transfer duct TD 32x16, southwest',
-         before='Transfer duct and duct elbow as installed per Addendum 1, next to the 12x8 branch.',
-         after='Transfer duct revised to TD 32x16; elbow deleted.',
-         work='Remove installed transfer duct and elbow; fabricate and install TD 32x16.',
-         demo=4, mat=650, inst=16, omat=0, omh=0),
+         title='Transfer TD 32x16, southwest',
+         before='Transfer and duct elbow as installed per Addendum 1, next to the 12x8 branch.',
+         after='Transfer revised to TD 32x16; 12x8 offset shifted to fit transfer.',
+         work='Remove installed transfer and elbow; fabricate and install new offset, F/I (2) 32x16 transfer grilles.',
+         demo=2, mat=650, inst=8, omat=0, omh=0),
     dict(id='31-6', floor=31, rect=(1145, 1428, 1765, 1688),
          title='Storage 31.15 / Room 31.16, southeast',
          before='12x12 and 18x12 grilles at previous locations; no transfer duct at Storage 31.15.',
          after='New TD 48x24; 12x12 and 18x12 grilles relocated.',
-         work='Remove grilles and their duct connections; fabricate and install TD 48x24, relocate 12x12 and 18x12 '
-              'grilles with duct connections at new locations.',
-         demo=5, mat=900, inst=12, omat=0, omh=0,
+         work='Remove grilles and their duct connections; mark-up the wall openings, furnish and install (2) 48x24 '
+              'transfer grilles; relocate 12x12 and 18x12 grilles with duct connections at new locations.',
+         demo=4, mat=600, inst=12, omat=0, omh=0,
          mat_label='Material and air outlets',
          inst_label='Relocation / installation of ductwork and air outlets (labor)'),
 ]
@@ -142,7 +143,7 @@ COP_LINES = [('Labor for demolition work (40 MH @ $125)', 5000),
              ('Cost of air outlets', 3600),
              ('Labor for installation of air outlets (16 MH @ $125)', 2000),
              ('Drafting fees (shop drawings for revised design)', 3000)]
-COP_TOTAL = 66780
+COP_TOTAL = sum(d['total'] for d in FLOORS.values())   # 66,780 as submitted; rev 4 31st floor markup
 
 
 def amounts(a):

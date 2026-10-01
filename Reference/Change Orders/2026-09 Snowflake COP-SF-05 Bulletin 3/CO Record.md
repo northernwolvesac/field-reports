@@ -42,3 +42,18 @@
 - Overlays put back per Ruslan: each area shows before / after / color overlay (gray unchanged, red Addendum 1
   only, blue Bulletin 3 only); the key plan on the scope page is the full-floor color overlay with legend.
   Build takes about 2 minutes (the tiled floor overlay).
+
+## Rev 4 - 10/01/2026 (Ruslan markup of rev 3, pages 2, 4, 6) - IN PROGRESS
+- Markup file came back from Acrobat Fill & Sign partly damaged: page contents lost on pp. 2 and 4, only the red
+  strike lines and the page 6 typed notes survived.
+- 31st floor applied, total $17,030 (was $19,080): transfers changed to wall openings with transfer grilles.
+  31-1 $1,280 (no removal, material $530, (4) transfer grilles); 31-2 $800 (no removal, install 4 MH, (2) grilles);
+  31-3 $3,700 (install 16 MH, volume damper note deleted); 31-4 $5,750 (material $1,750, install 26 MH);
+  31-5 $1,900 (removal 2 MH, install 8 MH, 12x8 offset shifted, (2) 32x16 grilles); 31-6 $2,600 (removal 4 MH,
+  material $600, (2) 48x24 transfer grilles instead of TD 48x24).
+- 30th floor text deletions applied (30-1 work "linear diffuser with plenum, relocate G(400) diffusers";
+  30-3 "FPB-HW-B (300) with supply connections", "44x20 transfer duct relocated").
+- Struck numbers with no surviving replacement (asked Ruslan): 29-2 removal $875, install $6,250, total $11,025;
+  29-3 install $1,500, total $2,500; 30-1 removal $750, material $2,200, install $3,750; 30-2 install $3,250;
+  30-3 removal $2,000, install $3,000.
+- COP total now the sum of the floors ($64,730 with 29th / 30th unchanged), no longer forced to $66,780.
