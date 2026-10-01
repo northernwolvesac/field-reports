@@ -80,6 +80,35 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   return need their own duct. Alternate (energy, not cost): tie unit TX-A bath exhaust into DOAS exhaust so the
   wheel recovers it; deletes ~280 wall caps/fans but adds risers and dampers.
 
+## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (10/01/2026)
+
+- GC EW Howell (Tony LaMorte), our estimator Kastriot, SRS (Mark Richter) VRF quote job 2210-0138, Addendum 2 dated
+  7/6/26. Drawings are on BuildingConnected only, not in this repo or Drive, so the design has not been reviewed here.
+- From Kastriot's 07/02/26 email to EW Howell (controls list) and Ruslan's review: no boilers, no hydronics, no VAV
+  zoning in common areas, no FSD at every rated wall. Systems: Daikin VRF (103 remote controllers = ~103 indoor
+  units), 2 Addison ERUs (energy recovery, standalone ALC controls), 5 JCI RTUs (BACnet cards only), KEF-1/2, MUA-1
+  with cellular remote monitoring. No BMS, standalone controls only. Our number: ~$2.1M material + ~$1.5M labor
+  before PW.
+- Use: same owner (Sunrise) accepted a VRF/ERU/RTU, standalone-controls building, so that is a precedent for
+  Callahan / Sunrise on Rye Brook. Get the Northport M-sheets (BuildingConnected) to confirm occupancy, damper
+  approach and what serves the AL units before quoting it to the GC.
+
+## Aggressive VE package (Northport-style), proposed 10/01/2026
+
+- VE-11 Controls: no BMS. Equipment controls only (VRF central controller / remotes, DOAS and RTU unit controls with
+  BACnet card for future monitoring, standalone stats on heaters). Supersedes VE-7. ABM scope deleted.
+- VE-12 Common areas: delete the 47 VAV boxes and their reheat (makes VE-1 unnecessary). RTUs serve the large open
+  common spaces as single-zone units (dining, lobby, activity, kitchen per RTU); smaller common rooms/offices on
+  VRF heat recovery or ductless heat pumps. Revisits VE-8: VRF for the small rooms only, not for the big spaces;
+  A2L charge limits still to be checked for AL occupied rooms (Northport precedent).
+- VE-13 Basement/BOH: VRF or ductless heat pumps (heat + cool) where a room really needs conditioning (electrical,
+  MDF, lounge, laundry), electric heaters for freeze protection only; deletes the 20 FCUs and the DOAS booster taps
+  (overlaps VE-3).
+- With VE-3/4/5/6 (no boilers, no glycol), VE-9 (dampers) and VE-10 (return): building runs on electric heat pumps
+  + gas RTUs + dedicated pool/spa heaters, like Northport.
+- Needs: IMEG redesign fee and schedule, energy code (heat pumps help), EE service size (VRF adds kW but less than
+  electric reheat), owner (Sunrise) buy-in, likely re-file with the building department.
+
 ## VE review 10/01/2026 (client asked for all VE options, all-electric/gas, no hydronic)
 
 Client (via Callahan) wants all possible VE options; Ruslan's view: boilers + hydronic VAV reheat + hydronic FCUs/
@@ -131,3 +160,6 @@ sprinklers; pool designer for heater scope.
 | VE-8 | Full VRF heat recovery for common areas - not recommended (cost, large spaces, A2L limits, redesign) | n/a |
 | VE-9 | FSDs only where code requires; unit branches by IBC 717.5.4 small-duct exception or FD (about 360 FSDs drawn) | - |
 | VE-10 | Shorten DOAS corridor return (corridor grilles at riser, exhaust small rooms with corridor makeup) | - |
+| VE-11 | No BMS: equipment/standalone controls only (Northport precedent); supersedes VE-7 | - |
+| VE-12 | Delete 47 VAV + reheat; RTUs single-zone for big common spaces, VRF/ductless for small rooms | VRF kW TBD (less than reheat) |
+| VE-13 | Basement/BOH on VRF/ductless heat pumps where needed, electric freeze heaters only; delete FCUs | ~20-40 kW |
