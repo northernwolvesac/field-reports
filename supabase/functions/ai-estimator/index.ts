@@ -19,7 +19,7 @@ const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_ANON = Deno.env.get("SUPABASE_ANON_KEY") || (() => {
   try { return String(Object.values(JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}"))[0] || ""); } catch (_e) { return ""; }
 })();
-const OFFICE = ["admin", "manager", "lead_pm", "project_manager", "apm"];
+const OFFICE = ["admin", "manager", "lead_pm", "project_manager", "apm", "estimator"];
 const MODELS: Record<string, { in: number; out: number }> = {   // $ per million tokens
   "claude-sonnet-5": { in: 3, out: 15 },
   "claude-opus-5-5": { in: 5, out: 25 },
