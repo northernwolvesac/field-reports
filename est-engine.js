@@ -38,14 +38,16 @@
     else if (/condensate pump/.test(t)) pick(400, 'condensate pump budget');
     else if (/air curtain/.test(t)) pick(3500, 'air curtain budget');
     else if (/duct heater|\bedh\b|electric heater|unit heater/.test(t)) pick(1800, 'electric heater budget');
-    else if (/erv|energy recovery|heat recovery|\bhrv\b|doas|dedicated outdoor/.test(t)) pick(Math.max(8000, (cfm || 500) * 25), 'ERV / DOAS budget — $25 per CFM' + (cfm ? '' : ' (500 CFM assumed)'));
+    // transfer vents / sound silencers are a few hundred dollars; the tag is carried without spaces ("transfervent ct12"), which contains "erv"
+    else if (/transfer (vent|duct|grille|silencer|air)|sound (silencer|trap)|transfervent/.test(t)) pick(450, 'transfer duct / sound silencer budget')
+    else if (/(^|[^a-z])erv(?![a-z])|energy recovery|heat recovery|\bhrv\b|\bdoas\b|dedicated outdoor/.test(t)) pick(Math.max(8000, (cfm || 500) * 25), 'ERV / DOAS budget — $25 per CFM' + (cfm ? '' : ' (500 CFM assumed)'));
     else if (/boiler/.test(t)) pick(6000, 'boiler budget');
     else if (/crac|computer room|liebert/.test(t)) pick(Math.max(25000, (tons || 3) * 9000), 'CRAC budget — $9,000 per ton');
     else if (/vrf|vrv/.test(t) && /outdoor|condens|heat recovery unit|\bcu\b/.test(t)) pick(Math.max(12000, (tons || 8) * 3000), 'VRF outdoor unit budget — $3,000 per ton');
     else if (/branch selector|\bbs\b/.test(t)) pick(2500, 'branch selector budget');
     else if (/vrf|vrv|cassette|ductless|mini[- ]split|wall[- ]mount/.test(t)) pick(2800, 'VRF / ductless indoor unit budget');
     else if (/water[- ]?source|wshp|water[- ]cooled|water cooled|\bwchp\b/.test(t)) pick(Math.max(5000, (tons || 3) * 3000), 'water-source heat pump budget — $3,000 per ton');
-    else if (/\brtu\b|rooftop|roof[- ]?top|make[- ]?up air|\bmua\b|packaged rooftop|doas/.test(t)) pick(Math.max(8000, (tons || 5) * 2200), 'rooftop / make-up air unit budget — $2,200 per ton');
+    else if (/\brtu\b|rooftop|roof[- ]?top|make[- ]?up air|\bmua\b|packaged rooftop|\bdoas\b/.test(t)) pick(Math.max(8000, (tons || 5) * 2200), 'rooftop / make-up air unit budget — $2,200 per ton');
     else if (/split|condens|heat pump|\bacc?u\b|\bcu\b/.test(t)) pick(Math.max(3000, (tons || 3) * 1100), 'split / condensing unit budget — $1,100 per ton');
     else if (/\bahu\b|air handl|fan coil|\bfcu\b/.test(t)) pick(Math.max(3000, (tons || 3) * 1200), 'air handler / fan coil budget — $1,200 per ton');
     else if (/hood|grease duct|\bkeh\b|make[- ]?up air|\bmua\b/.test(t)) pick(9000, 'kitchen hood / make-up air budget');
