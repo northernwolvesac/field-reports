@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=361">
+<link rel="stylesheet" href="procore-ui.css?v=362">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=361"></script>
-<script src="auth.js?v=361"></script>
-<script src="est-totals.js?v=361"></script>
-<script src="procore-ui.js?v=361"></script>
+<script src="supabase-config.js?v=362"></script>
+<script src="auth.js?v=362"></script>
+<script src="est-totals.js?v=362"></script>
+<script src="procore-ui.js?v=362"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=361"></script>
-<script src="est-drawings.js?v=361"></script>
-<script src="nw-catalog-picker.js?v=361"></script>
-<script src="geo-takeoff.js?v=361"></script>
+<script src="bid-actions.js?v=362"></script>
+<script src="est-drawings.js?v=362"></script>
+<script src="nw-catalog-picker.js?v=362"></script>
+<script src="geo-takeoff.js?v=362"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -318,6 +318,9 @@ requireAuth().catch(function(){});
     await checkSyncSchema();
     await loadDrawings();
     renderAll();
+    // ?layer=<id> (link from the Estimating grid): open that layer's properties on the Additional Parameters tab, where the Extra quantity is
+    var wantLayer = new URLSearchParams(location.search).get('layer');
+    if (wantLayer && layerById(wantLayer)) setTimeout(function() { openLayerPopover(wantLayer, document.querySelector('[data-lmenu="' + wantLayer + '"]')); popTab = 'params'; renderPopover(); }, 400);
     if (EMBED) { P.onCmd(handleCmd); P.emit('ready', { estimateId: estimateId }); if (est) P.emit('title', { name: est.name }); }
   }
   var EST_FULL = 'id,name,quote_number,status,labor_rate,is_ofci,overhead_pct,miscellaneous_pct,tax_rate,client_name,bid_stage,estimator_name,parent_estimate_id,version_label,settings,square_footage';
@@ -464,7 +467,7 @@ requireAuth().catch(function(){});
         var t = layerTotals(l), pq = pdfPage ? pageQty(l) : 0, hid = l.is_visible === false;
         html += '<div class="tk-row' + (l.id === activeLayerId ? ' active' : '') + (selectedLayerIds.has(l.id) ? ' tk-row-checked' : '') + (hid ? ' hidden-layer' : '') + '" data-lay="' + l.id + '"' + dnd + '>' +
           '<span class="eye' + (hid ? ' off' : '') + '" data-eye="' + l.id + '">' + ic(hid ? 'visibility_off' : 'visibility', 16) + '</span><input type="checkbox" class="tk-cb" data-lcb="' + l.id + '"' + (selectedLayerIds.has(l.id) ? ' checked' : '') + '>' +
-          '<div class="nm2"><div class="n1" title="' + esc(l.name) + '">' + esc(l.name) + '</div><div class="n2"><span class="pc-dot" style="background:' + esc(l.color) + '"></span><span title="Total on all plans' + (pdfPage ? ' · this plan: ' + qtyStr(pq, l.takeoff_type) : '') + '">' + qtyStr(t.qty, l.takeoff_type) + (pdfPage && pq ? ' <span class="pc-muted">(' + qtyStr(pq, l.takeoff_type).split(' ')[0] + ')</span>' : '') + '</span></div></div>' +
+          '<div class="nm2"><div class="n1" title="' + esc(l.name) + '">' + esc(l.name) + '</div><div class="n2"><span class="pc-dot" style="background:' + esc(l.color) + '"></span><span title="Total on all plans' + (pdfPage ? ' · this plan: ' + qtyStr(pq, l.takeoff_type) : '') + '">' + qtyStr(t.qty, l.takeoff_type) + (pdfPage && pq ? ' <span class="pc-muted">(' + qtyStr(pq, l.takeoff_type).split(' ')[0] + ')</span>' : '') + (!t.marks && Number(l.extra_count) ? ' <span class="pc-muted" title="Entered by hand (Extra quantity) — nothing is drawn on the plans for this layer">· by hand</span>' : '') + '</span></div></div>' +
           (l.is_locked ? '<span class="lock" title="Locked">' + ic('lock', 14) + '</span>' : '') + '<button class="tk-kebab" data-lmenu="' + l.id + '" title="Layer properties">' + ic('more_vert', 18) + '</button></div>';
       });
       html += '</div>';
@@ -2009,6 +2012,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=361"></script>
+<script src="sw-register.js?v=362"></script>
 </body>
 </html>

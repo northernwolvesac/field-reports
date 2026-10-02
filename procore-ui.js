@@ -873,6 +873,7 @@
    *   Loads every version (id = rootId OR parent_estimate_id = rootId) + all their line items (two queries),
    *   total per version = nwEstTotals(lines, est).total. Always rendered, even with one version.
    *   Without onSwitch (standalone estimating.html / takeoff.html) switching rewrites ?est= and reloads.
+   *   The "E N" badge shows the position of the open estimate (primary first, then by version number).
    * PC.estStrip.refresh() → Promise — recompute totals (call after edits / on 'nw-event totals').
    * PC.estStrip.setCurrent(id), PC.estStrip.versions(), PC.estStrip.state()
    */
@@ -999,13 +1000,16 @@
     var cur = o.currentId || rootId;
     c.innerHTML = '';
 
-    // "E N ▾" badge → every version + 'Change orders 0' head
+    // "E N ▾" badge = the estimate you are on (E 1 = the primary / first one), not the number of estimates — a project with
+    // three versions opened on the Original read "E 3" and looked like the wrong estimate. The menu lists them all.
+    var curIdx = 0;
+    versions.forEach(function (v, i) { if (v.id === cur) curIdx = i; });
     var badge = document.createElement('button');
     badge.type = 'button';
     badge.className = 'pc-btn pc-btn-ghost pc-est-badge-btn';
     badge.style.padding = '0 4px';
-    badge.title = 'Estimates';
-    badge.innerHTML = '<span class="pc-est-badge">E ' + versions.length + '</span>' + PC.icon('expand_more', 18);
+    badge.title = 'Estimate ' + (curIdx + 1) + ' of ' + versions.length + ' — click to switch';
+    badge.innerHTML = '<span class="pc-est-badge">E ' + (curIdx + 1) + '</span>' + PC.icon('expand_more', 18);
     badge.addEventListener('click', function () {
       var items = [{ head: true, label: 'Estimates (' + versions.length + ')' }].concat(versions.map(function (v) {
         return { label: stripLabel(v), hint: PC.money(st.totals[v.id] || 0) + (v.parent_estimate_id ? '' : ' · primary'), checked: v.id === cur,

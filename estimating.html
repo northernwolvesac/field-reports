@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=351">
+<link rel="stylesheet" href="procore-ui.css?v=362">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=351"></script>
-<script src="auth.js?v=351"></script>
-<script src="est-totals.js?v=351"></script>
-<script src="procore-ui.js?v=351"></script>
-<script src="nw-catalog-picker.js?v=351"></script>
-<script src="nw-proposal.js?v=351"></script>
-<script src="bid-actions.js?v=351"></script>
+<script src="supabase-config.js?v=362"></script>
+<script src="auth.js?v=362"></script>
+<script src="est-totals.js?v=362"></script>
+<script src="procore-ui.js?v=362"></script>
+<script src="nw-catalog-picker.js?v=362"></script>
+<script src="nw-proposal.js?v=362"></script>
+<script src="bid-actions.js?v=362"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -1522,7 +1522,7 @@ requireAuth().catch(function(){});
   function layerLocked(li) { return !!(li && li.layer_id); }
   function layerLockHint(li) {
     var l = layerForLine(li);
-    return 'From takeoff layer' + (l && l.name ? ' "' + l.name + '"' : '') + ' — edit on the Takeoff tab';
+    return 'From takeoff layer' + (l && l.name ? ' "' + l.name + '"' : '') + ' — click the quantity to change it, other fields on the Takeoff tab';
   }
   function isCellEditable(col, li) {
     if (!canEdit || !col.editable) return false;
@@ -1699,6 +1699,16 @@ requireAuth().catch(function(){});
         var col = COLUMNS.find(function(c) { return c.key === td.getAttribute('data-col'); });
         var li = lineById(td.getAttribute('data-edit'));
         if (col && li) startInlineEdit(td, col, li);
+      });
+    });
+    // takeoff-owned cells: the Quantity opens a small "change quantity" box (it lands in the layer's Extra quantity so the takeoff stays the
+    // source); the other cells say where they come from instead of doing nothing
+    table.querySelectorAll('td.locked').forEach(function(td) {
+      td.addEventListener('click', function() {
+        var tr = td.closest('tr'), li = tr && lineById(tr.getAttribute('data-id'));
+        if (!li) return;
+        var col = COLUMNS.find(function(c) { return c.key === td.getAttribute('data-col'); });
+        if (col && col.editable === 'quantity') adjustLayerQuantity(li); else showToast(layerLockHint(li));
       });
     });
     table.querySelectorAll('td[data-gmult]').forEach(function(td) {
@@ -2438,6 +2448,35 @@ requireAuth().catch(function(){});
     var skipped = ids.length - withLayer.length;
     showToast(n + ' quantit' + (n === 1 ? 'y' : 'ies') + ' reset from takeoff' + (skipped ? ' · ' + skipped + ' without takeoff' : ''), 'success');
     state.selected = {};
+    refreshAll();
+  }
+
+  // A layer-linked line's quantity = marks on the plans + the layer's Extra quantity (takeoff.html syncLayerLines). Typing a new total here sets the
+  // Extra quantity to (total − marks), so the takeoff and the estimate keep agreeing and the next sync does not undo it.
+  async function adjustLayerQuantity(li) {
+    if (!canEdit || !li || !li.layer_id) return;
+    var lr = await supabaseClient.from('estimate_takeoff_layers').select('id, name, multiplier, drop_length_ft, rise, run, extra_count, takeoff_type').eq('id', li.layer_id).maybeSingle();
+    if (lr.error || !lr.data) { showToast(layerLockHint(li)); return; }
+    var L = lr.data;
+    var mr = await supabaseClient.from('estimate_measurements').select('layer_id, tool_type, computed_value, drops, deduct').eq('layer_id', L.id);
+    if (mr.error) { showToast('Takeoff read failed: ' + mr.error.message, 'error'); return; }
+    var marks = (mr.data || []).length, fromMarks = 0;
+    (mr.data || []).forEach(function(m) { fromMarks += markQty(m, L); });
+    var cur = Math.round((fromMarks + num(L.extra_count)) * 10000) / 10000, unit = li.unit || '';
+    var ans = await PC.prompt({ title: 'Change quantity', label: '"' + L.name + '" — new total quantity' + (unit ? ' (' + unit + ')' : ''), value: String(cur),
+      hint: marks + ' mark' + (marks === 1 ? '' : 's') + ' on the plans = ' + (Math.round(fromMarks * 100) / 100) + (unit ? ' ' + unit : '') + '. The rest is entered by hand on the takeoff layer (Extra quantity).', okLabel: 'Save' });
+    if (ans == null) return;
+    var v = Number(String(ans).replace(/[,\s]/g, ''));
+    if (!isFinite(v) || v < 0) { showToast('Enter a number', 'error'); return; }
+    v = Math.round(v * 10000) / 10000;
+    if (Math.abs(v - cur) < 1e-9) return;
+    var extra = Math.round((v - fromMarks) * 10000) / 10000;
+    var u1 = await supabaseClient.from('estimate_takeoff_layers').update({ extra_count: extra }).eq('id', L.id);
+    if (u1.error) { showToast('Could not save: ' + u1.error.message, 'error'); return; }
+    var u2 = await supabaseClient.from('estimate_line_items').update({ quantity: v, updated_at: nowIso() }).eq('id', li.id);
+    if (u2.error) { showToast('Could not save: ' + u2.error.message, 'error'); return; }
+    li.quantity = v;
+    showToast('Quantity set to ' + v + (unit ? ' ' + unit : '') + ' — ' + (Math.round(extra * 100) / 100) + ' by hand + ' + (Math.round(fromMarks * 100) / 100) + ' from the plans', 'success');
     refreshAll();
   }
 
@@ -3563,6 +3602,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=351"></script>
+<script src="sw-register.js?v=362"></script>
 </body>
 </html>
