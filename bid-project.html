@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=344">
+<link rel="stylesheet" href="procore-ui.css?v=348">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=344"></script>
-<script src="auth.js?v=344"></script>
-<script src="est-totals.js?v=344"></script>
-<script src="procore-ui.js?v=344"></script>
+<script src="supabase-config.js?v=348"></script>
+<script src="auth.js?v=348"></script>
+<script src="est-totals.js?v=348"></script>
+<script src="procore-ui.js?v=348"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=344"></script>
-<script src="est-drawings.js?v=344"></script>
-<script src="nw-proposal.js?v=344"></script>
+<script src="bid-actions.js?v=348"></script>
+<script src="est-drawings.js?v=348"></script>
+<script src="nw-proposal.js?v=348"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -1738,6 +1738,18 @@ requireAuth().catch(function(){});
     cov.value = propSettings.coverFileId || ''; app.value = propSettings.appendixFileId || '';
   }
 
+  // catalog data of the estimate's lines (manufacturer / catalog # / description) for the proposal's Detail Settings
+  var catalogCache = {};
+  async function catalogMapFor(lines) {
+    try {
+      var ids = Array.from(new Set((lines || []).map(function(l) { return l.catalog_item_id; }).filter(Boolean))).filter(function(id) { return !catalogCache[id]; });
+      for (var i = 0; i < ids.length; i += 150) {
+        var r = await supabaseClient.from('est_catalog_items').select('id, name, description, manufacturer, catalog_number, supplier').in('id', ids.slice(i, i + 150));
+        (r.data || []).forEach(function(c) { catalogCache[c.id] = c; });
+      }
+    } catch (e) { console.warn('[proposal] catalog data', e); }
+    return catalogCache;
+  }
   async function estimatorEmailFor(name) {
     if (!name) return '';
     if (estimatorEmailCache[name] !== undefined) return estimatorEmailCache[name];
@@ -1759,7 +1771,7 @@ requireAuth().catch(function(){});
     var lines = await loadLines();
     var email = await estimatorEmailFor(currentVersion.estimator_name);
     try {
-      paper.innerHTML = NWProposal.render(currentVersion, lines, propSettings, { estimatorEmail: email, catalogById: {} });
+      paper.innerHTML = NWProposal.render(currentVersion, lines, propSettings, { estimatorEmail: email, catalogById: await catalogMapFor(lines) });
     } catch(e) { paper.innerHTML = '<div class="pc-empty" style="color:#dc2626">Proposal render failed: ' + esc(e.message || e) + '</div>'; }
     $('propModeLabel').textContent = 'Live preview';
     $('propModeLabel').classList.remove('on');
@@ -1853,7 +1865,7 @@ requireAuth().catch(function(){});
       var st = Object.assign({}, propSettings, { layout: 'letter', editMode: false });
       host = document.createElement('div');
       host.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;background:#fff';
-      host.innerHTML = NWProposal.render(currentVersion, lines, st, { estimatorEmail: email, catalogById: {} });
+      host.innerHTML = NWProposal.render(currentVersion, lines, st, { estimatorEmail: email, catalogById: await catalogMapFor(lines) });
       document.body.appendChild(host);
       var cover = await fileBytes(propSettings.coverFileId), appendix = await fileBytes(propSettings.appendixFileId);
       await NWProposal.exportPdf(host.querySelector('#nwpPaper'), { filename: proposalFilename('pdf'), coverBytes: cover, appendixBytes: appendix });
@@ -1868,6 +1880,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=344"></script>
+<script src="sw-register.js?v=348"></script>
 </body>
 </html>

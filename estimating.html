@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=341">
+<link rel="stylesheet" href="procore-ui.css?v=348">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=341"></script>
-<script src="auth.js?v=341"></script>
-<script src="est-totals.js?v=341"></script>
-<script src="procore-ui.js?v=341"></script>
-<script src="nw-catalog-picker.js?v=341"></script>
-<script src="nw-proposal.js?v=341"></script>
-<script src="bid-actions.js?v=341"></script>
+<script src="supabase-config.js?v=348"></script>
+<script src="auth.js?v=348"></script>
+<script src="est-totals.js?v=348"></script>
+<script src="procore-ui.js?v=348"></script>
+<script src="nw-catalog-picker.js?v=348"></script>
+<script src="nw-proposal.js?v=348"></script>
+<script src="bid-actions.js?v=348"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -492,6 +492,7 @@
 </div>
 
 <input type="file" id="xlsxImportFile" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
+<input type="file" id="bomImportFile" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
 
 <script>
 requireAuth().catch(function(){});
@@ -695,6 +696,7 @@ requireAuth().catch(function(){});
     document.getElementById('tkApply').addEventListener('click', applyTakeoff);
     document.getElementById('tkFile').addEventListener('change', parseTakeoffFile);
     document.getElementById('xlsxImportFile').addEventListener('change', importEstimateXlsx);
+    document.getElementById('bomImportFile').addEventListener('change', importBomXlsx);
     // Close icons
     ['estClose','lClose','tkClose'].forEach(function(id) { document.getElementById(id).innerHTML = icon('close', 20); });
     document.getElementById('lInfoIcon').innerHTML = icon('info', 18);
@@ -1202,7 +1204,7 @@ requireAuth().catch(function(){});
       if (k === 'estimate')               { if (!canEdit) return; $('xlsxImportFile').value = ''; $('xlsxImportFile').click(); }
       else if (k === 'estimate_template') downloadEstimateTemplate();
       else if (k === 'bom_template')      downloadBomTemplate();
-      else if (k === 'bom')               showToast('BoM import is not available yet — use Import Estimate (.xlsx)');
+      else if (k === 'bom')               { if (!canEdit) return; $('bomImportFile').value = ''; $('bomImportFile').click(); }
       else if (k === 'takeoff_summary')   openTakeoffModal();
       else                                openMenu(anchor, importMenuItems());
     } else if (cmd === 'export') {
@@ -2606,6 +2608,7 @@ requireAuth().catch(function(){});
       { label: 'Import Estimate (.xlsx)', icon: 'upload', onClick: function() { if (!canEdit) return; $('xlsxImportFile').value = ''; $('xlsxImportFile').click(); }, disabled: !canEdit },
       { head: true, label: 'Bill Of Materials (BoM)' },
       { label: 'Download BoM Import Template', icon: 'download', onClick: downloadBomTemplate },
+      { label: 'Import BoM (.xlsx)', icon: 'upload', onClick: function() { if (!canEdit) return; $('bomImportFile').value = ''; $('bomImportFile').click(); }, disabled: !canEdit },
       { sep: true },
       { label: 'Procore takeoff summary (Ductwork / Pipework only)', icon: 'upload', onClick: openTakeoffModal, disabled: !canEdit }
     ];
@@ -2740,6 +2743,70 @@ requireAuth().catch(function(){});
         showToast(inserts.length + ' item' + (inserts.length === 1 ? '' : 's') + ' imported', 'success');
         await loadLines(); refreshAll();
       } catch (err) { console.error(err); showToast('Import failed: ' + err.message, 'error'); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  // Bill of Materials import: rows are matched to the estimate's cost items by name (trailing "(…)" ignored); unit cost, quantity,
+  // supplier and catalog number are updated (takeoff-linked items keep quantity / unit cost — the takeoff owns them); unknown names become new items.
+  function importBomXlsx(ev) {
+    var file = ev.target.files && ev.target.files[0];
+    if (!file || !canEdit) return;
+    if (!window.XLSX) { showToast('Excel library not loaded — refresh the page', 'error'); return; }
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        var sheetName = wb.SheetNames.find(function(n) { return /^(bom|bill of materials)$/i.test(n); }) || wb.SheetNames[0];
+        var rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: null });
+        var want = { name: /^(cost\s*item|item|name|description)$/i, qty: /^(quantity|qty)$/i, uom: /^uom(\s*\(quantity\))?$|^unit$/i, cost: /^unit\s*cost/i, supplier: /^supplier$/i, catno: /^catalog\s*number$/i };
+        var hdrIdx = -1, map = {};
+        for (var r = 0; r < Math.min(rows.length, 25) && hdrIdx < 0; r++) {
+          var m = {};
+          (rows[r] || []).forEach(function(c, ci) { var h = c == null ? '' : String(c).trim(); if (!h) return; Object.keys(want).forEach(function(k) { if (m[k] == null && want[k].test(h)) m[k] = ci; }); });
+          if (m.name != null && (m.qty != null || m.cost != null)) { hdrIdx = r; map = m; }
+        }
+        if (hdrIdx < 0) { showToast('Could not find a "Cost item" column plus Quantity or Unit Cost in ' + sheetName, 'error'); return; }
+        function norm(x) { return String(x == null ? '' : x).replace(/\s*\([^()]*\)\s*$/, '').trim().toLowerCase(); }
+        var byName = {}; currentLines.forEach(function(l) { var k = norm(l.description); if (k) (byName[k] = byName[k] || []).push(l); });
+        var updates = [], inserts = [], locked = 0, sort = maxSort();
+        for (var i = hdrIdx + 1; i < rows.length; i++) {
+          var row = rows[i]; if (!row) continue;
+          var name = row[map.name] == null ? '' : String(row[map.name]).trim(); if (!name) continue;
+          var qty = map.qty != null && row[map.qty] != null && row[map.qty] !== '' ? num(row[map.qty]) : null;
+          var cost = map.cost != null && row[map.cost] != null && row[map.cost] !== '' ? num(row[map.cost]) : null;
+          var sup = map.supplier != null && row[map.supplier] ? String(row[map.supplier]).trim() : null;
+          var cat = map.catno != null && row[map.catno] ? String(row[map.catno]).trim() : null;
+          var hit = byName[norm(name)];
+          if (hit) {
+            hit.forEach(function(l) {
+              var patch = {};
+              if (layerLocked(l)) { if (qty != null || cost != null) locked++; }
+              else {
+                if (qty != null && Math.abs(qty - num(l.quantity)) > 1e-9) patch.quantity = qty;
+                if (cost != null && Math.abs(cost - num(l.unit_material_cost)) > 1e-9) patch.unit_material_cost = cost;
+              }
+              if (sup && sup !== l.vendor_name) patch.vendor_name = sup;
+              if (cat && cat !== l.vendor_quote_ref) patch.vendor_quote_ref = cat;
+              if (Object.keys(patch).length) updates.push({ line: l, patch: patch });
+            });
+          } else {
+            var unitStr = map.uom != null ? String(row[map.uom] || '').trim() : '';
+            var gcat = (window.NWCatalogPicker && NWCatalogPicker.guessCat) ? NWCatalogPicker.guessCat(name) : guessCatLocal(name);
+            inserts.push(cleanPatch({ estimate_id: currentEst.id, category: gcat, description: name, quantity: qty == null ? 1 : qty, unit: uom(unitStr) || null,
+              unit_material_cost: cost == null ? 0 : cost, unit_labor_hours: 0, labor_crew_type: CAT_CREW[gcat] || 'sm', vendor_name: sup, vendor_quote_ref: cat,
+              group_name: DEFAULT_GROUP, sort_order: ++sort, is_firm: true }));
+          }
+        }
+        if (!updates.length && !inserts.length) { showToast('Nothing to change — every BoM row already matches this estimate' + (locked ? ' (' + locked + ' takeoff item(s) keep their takeoff quantity / cost)' : '')); return; }
+        var ok = await pcConfirm({ title: 'Import Bill of Materials', message: 'Sheet "' + sheetName + '": update ' + updates.length + ' cost item' + (updates.length === 1 ? '' : 's') + ' (quantity / unit cost / supplier / catalog #) and add ' + inserts.length + ' new item' + (inserts.length === 1 ? '' : 's') + '.' + (locked ? ' ' + locked + ' takeoff-linked item(s) keep their quantity / unit cost.' : ''), okLabel: 'Import' });
+        if (!ok) return;
+        var queue = updates.slice(), failed = 0;
+        async function worker() { while (queue.length) { var u = queue.shift(); u.patch.updated_at = nowIso(); var rr = await supabaseClient.from('estimate_line_items').update(cleanPatch(u.patch)).eq('id', u.line.id); if (rr.error) failed++; } }
+        await Promise.all([worker(), worker(), worker(), worker()]);
+        if (inserts.length) { var ins = await supabaseClient.from('estimate_line_items').insert(inserts); if (ins.error) { showToast('Adding new items failed: ' + ins.error.message, 'error'); } }
+        showToast('BoM imported: ' + (updates.length - failed) + ' updated, ' + inserts.length + ' added' + (failed ? ', ' + failed + ' failed' : ''), failed ? 'error' : 'success');
+        await loadLines(); refreshAll();
+      } catch (err) { console.error(err); showToast('BoM import failed: ' + err.message, 'error'); }
     };
     reader.readAsArrayBuffer(file);
   }
@@ -3465,6 +3532,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=341"></script>
+<script src="sw-register.js?v=348"></script>
 </body>
 </html>
