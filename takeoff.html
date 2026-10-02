@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=356">
+<link rel="stylesheet" href="procore-ui.css?v=357">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=356"></script>
-<script src="auth.js?v=356"></script>
-<script src="est-totals.js?v=356"></script>
-<script src="procore-ui.js?v=356"></script>
+<script src="supabase-config.js?v=357"></script>
+<script src="auth.js?v=357"></script>
+<script src="est-totals.js?v=357"></script>
+<script src="procore-ui.js?v=357"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=356"></script>
-<script src="est-drawings.js?v=356"></script>
-<script src="nw-catalog-picker.js?v=356"></script>
-<script src="geo-takeoff.js?v=356"></script>
+<script src="bid-actions.js?v=357"></script>
+<script src="est-drawings.js?v=357"></script>
+<script src="nw-catalog-picker.js?v=357"></script>
+<script src="geo-takeoff.js?v=357"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -359,6 +359,7 @@ requireAuth().catch(function(){});
     return [
       { label: 'Upload plans', icon: 'upload', onClick: function() { if (!me.canEdit) { toast('Read-only', 'error'); return; } $('uploadInput').click(); } },
       { label: 'Name sheets with AI', icon: 'auto_awesome', onClick: nameSheetsAI },
+      { label: 'Run the AI Estimator on these plans', icon: 'auto_awesome', onClick: runAiEstimator },
       { label: 'Roll up to Estimate', icon: 'swap_vert', onClick: openRollup },
       { label: 'Export this page as PDF', icon: 'download', onClick: exportPdf },
       { label: 'Analyze page', icon: 'auto_awesome', onClick: analyzeModal },
@@ -1842,6 +1843,22 @@ requireAuth().catch(function(){});
     } catch (e) { toast('Auto-measure failed: ' + e.message, 'error'); }
   }
 
+  // ═══════════════════════ AI Estimator on the uploaded plans ═══════════════════════
+  // One session per estimate: it opens with the plans of this Takeoff already inside (no second upload) and offers to read them.
+  async function runAiEstimator() {
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    if (!plans.length) { toast('Upload the plans first', 'error'); return; }
+    try {
+      var ex = await sb.from('ai_est_sessions').select('id').eq('estimate_id', estimateId).order('created_at', { ascending: false }).limit(1);
+      var sid = ex.data && ex.data[0] && ex.data[0].id;
+      if (!sid) {
+        var ins = await sb.from('ai_est_sessions').insert({ name: (est && est.name) || 'Estimate', location: (est && est.project_address) || null, floors: null, model: 'claude-sonnet-5', estimate_id: estimateId }).select('id').single();
+        if (ins.error) throw new Error(ins.error.message); sid = ins.data.id;
+      }
+      (EMBED ? window.top : window).location.href = 'ai-estimator.html?s=' + sid + '&import=1';
+    } catch (e) { toast('Could not start the AI Estimator: ' + (e.message || e), 'error'); }
+  }
+
   // ═══════════════════════ sheet names (AI) ═══════════════════════
   // The title block of every sheet is read by the triage model (Haiku, three small renders ≈ $0.005): sheet number, title, discipline, kind.
   async function nameSheetsAI() {
@@ -1992,6 +2009,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=356"></script>
+<script src="sw-register.js?v=357"></script>
 </body>
 </html>

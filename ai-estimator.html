@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=355"></script>
-<script src="auth.js?v=355"></script>
-<script src="est-totals.js?v=355"></script>
-<script src="est-engine.js?v=355"></script>
-<script src="geo-takeoff.js?v=355"></script>
+<script src="supabase-config.js?v=357"></script>
+<script src="auth.js?v=357"></script>
+<script src="est-totals.js?v=357"></script>
+<script src="est-engine.js?v=357"></script>
+<script src="geo-takeoff.js?v=357"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -92,8 +92,8 @@ var AE = (function() {
     var p = u && ((typeof getAuthProfile === 'function' && await getAuthProfile()) || (await supabaseClient.from('profiles').select('role, full_name').eq('id', u.id).maybeSingle()).data);
     if (!p || OFFICE.indexOf(p.role) < 0) { $('main').innerHTML = '<div class="card">🔒 The AI Estimator is for the office team.</div>'; return; }
     me = { id: u.id, name: p.full_name || u.email };
-    var sid = new URLSearchParams(location.search).get('s');
-    if (sid) openSession(sid); else listSessions();
+    var qs = new URLSearchParams(location.search), sid = qs.get('s');
+    if (sid) openSession(sid).then(function() { if (qs.get('import')) importFromEstimate(); }); else listSessions();
   }
 
   // the AI sometimes writes inches inside text without escaping them: 6" CWS -> 6\" CWS
@@ -143,6 +143,29 @@ var AE = (function() {
       '<button class="btn primary" style="align-self:flex-end" onclick="AE.create()">Create session</button></div>' +
       '<p class="muted" style="margin:10px 0 0">One session per bid: upload the drawings, specs, addenda, bid RFIs and vendor quotes. The AI reads every sheet, then the estimate is priced with NWAC standards (Kastriot\'s Estimating Standards) and NWAC\'s Procore unit rates.</p></div>' +
       '<div class="card"><h3>Sessions</h3>' + (rows ? '<table class="t"><tr><th>Bid</th><th>Status</th><th>Created</th><th></th></tr>' + rows + '</table>' : '<div class="muted">No sessions yet.</div>') + '</div>';
+  }
+
+  // the plans an estimator already uploaded to the estimate's Takeoff go into this session — no second upload — and the AI reads them
+  async function importFromEstimate() {
+    if (!session || !session.estimate_id) return;
+    try {
+      history.replaceState(null, '', location.pathname + '?s=' + session.id);        // a reload must not import again
+      var er = await supabaseClient.from('estimates').select('parent_estimate_id').eq('id', session.estimate_id).single();
+      var rootId = (er.data && er.data.parent_estimate_id) || session.estimate_id;
+      var dr = await supabaseClient.from('estimate_drawings').select('id, filename, storage_path, page_count').eq('estimate_id', rootId).order('created_at');
+      var rows = (dr.data || []).filter(function(d) { return !files.some(function(f) { return f.file_name === d.filename; }); });
+      if (!rows.length) { toast(files.length ? 'These plans are already in the session' : 'This estimate has no plans yet — upload them in the Takeoff first'); return; }
+      var list = [];
+      for (var i = 0; i < rows.length; i++) {
+        $('upMsg').textContent = 'Copying ' + rows[i].filename + ' from the Takeoff…';
+        var d = await supabaseClient.storage.from('estimate-drawings').download(rows[i].storage_path);
+        if (d.error) { toast('Could not copy ' + rows[i].filename + ': ' + d.error.message); continue; }
+        list.push(new File([d.data], rows[i].filename, { type: 'application/pdf' }));
+      }
+      if (list.length) await upload(list);
+      var n = pages.filter(function(p) { return p.status === 'pending'; }).length;
+      if (n && confirm(n + ' sheet' + (n === 1 ? ' is' : 's are') + ' ready. Let the AI sort and read them now? (about $' + (n * 0.06).toFixed(2) + ' — sheets that are not mechanical are skipped)')) readAll();
+    } catch (e) { toast('Copy from the Takeoff failed: ' + (e.message || e)); }
   }
 
   async function create() {
@@ -785,7 +808,8 @@ var AE = (function() {
       if (lr.error) throw new Error(/does not exist|42P01/i.test(lr.error.message) ? 'run takeoff-v2-schema.sql in Supabase first' : lr.error.message);
       var layers = lr.data || [];
       // 1 · one takeoff drawing per session file (copied into the takeoff bucket once, matched by file name)
-      var ex = await supabaseClient.from('estimate_drawings').select('id,filename,page_count,page_meta').eq('estimate_id', estId);
+      var erq = await supabaseClient.from('estimates').select('parent_estimate_id').eq('id', estId).single(), dwgRoot = (erq.data && erq.data.parent_estimate_id) || estId;
+      var ex = await supabaseClient.from('estimate_drawings').select('id,filename,page_count,page_meta').eq('estimate_id', dwgRoot);
       var have = {}; (ex.data || []).forEach(function(d) { have[d.filename] = d; });
       var fileIds = Array.from(new Set(list.map(function(p) { return p.file_id; }))), dwg = {};
       for (var fi = 0; fi < fileIds.length; fi++) {
@@ -793,10 +817,10 @@ var AE = (function() {
         var meta = {}; pages.forEach(function(p) { var r = p.result || {}; if (p.file_id === f.id && r.sheet_no) meta[String(p.page_no)] = { sheet: r.sheet_no }; });
         if (have[f.file_name]) { dwg[f.id] = have[f.file_name]; await supabaseClient.from('estimate_drawings').update({ page_meta: Object.assign({}, have[f.file_name].page_meta || {}, meta) }).eq('id', have[f.file_name].id); continue; }
         bridging = 'Copying ' + f.file_name + '…'; render();
-        var bytes = await fileBytes(f.id), path = estId + '/' + Date.now() + '_' + f.file_name.replace(/[^A-Za-z0-9._-]/g, '_');
+        var bytes = await fileBytes(f.id), path = dwgRoot + '/' + Date.now() + '_' + f.file_name.replace(/[^A-Za-z0-9._-]/g, '_');
         var up = await supabaseClient.storage.from('estimate-drawings').upload(path, new Blob([bytes], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false });
         if (up.error) throw new Error(up.error.message);
-        var ins = await supabaseClient.from('estimate_drawings').insert({ estimate_id: estId, filename: f.file_name, storage_path: path, page_count: f.pages || 1, drawing_type: 'base', page_meta: meta, uploaded_by: me.id }).select().single();
+        var ins = await supabaseClient.from('estimate_drawings').insert({ estimate_id: dwgRoot, filename: f.file_name, storage_path: path, page_count: f.pages || 1, drawing_type: 'base', page_meta: meta, uploaded_by: me.id }).select().single();
         if (ins.error) throw new Error(ins.error.message);
         dwg[f.id] = ins.data;
       }
@@ -893,6 +917,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=355"></script>
+<script src="sw-register.js?v=357"></script>
 </body>
 </html>
