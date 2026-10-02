@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=342">
+<link rel="stylesheet" href="procore-ui.css?v=347">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=342"></script>
-<script src="auth.js?v=342"></script>
-<script src="est-totals.js?v=342"></script>
-<script src="procore-ui.js?v=342"></script>
+<script src="supabase-config.js?v=347"></script>
+<script src="auth.js?v=347"></script>
+<script src="est-totals.js?v=347"></script>
+<script src="procore-ui.js?v=347"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=342"></script>
-<script src="est-drawings.js?v=342"></script>
-<script src="nw-catalog-picker.js?v=342"></script>
-<script src="geo-takeoff.js?v=342"></script>
+<script src="bid-actions.js?v=347"></script>
+<script src="est-drawings.js?v=347"></script>
+<script src="nw-catalog-picker.js?v=347"></script>
+<script src="geo-takeoff.js?v=347"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -60,6 +60,8 @@
   .tk-row.tk-row-checked { background: var(--pc-row-active, #f3f6fb); }
   .tk-row.active { background: var(--pc-link-bg, #e8f0fe); border-left-color: var(--pc-link, #1a66e0); }
   .tk-row.hidden-layer .nm2 { opacity: .45; }
+  .tk-row.drop-before { box-shadow: inset 0 2px 0 var(--pc-link, #1a66e0); } .tk-row.drop-after { box-shadow: inset 0 -2px 0 var(--pc-link, #1a66e0); }
+  .tk-grp-h.drop-before { box-shadow: inset 0 2px 0 var(--pc-link, #1a66e0); } .tk-grp-h.drop-into { background: var(--pc-link-bg, #e8f0fe); }
   .tk-row .nm2 { flex: 1; min-width: 0; padding-left: 4px; }
   .tk-row .n1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pc-text, #1f2933); }
   .tk-row .n2 { color: var(--pc-muted, #6b7280); font-size: 12px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
@@ -282,7 +284,7 @@ requireAuth().catch(function(){});
   var extCols = false;   // estimate_takeoff_layers has params / tag / is_locked (procore-ui-schema.sql applied) — decides what copy paths may INSERT
   var drawings = [], plans = [], planIdx = -1, layers = [], allMeas = [], meas = [], groupOrder = [];
   var pdfPage = null, pdfCanvas, overlayCanvas, ctx, renderScale = 1, zoom = 1, viewport1 = null;
-  var tool = 'select', activeLayerId = null, selectedIds = new Set(), selectedLayerIds = new Set(), draft = [], draftDrops = [], draftDeduct = false, hover = null, measureLine = null, panState = null, dragState = null, marquee = null, undoStack = [], clipboard = [];
+  var tool = 'select', activeLayerId = null, selectedIds = new Set(), selectedLayerIds = new Set(), draft = [], draftDrops = [], draftDeduct = false, hover = null, measureLine = null, panState = null, dragState = null, marquee = null, undoStack = [], redoStack = [], clipboard = [], scaleScopeNext = '', dndSrc = null;
   var scalePpf = null, scaleLabel = null, compareIdx = -1, layerFilter = '', laborRate = 60;
   var annotVisible = true, thumbsOn = false, thumbBusy = false, stampPoint = null, legendOn = false, orthoOn = false, catCache = {};
   var VS = { labels: true, opacity: 1, lineWidth: 3, numberMarks: true };   // view settings (tune popover), per browser
@@ -449,16 +451,16 @@ requireAuth().catch(function(){});
     if (!names.length && !Object.keys(legacy).length && !allMeas.some(isAnnot)) {
       host.innerHTML = '<div class="empty">No takeoff layers yet.<br>Create a layer (a catalog item: duct size, pipe size, diffuser…) and start clicking on the plan.<br><br><button class="pc-btn pc-btn-outline" id="stdBtn">Add NWAC standard layers</button></div>';
       var sbtn = $('stdBtn'); if (sbtn) sbtn.onclick = addStandardLayers; renderSelCount(); return; }
-    var html = '';
+    var html = '', dnd = (me.canEdit && !f) ? ' draggable="true"' : '';
     names.forEach(function(g) {
       var ls = groups[g] || [], open = !isCollapsed(g), gv = ls.length ? ls.every(function(l) { return l.is_visible !== false; }) : true;
       var nSel = ls.filter(function(l) { return selectedLayerIds.has(l.id); }).length, cbState = !ls.length || !nSel ? '' : nSel === ls.length ? ' checked' : ' data-ind="1"';
-      html += '<div class="tk-grp"><div class="tk-grp-h" data-grp="' + esc(g) + '"><span class="eye' + (gv ? '' : ' off') + '" data-geye="' + esc(g) + '" title="Show / hide group">' + ic(gv ? 'visibility' : 'visibility_off', 16) + '</span>' +
+      html += '<div class="tk-grp"><div class="tk-grp-h" data-grp="' + esc(g) + '"' + dnd + '><span class="eye' + (gv ? '' : ' off') + '" data-geye="' + esc(g) + '" title="Show / hide group">' + ic(gv ? 'visibility' : 'visibility_off', 16) + '</span>' +
         '<input type="checkbox" class="tk-cb" data-gcb="' + esc(g) + '"' + cbState + '><span class="chev">' + ic(open ? 'expand_more' : 'chevron_right', 18) + '</span><span class="gname" title="' + esc(g) + '">' + esc(g) + '</span>' +
         '<button class="tk-kebab" data-gmenu="' + esc(g) + '" title="Group actions">' + ic('more_vert', 18) + '</button></div>';
       if (open) ls.forEach(function(l) {
         var t = layerTotals(l), pq = pdfPage ? pageQty(l) : 0, hid = l.is_visible === false;
-        html += '<div class="tk-row' + (l.id === activeLayerId ? ' active' : '') + (selectedLayerIds.has(l.id) ? ' tk-row-checked' : '') + (hid ? ' hidden-layer' : '') + '" data-lay="' + l.id + '">' +
+        html += '<div class="tk-row' + (l.id === activeLayerId ? ' active' : '') + (selectedLayerIds.has(l.id) ? ' tk-row-checked' : '') + (hid ? ' hidden-layer' : '') + '" data-lay="' + l.id + '"' + dnd + '>' +
           '<span class="eye' + (hid ? ' off' : '') + '" data-eye="' + l.id + '">' + ic(hid ? 'visibility_off' : 'visibility', 16) + '</span><input type="checkbox" class="tk-cb" data-lcb="' + l.id + '"' + (selectedLayerIds.has(l.id) ? ' checked' : '') + '>' +
           '<div class="nm2"><div class="n1" title="' + esc(l.name) + '">' + esc(l.name) + '</div><div class="n2"><span class="pc-dot" style="background:' + esc(l.color) + '"></span><span title="Total on all plans' + (pdfPage ? ' · this plan: ' + qtyStr(pq, l.takeoff_type) : '') + '">' + qtyStr(t.qty, l.takeoff_type) + (pdfPage && pq ? ' <span class="pc-muted">(' + qtyStr(pq, l.takeoff_type).split(' ')[0] + ')</span>' : '') + '</span></div></div>' +
           (l.is_locked ? '<span class="lock" title="Locked">' + ic('lock', 14) + '</span>' : '') + '<button class="tk-kebab" data-lmenu="' + l.id + '" title="Layer properties">' + ic('more_vert', 18) + '</button></div>';
@@ -471,6 +473,69 @@ requireAuth().catch(function(){});
     host.innerHTML = html;
     host.querySelectorAll('[data-ind]').forEach(function(cb) { cb.indeterminate = true; });
     renderSelCount();
+  }
+
+  // ─── drag & drop in the layer tree: reorder layers, move them between groups, reorder groups ───
+  function bindTreeDnD(host) {
+    function clearMarks() { host.querySelectorAll('.drop-before,.drop-after,.drop-into').forEach(function(e) { e.classList.remove('drop-before', 'drop-after', 'drop-into'); }); }
+    host.addEventListener('dragstart', function(e) {
+      var row = e.target.closest('[data-lay]'), gh = e.target.closest('[data-grp]');
+      if (row && row.getAttribute('data-lay').indexOf('legacy:') !== 0) { var id = row.getAttribute('data-lay'); dndSrc = { kind: 'layer', ids: selectedLayerIds.has(id) ? Array.from(selectedLayerIds) : [id] }; }
+      else if (gh && !row) dndSrc = { kind: 'group', name: gh.getAttribute('data-grp') };
+      else { e.preventDefault(); return; }
+      e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', 'nw-layer'); } catch (x) {}
+    });
+    host.addEventListener('dragover', function(e) {
+      if (!dndSrc) return;
+      var row = e.target.closest('[data-lay]'), gh = e.target.closest('[data-grp]');
+      if (!row && !gh) return;
+      e.preventDefault(); clearMarks();
+      if (dndSrc.kind === 'group') { if (gh) gh.classList.add('drop-before'); }
+      else if (row && row.getAttribute('data-lay').indexOf('legacy:') !== 0) { var r = row.getBoundingClientRect(); row.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after'); }
+      else if (gh) gh.classList.add('drop-into');
+    });
+    host.addEventListener('dragleave', function(e) { if (!host.contains(e.relatedTarget)) clearMarks(); });
+    host.addEventListener('dragend', function() { dndSrc = null; clearMarks(); });
+    host.addEventListener('drop', async function(e) {
+      if (!dndSrc) return; e.preventDefault();
+      var row = e.target.closest('[data-lay]'), gh = e.target.closest('[data-grp]'), src = dndSrc, after = false;
+      if (row) { var r = row.getBoundingClientRect(); after = e.clientY >= r.top + r.height / 2; }
+      clearMarks(); dndSrc = null;
+      if (!me.canEdit) return;
+      if (src.kind === 'group') { if (gh) await moveGroup(src.name, gh.getAttribute('data-grp')); }
+      else if (row && row.getAttribute('data-lay').indexOf('legacy:') !== 0) await moveLayers(src.ids, row.getAttribute('data-lay'), after);
+      else if (gh) await moveLayers(src.ids, null, false, gh.getAttribute('data-grp'));
+    });
+  }
+  async function moveLayers(ids, targetId, after, intoGroup) {
+    if (targetId && ids.indexOf(targetId) >= 0) return;
+    var moving = layers.filter(function(l) { return ids.indexOf(l.id) >= 0; });
+    if (!moving.length) return;
+    var before = {}; layers.forEach(function(l) { before[l.id] = (l.group_name || 'Default Group') + '|' + l.sort_order; });
+    var target = targetId ? layerById(targetId) : null, grp = intoGroup || (target && (target.group_name || 'Default Group'));
+    if (!grp) return;
+    var rest = layers.filter(function(l) { return ids.indexOf(l.id) < 0; }), at = -1;
+    if (target) at = rest.indexOf(target) + (after ? 1 : 0);
+    else { rest.forEach(function(l, i) { if ((l.group_name || 'Default Group') === grp) at = i + 1; }); if (at < 0) at = rest.length; }
+    moving.forEach(function(l) { l.group_name = grp; });
+    layers = rest.slice(0, at).concat(moving, rest.slice(at));
+    layers.forEach(function(l, i) { l.sort_order = i; });
+    groupEntry(grp, true);
+    var changed = layers.filter(function(l) { return before[l.id] !== (l.group_name || 'Default Group') + '|' + l.sort_order; });
+    renderLayerTree();
+    var queue = changed.slice(), failed = 0;
+    async function worker() { while (queue.length) { var l = queue.shift(); var r = await sb.from('estimate_takeoff_layers').update({ group_name: l.group_name, sort_order: l.sort_order }).eq('id', l.id); if (r.error) failed++; } }
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    if (failed) toast(failed + ' layer(s) could not be moved — reload the page', 'error'); else { saveGroups(); scheduleSync(); }
+  }
+  async function moveGroup(src, target) {
+    if (src === target) return;
+    var names = groupNames(); names.forEach(function(g) { groupEntry(g, true); });
+    names = names.filter(function(n) { return n !== src; });
+    var at = names.indexOf(target); if (at < 0) return;
+    names.splice(at, 0, src);
+    groupOrder = names.map(function(n) { return groupEntry(n); });
+    saveGroups(); renderLayerTree();
   }
   function renderSelCount() {
     var n = selectedLayerIds.size, el = $('selCount');
@@ -1135,9 +1200,10 @@ requireAuth().catch(function(){});
     var g = {}; SCALE_PRESETS.forEach(function(p, i) { (g[p.group] = g[p.group] || []).push('<option value="' + i + '">' + esc(p.label) + '</option>'); });
     var body = '<div class="pc-field"><label class="pc-label">Current scale</label><div class="ro" style="font-weight:600' + (scalePpf ? '' : ';color:var(--pc-danger)') + '">' + (scalePpf ? esc(scaleLabel) : 'not defined yet') + '</div></div>' +
       '<div class="pc-field"><label class="pc-label">Pick the sheet\'s scale</label><select class="pc-select" id="scalePreset"><option value="">Select…</option>' + Object.keys(g).map(function(k) { return '<optgroup label="' + k + '">' + g[k].join('') + '</optgroup>'; }).join('') + '</select></div>' +
+      '<div class="pc-field"><label class="pc-label">Apply to</label><select class="pc-select" id="scaleScope"><option value="">This sheet only</option><option value="drawing">This sheet + the other sheets of this drawing that have no scale</option><option value="all">This sheet + every sheet of the estimate that has no scale</option></select></div>' +
       '<div class="pc-field"><label class="pc-label">Or calibrate on the drawing</label><button class="pc-btn pc-btn-outline" id="scaleCalib">' + ic('straighten', 16) + 'Calibrate: click two points</button><div class="hint">Click both ends of a known dimension on the plan, then type its length in feet.</div></div>';
-    var dlg = P.modal({ title: 'Drawing Scale', body: body, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Set scale', primary: true, close: false, onClick: function() { var v = $('scalePreset').value; if (v === '') { toast('Pick a scale', 'error'); return false; } dlg.close(); setPresetScale(SCALE_PRESETS[+v], false); } }] });
-    $('scaleCalib').onclick = function() { dlg.close(); setTool('scale'); toast('Click two points of a known dimension'); };
+    var dlg = P.modal({ title: 'Drawing Scale', body: body, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Set scale', primary: true, close: false, onClick: function() { var v = $('scalePreset').value; if (v === '') { toast('Pick a scale', 'error'); return false; } scaleScopeNext = $('scaleScope').value; dlg.close(); setPresetScale(SCALE_PRESETS[+v], false); } }] });
+    $('scaleCalib').onclick = function() { scaleScopeNext = $('scaleScope').value; dlg.close(); setTool('scale'); toast('Click two points of a known dimension'); };
   }
   async function setPresetScale(preset, auto) {
     if (!pdfPage || !me.canEdit) return;
@@ -1147,7 +1213,17 @@ requireAuth().catch(function(){});
     if (r.error) { toast(r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data);
     await recomputeScaled(preset.ppf); loadScale(); redraw(); renderAll(); scheduleSync();
-    if (!auto) toast('Scale ' + preset.label, 'success');
+    if (!auto) { toast('Scale ' + preset.label, 'success'); if (scaleScopeNext) await copyScaleToSheets(preset.ppf, preset.label, scaleScopeNext); scaleScopeNext = ''; }
+  }
+  // the same scale on the sheets that have none yet (never overwrites a scale that is already set)
+  async function copyScaleToSheets(ppf, label, scope) {
+    var cur = plans[planIdx]; if (!cur || !scope) return;
+    var has = {}; allMeas.forEach(function(m) { if (m.tool_type === 'scale') has[m.drawing_id + ':' + m.page_number] = 1; });
+    var rows = plans.filter(function(q) { return q !== cur && (scope === 'all' || q.drawing.id === cur.drawing.id) && !has[q.drawing.id + ':' + q.page]; })
+      .map(function(q) { return { drawing_id: q.drawing.id, page_number: q.page, tool_type: 'scale', points: [[0, 0]], label: label, computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ppf, color: '#dc2626', notes: 'Copied from ' + (cur.sheet || ('page ' + cur.page)) }; });
+    if (!rows.length) { toast('No other sheet without a scale'); return; }
+    for (var i = 0; i < rows.length; i += 200) { var r = await sb.from('estimate_measurements').insert(rows.slice(i, i + 200)).select(); if (r.error) { toast(r.error.message, 'error'); return; } allMeas = allMeas.concat(r.data); }
+    toast('Scale ' + label + ' applied to ' + rows.length + ' more sheet' + (rows.length === 1 ? '' : 's'), 'success');
   }
   async function recomputeScaled(ppf) {
     for (var i = 0; i < meas.length; i++) { var m = meas[i]; if (m.tool_type !== 'length' && m.tool_type !== 'area') continue;
@@ -1163,6 +1239,7 @@ requireAuth().catch(function(){});
     if (r.error) { toast(r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data); draft = [];
     await recomputeScaled(ppf); loadScale(); setTool('select'); redraw(); renderAll(); scheduleSync();
+    if (scaleScopeNext) { await copyScaleToSheets(ppf, 'Custom (' + ft + ' ft)', scaleScopeNext); scaleScopeNext = ''; }
   }
 
   // ═══════════════════════ canvas chrome: rail · modebar · bottom bar ═══════════════════════
@@ -1173,7 +1250,7 @@ requireAuth().catch(function(){});
     $('prevPlan').innerHTML = ic('chevron_left', 20); $('nextPlan').innerHTML = ic('chevron_right', 20); $('planCaret').innerHTML = ic('expand_more', 16);
     $('compareBtn').innerHTML = ic('picture_in_picture', 18) + 'Compare'; $('compareClose').innerHTML = ic('close', 14); $('openNewBtn').innerHTML = ic('open_in_new', 18); $('downloadBtn').innerHTML = ic('download', 18);
     $('emptyIcon').innerHTML = ic('straighten', 56); $('rightClose').innerHTML = ic('close', 18);
-    $('rail').innerHTML = '<div class="tk-float">' + tb('pan', 'pan_tool', 'Pan (H) — or hold Space / Alt and drag') + tb('select', 'near_me', 'Select / move marks (V)') + tb('marquee', 'select_all', 'Marquee select — drag a rectangle') + ib('undoBtn', 'undo', 'Undo (Ctrl+Z)') + ib('layersBtn', 'layers', 'Show / hide the takeoff panel') + '</div>' +
+    $('rail').innerHTML = '<div class="tk-float">' + tb('pan', 'pan_tool', 'Pan (H) — or hold Space / Alt and drag') + tb('select', 'near_me', 'Select / move marks (V)') + tb('marquee', 'select_all', 'Marquee select — drag a rectangle') + ib('undoBtn', 'undo', 'Undo (Ctrl+Z)') + ib('redoBtn', 'redo', 'Redo (Ctrl+Y / Ctrl+Shift+Z)') + ib('layersBtn', 'layers', 'Show / hide the takeoff panel') + '</div>' +
       '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
       '<div class="tk-float">' + ib('legendBtn', 'description', 'Legend of the layers on this plan') + ib('pasteBtn', 'content_paste', 'Paste copied marks (Ctrl+V)') + '</div>' +
       '<div class="tk-float tk-rail-last">' + ib('swapBtn', 'swap_horiz', 'Swap the compared plans') + ib('railCollapse', 'chevron_right', 'Collapse the tool rail') + '</div>';
@@ -1234,6 +1311,7 @@ requireAuth().catch(function(){});
     h.innerHTML = (!scalePpf && pdfPage && ['count', 'note', 'select', 'marquee', 'pan', 'stamp', 'cloud', 'highlight', 'scale'].indexOf(tool) < 0) ? '<b style="color:var(--pc-danger)">Set the scale first</b> — click "Drawing Scale" above the plan.' : (hints[tool] || '');
     $('statusPage').textContent = pdfPage ? (plans[planIdx].sheet ? plans[planIdx].sheet + ' · ' : '') + meas.filter(function(m) { return m.tool_type !== 'scale'; }).length + ' marks on this plan' + (selectedIds.size ? ' · ' + selectedIds.size + ' selected' : '') : '';
     var ub = $('undoBtn'); if (ub) ub.disabled = !undoStack.length && !draft.length;
+    var rb = $('redoBtn'); if (rb) rb.disabled = !redoStack.length;
   }
   function bindOverlay() {
     overlayCanvas.onmousedown = onDown; overlayCanvas.onmousemove = onMove; overlayCanvas.onmouseup = onUp; overlayCanvas.onmouseleave = onUp;
@@ -1290,7 +1368,7 @@ requireAuth().catch(function(){});
         if (m.tool_type === 'length') m.computed_value = scalePpf ? polyLen(m.points) / scalePpf : 0; if (m.tool_type === 'area') m.computed_value = scalePpf ? polyArea(m.points) / (scalePpf * scalePpf) : 0;
         var u = await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); if (u.error) { toast(u.error.message, 'error'); ok = false; break; }
         undoItems.push({ id: m.id, points: d.orig[m.id] }); }
-      if (ok) undoStack.push(undoItems.length === 1 ? { type: 'move', id: undoItems[0].id, points: undoItems[0].points } : { type: 'move-multi', items: undoItems });
+      if (ok) pushUndo(undoItems.length === 1 ? { type: 'move', id: undoItems[0].id, points: undoItems[0].points } : { type: 'move-multi', items: undoItems });
       renderAll(); scheduleSync(); }
   }
   function onClick(e) {
@@ -1351,14 +1429,14 @@ requireAuth().catch(function(){});
     if (!schemaOk) { delete m.layer_id; delete m.drops; delete m.mark_no; delete m.deduct; m.layer_category = (l && l.category) || 'ductwork'; }
     var r = await sb.from('estimate_measurements').insert(m).select().single();
     if (r.error) { toast('Save failed: ' + r.error.message, 'error'); return; }
-    allMeas.push(r.data); meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); renderAll(); scheduleSync();
+    allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll(); scheduleSync();
   }
   async function saveAnnot(m) {
     var p = plans[planIdx];
     var row = Object.assign({ drawing_id: p.drawing.id, page_number: p.page, computed_value: 0, computed_unit: null, layer_id: null, layer_category: null, scale_pixels_per_foot: scalePpf }, m);
     var r = await sb.from('estimate_measurements').insert(row).select().single();
     if (r.error) { toast(r.error.message, 'error'); return; }
-    allMeas.push(r.data); meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); renderAll();
+    allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll();
   }
   function openStamp() {
     var color = '#dc2626';
@@ -1394,7 +1472,7 @@ requireAuth().catch(function(){});
     var p = plans[planIdx], rows = pts.map(function(q) { return { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'count', points: [q], computed_value: 1, computed_unit: 'ea', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: scalePpf, mark_no: nextMarkNo(l), label: 'spaced ' + sp + ' ft' }; });
     var r = await sb.from('estimate_measurements').insert(rows).select();
     if (r.error) { toast(r.error.message, 'error'); redraw(); return; }
-    allMeas = allMeas.concat(r.data); meas = meas.concat(r.data); r.data.forEach(function(m) { undoStack.push({ type: 'add', id: m.id }); });
+    allMeas = allMeas.concat(r.data); meas = meas.concat(r.data); r.data.forEach(function(m) { pushUndo({ type: 'add', id: m.id }); });
     toast(r.data.length + ' marks placed every ' + sp + ' ft (' + (polyLen(path) / scalePpf).toFixed(0) + ' ft path)', 'success'); renderAll(); scheduleSync();
   }
   async function addNote() {
@@ -1403,7 +1481,7 @@ requireAuth().catch(function(){});
     var p = plans[planIdx], q = draft[0]; draft = [];
     var r = await sb.from('estimate_measurements').insert({ drawing_id: p.drawing.id, page_number: p.page, tool_type: 'note', points: [q], label: t, computed_value: 0, computed_unit: null, color: '#f59e0b' }).select().single();
     if (r.error) { toast(r.error.message, 'error'); return; }
-    allMeas.push(r.data); meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); renderAll();
+    allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll();
   }
   async function deleteMark(id, silent) {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
@@ -1411,7 +1489,7 @@ requireAuth().catch(function(){});
     if (!silent && lockedMark(m)) { toast('Layer is locked', 'error'); return; }
     var r = await sb.from('estimate_measurements').delete().eq('id', id);
     if (r.error) { toast(r.error.message, 'error'); return; }
-    if (!silent) undoStack.push({ type: 'delete', row: m });
+    if (!silent) pushUndo({ type: 'delete', row: m });
     allMeas = allMeas.filter(function(x) { return x.id !== id; }); meas = meas.filter(function(x) { return x.id !== id; });
     selectedIds.delete(id); renderAll(); scheduleSync();
   }
@@ -1422,7 +1500,7 @@ requireAuth().catch(function(){});
     if (ids.length === 1) { deleteMark(ids[0]); return; }
     var rows = ids.map(function(id) { return meas.find(function(x) { return x.id === id; }); });
     var r = await sb.from('estimate_measurements').delete().in('id', ids); if (r.error) { toast(r.error.message, 'error'); return; }
-    undoStack.push({ type: 'delete-multi', rows: rows });
+    pushUndo({ type: 'delete-multi', rows: rows });
     allMeas = allMeas.filter(function(x) { return ids.indexOf(x.id) < 0; }); meas = meas.filter(function(x) { return ids.indexOf(x.id) < 0; }); selectedIds.clear(); renderAll(); scheduleSync();
   }
   function copySelected() {
@@ -1440,19 +1518,44 @@ requireAuth().catch(function(){});
       rows.push(row); });
     if (!rows.length) { toast('Nothing to paste' + (skipped ? ' (' + skipped + ' locked / missing layer)' : ''), 'error'); return; }
     var r = await sb.from('estimate_measurements').insert(rows).select(); if (r.error) { toast(r.error.message, 'error'); return; }
-    allMeas = allMeas.concat(r.data); meas = meas.concat(r.data); selectedIds.clear(); r.data.forEach(function(m) { undoStack.push({ type: 'add', id: m.id }); selectedIds.add(m.id); });
+    allMeas = allMeas.concat(r.data); meas = meas.concat(r.data); selectedIds.clear(); r.data.forEach(function(m) { pushUndo({ type: 'add', id: m.id }); selectedIds.add(m.id); });
     clipboard = clipboard.map(function(m) { m.points = m.points.map(function(q) { return [q[0] + off, q[1] + off]; }); return m; });   // the next paste lands further along
     renderAll(); scheduleSync(); toast(r.data.length + ' mark(s) pasted', 'success');
   }
+  function pushUndo(u) { undoStack.push(u); redoStack.length = 0; }
   async function undo() {
     if (draft.length) { draft.pop(); redraw(); updateStatus(); return; }
     var u = undoStack.pop(); if (!u) return;
-    if (u.type === 'add') { await deleteMark(u.id, true); }
+    if (u.type === 'add') { var was = allMeas.find(function(x) { return x.id === u.id; }); if (was) redoStack.push({ type: 'add', row: Object.assign({}, was) }); await deleteMark(u.id, true); }
     else if (u.type === 'delete' || u.type === 'delete-multi') { var rows = (u.rows || [u.row]).map(function(x) { var row = Object.assign({}, x); delete row.id; delete row.created_at; delete row.updated_at; return row; });
-      var r = await sb.from('estimate_measurements').insert(rows).select(); if (!r.error) { r.data.forEach(function(m) { allMeas.push(m); if (m.drawing_id === plans[planIdx].drawing.id && m.page_number === plans[planIdx].page) meas.push(m); }); } renderAll(); scheduleSync(); }
-    else if (u.type === 'move' || u.type === 'move-multi') { var items = u.items || [{ id: u.id, points: u.points }];
-      for (var i = 0; i < items.length; i++) { var m = allMeas.find(function(x) { return x.id === items[i].id; }); if (!m) continue; m.points = items[i].points; m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value; await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
+      var r = await sb.from('estimate_measurements').insert(rows).select(); if (!r.error) { r.data.forEach(function(m) { allMeas.push(m); if (m.drawing_id === plans[planIdx].drawing.id && m.page_number === plans[planIdx].page) meas.push(m); }); redoStack.push({ type: 'del', ids: r.data.map(function(m) { return m.id; }) }); } renderAll(); scheduleSync(); }
+    else if (u.type === 'move' || u.type === 'move-multi') { var items = u.items || [{ id: u.id, points: u.points }], redoItems = [];
+      for (var i = 0; i < items.length; i++) { var m = allMeas.find(function(x) { return x.id === items[i].id; }); if (!m) continue; redoItems.push({ id: m.id, points: m.points }); m.points = items[i].points; m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value; await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
+      if (redoItems.length) redoStack.push({ type: 'move', items: redoItems });
       renderAll(); scheduleSync(); }
+    updateStatus();
+  }
+  async function redo() {
+    var u = redoStack.pop(); if (!u) return;
+    var cur = plans[planIdx];
+    if (u.type === 'add') {
+      var row = Object.assign({}, u.row); delete row.id; delete row.created_at; delete row.updated_at;
+      var r = await sb.from('estimate_measurements').insert(row).select().single();
+      if (!r.error) { allMeas.push(r.data); if (cur && r.data.drawing_id === cur.drawing.id && r.data.page_number === cur.page) meas.push(r.data); undoStack.push({ type: 'add', id: r.data.id }); }
+      renderAll(); scheduleSync();
+    } else if (u.type === 'del') {
+      var rows = allMeas.filter(function(m) { return u.ids.indexOf(m.id) >= 0; }); if (!rows.length) { updateStatus(); return; }
+      var d = await sb.from('estimate_measurements').delete().in('id', u.ids);
+      if (!d.error) { allMeas = allMeas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); meas = meas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); selectedIds.clear(); undoStack.push({ type: 'delete-multi', rows: rows }); }
+      renderAll(); scheduleSync();
+    } else if (u.type === 'move') {
+      var prev = [];
+      for (var i = 0; i < u.items.length; i++) { var m = allMeas.find(function(x) { return x.id === u.items[i].id; }); if (!m) continue; prev.push({ id: m.id, points: m.points }); m.points = u.items[i].points;
+        m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value;
+        await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
+      if (prev.length) undoStack.push({ type: 'move-multi', items: prev });
+      renderAll(); scheduleSync();
+    }
     updateStatus();
   }
   // hit test in PDF units: vertex within 7 px, segment within 5 px, polygon inside, count symbol within 10 px
@@ -1771,7 +1874,7 @@ requireAuth().catch(function(){});
     $('uploadInput').onchange = uploadPdfs;
     $('newLayerBtn').onclick = function() { openLayerModal(null); };
     $('layerSearch').oninput = function() { layerFilter = this.value; renderLayerTree(); };
-    $('layerTree').addEventListener('click', onTreeClick);
+    $('layerTree').addEventListener('click', onTreeClick); bindTreeDnD($('layerTree'));
     $('allEye').onclick = toggleAllVis; $('actionsBtn').onclick = function(e) { e.stopPropagation(); openActionsMenu(this); };
     $('leftCollapse').onclick = toggleLeft;
     $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); };
@@ -1782,7 +1885,7 @@ requireAuth().catch(function(){});
     $('scaleChip').onclick = scaleDialog;
     // rail / bottom bar
     document.querySelectorAll('#rail [data-tool], #bottombar [data-tool]').forEach(function(b) { b.onclick = function() { setTool(b.getAttribute('data-tool')); }; });
-    $('undoBtn').onclick = undo; $('layersBtn').onclick = toggleLeft; $('railMore').onclick = function(e) { e.stopPropagation(); railMenu(this); };
+    $('undoBtn').onclick = undo; $('redoBtn').onclick = redo; $('layersBtn').onclick = toggleLeft; $('railMore').onclick = function(e) { e.stopPropagation(); railMenu(this); };
     $('legendBtn').onclick = toggleLegend; $('pasteBtn').onclick = pasteMarks; $('swapBtn').onclick = swapCompare; $('swapBtn2').onclick = swapCompare;
     $('railCollapse').onclick = function() { var c = document.body.classList.toggle('tk-rail-collapsed'); this.innerHTML = ic(c ? 'chevron_left' : 'chevron_right', 20); };
     $('zoomIn').onclick = function() { setZoom(zoom * 1.25); }; $('zoomOut').onclick = function() { setZoom(zoom / 1.25); }; $('zoomFit').onclick = function() { fitView(); };
@@ -1808,7 +1911,8 @@ requireAuth().catch(function(){});
       else if (e.key === 'Escape') { if (pop) { closePopover(); return; } draft = []; draftDrops = []; measureLine = null; marquee = null; selectedIds.clear(); renderProps(); redraw(); updateStatus(); }
       else if (e.key === 'Backspace' && draft.length) { e.preventDefault(); draft.pop(); draftDrops = draftDrops.filter(function(i) { return i < draft.length; }); redraw(); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size) { e.preventDefault(); if (me.canEdit) deleteSelected(); }
-      else if (k === 'z' && mod) { e.preventDefault(); undo(); }
+      else if (k === 'z' && mod) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+      else if (k === 'y' && mod) { e.preventDefault(); redo(); }
       else if (k === 'c' && mod) { if (selectedIds.size) { e.preventDefault(); copySelected(); } }
       else if (k === 'v' && mod) { e.preventDefault(); pasteMarks(); }
       else if (k === 'a' && mod && pdfPage) { e.preventDefault(); selectedIds.clear(); meas.forEach(function(m) { if (m.tool_type !== 'scale') selectedIds.add(m.id); }); renderProps(); redraw(); updateStatus(); }
@@ -1839,6 +1943,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=342"></script>
+<script src="sw-register.js?v=347"></script>
 </body>
 </html>
