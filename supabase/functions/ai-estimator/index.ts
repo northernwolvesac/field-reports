@@ -152,6 +152,20 @@ Transcribe each crop exactly as drawn. Duct sizes look like 24X12 or 24x12 (alwa
 If a crop is upside down or turned, read it as if it were upright. Keep inch marks (") and the Ø symbol. Return an empty string for crops that are not text (linework, hatch, symbols, tiny fragments) and never guess characters you cannot see.
 Return one entry for every number shown.`;
 
+// ─── sheet triage: what is this sheet? (small renders, Haiku) — decides which sheets get the expensive read ───
+const TRIAGE_SCHEMA = { type: "object", additionalProperties: false, required: ["discipline", "kind"], properties: {
+  sheet_no: { type: "string" }, sheet_title: { type: "string" }, discipline: { type: "string" }, kind: { type: "string" },
+  work: { type: "string" }, scale: { type: "string" }, level: { type: "string" }, confidence: { type: "string" } } };
+const TRIAGE_PROMPT = `You are triaging ONE sheet of a construction bid drawing set for an HVAC (mechanical) contractor.
+The images show the same sheet: 1 = the whole sheet, 2 = the title-block strip along the right edge, 3 = the lower-right corner. Read the title block and the big view titles.
+Answer with the record_findings tool:
+- sheet_no (e.g. M-201, M101.00), sheet_title (as printed)
+- discipline: mechanical (HVAC, ventilation, refrigerant, controls) | plumbing | electrical | fire_protection | architectural | structural | civil | cover_index | other
+- kind: duct_plan (HVAC floor plan with ductwork and air devices) | pipe_plan (HVAC piping: refrigerant, chilled/hot water, condensate, gas) | demo (demolition plan) | enlarged (enlarged plan / mechanical room) | riser (riser or flow diagram) | schedule (equipment schedules) | notes_legend (general notes, symbols, abbreviations, index) | details | specs | other
+- work: new (proposed / new work) | existing (existing conditions only) | demo | mixed | not_applicable
+- scale as printed for the main plan view (1/4" = 1'-0"), empty if none or not to scale; level: the floor or area the plan covers
+- confidence: high | medium | low. Never guess: when you cannot tell, say low.`;
+
 // ─── Claude call ──────────────────────────────────────────────────────
 async function claude(model: string, content: any[], maxTokens: number, schema: any = { type: "object" }) {
   // extraction work: no extended thinking, so the whole output budget goes to the JSON answer
@@ -215,7 +229,7 @@ function repairJson(s: string): any {
 
 // ─── handlers ─────────────────────────────────────────────────────────
 async function runPage(db: any, body: any, kind: "sheet" | "quote") {
-  const { data: pg, error } = await db.from("ai_est_pages").select("id, session_id, page_no").eq("id", body.page_id).single();
+  const { data: pg, error } = await db.from("ai_est_pages").select("id, session_id, page_no, result").eq("id", body.page_id).single();
   if (error || !pg) throw new Error("page not found");
   const { data: ses } = await db.from("ai_est_sessions").select("model").eq("id", pg.session_id).single();
   const model = MODELS[body.model] ? body.model : (ses && MODELS[ses.model] ? ses.model : DEFAULT_MODEL);
@@ -238,6 +252,10 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
       if (r.data) result = r.data;
       else try { result = parseJson(r.text); } catch (_e) { result = { parse_error: true, raw: r.text.slice(0, 20000) }; }
       if (r.stop === "max_tokens") result.truncated = true;
+      // what an earlier step stored on this sheet stays: the triage and the OCR'd labels (same PDF page)
+      const prev: any = (pg as any).result || {};
+      if (prev.triage) result.triage = prev.triage;
+      if (prev.ocr_labels) result.ocr_labels = prev.ocr_labels;
       await db.from("ai_est_pages").update({
         status: "done", result, tokens_in: r.tokens_in, tokens_out: r.tokens_out, cost: r.cost,
         sheet_no: result.sheet_no || result.quote_no || null, sheet_title: result.sheet_title || result.vendor || null,
@@ -323,6 +341,18 @@ Deno.serve(async (req: Request) => {
       let reads: any = r.data && (r.data as any).reads;
       if (!Array.isArray(reads)) { try { reads = (parseJson(r.text) || {}).reads; } catch (_e) { reads = []; } }
       return json({ ok: true, reads: reads || [], cost: r.cost, model });
+    }
+    if (body.action === "triage") {
+      const model = MODELS[body.model] ? body.model : "claude-haiku-4-5";
+      const imgs = (Array.isArray(body.images) ? body.images : []).slice(0, 4).map((x: any) => String(x).replace(/^data:image\/\w+;base64,/, "")).filter((x: string) => x && x.length < 6_000_000);
+      if (!imgs.length) return json({ ok: false, error: "images missing" }, 400);
+      const content: any[] = imgs.map((data: string) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }));
+      content.push({ type: "text", text: TRIAGE_PROMPT + (body.text_hint ? "\n\nText from the PDF text layer of this sheet (may be empty or partial): " + String(body.text_hint).slice(0, 1500) : "") });
+      const r = await claude(model, content, 700, TRIAGE_SCHEMA);
+      let tri: any = r.data;
+      if (!tri) { try { tri = parseJson(r.text); } catch (_e) { tri = null; } }
+      if (!tri) return json({ ok: false, error: "unreadable triage answer" }, 502);
+      return json({ ok: true, triage: tri, cost: r.cost, model });
     }
     if (body.action === "ping") return json({ ok: true, user: u.user.email, role: prof.role });
     return json({ ok: false, error: "unknown action" }, 400);

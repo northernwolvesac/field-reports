@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=349"></script>
-<script src="auth.js?v=349"></script>
-<script src="est-totals.js?v=349"></script>
-<script src="est-engine.js?v=349"></script>
-<script src="geo-takeoff.js?v=349"></script>
+<script src="supabase-config.js?v=353"></script>
+<script src="auth.js?v=353"></script>
+<script src="est-totals.js?v=353"></script>
+<script src="est-engine.js?v=353"></script>
+<script src="geo-takeoff.js?v=353"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -216,6 +216,7 @@ var AE = (function() {
     if (r.duct_runs && r.duct_runs.length) bits.push(Math.round(r.duct_runs.reduce(function(a, d) { return a + Number(d.lf || 0); }, 0)) + ' ft duct');
     if (r.pipe_runs && r.pipe_runs.length) bits.push(Math.round(r.pipe_runs.reduce(function(a, d) { return a + Number(d.lf || 0); }, 0)) + ' ft pipe');
     if (r.scope_notes && r.scope_notes.length) bits.push(r.scope_notes.length + ' notes');
+    if (p.status === 'skipped' && r.triage) bits.push('not mechanical (' + esc(r.triage.discipline || '?') + ')');
     if (r.total) bits.push(money(r.total));
     if (r.geo && r.geo.total_ft) bits.push('📐 ' + Math.round(r.geo.total_ft) + ' ft measured');
     if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
@@ -520,7 +521,49 @@ var AE = (function() {
     var bad = list.filter(function(p) { return p.status === 'error'; }).length;
     toast(bad ? bad + ' sheet(s) failed — press ↻ on them' : 'All sheets read ✓');
   }
-  function readAll() { runQueue(pages.filter(function(p) { return p.status === 'pending' || p.status === 'error'; })); }
+  // ─── triage: a cheap look (Haiku, ~$0.004) at every drawing sheet before the expensive read — plumbing, electrical, architectural, covers are not read ───
+  var SKIP_DISC = /^(plumbing|electrical|fire|architectural|structural|civil|cover)/i;
+  async function triagePage(p) {
+    var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise;
+    try {
+      var pg = await pdf.getPage(1), tc = await pg.getTextContent();
+      var txt = tc.items.map(function(t) { return t.str; }).join(' ').replace(/\s+/g, ' ').trim();
+      var imgs = await NWGeo.triageImages(pg);
+      var j = await callFn({ action: 'triage', images: imgs, text_hint: txt.slice(0, 1200) });
+      return { tri: j.triage, cost: Number(j.cost || 0) };
+    } finally { pdf.destroy(); }
+  }
+  async function triageSheets(list) {
+    var todo = list.filter(function(p) { var f = files.find(function(x) { return x.id === p.file_id; }) || {}; return p.status === 'pending' && f.kind !== 'quote' && f.kind !== 'specs' && !(p.result && p.result.triage); });
+    if (!todo.length || !window.NWGeo || !NWGeo.triageImages) return 0;
+    window.NW_HOLD_RELOAD = true;
+    var i = 0, done = 0, skipped = 0;
+    async function worker() {
+      while (i < todo.length) {
+        var p = todo[i++];
+        try {
+          var t = await triagePage(p), tri = t.tri, skip = SKIP_DISC.test(tri.discipline || '') && tri.confidence !== 'low';
+          var res = Object.assign({}, p.result || {}, { triage: Object.assign({}, tri, { cost: t.cost }) });
+          var patch = { result: res, cost: t.cost, sheet_no: tri.sheet_no || p.sheet_no || null, sheet_title: tri.sheet_title || null, sheet_type: tri.kind || null };
+          if (skip) { patch.status = 'skipped'; skipped++; }
+          await supabaseClient.from('ai_est_pages').update(patch).eq('id', p.id);
+          Object.assign(p, patch);
+        } catch (e) { /* the sheet simply gets the full read */ }
+        done++; measuring = 'Sorting sheets (cheap look): ' + done + ' / ' + todo.length + '…'; render();
+      }
+    }
+    measuring = 'Sorting sheets (cheap look): 0 / ' + todo.length + '…'; render();
+    await Promise.all([worker(), worker(), worker()]);
+    measuring = ''; window.NW_HOLD_RELOAD = false;
+    return skipped;
+  }
+  async function readAll() {
+    if (running || measuring) return;
+    var skipped = await triageSheets(pages.filter(function(p) { return p.status === 'pending'; }));
+    await reload(); render();
+    if (skipped) toast(skipped + ' sheet' + (skipped === 1 ? '' : 's') + ' skipped (not mechanical) — press ↻ on one to read it anyway');
+    runQueue(pages.filter(function(p) { return p.status === 'pending' || p.status === 'error'; }));
+  }
   function readOne(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) runQueue([p]); }
 
   // ─── duct construction from the specs (shape + insulation → NWAC rate family) ───
@@ -804,6 +847,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=349"></script>
+<script src="sw-register.js?v=353"></script>
 </body>
 </html>

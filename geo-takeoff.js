@@ -475,13 +475,12 @@
     function frac(s) { if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
     function hyp(a, b) { return Math.sqrt(a * a + b * b); }
 
+    var STD_SCALES = [1 / 16, 3 / 32, 1 / 8, 3 / 16, 9 / 64, 1 / 4, 3 / 8, 9 / 32, 1 / 2, 3 / 4, 1];   // inches per foot (3/32, 9/64, 9/32 = 1/8, 3/16, 3/8 printed at 75 %)
     function measure(D) {
       var found = {}, m;
       SCALE_RE.lastIndex = 0;
       while ((m = SCALE_RE.exec(D.fullText))) { var f = frac(m[1]); found[f] = (found[f] || 0) + 1; }
-      var best = null; for (var k in found) if (!best || found[k] > found[best]) best = k;
-      if (!best) return { error: 'no drawing scale found on the sheet' };
-      var ptft = +best * 72;
+      var textScales = Object.keys(found).map(Number).sort(function (p, q) { return found[q] - found[p] || q - p; });
       var labs = [];
       D.text.forEach(function (t) {
         var a = SIZE_RE.exec(t.str), r = a ? null : ROUND_RE.exec(t.str);
@@ -490,41 +489,80 @@
         if (w < 4 || h < 3) return;
         labs.push({ txt: t.str, w: w, h: h, round: !!r, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
       });
-      if (labs.length < 3) return { error: 'fewer than 3 duct size labels', ptft: ptft };
-      // segments by style (skip gray background, white, dashed)
-      var bySty = {}, dashSty = {}, n = D.segs.length / 5;
-      for (var i = 0; i < n; i++) {
-        var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col;
-        if (st.dash) {
-          if (!(Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) && hyp(D.segs[o + 2] - D.segs[o], D.segs[o + 3] - D.segs[o + 1]) > 0.8 * ptft)
-            (dashSty[st.key] = dashSty[st.key] || []).push([D.segs[o], D.segs[o + 1], D.segs[o + 2], D.segs[o + 3]]);
-          continue;
+      if (labs.length < 3) return { error: textScales.length ? 'fewer than 3 duct size labels' : 'no drawing scale found on the sheet', ptft: textScales.length ? textScales[0] * 72 : undefined };
+      var n = D.segs.length / 5;
+      // segments by style (skip gray background, white, dashed) — the dash threshold and the dash trains depend on the scale
+      function prep(ptft) {
+        var bySty = {}, dashSty = {};
+        for (var i = 0; i < n; i++) {
+          var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col;
+          if (st.dash) {
+            if (!(Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) && hyp(D.segs[o + 2] - D.segs[o], D.segs[o + 3] - D.segs[o + 1]) > 0.8 * ptft)
+              (dashSty[st.key] = dashSty[st.key] || []).push([D.segs[o], D.segs[o + 1], D.segs[o + 2], D.segs[o + 3]]);
+            continue;
+          }
+          if (Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) continue;
+          var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3];
+          if (hyp(x2 - x1, y2 - y1) <= 1.0) continue;
+          (bySty[st.key] = bySty[st.key] || []).push([x1, y1, x2, y2]);
         }
-        if (Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) continue;
-        var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3];
-        if (hyp(x2 - x1, y2 - y1) <= 1.0) continue;
-        (bySty[st.key] = bySty[st.key] || []).push([x1, y1, x2, y2]);
+        // dash trains: a duct drawn as a row of 1-ft dashes (360 Lexington's heavy 1.68-pt mains — 375 dashes of 18 pt) becomes one
+        // segment per row so labels, pairs and single-line chaining see a line, not 30 stubs
+        // duct-weight styles take the merged rows in place; rows made of THIN dashes (360 Lexington's 0.72-pt mains labelled 12x6 / 8x8)
+        // only count through dashedRuns, i.e. when a size label sits on them — merged thin dashes fed into pairing made L'Catteron's
+        // 0.54-pt lines pair up (+800 ft)
+        Object.keys(bySty).forEach(function (key) {
+          var w = +key.split('|')[1], merged = mergeDashes(bySty[key], ptft);
+          if (w >= 1.0) { bySty[key] = merged; return; }
+          var orig = {}; bySty[key].forEach(function (g) { orig[g.join(',')] = 1; });
+          merged.forEach(function (g) { if (!orig[g.join(',')] && hyp(g[2] - g[0], g[3] - g[1]) >= 3 * ptft) (dashSty[key] = dashSty[key] || []).push(g); });
+        });
+        return { bySty: bySty, dashSty: dashSty };
       }
-      // dash trains: a duct drawn as a row of 1-ft dashes (360 Lexington's heavy 1.68-pt mains — 375 dashes of 18 pt) becomes one
-      // segment per row so labels, pairs and single-line chaining see a line, not 30 stubs
-      // duct-weight styles take the merged rows in place; rows made of THIN dashes (360 Lexington's 0.72-pt mains labelled 12x6 / 8x8)
-      // only count through dashedRuns, i.e. when a size label sits on them — merged thin dashes fed into pairing made L'Catteron's
-      // 0.54-pt lines pair up (+800 ft)
-      Object.keys(bySty).forEach(function (key) {
-        var w = +key.split('|')[1], merged = mergeDashes(bySty[key], ptft);
-        if (w >= 1.0) { bySty[key] = merged; return; }
-        var orig = {}; bySty[key].forEach(function (g) { orig[g.join(',')] = 1; });
-        merged.forEach(function (g) { if (!orig[g.join(',')] && hyp(g[2] - g[0], g[3] - g[1]) >= 3 * ptft) (dashSty[key] = dashSty[key] || []).push(g); });
-      });
-      var stats = [];
-      Object.keys(bySty).forEach(function (key) {
-        var segs = bySty[key]; if (segs.length < 20 || /^fill\|/.test(key)) return;
-        var S = segs.map(norm), pc = findPairs(S, ptft, labs).pieces, sized = 0, tot = 0;
-        pc.forEach(function (p) { tot += p.len_ft; if (looseLabel(p, labs, ptft)) sized += p.len_ft; });
-        stats.push([sized, tot, key]);
-      });
-      var top = 0; stats.forEach(function (s) { top = Math.max(top, s[0]); });
-      var keep = stats.filter(function (s) { return top && (s[0] === top || (s[0] >= 0.5 * top && s[0] / Math.max(s[1], 1) >= 0.5)); }).map(function (s) { return s[2]; });
+      // per style: the pairs of parallel lines and how many size labels sit INSIDE one at exactly the label's width
+      function score(ptft, P) {
+        var stats = [], top = 0, topHit = 0;
+        Object.keys(P.bySty).forEach(function (key) {
+          var segs = P.bySty[key]; if (segs.length < 20 || /^fill\|/.test(key)) return;
+          var S = segs.map(norm), pc = findPairs(S, ptft, labs).pieces, sized = 0, tot = 0, tight = 0, hit = {};
+          pc.forEach(function (p) {
+            tot += p.len_ft; if (looseLabel(p, labs, ptft)) sized += p.len_ft;
+            var tl = tightLabel(p, labs, ptft); if (tl) { tight += p.len_ft; hit[tl.cx + ',' + tl.cy] = 1; }
+          });
+          stats.push([sized, tot, key, tight, Object.keys(hit).length]);
+        });
+        stats.forEach(function (s) { top = Math.max(top, s[0]); topHit = Math.max(topHit, s[4]); });
+        return { stats: stats, top: top, topHit: topHit };
+      }
+      var ptft = textScales.length ? textScales[0] * 72 : 0, P = null, SC = null, scaleFrom = 'text', thr = Math.max(5, 0.15 * labs.length);
+      if (ptft) { P = prep(ptft); SC = score(ptft, P); }
+      // self-calibration: when the printed scale does not make the size labels fit the duct walls (a sheet with several views and scales, or
+      // a scale note the text layer does not carry — outlined text), try the usual scales: the right one makes the pair gaps equal the labels
+      // (OGCP 1520: the 1/4" notes of the two small alt-RCP views outvoted the 1/8" main plan, 3 labels fit instead of 15+)
+      if (!ptft || SC.topHit < thr) {
+        // candidates: every scale printed on the sheet, and each of them reduced to 75 % / 50 % (a sheet plotted smaller than its drawing size
+        // keeps the original scale note — OGCP 1520's "1/8" = 1'-0"" plan is really 3/32"); with no scale note at all, the usual scales
+        var cand = [];
+        function addC(x) { for (var q = 0; q < cand.length; q++) if (Math.abs(cand[q] - x) < 1e-6) return; if (!ptft || Math.abs(x * 72 - ptft) > 1e-6) cand.push(x); }
+        if (textScales.length) textScales.forEach(function (x) { addC(x); addC(x * 0.75); addC(x * 0.5); });
+        else STD_SCALES.forEach(addC);
+        var lx = labs.map(function (l) { return l.cx; }), ly = labs.map(function (l) { return l.cy; }),
+          labSpan = Math.max(Math.max.apply(null, lx) - Math.min.apply(null, lx), Math.max.apply(null, ly) - Math.min.apply(null, ly));
+        if (!textScales.length) cand = cand.filter(function (x) { var ft = labSpan / (x * 72); return ft >= 12 && ft <= 1000; });
+        var bestC = { ptft: ptft, P: P, SC: SC, hit: SC ? SC.topHit : -1 };
+        var tried = [[ptft, SC ? SC.topHit : -1]];
+        cand.forEach(function (x) { var pt = x * 72, P2 = prep(pt), S2 = score(pt, P2); tried.push([pt, S2.topHit, S2.stats.map(function (q) { return q[2].replace(/0,0,0/,'K').replace(/0.2,0.2,0.2/,'G') + ':' + q[4] + '/' + Math.round(q[3]) + '/' + Math.round(q[1]); }).filter(function (z) { return z.indexOf(':0/0/') < 0; }).join(' ')]); if (S2.topHit > bestC.hit) bestC = { ptft: pt, P: P2, SC: S2, hit: S2.topHit }; });
+        if (D.debugScales) D.debugScales.push.apply(D.debugScales, tried);
+        if (bestC.hit >= thr && bestC.hit >= 2 * Math.max(1, SC ? SC.topHit : 0)) { ptft = bestC.ptft; P = bestC.P; SC = bestC.SC; scaleFrom = 'labels'; }
+      }
+      if (!ptft || !SC) return { error: 'no drawing scale found on the sheet' };
+      var bySty = P.bySty, dashSty = P.dashSty, stats = SC.stats, top = SC.top, topHit = SC.topHit;
+      // the duct walls are the style whose pairs have a size label INSIDE them at exactly the label's width (OGCP 5200: the thin 0.24-pt background
+      // lines paired up everywhere and "matched" 4,800 ft of loose labels — 6.3x too much; the real 1.44-pt walls hold 43 of the 80 labels)
+      var keep = topHit >= thr
+        ? stats.filter(function (s) { return s[4] === topHit || (s[4] >= 0.6 * topHit && s[3] / Math.max(s[1], 1) >= 0.3); }).map(function (s) { return s[2]; })
+        : stats.filter(function (s) { return top && (s[0] === top || (s[0] >= 0.5 * top && s[0] / Math.max(s[1], 1) >= 0.5)); }).map(function (s) { return s[2]; });
+      if (D.forceStyle) keep = [D.forceStyle];   // offline experiments
       var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { S.push(norm(s)); }); });
       var fp = findPairs(S, ptft, labs), pcs = fp.pieces;
       // sizing order: the label written on / beside the piece → carried along the connected run → the nearest label within
@@ -609,10 +647,10 @@
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length };
-      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10,
+      return { ptft: ptft, scale_from: scaleFrom, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10,
         styles: keep, labels: labs.length, pieces: all.length,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
-        debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2]]; }) };
+        debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4]]; }) };
     }
 
     function norm(s) {
@@ -681,6 +719,17 @@
         var dx = l.cx - p.cx, dy = l.cy - p.cy, along = Math.abs(dx * p.ux + dy * p.uy), perp = Math.abs(-dx * p.uy + dy * p.ux);
         if (hyp(dx, dy) > 25 * ptft) return;
         var d = along + 3 * perp; if (d < bd) { best = l; bd = d; }
+      });
+      return best;
+    }
+    // strict version: the label's width is the piece's gap (±1.2") and the label sits inside the piece's band
+    function tightLabel(p, labs, ptft) {
+      var best = null, bd = 1e9, half = p.len_ft * ptft / 2;
+      labs.forEach(function (l) {
+        if (Math.abs(l.w - p.w_in) > 1.2) return;
+        var dx = l.cx - p.cx, dy = l.cy - p.cy, along = Math.abs(dx * p.ux + dy * p.uy), perp = Math.abs(-dx * p.uy + dy * p.ux);
+        if (along > half + 1.5 * ptft || perp > (p.w_in / 24) * ptft + 0.6 * ptft) return;
+        if (perp < bd) { best = l; bd = perp; }
       });
       return best;
     }
@@ -1019,6 +1068,15 @@
         });
         return hits.sort(function (p, q) { return p[0] - q[0]; });
       }
+      // MEP pipes are drawn in black; the dark-gray lines (architecture, walls, ceiling) sit beside most labels too and, joined up through
+      // wall corners, carried one "2in CHWS" label over 1,875 ft of wall (OGCP 5200). When black lines answer at least half of the labels
+      // that any line answers, only black lines are pipe candidates.
+      var blackSegs = segs.filter(function (sg) { var c0 = sg[8].split('|')[0]; return c0 === 'fill' || Math.max.apply(null, c0.split(',').map(Number)) <= 0.12; });
+      if (blackSegs.length && blackSegs.length < segs.length) {
+        var nAny = 0, nBlack = 0;
+        labs.forEach(function (l) { if (near(l, segs).length) nAny++; if (near(l, blackSegs).length) nBlack++; });
+        if (nBlack >= 1 && nBlack >= 0.5 * nAny) { segs = blackSegs; }
+      }
       var votes = {};
       labs.forEach(function (l) { var h = near(l, segs); if (h.length) votes[segs[h[0][1]][8]] = (votes[segs[h[0][1]][8]] || 0) + 1; });
       var top = 0; for (var vk in votes) top = Math.max(top, votes[vk]);
@@ -1099,7 +1157,9 @@
         sizes[kk] = (sizes[kk] || 0) + S[i][6] / ptft; total += S[i][6] / ptft;
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
-      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, lab_list: labs.map(function (l) { return l.txt; }),
+      // a few labels cannot size hundreds of feet: that is a size spreading over walls or equipment, not a pipe run
+      if (labs.length < 12 && total > 150 * labs.length) return { error: 'only ' + labs.length + ' pipe labels for ' + Math.round(total) + ' ft of lines — geometry not trusted', ptft: ptft, labels: labs.length };
+      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }),
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry
@@ -1265,8 +1325,25 @@
     return job;
   }
 
+  // small JPEG renders of a sheet for the triage model: the whole sheet, the title-block strip along the right edge and the lower-right corner
+  async function triageImages(page) {
+    var v0 = page.getViewport({ scale: 1 }), k = 3200 / Math.max(v0.width, v0.height), vp = page.getViewport({ scale: k });
+    var W = Math.round(vp.width), H = Math.round(vp.height);
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
+    function jpg(sx, sy, sw, sh, maxSide) {
+      var f = Math.min(1, maxSide / Math.max(sw, sh)), o = document.createElement('canvas'); o.width = Math.max(1, Math.round(sw * f)); o.height = Math.max(1, Math.round(sh * f));
+      var oc = o.getContext('2d'); oc.fillStyle = '#fff'; oc.fillRect(0, 0, o.width, o.height); oc.drawImage(c, sx, sy, sw, sh, 0, 0, o.width, o.height);
+      var out = o.toDataURL('image/jpeg', 0.72).split(',')[1]; o.width = o.height = 0; return out;
+    }
+    var rx = Math.round(W * 0.82), cx = Math.round(W * 0.55), cy = Math.round(H * 0.8);
+    var out = [jpg(0, 0, W, H, 1800), jpg(rx, 0, W - rx, H, 1400), jpg(cx, cy, W - cx, H - cy, 1400)];
+    c.width = c.height = 0; return out;
+  }
+
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
   function measureRisers(data) { data.mode = 'risers'; return measure(data); }
-  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords,
+  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
     isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, _worker: workerMain };   // _worker: for offline tests
 })();
