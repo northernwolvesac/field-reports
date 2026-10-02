@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration (v3.12)
+// GOOGLE APPS SCRIPT - Google Drive Integration (v3.13)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -64,6 +64,7 @@ var FULL_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
 // Purchase Orders and Schedule; never contracts, billing, COI, insurance, proposals, quotes, change orders or tax certificates.
 var LIMITED_ROLES = ['pm_limited'];
 var LIMITED_FOLDERS = FIELD_FOLDERS.concat(['RFI', 'Purchase Orders', 'Schedule']);
+// v3.13: send_email takes an optional html body (the app's branded email layout, nw-email.js); without it the plain text is wrapped as before
 // v3.12: a limited PM is confined to the projects listed in profiles.project_ids (app project ids); Drive Editor rights on the
 // limited folders of exactly those projects are granted / revoked with the set_limited_access action (management → Team → Projects)
 var ACTIVE_FOLDERS = FIELD_FOLDERS;                       // set per request from the caller's role
@@ -331,6 +332,13 @@ function sendEmailWithFiles(b, caller) {
   if (links.length) text += '\n\nFiles (too large to attach, open with the link):\n' + links.join('\n');
   var esc = function(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
   var html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">' + esc(text).replace(/(https:\/\/\S+)/g, '<a href="$1">$1</a>').replace(/\n/g, '<br>') + '</div>';
+  // v3.13: the app sends its own branded layout (nw-email.js: logo signature, details table); the plain text above stays the text part.
+  // Files that were too large to attach are listed under it.
+  if (b.html) {
+    html = String(b.html).slice(0, 150000);
+    if (links.length) html += '<div style="font-family:Arial,sans-serif;font-size:13px;color:#111;max-width:600px;margin:0 auto;padding:6px 12px 18px">Files too large to attach (open with the link):<br>' +
+      links.map(function(l) { return esc(l).replace(/(https:\/\/\S+)/g, '<a href="$1">$1</a>'); }).join('<br>') + '</div>';
+  }
   var opts = { htmlBody: html, attachments: attachments, name: String(b.fromName || 'Northern Wolves Air Conditioning').slice(0, 80) };
   if (cc.length) opts.cc = cc.join(',');
   if (me) opts.replyTo = caller.email;
@@ -592,7 +600,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.12' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.13' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -600,7 +608,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
-    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.12', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.13', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
     var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
     if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
     ACTIVE_FOLDERS = caller.limited ? LIMITED_FOLDERS : FIELD_FOLDERS;

@@ -15,6 +15,9 @@ const EMAIL_CONFIG = {
   EMAILJS_PUBLIC_KEY:  '2D_ekI2psvgG5W9Bi',
   EMAILJS_SERVICE_ID:  'service_48i790s',
   EMAILJS_TEMPLATE_ID: 'template_97sktpv',
+  // The branded HTML template (EmailJS → Email Templates → content = {{{html_body}}}, subject = {{subject}}, to = {{to_emails}}).
+  // While empty, emails keep going through the old plain-text template above; set it and every email gets the new layout (nw-email.js).
+  EMAILJS_TEMPLATE_HTML_ID: '',
 
   // Google Apps Script web app URL (uploads PDF to Drive, returns link)
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzvkMp9DdSa4JUC8CNxLPnGuiYnkMoidltHbQvvUYQPh7ZfLICPWRcRG7iKcbKH-A3c/exec',
@@ -235,6 +238,36 @@ async function uploadToGoogleDrive(pdfDoc, filename) {
   return result;
 }
 
+// ========== BRANDED SEND ==========
+
+/**
+ * One place that sends an email through EmailJS. With EMAILJS_TEMPLATE_HTML_ID set it sends the branded layout
+ * (nw-email.js: logo signature, details table, PDF buttons); without it, or if nw-email.js did not load, the old plain-text template.
+ * o: { to, subject, bodyText, reportType, title, subtitle, customerName, techName, senderName, intro, files: [{label, plain, url, primary}] }
+ */
+async function nwSendBrandedEmail(o) {
+  emailjs.init(EMAIL_CONFIG.EMAILJS_PUBLIC_KEY);
+  var files = (o.files || []).filter(function(f) { return f && f.url; });
+  var plain = o.bodyText + '\n\n--- PDF Report ---' + files.map(function(f) { return '\n' + (f.plain || f.label) + ': ' + f.url; }).join('') + '\n\n-- Northern Wolves Air Conditioning';
+  var params = {
+    to_emails:     o.to,
+    subject:       o.subject,
+    body_text:     plain,
+    report_type:   o.reportType || '',
+    customer_name: o.customerName || '',
+    tech_name:     o.techName || ''
+  };
+  var template = EMAIL_CONFIG.EMAILJS_TEMPLATE_ID;
+  if (EMAIL_CONFIG.EMAILJS_TEMPLATE_HTML_ID && window.NWEmail) {
+    template = EMAIL_CONFIG.EMAILJS_TEMPLATE_HTML_ID;
+    params.html_body = NWEmail.build({
+      reportType: o.reportType, title: o.title, subtitle: o.subtitle, bodyText: o.bodyText, senderName: o.senderName || o.techName,
+      intro: o.intro, files: files
+    }).html;
+  }
+  return emailjs.send(EMAIL_CONFIG.EMAILJS_SERVICE_ID, template, params);
+}
+
 // ========== SEND WITH PREVIEW ==========
 
 /**
@@ -281,24 +314,15 @@ async function sendReportToManagement({ reportType, subject, bodyText, customerN
     showToast('Sending email...');
 
     // Step 2: Send email via EmailJS with the Drive link (no attachment needed)
-    emailjs.init(EMAIL_CONFIG.EMAILJS_PUBLIC_KEY);
-
-    const bodyWithLink = finalParams.bodyText
-      + '\n\n--- PDF Report ---'
-      + '\nDownload: ' + driveResult.downloadUrl
-      + '\nView: ' + driveResult.viewUrl
-      + '\n\n-- Northern Wolves Air Conditioning';
-
     // Build recipient list (To + CC)
     var toEmails = nwEmailList(finalParams.toEmails, finalParams.ccEmails) || EMAIL_CONFIG.MANAGEMENT_EMAILS.join(', ');
 
-    await emailjs.send(EMAIL_CONFIG.EMAILJS_SERVICE_ID, EMAIL_CONFIG.EMAILJS_TEMPLATE_ID, {
-      to_emails:     toEmails,
-      subject:       finalParams.subject,
-      body_text:     bodyWithLink,
-      report_type:   finalParams.reportType,
-      customer_name: finalParams.customerName || '',
-      tech_name:     finalParams.techName || ''
+    await nwSendBrandedEmail({
+      to: toEmails, subject: finalParams.subject, bodyText: finalParams.bodyText,
+      reportType: finalParams.reportType, title: finalParams.title, subtitle: finalParams.subtitle || finalParams.customerName,
+      customerName: finalParams.customerName, techName: finalParams.techName,
+      intro: 'A new ' + (finalParams.reportType || 'report') + ' has been completed. The PDF is linked below.',
+      files: [{ label: 'Download PDF', plain: 'Download', url: driveResult.downloadUrl }, { label: 'View Online', plain: 'View', url: driveResult.viewUrl, primary: false }]
     });
 
     showToast('Report sent to management!');

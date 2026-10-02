@@ -12,12 +12,13 @@
 <title>Submittal — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=340"></script>
-<script src="auth.js?v=340"></script>
-<script src="nw-drive.js?v=340"></script>
+<script src="supabase-config.js?v=363"></script>
+<script src="auth.js?v=363"></script>
+<script src="nw-drive.js?v=363"></script>
+<script src="nw-email.js?v=363"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
-<script src="pdf-utils.js?v=340"></script>
+<script src="pdf-utils.js?v=363"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 110px; }
   .sb-wrap { max-width: 860px; margin: 0 auto; padding: 0 14px; }
@@ -603,6 +604,7 @@ requireAuth().catch(function(){});
     if (!saved || (dirty && !editId)) { if (!(await save())) return; }
     busy(true, 'Sending…');
     var r = await NWDrive.request({ action: 'send_email', to: to, cc: val('mCc'), subject: val('mSubject'), body: $('mBody').value, fileIds: [saved.drive_id],
+      html: window.NWEmail ? NWEmail.build({ reportType: KD.noun, title: KD.noun + ' ' + subNo(), subtitle: val('fProject'), bodyText: $('mBody').value, senderName: val('fFromName') }).html : undefined,
       fromName: (val('fFromName') ? val('fFromName') + ' - ' : '') + 'Northern Wolves AC' });
     var upd = { status: 'sent', sent_to: (r.to || [to]).join(', '), sent_at: new Date().toISOString() };
     if (!saved.to_email) upd.to_email = to;
@@ -613,6 +615,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=340"></script>
+<script src="sw-register.js?v=363"></script>
 </body>
 </html>

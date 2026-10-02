@@ -8,23 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=346"></script>
-<script src="auth.js?v=346"></script>
-<script src="labor-rates.js?v=346"></script>
-<script src="cloud-save.js?v=346"></script>
+<script src="supabase-config.js?v=363"></script>
+<script src="auth.js?v=363"></script>
+<script src="labor-rates.js?v=363"></script>
+<script src="cloud-save.js?v=363"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=346"></script>
-<script src="edit-utils.js?v=346"></script>
-<script src="project-utils.js?v=346"></script>
-<script src="customer-utils.js?v=346"></script>
+<script src="draft-utils.js?v=363"></script>
+<script src="edit-utils.js?v=363"></script>
+<script src="project-utils.js?v=363"></script>
+<script src="customer-utils.js?v=363"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=346"></script>
-<script src="ai-summary.js?v=346"></script>
-<script src="ai-chat.js?v=346"></script>
+<script src="email-utils.js?v=363"></script>
+<script src="nw-email.js?v=363"></script>
+<script src="ai-summary.js?v=363"></script>
+<script src="ai-chat.js?v=363"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=346"></script>
+<script src="pdf-utils.js?v=363"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -1199,27 +1200,19 @@ async function confirmSendEmail(){
     const bodyText=document.getElementById('emailBody').value;
     const ccEmail=document.getElementById('emailCc').value.trim();
 
-    // Build HTML email body
-    const htmlBody=buildHtmlEmail(v,bodyText);
-
     showToast('Uploading report...');
     const driveResult=await uploadToGoogleDrive(doc,fn);
     showToast('Sending email...');
 
-    emailjs.init(EMAIL_CONFIG.EMAILJS_PUBLIC_KEY);
-
     // Build recipients — use editable To field + optional CC
     var toEmails=nwEmailList(document.getElementById('emailTo').value, ccEmail) || EMAIL_CONFIG.MANAGEMENT_EMAILS.join(', ');
 
-    const fullBody=bodyText+'\n\n--- PDF Report ---\nDownload: '+driveResult.downloadUrl+'\nView: '+driveResult.viewUrl+'\n\n-- Northern Wolves Air Conditioning';
-
-    await emailjs.send(EMAIL_CONFIG.EMAILJS_SERVICE_ID,EMAIL_CONFIG.EMAILJS_TEMPLATE_ID,{
-      to_emails:toEmails,
-      subject:subject,
-      body_text:fullBody,
-      report_type:'Change Order',
-      customer_name:v('custName')||'',
-      tech_name:v('requestedBy')||''
+    // branded layout (nw-email.js) when the HTML template is configured, the old plain-text template otherwise
+    await nwSendBrandedEmail({
+      to:toEmails, subject:subject, bodyText:bodyText,
+      reportType:'Change Order', title:'Change Order'+(v('coNumber')?' #'+v('coNumber'):''), subtitle:v('projectName')||v('custName'),
+      customerName:v('custName')||'', techName:v('requestedBy')||'', senderName:v('requestedBy')||'',
+      files:[{label:'Download PDF',plain:'Download',url:driveResult.downloadUrl},{label:'View Online',plain:'View',url:driveResult.viewUrl,primary:false}]
     });
 
     if(driveResult.driveUrl&&projId){
@@ -1276,14 +1269,6 @@ async function updateCOStatus(newStatus) {
   }
 }
 
-function buildHtmlEmail(v, bodyText){
-  // Convert plain text body to HTML paragraphs
-  return bodyText.split('\n').map(function(line){
-    if(!line.trim()) return '<br>';
-    return '<p style="margin:0 0 4px;font-size:14px;color:#1e293b;line-height:1.6">'+line.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</p>';
-  }).join('');
-}
-
 // ========== AI CHAT ASSISTANT ==========
 function openChangeOrderAIChat() {
   openAIChat({
@@ -1329,9 +1314,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=346"></script>
-<script src="nw-drive.js?v=346"></script>
-<script src="nw-form-kit.js?v=346"></script>
-<script src="sw-register.js?v=346"></script>
+<script src="form-utils.js?v=363"></script>
+<script src="nw-drive.js?v=363"></script>
+<script src="nw-form-kit.js?v=363"></script>
+<script src="sw-register.js?v=363"></script>
 </body>
 </html>
