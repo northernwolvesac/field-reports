@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=348">
+<link rel="stylesheet" href="procore-ui.css?v=351">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=348"></script>
-<script src="auth.js?v=348"></script>
-<script src="est-totals.js?v=348"></script>
-<script src="procore-ui.js?v=348"></script>
-<script src="nw-catalog-picker.js?v=348"></script>
-<script src="nw-proposal.js?v=348"></script>
-<script src="bid-actions.js?v=348"></script>
+<script src="supabase-config.js?v=351"></script>
+<script src="auth.js?v=351"></script>
+<script src="est-totals.js?v=351"></script>
+<script src="procore-ui.js?v=351"></script>
+<script src="nw-catalog-picker.js?v=351"></script>
+<script src="nw-proposal.js?v=351"></script>
+<script src="bid-actions.js?v=351"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -2122,13 +2122,27 @@ requireAuth().catch(function(){});
   function loadViews() { try { return JSON.parse(localStorage.getItem('es_views') || '[]') || []; } catch (e) { return []; } }
   function saveViews(v) { try { localStorage.setItem('es_views', JSON.stringify(v)); } catch (e) {} }
   var activeView = 'classic';
+  function projectViews() { var v = getSettings().views; return Array.isArray(v) ? v : []; }
+  function viewSnapshot(name) {
+    var cols = {}; COLUMNS.forEach(function(c) { cols[c.key] = { visible: c.visible, width: c.width }; });
+    return { name: name, cols: cols, rowHeight: state.rowHeight, groupMode: state.groupMode, sort: state.sort, colFilters: state.colFilters };
+  }
+  function applyView(v, key) {
+    COLUMNS.forEach(function(c) { var s = v.cols && v.cols[c.key]; if (s) { c.visible = !!s.visible; c.width = s.width || c.defaultWidth; } });
+    state.rowHeight = v.rowHeight || 'medium'; applyRowHeight();
+    state.groupMode = v.groupMode || 'manual'; $('groupMode').value = state.groupMode;
+    state.sort = v.sort || null; state.colFilters = v.colFilters || {};
+    activeView = key; savePrefs(); refreshAll(); renderViewsPanel();
+  }
   function renderViewsPanel() {
     var p = $('viewsPanel'); if (!p) return;
-    var views = loadViews();
+    var views = loadViews(), pviews = projectViews();
+    var pvHtml = pviews.length ? '' : '<div class="es-view-row disabled"><span class="grow">None yet — Create, then share the view with the project.</span></div>';
+    pviews.forEach(function(v, i) { pvHtml += '<div class="es-view-row' + (activeView === 'j' + i ? ' active' : '') + '" data-pview="' + i + '">' + icon('visibility', 16) + '<span class="grow">' + escHtml(v.name) + '</span>' + (canEdit ? '<button class="pc-btn pc-btn-icon pc-btn-ghost" data-pvdel="' + i + '" style="height:24px;width:24px">' + icon('delete', 15) + '</button>' : '') + '</div>'; });
     var html = '<div class="pc-card-h">Saved Views<span style="margin-left:auto;font-weight:500;color:var(--pc-link);cursor:pointer;font-size:13px" id="viewCreate">Create</span></div><div class="pc-card-b">' +
       '<div class="es-view-row' + (activeView === 'classic' ? ' active' : '') + '" data-view="classic">' + icon('grid_on', 16) + '<span class="grow">Procore Classic</span></div>' +
       '<div class="es-view-sec">Company Views</div><div class="es-view-row disabled">' + icon('lock', 14) + '<span class="grow">Not available (P3)</span></div>' +
-      '<div class="es-view-sec">Project Views</div><div class="es-view-row disabled">' + icon('lock', 14) + '<span class="grow">Not available (P3)</span></div>' +
+      '<div class="es-view-sec">Project Views</div>' + pvHtml +
       '<div class="es-view-sec">Personal Views</div>';
     if (!views.length) html += '<div class="es-view-row disabled"><span class="grow">No personal views yet — Create saves the current columns, grouping and row height.</span></div>';
     views.forEach(function(v, i) {
@@ -2139,8 +2153,14 @@ requireAuth().catch(function(){});
     $('viewCreate').addEventListener('click', async function() {
       var name = await pcPrompt({ title: 'Create view', label: 'View name', value: 'My view', okLabel: 'Save' });
       if (!name) return;
-      var cols = {}; COLUMNS.forEach(function(c) { cols[c.key] = { visible: c.visible, width: c.width }; });
-      var v = loadViews(); v.push({ name: name, cols: cols, rowHeight: state.rowHeight, groupMode: state.groupMode, sort: state.sort, colFilters: state.colFilters });
+      var snap = viewSnapshot(name);
+      var share = canEdit && schemaOk && await pcConfirm({ title: 'Share this view?', message: 'Show "' + name + '" to everyone who opens this estimate (Project Views)? Cancel keeps it as your personal view.', okLabel: 'Share with project' });
+      if (share) {
+        var idx = projectViews().length;
+        if (await saveSettings(function(st) { st.views = (Array.isArray(st.views) ? st.views : []).concat([snap]); })) { activeView = 'j' + idx; renderViewsPanel(); }
+        return;
+      }
+      var v = loadViews(); v.push(snap);
       saveViews(v); activeView = 'p' + (v.length - 1); renderViewsPanel();
     });
     p.querySelectorAll('[data-view]').forEach(function(row) {
@@ -2149,11 +2169,21 @@ requireAuth().catch(function(){});
         var k = row.getAttribute('data-view');
         if (k === 'classic') { activeView = 'classic'; resetColumns(); state.rowHeight = 'medium'; applyRowHeight(); state.groupMode = 'manual'; $('groupMode').value = 'manual'; savePrefs(); refreshAll(); renderViewsPanel(); return; }
         var v = loadViews()[Number(k)]; if (!v) return;
-        COLUMNS.forEach(function(c) { var s = v.cols && v.cols[c.key]; if (s) { c.visible = !!s.visible; c.width = s.width || c.defaultWidth; } });
-        state.rowHeight = v.rowHeight || 'medium'; applyRowHeight();
-        state.groupMode = v.groupMode || 'manual'; $('groupMode').value = state.groupMode;
-        state.sort = v.sort || null; state.colFilters = v.colFilters || {};
-        activeView = 'p' + k; savePrefs(); refreshAll(); renderViewsPanel();
+        applyView(v, 'p' + k);
+      });
+    });
+    p.querySelectorAll('[data-pview]').forEach(function(row) {
+      row.addEventListener('click', function(e) {
+        if (e.target.closest('[data-pvdel]')) return;
+        var i = Number(row.getAttribute('data-pview')), v = projectViews()[i]; if (v) applyView(v, 'j' + i);
+      });
+    });
+    p.querySelectorAll('[data-pvdel]').forEach(function(b) {
+      b.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        var i = Number(b.getAttribute('data-pvdel')), v = projectViews()[i];
+        if (!v || !(await pcConfirm({ title: 'Delete project view', message: 'Delete "' + v.name + '" for everyone on this estimate?', okLabel: 'Delete', danger: true }))) return;
+        if (await saveSettings(function(st) { st.views = (Array.isArray(st.views) ? st.views : []).filter(function(_, k) { return k !== i; }); })) { activeView = 'classic'; renderViewsPanel(); }
       });
     });
     p.querySelectorAll('[data-viewdel]').forEach(function(b) {
@@ -2624,6 +2654,7 @@ requireAuth().catch(function(){});
   // Pull unit cost / labor / waste from est_catalog_items for every line (catalog_item_id, else exact name match)
   async function refreshFromCatalog() {
     if (!canEdit) return;
+    if (isLocked()) { showToast('Pricing is locked on this estimate — unlock it on the Overview tab to refresh prices from the catalog', 'error'); return; }
     var ids = [], names = [];
     currentLines.forEach(function(l) { if (l.catalog_item_id) ids.push(l.catalog_item_id); else if (l.description) names.push(l.description.replace(/\s*\([^()]*\)\s*$/, '')); });
     var byId = {}, byName = {};
@@ -3532,6 +3563,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=348"></script>
+<script src="sw-register.js?v=351"></script>
 </body>
 </html>
