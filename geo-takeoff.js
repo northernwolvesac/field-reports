@@ -583,13 +583,19 @@
       // other styles of the same drawing whose pairs are as label-matched as the proven one's (April Tax: 2.16 and 1.8 pt walls) are duct too
       if (topHit >= thr && keep.length) {
         var pr0 = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }), prSized = Math.max.apply(null, pr0.map(function (q) { return q[0]; }).concat([1]));
-        var provenCols = keep.map(function (k) { return k.split('|')[0]; });
-        stats.forEach(function (q) { if (keep.indexOf(q[2]) < 0 && q[0] >= 0.5 * prSized && q[0] / Math.max(q[1], 1) >= 0.5 && provenCols.indexOf(q[2].split('|')[0]) >= 0) keep.push(q[2]); });
+        var provenCols = keep.map(function (k) { return k.split('|')[0]; }), prTot = pr0.reduce(function (a, q) { return a + q[1]; }, 0);
+        // …and no more pair length than three times the proven style's (El Califa: a 0.3-pt weight with 14x the pairs is background, not duct)
+        stats.forEach(function (q) { if (keep.indexOf(q[2]) < 0 && q[0] >= 0.5 * prSized && q[0] / Math.max(q[1], 1) >= 0.5 && q[1] <= 3 * prTot && provenCols.indexOf(q[2].split('|')[0]) >= 0) keep.push(q[2]); });
       }
       var proven = keep.slice();
       if (topHit >= thr && keep.length) {
         var colOf = function (k) { return k.split('|')[0]; }, dark = function (k) { return /^0(\.0+)?,0(\.0+)?,0(\.0+)?$/.test(colOf(k)); };
         if (keep.every(dark)) stats.forEach(function (q) { if (keep.indexOf(q[2]) < 0 && dark(q[2]) && +q[2].split('|')[1] >= 0.5 && q[1] >= 8) keep.push(q[2]); });
+      }
+      // no style has convincing label evidence and the one that is left is background-sized (Parkinson's: 4,700 ft of "pairs" for 49 labels): no number
+      if (topHit < thr && !D.forceStyle) {
+        var keepTot = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0);
+        if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length };
       }
       if (D.forceStyle) keep = [D.forceStyle];   // offline experiments
       var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { var ns = norm(s); if (proven.indexOf(k) < 0) ns.extra = true; S.push(ns); }); });
