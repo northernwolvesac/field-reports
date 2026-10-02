@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=353">
+<link rel="stylesheet" href="procore-ui.css?v=355">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=353"></script>
-<script src="auth.js?v=353"></script>
-<script src="est-totals.js?v=353"></script>
-<script src="procore-ui.js?v=353"></script>
+<script src="supabase-config.js?v=355"></script>
+<script src="auth.js?v=355"></script>
+<script src="est-totals.js?v=355"></script>
+<script src="procore-ui.js?v=355"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=353"></script>
-<script src="est-drawings.js?v=353"></script>
-<script src="nw-catalog-picker.js?v=353"></script>
-<script src="geo-takeoff.js?v=353"></script>
+<script src="bid-actions.js?v=355"></script>
+<script src="est-drawings.js?v=355"></script>
+<script src="nw-catalog-picker.js?v=355"></script>
+<script src="geo-takeoff.js?v=355"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -358,6 +358,7 @@ requireAuth().catch(function(){});
   function headerKebab() {
     return [
       { label: 'Upload plans', icon: 'upload', onClick: function() { if (!me.canEdit) { toast('Read-only', 'error'); return; } $('uploadInput').click(); } },
+      { label: 'Name sheets with AI', icon: 'auto_awesome', onClick: nameSheetsAI },
       { label: 'Roll up to Estimate', icon: 'swap_vert', onClick: openRollup },
       { label: 'Export this page as PDF', icon: 'download', onClick: exportPdf },
       { label: 'Analyze page', icon: 'auto_awesome', onClick: analyzeModal },
@@ -1008,12 +1009,12 @@ requireAuth().catch(function(){});
     if (plans.length && planIdx < 0) await openPlan(0);
     renderThumbs();
   }
-  function planLabel(p) { return p.drawing.filename.replace(/\.pdf$/i, '') + ' - Page ' + p.page + (p.sheet ? ' (' + p.sheet + ')' : ''); }
+  function planLabel(p) { return p.drawing.filename.replace(/\.pdf$/i, '') + ' - Page ' + p.page + (p.sheet ? ' (' + p.sheet + ')' : '') + (p.title ? ' — ' + p.title : ''); }
   function planShort(p) { return p.sheet || (p.drawing.filename.replace(/\.pdf$/i, '').slice(0, 18) + ' p' + p.page); }
   function updatePlanLabel() {
     var p = plans[planIdx], b = $('planBtn');
     $('planLabel').textContent = p ? p.drawing.filename.replace(/\.pdf$/i, '') + ' - Page ' + p.page : (plans.length ? 'Pick a plan' : '— No plans yet —');
-    b.title = p ? (p.sheet ? p.sheet + ' · ' : '') + p.drawing.filename : ''; b.disabled = !plans.length;
+    b.title = p ? (p.sheet ? p.sheet + ' · ' : '') + (p.title ? p.title + ' · ' : '') + p.drawing.filename : ''; b.disabled = !plans.length;
     $('prevPlan').disabled = planIdx <= 0; $('nextPlan').disabled = planIdx >= plans.length - 1;
     $('openNewBtn').disabled = $('downloadBtn').disabled = !p;
   }
@@ -1027,7 +1028,7 @@ requireAuth().catch(function(){});
     var host = $('thumbs'); host.classList.toggle('hidden', !thumbsOn); var tb = $('thumbsBtn'); if (tb) tb.classList.toggle('on', thumbsOn);
     if (!thumbsOn) return;
     var counts = {}; allMeas.forEach(function(m) { if (m.tool_type === 'scale') return; var k = m.drawing_id + ':' + m.page_number; counts[k] = (counts[k] || 0) + 1; });
-    host.innerHTML = plans.map(function(p, i) { var k = p.drawing.id + ':' + p.page; return '<div class="thumb' + (i === planIdx ? ' on' : '') + '" data-plan="' + i + '"><div class="im">' + (p.thumb ? '<img src="' + p.thumb + '">' : 'p' + p.page) + '</div><div class="lb"><span>' + esc(p.sheet || 'p' + p.page) + '</span>' + (counts[k] ? '<small>' + counts[k] + '</small>' : '') + '</div></div>'; }).join('');
+    host.innerHTML = plans.map(function(p, i) { var k = p.drawing.id + ':' + p.page; return '<div class="thumb' + (i === planIdx ? ' on' : '') + '" data-plan="' + i + '" title="' + esc((p.sheet || 'p' + p.page) + (p.title ? ' — ' + p.title : '')) + '"><div class="im">' + (p.thumb ? '<img src="' + p.thumb + '">' : 'p' + p.page) + '</div><div class="lb"><span>' + esc(p.sheet || 'p' + p.page) + '</span>' + (counts[k] ? '<small>' + counts[k] + '</small>' : '') + '</div></div>'; }).join('');
     host.querySelectorAll('[data-plan]').forEach(function(el) { el.onclick = function() { openPlan(+el.getAttribute('data-plan')); }; });
     var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' });
     buildThumbs();
@@ -1841,6 +1842,38 @@ requireAuth().catch(function(){});
     } catch (e) { toast('Auto-measure failed: ' + e.message, 'error'); }
   }
 
+  // ═══════════════════════ sheet names (AI) ═══════════════════════
+  // The title block of every sheet is read by the triage model (Haiku, three small renders ≈ $0.005): sheet number, title, discipline, kind.
+  async function nameSheetsAI() {
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    if (!window.NWGeo || !NWGeo.triageImages) { toast('The sheet reader did not load — reload the page', 'error'); return; }
+    var todo = plans.filter(function(p) { return !p.title; });
+    if (!todo.length) { toast('Every sheet already has a name'); return; }
+    if (!await P.confirm({ title: 'Name sheets with AI', message: 'Read the sheet number and title of ' + todo.length + ' sheet' + (todo.length === 1 ? '' : 's') + ' from their title blocks (about $' + Math.max(0.01, todo.length * 0.005).toFixed(2) + ')?', okLabel: 'Name sheets' })) return;
+    var sess = (await sb.auth.getSession()).data.session, done = 0, bad = 0, saves = {};
+    toast('Reading sheet names…');
+    for (var i = 0; i < todo.length; i++) {
+      var p = todo[i];
+      try {
+        var doc = await getDoc(p.drawing), pg = await doc.getPage(p.page), tc = await pg.getTextContent();
+        var hint = tc.items.map(function(t) { return t.str; }).join(' ').replace(/\s+/g, ' ').trim().slice(0, 1200);
+        var imgs = await NWGeo.triageImages(pg);
+        var r = await fetch(SUPABASE_URL + '/functions/v1/ai-estimator', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sess.access_token, apikey: SUPABASE_ANON_KEY },
+          body: JSON.stringify({ action: 'triage', images: imgs, text_hint: hint }) });
+        var j = await r.json(); if (!j.ok) throw new Error(j.error || 'reader failed');
+        var t = j.triage || {}, meta = Object.assign({}, p.drawing.page_meta || {}), old = meta[String(p.page)] || {};
+        meta[String(p.page)] = Object.assign({}, old, { sheet: (t.confidence !== 'low' && t.sheet_no) || old.sheet || null, title: t.sheet_title || null, kind: t.kind || null, discipline: t.discipline || null, work: t.work || null });
+        p.drawing.page_meta = meta; p.sheet = meta[String(p.page)].sheet; p.title = meta[String(p.page)].title; p.kind = t.kind || null; p.discipline = t.discipline || null;
+        saves[p.drawing.id] = meta; done++;
+      } catch (e) { bad++; console.warn('sheet name', p.page, e); }
+      if ((i + 1) % 6 === 0 || i === todo.length - 1) {
+        var ids = Object.keys(saves); for (var k = 0; k < ids.length; k++) { var dr = drawings.find(function(x) { return x.id === ids[k]; }); await sb.from('estimate_drawings').update({ page_meta: saves[ids[k]] }).eq('id', ids[k]); }
+        saves = {}; updatePlanLabel(); renderThumbs(); toast('Named ' + done + ' of ' + todo.length + ' sheets…');
+      }
+    }
+    toast(done + ' sheet' + (done === 1 ? '' : 's') + ' named' + (bad ? ', ' + bad + ' could not be read' : ''), bad ? 'error' : 'success');
+  }
+
   // ═══════════════════════ upload / export / analyze ═══════════════════════
   async function uploadPdfs(ev) {
     var files = Array.prototype.slice.call(ev.target.files || []); ev.target.value = ''; if (!files.length) return; if (!me.canEdit) { toast('Read-only', 'error'); return; }
@@ -1959,6 +1992,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=353"></script>
+<script src="sw-register.js?v=355"></script>
 </body>
 </html>

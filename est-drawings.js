@@ -113,7 +113,7 @@
     (rows || []).forEach(function (d) {
       for (var p = 1; p <= (d.page_count || 1); p++) {
         var meta = (d.page_meta || {})[String(p)] || {};
-        out.push({ drawing: d, page: p, sheet: meta.sheet || null, scale: meta.scale || null, key: d.id + ':' + p });
+        out.push({ drawing: d, page: p, sheet: meta.sheet || null, scale: meta.scale || null, title: meta.title || null, kind: meta.kind || null, discipline: meta.discipline || null, key: d.id + ':' + p });
       }
     });
     return out;

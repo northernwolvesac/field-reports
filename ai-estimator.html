@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=354"></script>
-<script src="auth.js?v=354"></script>
-<script src="est-totals.js?v=354"></script>
-<script src="est-engine.js?v=354"></script>
-<script src="geo-takeoff.js?v=354"></script>
+<script src="supabase-config.js?v=355"></script>
+<script src="auth.js?v=355"></script>
+<script src="est-totals.js?v=355"></script>
+<script src="est-engine.js?v=355"></script>
+<script src="geo-takeoff.js?v=355"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -216,7 +216,7 @@ var AE = (function() {
     if (r.duct_runs && r.duct_runs.length) bits.push(Math.round(r.duct_runs.reduce(function(a, d) { return a + Number(d.lf || 0); }, 0)) + ' ft duct');
     if (r.pipe_runs && r.pipe_runs.length) bits.push(Math.round(r.pipe_runs.reduce(function(a, d) { return a + Number(d.lf || 0); }, 0)) + ' ft pipe');
     if (r.scope_notes && r.scope_notes.length) bits.push(r.scope_notes.length + ' notes');
-    if (p.status === 'skipped' && r.triage) bits.push('not mechanical (' + esc(r.triage.discipline || '?') + ')');
+    if (p.status === 'skipped' && r.triage) bits.push(r.triage.superseded ? 'superseded by ' + esc(r.triage.superseded) : 'not mechanical (' + esc(r.triage.discipline || '?') + ')');
     if (r.total) bits.push(money(r.total));
     if (r.geo && r.geo.total_ft) bits.push('📐 ' + Math.round(r.geo.total_ft) + ' ft measured');
     if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
@@ -573,11 +573,41 @@ var AE = (function() {
     measuring = ''; window.NW_HOLD_RELOAD = false;
     return skipped;
   }
+  // The same sheet in two files (a revised set, an addendum): same sheet number (without the revision decimal), same title, same level —
+  // only the page of the file uploaded last is counted. 645 Madison: R1 and the 7/1 set both carried M-504, M-505 … (the quantities doubled).
+  async function markSuperseded() {
+    var order = {}; files.forEach(function(f, i) { order[f.id] = i; });
+    var norm = function(x) { return String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+    var groups = {};
+    pages.forEach(function(p) {
+      var f = files.find(function(x) { return x.id === p.file_id; }) || {}, t = (p.result && p.result.triage) || null;
+      if (!t || f.kind === 'quote' || f.kind === 'specs') return;
+      if (p.status === 'skipped' && !t.superseded) return;                   // not mechanical: nothing to supersede
+      var no = norm(String(t.sheet_no || '').replace(/\..*$/, '')), title = norm(t.sheet_title || ''), lvl = norm(t.level || '');
+      if (!no || title.length < 8) return;
+      var k = no + '|' + title + '|' + lvl; (groups[k] = groups[k] || []).push(p);
+    });
+    var n = 0;
+    for (var k in groups) {
+      var g = groups[k]; if (g.length < 2) continue;
+      g.sort(function(a, b) { return (order[a.file_id] || 0) - (order[b.file_id] || 0) || a.page_no - b.page_no; });
+      var keep = g[g.length - 1], kf = files.find(function(x) { return x.id === keep.file_id; }) || {};
+      for (var i = 0; i < g.length - 1; i++) {
+        var p = g[i]; if (p.file_id === keep.file_id || (p.result && p.result.triage && p.result.triage.superseded && p.status === 'skipped')) continue;
+        var res = Object.assign({}, p.result || {}); res.triage = Object.assign({}, res.triage, { superseded: kf.file_name || 'a later file' });
+        await supabaseClient.from('ai_est_pages').update({ status: 'skipped', result: res }).eq('id', p.id);
+        p.status = 'skipped'; p.result = res; n++;
+      }
+    }
+    return n;
+  }
   async function readAll() {
     if (running || measuring) return;
     var skipped = await triageSheets(pages.filter(function(p) { return p.status === 'pending'; }));
+    var dup = await markSuperseded();
     await reload(); render();
-    if (skipped) toast(skipped + ' sheet' + (skipped === 1 ? '' : 's') + ' skipped (not mechanical) — press ↻ on one to read it anyway');
+    if (dup) toast(dup + ' sheet' + (dup === 1 ? ' appears' : 's appear') + ' in two files — only the later file is counted (press ↻ on one to read it anyway)');
+    else if (skipped) toast(skipped + ' sheet' + (skipped === 1 ? '' : 's') + ' skipped (not mechanical) — press ↻ on one to read it anyway');
     runQueue(pages.filter(function(p) { return p.status === 'pending' || p.status === 'error'; }));
   }
   function readOne(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) runQueue([p]); }
@@ -863,6 +893,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=354"></script>
+<script src="sw-register.js?v=355"></script>
 </body>
 </html>
