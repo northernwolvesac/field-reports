@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=351">
+<link rel="stylesheet" href="procore-ui.css?v=352">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=351"></script>
-<script src="auth.js?v=351"></script>
-<script src="est-totals.js?v=351"></script>
-<script src="procore-ui.js?v=351"></script>
+<script src="supabase-config.js?v=352"></script>
+<script src="auth.js?v=352"></script>
+<script src="est-totals.js?v=352"></script>
+<script src="procore-ui.js?v=352"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=351"></script>
-<script src="est-drawings.js?v=351"></script>
-<script src="nw-catalog-picker.js?v=351"></script>
-<script src="geo-takeoff.js?v=351"></script>
+<script src="bid-actions.js?v=352"></script>
+<script src="est-drawings.js?v=352"></script>
+<script src="nw-catalog-picker.js?v=352"></script>
+<script src="geo-takeoff.js?v=352"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -1797,6 +1797,20 @@ requireAuth().catch(function(){});
   }
 
   // ═══════════════════════ auto-measure (geo-takeoff.js) ═══════════════════════
+  // Size labels drawn as outlines / strokes have no text layer: Claude vision (Haiku) reads word crops composed on numbered sheets (≈ $0.03 / sheet)
+  async function visionLabels(data) {
+    var nLab = data.text.filter(function(t) { return NWGeo.isSizeLabel(t.str) || NWGeo.isPipeLabel(t.str); }).length;
+    if (nLab >= 15 || (data.glyphs || []).length < 150) return null;
+    toast('The labels on this sheet are drawn as outlines — reading them with AI (about $0.03)…');
+    var sess = (await sb.auth.getSession()).data.session;
+    var reader = async function(canvas, n) {
+      var r = await fetch(SUPABASE_URL + '/functions/v1/ai-estimator', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sess.access_token, apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify({ action: 'ocr', image: canvas.toDataURL('image/png').split(',')[1], n: n }) });
+      var j = await r.json(); if (!j.ok) throw new Error(j.error || 'AI reader failed'); return j.reads || [];
+    };
+    try { return await NWGeo.ocrLabels(pdfPage, data, { maxLetters: 12, minLetters: 3, reader: reader }); } catch (e) { toast('Reading labels failed: ' + e.message, 'error'); return null; }
+  }
+  function addLabels(D, o) { D.text = D.text.concat(o.items); D.fullText += ' ' + o.items.map(function(t) { return t.str; }).join(' ') + ' ' + (o.text || ''); }
   async function autoMeasure() {
     if (!me.canEdit || !schemaOk) { toast(schemaOk ? 'Read-only' : 'Run takeoff-v2-schema.sql first', 'error'); return; }
     if (!pdfPage || !window.NWGeo) { toast('Open a plan first', 'error'); return; }
@@ -1804,7 +1818,9 @@ requireAuth().catch(function(){});
     toast('Reading the drawing geometry…');
     try {
       var p = plans[planIdx], data = await NWGeo.extract(pdfPage); data.wantPieces = true;
-      var d = await NWGeo.measure(data), pipeData = await NWGeo.extract(pdfPage); pipeData.wantPieces = true; var pp = await NWGeo.measurePipes(pipeData);
+      var lab = await visionLabels(data);   // outlined / stroked text: the size labels are read by AI first
+      if (lab) addLabels(data, lab);
+      var d = await NWGeo.measure(data), pipeData = await NWGeo.extract(pdfPage); pipeData.wantPieces = true; if (lab) addLabels(pipeData, lab); var pp = await NWGeo.measurePipes(pipeData);
       var old = meas.filter(function(m) { return m.label === 'auto'; }); for (var k = 0; k < old.length; k++) await deleteMark(old[k].id, true);
       var rows = [], made = 0;
       async function layerFor(name, cat, group) { var l = layers.find(function(x) { return x.name.toLowerCase() === name.toLowerCase(); }); if (l) return l;
@@ -1943,6 +1959,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=351"></script>
+<script src="sw-register.js?v=352"></script>
 </body>
 </html>
