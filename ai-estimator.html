@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=353"></script>
-<script src="auth.js?v=353"></script>
-<script src="est-totals.js?v=353"></script>
-<script src="est-engine.js?v=353"></script>
-<script src="geo-takeoff.js?v=353"></script>
+<script src="supabase-config.js?v=354"></script>
+<script src="auth.js?v=354"></script>
+<script src="est-totals.js?v=354"></script>
+<script src="est-engine.js?v=354"></script>
+<script src="geo-takeoff.js?v=354"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -440,10 +440,10 @@ var AE = (function() {
       var p = list[i];
       var riser = isRiserSheet(p), pipes = !riser && isPipePlan(p) && !isDuctPlan(p);
       measuring = 'Measuring ' + (riser ? 'risers' : pipes ? 'pipes' : 'ducts') + ' on ' + (p.sheet_no || 'sheet ' + p.page_no) + ' (' + (i + 1) + ' of ' + list.length + ')…'; render();
-      var geo, ocrSave = null;
+      var geo, ocrSave = null, geoPipe = null;
       try {
         var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, pg1 = await pdf.getPage(1);
-        var data = await NWGeo.extract(pg1), ocrInfo = null;
+        var data = await NWGeo.extract(pg1), ocrInfo = null, ocrItems = null;
         // outlined / stroked text (AutoCAD SHX): no size labels in the text layer but thousands of glyph paths → OCR the labels
         if (!riser) {
           var nLab = data.text.filter(function (t) { return pipes ? NWGeo.isPipeLabel(t.str) : NWGeo.isSizeLabel(t.str); }).length;
@@ -451,6 +451,7 @@ var AE = (function() {
             var cached = !all && p.result && p.result.ocr_labels;
             var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: pipes ? 2 : 3, reader: aiReader,
               onProgress: function (d, n) { measuring = 'Reading labels (OCR) on ' + (p.sheet_no || 'sheet ' + p.page_no) + ': ' + d + ' / ' + n + ' words…'; render(); } });
+            ocrItems = ocr.items;
             data.text = data.text.concat(ocr.items);
             data.fullText += ' ' + ocr.items.map(function (t) { return t.str; }).join(' ') + ' ' + (ocr.text || '');
             ocrInfo = { labels: ocr.items.length, words: ocr.words || null, secs: ocr.secs || null, cached: !!cached };
@@ -461,11 +462,26 @@ var AE = (function() {
         if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, labels: g.labels, unsized_ft: g.unsized_ft, levels: g.levels, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, unsized_ft: g.unsized_ft, levels: g.levels, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+        // refrigerant / water piping drawn on the HVAC plan itself: measured too when the AI saw pipe runs on this sheet, and kept only when the
+        // two agree within a factor of 3-4 (duct lines and walls look like pipes to the line follower)
+        if (!riser && !pipes && !g.error) {
+          var aiPipeFt = ((p.result && p.result.pipe_runs) || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
+          if (aiPipeFt >= 20) {
+            var pdata2 = await NWGeo.extract(pg1);
+            if (ocrItems) { pdata2.text = pdata2.text.concat(ocrItems); pdata2.fullText += ' ' + ocrItems.map(function (t) { return t.str; }).join(' '); }
+            if (aiScale && !NWGeo.hasScale(pdata2.fullText)) pdata2.fullText += ' SCALE: ' + aiScale;
+            var gp = await NWGeo.measurePipes(pdata2);
+            geoPipe = gp.error ? { error: gp.error, at: new Date().toISOString() }
+              : (gp.total_ft <= 3 * aiPipeFt && gp.total_ft >= aiPipeFt / 4) ? { sizes: gp.sizes, total_ft: gp.total_ft, ptft: gp.ptft, labels: gp.labels, at: new Date().toISOString() }
+              : { error: 'pipes: measured ' + Math.round(gp.total_ft) + ' ft vs the AI\'s ' + Math.round(aiPipeFt) + ' ft — not used', at: new Date().toISOString() };
+          }
+        }
         pdf.destroy();
       } catch (e) { geo = { error: String(e.message || e).slice(0, 200), at: new Date().toISOString() }; }
       var patch = {}; patch[riser ? 'geo_riser' : pipes ? 'geo_pipe' : 'geo'] = geo;
       if (ocrSave) patch.ocr_labels = ocrSave;
+      if (geoPipe) patch.geo_pipe = geoPipe;
       var res = Object.assign({}, p.result || {}, patch);
       await supabaseClient.from('ai_est_pages').update({ result: res }).eq('id', p.id);
       p.result = res;
@@ -729,7 +745,7 @@ var AE = (function() {
     if (bridging) return;
     if (!session.estimate_id) { toast('Create the estimate first'); return; }
     var estId = session.estimate_id;
-    var list = pages.filter(function(p) { var r = p.result || {}; return (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || (isPipePlan(p) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0); });
+    var list = pages.filter(function(p) { var r = p.result || {}; return (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || ((isPipePlan(p) || isDuctPlan(p)) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0); });
     if (!list.length) { toast('Nothing measured yet — press “Measure ducts & pipes” first'); return; }
     if (!confirm('Copy the drawing set into this estimate\'s Takeoff and lay the measured ducts, pipes and risers on the plans as layers? Earlier auto-marks there are replaced.')) return;
     bridging = 'Preparing…'; render();
@@ -793,7 +809,7 @@ var AE = (function() {
               if (pc.k === 'd') { var h = pc.len * ptft / 2; rows.push(mk(l, [V(pc.cx - pc.ux * h, pc.cy - pc.uy * h), V(pc.cx + pc.ux * h, pc.cy + pc.uy * h)], pc.len, ptft)); }
               else (pc.segs || []).forEach(function(s) { rows.push(mk(l, [V(s[0], s[1]), V(s[2], s[3])], Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft, ptft)); }); } }
         }
-        if (isPipePlan(p) && res.geo_pipe && res.geo_pipe.total_ft > 0) {
+        if ((isPipePlan(p) || isDuctPlan(p)) && res.geo_pipe && res.geo_pipe.total_ft > 0) {
           var pdata = withLabels(await NWGeo.extract(page), p); pdata.wantPieces = true; var pp = await NWGeo.measurePipes(pdata);
           if (pp && !pp.error && pp.xy) { ptft = ptft || pp.ptft;
             for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
@@ -847,6 +863,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=353"></script>
+<script src="sw-register.js?v=354"></script>
 </body>
 </html>

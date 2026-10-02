@@ -303,8 +303,11 @@
           var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
           var coarseDup = !!coarseSet[sh];
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
+          // the AI's reading of the same sheet is the cross-check: a measurement more than 3x it (the wrong line style paired up: OGCP 5200 gave
+          // 6,193 ft against the AI's 1,285) or under a quarter of it (labels missing) is not used
           var weakGeo = r.geo && r.geo.total_ft > 0 && (((r.geo.labels || 0) < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft) ||
-            ((r.geo.labels || 0) < 20 && aiFt > 2 * r.geo.total_ft * GEO_FITTINGS));
+            ((r.geo.labels || 0) < 20 && aiFt > 2 * r.geo.total_ft * GEO_FITTINGS) ||
+            (aiFt >= 60 && (r.geo.total_ft > 3 * aiFt || r.geo.total_ft * GEO_FITTINGS < aiFt / 4)));
           if (weakGeo && !coarseDup) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: r.geo.labels || 0 });
           if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check

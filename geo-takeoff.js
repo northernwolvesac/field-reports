@@ -1042,6 +1042,7 @@
       var ptft = +best * 72, labs = [];
       D.text.forEach(function (t) {
         var txt = t.str; if (/['’]/.test(txt) || txt.length > 34) return;
+        if (/[Øø∅]|DIA/i.test(txt) && !PSVC.test(txt) && txt.indexOf('/') < 0) return;      // 8"Ø is a round duct, not an 8-inch pipe
         var mm = PSIZE.exec(txt); if (!mm) return;
         var rest = (txt.slice(0, mm.index) + txt.slice(mm.index + mm[0].length)).trim();
         if (rest && !PSVC.test(rest) && !/^(PROVIDE|NEW|TO|\s)*$/.test(rest)) return;
