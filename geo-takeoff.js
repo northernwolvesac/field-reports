@@ -475,12 +475,13 @@
     function frac(s) { if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
     function hyp(a, b) { return Math.sqrt(a * a + b * b); }
 
-    var STD_SCALES = [1 / 16, 3 / 32, 1 / 8, 3 / 16, 9 / 64, 1 / 4, 3 / 8, 9 / 32, 1 / 2, 3 / 4, 1];   // inches per foot (3/32, 9/64, 9/32 = 1/8, 3/16, 3/8 printed at 75 %)
+    var STD_SCALES = [1 / 16, 3 / 32, 1 / 8, 3 / 16, 1 / 4, 3 / 8, 1 / 2, 3 / 4, 1];   // inches per foot
     function measure(D) {
       var found = {}, m;
       SCALE_RE.lastIndex = 0;
       while ((m = SCALE_RE.exec(D.fullText))) { var f = frac(m[1]); found[f] = (found[f] || 0) + 1; }
       var textScales = Object.keys(found).map(Number).sort(function (p, q) { return found[q] - found[p] || q - p; });
+      if (D.forceScale) textScales = [D.forceScale];   // offline experiments (inches per foot)
       var labs = [];
       D.text.forEach(function (t) {
         var a = SIZE_RE.exec(t.str), r = a ? null : ROUND_RE.exec(t.str);
@@ -519,39 +520,54 @@
         });
         return { bySty: bySty, dashSty: dashSty };
       }
-      // per style: the pairs of parallel lines and how many size labels sit INSIDE one at exactly the label's width
+      // per style: the pairs of parallel lines and how many size labels sit INSIDE one at the label's width plus ONE consistent allowance (0-4 in:
+      // some sheets draw the duct walls around the clear inside dimension, others on it). A style whose pairs add up to far more line than the
+      // labels can explain (the gray background: 4,600 ft of "pairs" for 22 labels) is discounted.
       function score(ptft, P) {
-        var stats = [], top = 0, topHit = 0;
+        var stats = [], top = 0, topEff = 0;
         Object.keys(P.bySty).forEach(function (key) {
           var segs = P.bySty[key]; if (segs.length < 20 || /^fill\|/.test(key)) return;
-          var S = segs.map(norm), pc = findPairs(S, ptft, labs).pieces, sized = 0, tot = 0, tight = 0, hit = {};
+          var S = segs.map(norm), pc = findPairs(S, ptft, labs).pieces, sized = 0, tot = 0, NB = 17, perD = [], ftD = [];
+          for (var z = 0; z < NB; z++) { perD.push({}); ftD.push(0); }
           pc.forEach(function (p) {
             tot += p.len_ft; if (looseLabel(p, labs, ptft)) sized += p.len_ft;
-            var tl = tightLabel(p, labs, ptft); if (tl) { tight += p.len_ft; hit[tl.cx + ',' + tl.cy] = 1; }
+            var half = p.len_ft * ptft / 2, hitK = [];
+            labs.forEach(function (l) {
+              var dx = l.cx - p.cx, dy = l.cy - p.cy, along = Math.abs(dx * p.ux + dy * p.uy), perp = Math.abs(-dx * p.uy + dy * p.ux);
+              if (along > half + 1.5 * ptft || perp > (p.w_in / 24) * ptft + 0.8 * ptft) return;
+              var key2 = l.cx + ',' + l.cy, dims = l.round || l.h === l.w ? [l.w] : [l.w, l.h];
+              dims.forEach(function (dm) { var d = p.w_in - dm; for (var k = 0; k < NB; k++) if (Math.abs(d - (k - 8)) <= 1.0) { perD[k][key2] = 1; hitK[k] = true; } });
+            });
+            for (var k = 0; k < NB; k++) if (hitK[k]) ftD[k] += p.len_ft;
           });
-          stats.push([sized, tot, key, tight, Object.keys(hit).length]);
+          var bk = 0, bh = 0;
+          for (var k = 0; k < NB; k++) { var c = Object.keys(perD[k]).length; if (c > bh) { bh = c; bk = k; } }
+          // the peak must stand out: a style whose labels fit equally well at any allowance matched by chance (gray background, table rules)
+          var rival = 0; for (var k2 = 0; k2 < NB; k2++) if (Math.abs(k2 - bk) >= 4) rival = Math.max(rival, Object.keys(perD[k2]).length);
+          var contrast = Math.max(0, bh - rival), bkIn = bk - 8;   // allowance in inches, -8 .. +8
+          var pen = Math.min(1, labs.length * 40 / Math.max(tot, 1));
+          stats.push([sized, tot, key, ftD[bk], bh, bkIn, contrast * pen]);
         });
-        stats.forEach(function (s) { top = Math.max(top, s[0]); topHit = Math.max(topHit, s[4]); });
-        return { stats: stats, top: top, topHit: topHit };
+        stats.forEach(function (q) { top = Math.max(top, q[0]); topEff = Math.max(topEff, q[6]); });
+        return { stats: stats, top: top, topHit: topEff };
       }
-      var ptft = textScales.length ? textScales[0] * 72 : 0, P = null, SC = null, scaleFrom = 'text', thr = Math.max(5, 0.15 * labs.length);
+      var ptft = textScales.length ? textScales[0] * 72 : 0, P = null, SC = null, scaleFrom = 'text', thr = Math.max(3, 0.1 * labs.length);
       if (ptft) { P = prep(ptft); SC = score(ptft, P); }
       // self-calibration: when the printed scale does not make the size labels fit the duct walls (a sheet with several views and scales, or
       // a scale note the text layer does not carry — outlined text), try the usual scales: the right one makes the pair gaps equal the labels
-      // (OGCP 1520: the 1/4" notes of the two small alt-RCP views outvoted the 1/8" main plan, 3 labels fit instead of 15+)
-      if (!ptft || SC.topHit < thr) {
-        // candidates: every scale printed on the sheet, and each of them reduced to 75 % / 50 % (a sheet plotted smaller than its drawing size
-        // keeps the original scale note — OGCP 1520's "1/8" = 1'-0"" plan is really 3/32"); with no scale note at all, the usual scales
+      // (OGCP 1520: the 1/4" notes of the two small alt-RCP views outvoted the 1/8" main plan)
+      if (!D.forceScale && (!ptft || SC.topHit < thr)) {
+        // candidates: every scale printed on the sheet (the main plan's is not always the most frequent one); with no scale note at all, the usual scales
         var cand = [];
         function addC(x) { for (var q = 0; q < cand.length; q++) if (Math.abs(cand[q] - x) < 1e-6) return; if (!ptft || Math.abs(x * 72 - ptft) > 1e-6) cand.push(x); }
-        if (textScales.length) textScales.forEach(function (x) { addC(x); addC(x * 0.75); addC(x * 0.5); });
+        if (textScales.length) textScales.forEach(addC);
         else STD_SCALES.forEach(addC);
         var lx = labs.map(function (l) { return l.cx; }), ly = labs.map(function (l) { return l.cy; }),
           labSpan = Math.max(Math.max.apply(null, lx) - Math.min.apply(null, lx), Math.max.apply(null, ly) - Math.min.apply(null, ly));
         if (!textScales.length) cand = cand.filter(function (x) { var ft = labSpan / (x * 72); return ft >= 12 && ft <= 1000; });
         var bestC = { ptft: ptft, P: P, SC: SC, hit: SC ? SC.topHit : -1 };
         var tried = [[ptft, SC ? SC.topHit : -1]];
-        cand.forEach(function (x) { var pt = x * 72, P2 = prep(pt), S2 = score(pt, P2); tried.push([pt, S2.topHit, S2.stats.map(function (q) { return q[2].replace(/0,0,0/,'K').replace(/0.2,0.2,0.2/,'G') + ':' + q[4] + '/' + Math.round(q[3]) + '/' + Math.round(q[1]); }).filter(function (z) { return z.indexOf(':0/0/') < 0; }).join(' ')]); if (S2.topHit > bestC.hit) bestC = { ptft: pt, P: P2, SC: S2, hit: S2.topHit }; });
+        cand.forEach(function (x) { var pt = x * 72, P2 = prep(pt), S2 = score(pt, P2); tried.push([pt, S2.topHit, S2.stats.map(function (q) { return q[2].replace(/0,0,0/,'K').replace(/0.2,0.2,0.2/,'G') + ':' + q[4] + '@' + q[5] + 'e' + q[6].toFixed(1) + '/' + Math.round(q[3]) + '/' + Math.round(q[1]); }).filter(function (z) { return z.indexOf(':0@0e0.0/0/') < 0; }).join(' ')]); if (S2.topHit > bestC.hit) bestC = { ptft: pt, P: P2, SC: S2, hit: S2.topHit }; });
         if (D.debugScales) D.debugScales.push.apply(D.debugScales, tried);
         if (bestC.hit >= thr && bestC.hit >= 2 * Math.max(1, SC ? SC.topHit : 0)) { ptft = bestC.ptft; P = bestC.P; SC = bestC.SC; scaleFrom = 'labels'; }
       }
@@ -560,10 +576,23 @@
       // the duct walls are the style whose pairs have a size label INSIDE them at exactly the label's width (OGCP 5200: the thin 0.24-pt background
       // lines paired up everywhere and "matched" 4,800 ft of loose labels — 6.3x too much; the real 1.44-pt walls hold 43 of the 80 labels)
       var keep = topHit >= thr
-        ? stats.filter(function (s) { return s[4] === topHit || (s[4] >= 0.6 * topHit && s[3] / Math.max(s[1], 1) >= 0.3); }).map(function (s) { return s[2]; })
+        ? stats.filter(function (s) { return s[6] === topHit || (s[6] >= 0.6 * topHit && s[3] / Math.max(s[1], 1) >= 0.3); }).map(function (s) { return s[2]; })
         : stats.filter(function (s) { return top && (s[0] === top || (s[0] >= 0.5 * top && s[0] / Math.max(s[1], 1) >= 0.5)); }).map(function (s) { return s[2]; });
+      // the MEP lines of one drawing share a colour but come in several weights (OGCP 1520: slot ducts 0.72, mains 1.08 / 1.44, plenums 1.8) and the
+      // label evidence of one weight does not vouch for another — black walls of a black-drawn duct set join the style that was proven
+      // other styles of the same drawing whose pairs are as label-matched as the proven one's (April Tax: 2.16 and 1.8 pt walls) are duct too
+      if (topHit >= thr && keep.length) {
+        var pr0 = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }), prSized = Math.max.apply(null, pr0.map(function (q) { return q[0]; }).concat([1]));
+        var provenCols = keep.map(function (k) { return k.split('|')[0]; });
+        stats.forEach(function (q) { if (keep.indexOf(q[2]) < 0 && q[0] >= 0.5 * prSized && q[0] / Math.max(q[1], 1) >= 0.5 && provenCols.indexOf(q[2].split('|')[0]) >= 0) keep.push(q[2]); });
+      }
+      var proven = keep.slice();
+      if (topHit >= thr && keep.length) {
+        var colOf = function (k) { return k.split('|')[0]; }, dark = function (k) { return /^0(\.0+)?,0(\.0+)?,0(\.0+)?$/.test(colOf(k)); };
+        if (keep.every(dark)) stats.forEach(function (q) { if (keep.indexOf(q[2]) < 0 && dark(q[2]) && +q[2].split('|')[1] >= 0.5 && q[1] >= 8) keep.push(q[2]); });
+      }
       if (D.forceStyle) keep = [D.forceStyle];   // offline experiments
-      var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { S.push(norm(s)); }); });
+      var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { var ns = norm(s); if (proven.indexOf(k) < 0) ns.extra = true; S.push(ns); }); });
       var fp = findPairs(S, ptft, labs), pcs = fp.pieces;
       // sizing order: the label written on / beside the piece → carried along the connected run → the nearest label within
       // 8 ft (same width) → carried again → width + usual depth. A label 25 ft away used to win over the run itself, so a
@@ -597,6 +626,69 @@
       propagate(pcs, ptft);
       pcs.forEach(function (p) { if (p.size) return; var l = nearLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.via = 'near'; } });
       propagate(pcs, ptft);
+      // Duct is one connected network and a size label sits on it somewhere. Table rules, legend swatches and hatch pair up too and borrow
+      // a width-matching label from far away ("20x10": 394 ft in the title block of 645 Madison) but never touch a labelled duct.
+      var orphanFt = 0, extraFt = 0;
+      (function () {
+        if (!pcs.some(function (p) { return p.extra; }) && (D.noOrphan || !pcs.some(function (p) { return p.via === 'label'; }))) return;
+        var comp = pcs.map(function (_, i) { return i; }), E2 = pcs.map(function (p) { return ends(p, ptft); });
+        function find(i) { while (comp[i] !== i) { comp[i] = comp[comp[i]]; i = comp[i]; } return i; }
+        for (var i = 0; i < pcs.length; i++) for (var j = i + 1; j < pcs.length; j++) {
+          var a = pcs[i], b = pcs[j], gap = Math.max(1.5, Math.max(a.w_in, b.w_in) / 12 * 1.6) * ptft, ea = E2[i], eb = E2[j], dmin = Infinity;
+          if (Math.abs(a.cx - b.cx) > (a.len_ft + b.len_ft) * ptft / 2 + gap + 2 * ptft || Math.abs(a.cy - b.cy) > (a.len_ft + b.len_ft) * ptft / 2 + gap + 2 * ptft) continue;
+          ea.forEach(function (u) { eb.forEach(function (v) { dmin = Math.min(dmin, hyp(u[0] - v[0], u[1] - v[1])); }); });
+          ea.forEach(function (u) { dmin = Math.min(dmin, ptSeg(u[0], u[1], [eb[0][0], eb[0][1], eb[1][0], eb[1][1]])); });
+          eb.forEach(function (v) { dmin = Math.min(dmin, ptSeg(v[0], v[1], [ea[0][0], ea[0][1], ea[1][0], ea[1][1]])); });
+          if (dmin <= gap) comp[find(i)] = find(j);
+        }
+        // anchored: a label on the piece, or a size label of any width within 10 ft of its centre line
+        // pieces of the other weights count only when they are attached to the proven duct or carry a size label themselves, not as legend or notes
+        var hasMain = {}; pcs.forEach(function (p, i) { if (!p.extra || p.via === 'label') hasMain[find(i)] = true; });
+        // …and are runs, not tag boxes, keynote bubbles or diffuser bars: at least 6 ft long and 3x as long as wide
+        pcs = pcs.filter(function (p, i) { if (!p.extra || (hasMain[find(i)] && p.len_ft >= 6 && p.len_ft * 12 >= 3 * p.w_in)) return true; extraFt += p.len_ft; if (D.debugExtras) D.debugExtras.push([p.size, p.via, Math.round(p.len_ft * 10) / 10, Math.round(p.w_in), !!hasMain[find(i)]]); return false; });
+        if (D.noOrphan || !pcs.some(function (p) { return p.via === 'label'; })) return;
+        comp = pcs.map(function (_, i) { return i; }); E2 = pcs.map(function (p) { return ends(p, ptft); });
+        for (var i2 = 0; i2 < pcs.length; i2++) for (var j2 = i2 + 1; j2 < pcs.length; j2++) {
+          var a2 = pcs[i2], b2 = pcs[j2], gap2 = Math.max(1.5, Math.max(a2.w_in, b2.w_in) / 12 * 1.6) * ptft, ea2 = E2[i2], eb2 = E2[j2], dm2 = Infinity;
+          if (Math.abs(a2.cx - b2.cx) > (a2.len_ft + b2.len_ft) * ptft / 2 + gap2 + 2 * ptft || Math.abs(a2.cy - b2.cy) > (a2.len_ft + b2.len_ft) * ptft / 2 + gap2 + 2 * ptft) continue;
+          ea2.forEach(function (u) { eb2.forEach(function (v) { dm2 = Math.min(dm2, hyp(u[0] - v[0], u[1] - v[1])); }); });
+          ea2.forEach(function (u) { dm2 = Math.min(dm2, ptSeg(u[0], u[1], [eb2[0][0], eb2[0][1], eb2[1][0], eb2[1][1]])); });
+          eb2.forEach(function (v) { dm2 = Math.min(dm2, ptSeg(v[0], v[1], [ea2[0][0], ea2[0][1], ea2[1][0], ea2[1][1]])); });
+          if (dm2 <= gap2) comp[find(i2)] = find(j2);
+        }
+        var ok = {}; pcs.forEach(function (p, i) {
+          if (p.via === 'label' || labs.some(function (l) { return ptSeg(l.cx, l.cy, [E2[i][0][0], E2[i][0][1], E2[i][1][0], E2[i][1][1]]) <= 10 * ptft; })) ok[find(i)] = true;
+        });
+        var compFt = {}; pcs.forEach(function (p, i) { var r = find(i); compFt[r] = (compFt[r] || 0) + p.len_ft; });
+        // only short stray bits go (a table rule, a legend swatch: ≤ 15 ft each); a long run that happens to sit far from every label stays
+        pcs = pcs.filter(function (p, i) { var r = find(i); if (ok[r] || compFt[r] > 15) return true; orphanFt += p.len_ft; if (D.debugOrphans) D.debugOrphans.push([p.size, p.via, Math.round(p.len_ft * 10) / 10, Math.round(p.w_in), Math.round(compFt[r]), Math.round(p.cx), Math.round(p.cy)]); return false; });
+      })();
+      // the same stretch of duct must not be counted twice: three parallel lines pair up as (a,b), (b,c) and (a,c); a layer drawn twice gives
+      // identical pairs (645 Madison: one 42 ft wall pair came out three times). Collinear pieces within a width of each other: only the part of
+      // a piece that no better-sized piece already covers counts.
+      var dupFt = 0;
+      if (!D.noDedupe) (function () {
+        var prio = { label: 0, run: 1, near: 2 }, order = pcs.map(function (_, i) { return i; });
+        order.sort(function (a, b) { return ((prio[pcs[a].via] !== undefined ? prio[pcs[a].via] : 3) - (prio[pcs[b].via] !== undefined ? prio[pcs[b].via] : 3)) || pcs[b].len_ft - pcs[a].len_ft; });
+        var kept = [], out = [];
+        order.forEach(function (i) {
+          var p = pcs[i], L = p.len_ft * ptft, iv = [];
+          kept.forEach(function (k) {
+            if (Math.abs(p.ux * k.uy - p.uy * k.ux) > 0.03) return;
+            var dx = k.cx - p.cx, dy = k.cy - p.cy, lat = Math.abs(-dx * p.uy + dy * p.ux), tol = Math.max(p.w_in, k.w_in) / 12 * ptft * 0.75 + 2;
+            if (lat > tol) return;
+            var c = dx * p.ux + dy * p.uy, h = k.len_ft * ptft / 2, lo = Math.max(-L / 2, c - h), hi = Math.min(L / 2, c + h);
+            if (hi > lo) iv.push([lo, hi]);
+          });
+          iv.sort(function (a, b) { return a[0] - b[0]; });
+          var cov = 0, end = -Infinity; iv.forEach(function (r) { var s0 = Math.max(r[0], end); if (r[1] > s0) { cov += r[1] - s0; end = r[1]; } });
+          var left = Math.max(0, L - cov);
+          if (left < 0.25 * L || left < 0.5 * ptft) { dupFt += p.len_ft; return; }
+          if (cov > 0) { dupFt += cov / ptft; p.len_ft = left / ptft; }
+          kept.push(p); out.push(p);
+        });
+        pcs = out;
+      })();
       // unlabeled pieces wider than any label on the sheet (+4") are shafts / equipment, not duct; wide unlabeled pieces that stay are reported for review
       var wmax = Math.max.apply(null, labs.map(function (l) { return l.w; }).concat([6])) + 4, wideFt = 0;
       pcs = pcs.filter(function (p) { return p.size || p.w_in <= wmax; });
@@ -647,10 +739,10 @@
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length };
-      return { ptft: ptft, scale_from: scaleFrom, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10,
+      return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10,
         styles: keep, labels: labs.length, pieces: all.length,
-        xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
-        debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4]]; }) };
+        xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
+        debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
 
     function norm(s) {
@@ -696,7 +788,7 @@
         if (!free(c[1], lo, hi) || !free(c[2], l2, h2)) return;
         used[c[1]].push([lo, hi]); used[c[2]].push([l2, h2]);
         var nx = -a[5], ny = a[4];
-        pieces.push({ kind: 'double', w_in: c[0] / ptin, len_ft: (hi - lo) / ptft, ux: a[4], uy: a[5],
+        pieces.push({ kind: 'double', extra: !!(a.extra && b.extra), w_in: c[0] / ptin, len_ft: (hi - lo) / ptft, ux: a[4], uy: a[5],
           cx: a[0] + a[4] * (lo + hi) / 2 + nx * d / 2, cy: a[1] + a[5] * (lo + hi) / 2 + ny * d / 2, size: null });
       });
       return { pieces: pieces, used: used };
@@ -986,6 +1078,11 @@
         ids.forEach(function (j) { seen[j] = 1; });
         var L = ids.reduce(function (a, j) { return a + freeLen(j); }, 0) / ptft;
         if (L < 3) return;
+        // a diffuser symbol (box + diagonals, 2 ft across) next to a "6"Ø" label is a tangle, not a run: far more line than its extent
+        var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+        ids.forEach(function (j) { var s = S[j]; bx0 = Math.min(bx0, s[0], s[2]); bx1 = Math.max(bx1, s[0], s[2]); by0 = Math.min(by0, s[1], s[3]); by1 = Math.max(by1, s[1], s[3]); });
+        var ext = Math.max(bx1 - bx0, by1 - by0) / ptft;
+        if (ext <= 6 && L > 2.5 * Math.max(ext, 0.5)) return;
         // a duct WALL whose partner wall is fragmented into several pairs must not come back as a single line: paired segments running
         // parallel within 30" on either side are summed, and half the main's length covered means it is a wall (Sage)
         var main = ids.reduce(function (a, j) { return S[j][6] > S[a][6] ? j : a; }, ids[0]), mm = S[main], side = [0, 0];
