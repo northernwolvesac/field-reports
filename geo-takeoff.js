@@ -666,8 +666,10 @@
           if (p.via === 'label' || labs.some(function (l) { return ptSeg(l.cx, l.cy, [E2[i][0][0], E2[i][0][1], E2[i][1][0], E2[i][1][1]]) <= 10 * ptft; })) ok[find(i)] = true;
         });
         var compFt = {}; pcs.forEach(function (p, i) { var r = find(i); compFt[r] = (compFt[r] || 0) + p.len_ft; });
-        // only short stray bits go (a table rule, a legend swatch: ≤ 15 ft each); a long run that happens to sit far from every label stays
-        pcs = pcs.filter(function (p, i) { var r = find(i); if (ok[r] || compFt[r] > 15) return true; orphanFt += p.len_ft; if (D.debugOrphans) D.debugOrphans.push([p.size, p.via, Math.round(p.len_ft * 10) / 10, Math.round(p.w_in), Math.round(compFt[r]), Math.round(p.cx), Math.round(p.cy)]); return false; });
+        // only short stray bits go (title-block table rules, a legend swatch, a gridline: ≤ 30 ft per chain — Belmont A1C's revision table gave 44 ft of
+        // "12x6"); a long run that happens to sit far from every label stays (60 ft cost A1a its real 44 ft)
+        var orphanMax = D.orphanMax !== undefined ? D.orphanMax : 30;
+        pcs = pcs.filter(function (p, i) { var r = find(i); if (ok[r] || compFt[r] > orphanMax) return true; orphanFt += p.len_ft; if (D.debugOrphans) D.debugOrphans.push([p.size, p.via, Math.round(p.len_ft * 10) / 10, Math.round(p.w_in), Math.round(compFt[r]), Math.round(p.cx), Math.round(p.cy)]); return false; });
       })();
       // the same stretch of duct must not be counted twice: three parallel lines pair up as (a,b), (b,c) and (a,c); a layer drawn twice gives
       // identical pairs (645 Madison: one 42 ft wall pair came out three times). Collinear pieces within a width of each other: only the part of
