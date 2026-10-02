@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=357"></script>
-<script src="auth.js?v=357"></script>
-<script src="est-totals.js?v=357"></script>
-<script src="est-engine.js?v=357"></script>
-<script src="geo-takeoff.js?v=357"></script>
+<script src="supabase-config.js?v=358"></script>
+<script src="auth.js?v=358"></script>
+<script src="est-totals.js?v=358"></script>
+<script src="est-engine.js?v=358"></script>
+<script src="geo-takeoff.js?v=358"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -164,7 +164,7 @@ var AE = (function() {
       }
       if (list.length) await upload(list);
       var n = pages.filter(function(p) { return p.status === 'pending'; }).length;
-      if (n && confirm(n + ' sheet' + (n === 1 ? ' is' : 's are') + ' ready. Let the AI sort and read them now? (about $' + (n * 0.06).toFixed(2) + ' — sheets that are not mechanical are skipped)')) readAll();
+      if (n) toast(n + ' sheet' + (n === 1 ? ' is' : 's are') + ' ready from the Takeoff — press “Read” (about $' + (n * 0.06).toFixed(2) + '; sheets that are not mechanical are skipped)');
     } catch (e) { toast('Copy from the Takeoff failed: ' + (e.message || e)); }
   }
 
@@ -917,6 +917,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=357"></script>
+<script src="sw-register.js?v=358"></script>
 </body>
 </html>
