@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=340"></script>
-<script src="auth.js?v=340"></script>
-<script src="est-totals.js?v=340"></script>
-<script src="est-engine.js?v=340"></script>
-<script src="geo-takeoff.js?v=340"></script>
+<script src="supabase-config.js?v=349"></script>
+<script src="auth.js?v=349"></script>
+<script src="est-totals.js?v=349"></script>
+<script src="est-engine.js?v=349"></script>
+<script src="geo-takeoff.js?v=349"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -416,6 +416,20 @@ var AE = (function() {
     var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {}, t = r.sheet_title || '';
     return f.kind !== 'quote' && f.kind !== 'specs' && p.status === 'done' && (r.sheet_type === 'riser' || /riser/i.test(t)) && !/\bair\b|duct|exhaust/i.test(t);
   }
+  // Claude vision reads the label crops (outlined / stroked text has no text layer): one numbered sheet per call, ~30 words, Haiku ≈ $0.003
+  async function aiReader(canvas, n) {
+    var png = canvas.toDataURL('image/png').split(',')[1];
+    var j = await callFn({ action: 'ocr', image: png, n: n });
+    return j.reads || [];
+  }
+  // OCR'd labels + the AI-read scale go into a sheet's geometry data (measure and the takeoff bridge use the same inputs)
+  function withLabels(data, p) {
+    var items = p.result && p.result.ocr_labels;
+    if (items && items.length) { data.text = data.text.concat(items); data.fullText += ' ' + items.map(function (t) { return t.str; }).join(' '); }
+    var aiScale = p.result && p.result.scale;
+    if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
+    return data;
+  }
   async function measureDucts(all) {
     if (measuring || !window.NWGeo) return;
     var list = pages.filter(function(p) { return (isDuctPlan(p) && (all || !(p.result && p.result.geo))) || (isPipePlan(p) && (all || !(p.result && p.result.geo_pipe))) || (isRiserSheet(p) && (all || !(p.result && p.result.geo_riser))); });
@@ -434,7 +448,7 @@ var AE = (function() {
           var nLab = data.text.filter(function (t) { return pipes ? NWGeo.isPipeLabel(t.str) : NWGeo.isSizeLabel(t.str); }).length;
           if (nLab < (pipes ? 6 : 15) && (data.glyphs || []).length > 150) {
             var cached = !all && p.result && p.result.ocr_labels;
-            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: pipes ? 2 : 3,
+            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: pipes ? 2 : 3, reader: aiReader,
               onProgress: function (d, n) { measuring = 'Reading labels (OCR) on ' + (p.sheet_no || 'sheet ' + p.page_no) + ': ' + d + ' / ' + n + ' words…'; render(); } });
             data.text = data.text.concat(ocr.items);
             data.fullText += ' ' + ocr.items.map(function (t) { return t.str; }).join(' ') + ' ' + (ocr.text || '');
@@ -729,7 +743,7 @@ var AE = (function() {
         var mk = function(l, pts, ft, ptft, extra) { return Object.assign({ drawing_id: d.id, page_number: p.page_no, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: ptft || null, label: 'auto' }, extra || {}); };
         var ptft = null;
         if (isDuctPlan(p) && res.geo && res.geo.total_ft > 0) {
-          var data = await NWGeo.extract(page); data.wantPieces = true; var g = await NWGeo.measure(data);
+          var data = withLabels(await NWGeo.extract(page), p); data.wantPieces = true; var g = await NWGeo.measure(data);
           if (g && !g.error && g.xy) { ptft = g.ptft;
             for (var k = 0; k < g.xy.length; k++) { var pc = g.xy[k], sz = String(pc.size || ''), round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x');
               var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group', null, sz, false);
@@ -737,7 +751,7 @@ var AE = (function() {
               else (pc.segs || []).forEach(function(s) { rows.push(mk(l, [V(s[0], s[1]), V(s[2], s[3])], Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft, ptft)); }); } }
         }
         if (isPipePlan(p) && res.geo_pipe && res.geo_pipe.total_ft > 0) {
-          var pdata = await NWGeo.extract(page); pdata.wantPieces = true; var pp = await NWGeo.measurePipes(pdata);
+          var pdata = withLabels(await NWGeo.extract(page), p); pdata.wantPieces = true; var pp = await NWGeo.measurePipes(pdata);
           if (pp && !pp.error && pp.xy) { ptft = ptft || pp.ptft;
             for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
               var pl = await layerFor(cd ? size + ' condensate drain' : size + ' copper pipe & 1" insulation', 'pipework', 'Pipes', cd ? [size + '%pvc%', size + ' copper pipe & 1" insulation'] : null, size, cd);
@@ -790,6 +804,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=340"></script>
+<script src="sw-register.js?v=349"></script>
 </body>
 </html>

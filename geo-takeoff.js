@@ -311,9 +311,16 @@
     opts = opts || {};
     var t0 = Date.now(), words = clusterWords(D.glyphs || [], { maxLetters: opts.maxLetters || 10, minLetters: opts.minLetters || 2 });
     if (!words.length) return { items: [], words: 0, secs: 0, text: '' };
-    await loadTesseract();
-    var worker = await Tesseract.createWorker('eng', 1, { logger: function () {} });
-    await worker.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789xX"\'øØ/-()SRAEOTYPUDNWVBFCGHKLMIJZ. ' });
+    // Tesseract is only started when it is needed: opts.reader (Claude vision on the composed crops) replaces it, and is the fallback's primary
+    var worker = null;
+    async function ensureWorker() {
+      if (!worker) {
+        await loadTesseract();
+        worker = await Tesseract.createWorker('eng', 1, { logger: function () {} });
+        await worker.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789xX"\'øØ/-()SRAEOTYPUDNWVBFCGHKLMIJZ. ' });
+      }
+      return worker;
+    }
     var scale = (opts.dpi || 300) / 72, vp0 = page.getViewport({ scale: scale, rotation: 0 }), W = vp0.width, Hh = vp0.height;
     var T = 2400, OV = 80, PAD = 2.5 * scale, M = 0.5 * scale, crops = [];
     function px(vp, x, y) { return vp.convertToViewportPoint(x, y); }
@@ -353,16 +360,38 @@
       await new Promise(function (r) { setTimeout(r, 0); });
     }
     // 2. compose ~30 crops per sheet (rows), read once; then the same sheet with every crop turned 180°
-    var GAP = 24, SW = 2400, results = {}, done = 0;
+    var GAP = 24, SW = 2400, results = {}, done = 0, X0 = opts.reader ? 70 : GAP;   // reader mode: a left margin for the crop numbers
     function score(r) { return r.conf + (isSizeLabel(r.txt) ? 150 : isPipeLabel(r.txt) ? 60 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
     for (var s0 = 0; s0 < crops.length; s0 += 30) {
-      var batch = crops.slice(s0, s0 + 30), cells = [], x = GAP, y = GAP, rowH = 0;
+      var batch = crops.slice(s0, s0 + 30), cells = [], x = X0, y = GAP, rowH = 0;
       batch.forEach(function (cr) {
         var cwid = cr.c.width, chei = cr.c.height;
-        if (x + cwid + GAP > SW) { x = GAP; y += rowH + GAP; rowH = 0; }
+        if (x + cwid + GAP > SW) { x = X0; y += rowH + GAP; rowH = 0; }
         cells.push({ i: cr.i, x: x, y: y, w: cwid, h: chei }); x += cwid + GAP; rowH = Math.max(rowH, chei);
       });
       var sheetH = y + rowH + GAP;
+      if (opts.reader) {
+        // vision reader: one numbered sheet, upright crops; the model transcribes each number (and turns upside-down crops itself)
+        try {
+          var sheetR = document.createElement('canvas'); sheetR.width = SW; sheetR.height = sheetH;
+          var scR = sheetR.getContext('2d'); scR.fillStyle = '#fff'; scR.fillRect(0, 0, SW, sheetH);
+          cells.forEach(function (cell, idx) {
+            scR.drawImage(batch[idx].c, cell.x, cell.y);
+            scR.fillStyle = '#d00'; scR.font = 'bold 30px sans-serif'; scR.textBaseline = 'middle'; scR.fillText(String(idx + 1), 8, cell.y + cell.h / 2);
+          });
+          var reads = await opts.reader(sheetR, cells.length);
+          sheetR.width = sheetR.height = 0;
+          (reads || []).forEach(function (rd) {
+            var cl = cells[(rd.n | 0) - 1]; if (!cl) return;
+            var t = normOcr(rd.text || ''); if (t) results[cl.i] = { txt: t, conf: 90, flip: 0 };
+          });
+          done += batch.length; if (opts.onProgress) opts.onProgress(done, crops.length);
+          continue;
+        } catch (err) {
+          console.warn('[NWGeo] vision reader failed, using Tesseract:', err && err.message);
+          opts.reader = null; X0 = GAP;
+        }
+      }
       for (var flip = 0; flip < 2; flip++) {
         var sheet = document.createElement('canvas'); sheet.width = SW; sheet.height = sheetH;
         var sc = sheet.getContext('2d'); sc.fillStyle = '#fff'; sc.fillRect(0, 0, SW, sheetH);
@@ -371,7 +400,7 @@
           if (!flip) sc.drawImage(cr, cell.x, cell.y);
           else { sc.save(); sc.translate(cell.x + cell.w, cell.y + cell.h); sc.rotate(Math.PI); sc.drawImage(cr, 0, 0); sc.restore(); }
         });
-        var rr = await worker.recognize(sheet);
+        var rr = await (await ensureWorker()).recognize(sheet);
         var per = {};
         (rr.data.words || []).forEach(function (wd) {
           var cx = (wd.bbox.x0 + wd.bbox.x1) / 2, cy = (wd.bbox.y0 + wd.bbox.y1) / 2;
@@ -393,7 +422,7 @@
       var w = words[cr.i], r = results[cr.i], ticks = w.letters.filter(function (L) { return Math.max(L[3] - L[1], L[2] - L[0]) < 2.5; }).length;
       return !(r && isSizeLabel(r.txt)) && ticks >= 1 && w.n >= 3 && w.n <= 8;
     }).slice(0, 80);
-    if (retry.length) {
+    if (retry.length && worker) {
       await worker.setParameters({ tessedit_pageseg_mode: '7' });
       for (var ri = 0; ri < retry.length; ri++) {
         var cr2 = retry[ri], reads2 = [];
@@ -406,7 +435,7 @@
         if (opts.onProgress && ri % 10 === 9) opts.onProgress(crops.length, crops.length, 'retry ' + (ri + 1) + '/' + retry.length);
       }
     }
-    await worker.terminate();
+    if (worker) await worker.terminate();
     var items = [], allText = [];
     Object.keys(results).forEach(function (i) {
       var r = results[i], w = words[+i]; if (!r.txt) return;

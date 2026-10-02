@@ -23,6 +23,7 @@ const OFFICE = ["admin", "manager", "lead_pm", "project_manager", "apm"];
 const MODELS: Record<string, { in: number; out: number }> = {   // $ per million tokens
   "claude-sonnet-5": { in: 3, out: 15 },
   "claude-opus-5-5": { in: 5, out: 25 },
+  "claude-haiku-4-5": { in: 1, out: 5 },
 };
 const DEFAULT_MODEL = "claude-sonnet-5";
 
@@ -142,6 +143,14 @@ const REVIEW_B_SCHEMA = { type: "object", additionalProperties: false, required:
   rfis: { type: "array", maxItems: 12, items: obj({ question: { type: "string" }, sheet: { type: "string" } }) },
   exclusions: { type: "array", maxItems: 20, items: { type: "string" } },
   risks: { type: "array", maxItems: 8, items: obj({ risk: { type: "string" }, severity: { type: "string" } }) } } };
+
+// ─── vision OCR of outlined drawing text (small crops composed on one numbered sheet) ───
+const OCR_SCHEMA = { type: "object", additionalProperties: false, required: ["reads"], properties: {
+  reads: { type: "array", items: { type: "object", additionalProperties: false, required: ["n", "text"], properties: { n: { type: "integer" }, text: { type: "string" } } } } } };
+const OCR_PROMPT = `The image holds numbered crops of text cut out of HVAC / mechanical construction drawings (duct sizes, pipe sizes, service names, scale notes, tags, short notes). The crop number is written in red at the left of each crop.
+Transcribe each crop exactly as drawn. Duct sizes look like 24X12 or 24x12 (always write them with a lowercase x: 24x12); round or oval ducts like 10"Ø or 22"ø; pipe sizes like 1-1/4" or 3/4" CHWS or 2" CD; scale notes like 1/4" = 1'-0".
+If a crop is upside down or turned, read it as if it were upright. Keep inch marks (") and the Ø symbol. Return an empty string for crops that are not text (linework, hatch, symbols, tiny fragments) and never guess characters you cannot see.
+Return one entry for every number shown.`;
 
 // ─── Claude call ──────────────────────────────────────────────────────
 async function claude(model: string, content: any[], maxTokens: number, schema: any = { type: "object" }) {
@@ -304,6 +313,16 @@ Deno.serve(async (req: Request) => {
       if (prevChoice) spec.choice = prevChoice;
       await db.from("ai_est_sessions").update({ result: { ...(cur?.result || {}), duct_spec: spec } }).eq("id", ses.id);
       return json({ ok: true, spec });
+    }
+    if (body.action === "ocr") {
+      const model = MODELS[body.model] ? body.model : "claude-haiku-4-5";
+      const img = String(body.image || "").replace(/^data:image\/\w+;base64,/, "");
+      if (!img || img.length > 9_000_000) return json({ ok: false, error: "image missing or too large" }, 400);
+      const r = await claude(model, [{ type: "image", source: { type: "base64", media_type: "image/png", data: img } },
+        { type: "text", text: OCR_PROMPT + "\nNumbers shown: 1 to " + (Number(body.n) || 30) }], 3000, OCR_SCHEMA);
+      let reads: any = r.data && (r.data as any).reads;
+      if (!Array.isArray(reads)) { try { reads = (parseJson(r.text) || {}).reads; } catch (_e) { reads = []; } }
+      return json({ ok: true, reads: reads || [], cost: r.cost, model });
     }
     if (body.action === "ping") return json({ ok: true, user: u.user.email, role: prof.role });
     return json({ ok: false, error: "unknown action" }, 400);
