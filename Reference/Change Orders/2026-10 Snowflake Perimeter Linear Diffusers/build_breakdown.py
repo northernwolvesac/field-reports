@@ -215,19 +215,18 @@ def summary_page(c):
         'Each bubbled area is numbered by floor and shown with its shop drawing screenshot, followed by a quantity page '
         'per floor. Branch lengths are as dimensioned on the shop drawings; main duct lengths inside the clouds are '
         'approximate and listed for reference only.',
-        'This breakdown carries no pricing. See the open questions before pricing.',
+        'This breakdown carries no pricing; pricing follows on the basis below.',
     ]
     for i, n in enumerate(notes, 1):
         y -= para(c, f'{i}. {n}', st, x, y, 560) + 5
     y -= 8
-    y -= para(c, 'Open questions before pricing', sth, x, y, 560) + 4
+    y -= para(c, 'Basis for pricing', sth, x, y, 560) + 4
     qs = [
-        'What is removed or credited: Bulletin 3 had 36 ceiling linear diffusers (G, 13,400 CFM) where the 49 LDs go. '
-        'Delete them and their branch duct? Any already installed? (screenshots sent 10/05 for confirmation)',
-        'Perimeter mains inside the clouds (flat oval 26.1/10 to 34.4/12): existing to remain with new taps only, or new / '
-        'rerouted? (screenshots sent 10/05)',
-        '<b>Answered 10/05:</b> linear diffusers and plenum boxes furnished and installed by us - price them. '
-        'VD/CO on every connection (49). CO number not assigned yet.',
+        '<b>Confirmed 10/05:</b> the Bulletin 3 ceiling linear diffusers (G) at these locations are deleted. No credit: '
+        'all original G diffusers have been delivered and the factory will not take them back.',
+        '<b>Confirmed 10/05:</b> perimeter mains stay as installed. Added work starts at the new taps on the mains.',
+        '<b>Confirmed 10/05:</b> linear diffusers and plenum boxes furnished and installed by us. VD/CO on every '
+        'connection (49). CO number not assigned yet.',
         'Soffit openings, access and patching by GC. M-531 title block still dated 08/17/2026.',
     ]
     for i, n in enumerate(qs, 1):
@@ -339,10 +338,10 @@ def qty_page(c, f):
     areas = floor_areas(f)
     header(c, f'{ordn(f)} Floor - M-5{f} SD R2: Scope and Quantities',
            'LD = linear supply diffuser in plenum box O.D. 48x4x26 (4 ft) w/ 1/2" lining  |  '
-           'VD/CO as tagged  |  branch lengths as dimensioned, mains approximate')
+           'VD/CO on every branch  |  scope starts at the new tap, mains existing to remain')
     tw = [38, 300, 40, 112, 92, 46, 210]
     rows = [['Area', 'Location / scope', 'LD qty', 'CFM each\n(total)', 'Branches', 'VD/CO\ntagged',
-             'Perimeter main in bubbled area\n(reference only)']]
+             'Perimeter main in bubbled area\n(existing to remain, not priced)']]
     for a in areas:
         b = brsum([a])
         brt = '<br/>'.join(f'{n} x {s}, {l} in total' for s, (n, l) in b.items())

@@ -93,5 +93,5 @@ Folder `Reference/Change Orders/2026-10 Snowflake Perimeter Linear Diffusers/`. 
 bubble 49 perimeter linear diffusers in plenum boxes 48x4x26 lined, 12x10 branches with VD/CO off the perimeter mains:
 29th 23 (6,400 CFM), 30th 12 (3,300 CFM), 31st 14 (3,800 CFM). Quantity breakdown per floor issued to Ruslan
 (no pricing). 10/05 Ruslan: we F&I the LDs and plenum boxes (price them), VD/CO on every branch, no CO number yet.
-Bulletin 3 vs SD R2 screenshots sent for him to confirm (1) deletion of the 36 G ceiling diffusers they replace and
-(2) whether the perimeter mains stay. Then price.
+Bulletin 3 vs SD R2 screenshots sent; Ruslan confirmed: the 36 G ceiling diffusers are deleted with NO credit (all
+delivered, factory will not take them back); all mains stay, price only the add starting at the new taps. Next: pricing.

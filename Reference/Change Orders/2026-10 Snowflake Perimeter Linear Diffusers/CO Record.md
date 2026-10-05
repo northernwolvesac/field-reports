@@ -19,16 +19,14 @@
 Per area (location, CFM, branch lengths, main in the cloud) is in the `AREAS` list in `build_breakdown.py`;
 counts are checked against the PLENUM / CFM text inside each cloud. Clouds are found from the red arc paths.
 
-## Open questions before pricing
-1. What is deleted / credited: Bulletin 3 has 36 G ceiling linear diffusers (13,400 CFM) in the clouds
-   (29th 17, 30th 8, 31st 11 - per area in `build_comparison.py` output). Delete with branches? Any installed?
-2. Perimeter mains inside the clouds: existing to remain (new taps only) or new / rerouted (29-1 corner shows a
-   26.1/10 offset down and reroute along Broadway)?
-   -> 1 and 2: Bulletin 3 vs SD R2 screenshots sent to Ruslan 10/05 (`Perimeter Linear Diffusers - Bulletin 3 vs
-   SD R2.pdf`, built by `build_comparison.py`), waiting on his confirmation.
-3. ANSWERED 10/05: we furnish and install the linear diffusers and plenum boxes - price them.
-4. ANSWERED 10/05: VD/CO on every connection (49).
-5. ANSWERED 10/05: no CO number yet. Soffit openings / access by GC.
+## Decisions (Ruslan, 10/05/2026)
+1. Bulletin 3 G ceiling linear diffusers at these locations (36, 13,400 CFM; 29th 17, 30th 8, 31st 11) are deleted.
+   NO credit: all original G diffusers were delivered and the factory will not take them back.
+2. All perimeter mains stay as installed. Price only the added work, starting at the new taps.
+3. We furnish and install the linear diffusers and plenum boxes - price them.
+4. VD/CO on every connection (49).
+5. No CO number yet.
+Still open for pricing: unit material costs (LD 48", plenum box, branch, VD/CO), labor per LD, TAB, drafting.
 
 ## Files
 - `Perimeter Linear Diffusers - Breakdown by Floor.pdf` (7 pages: summary, then per floor screenshots + quantities)
