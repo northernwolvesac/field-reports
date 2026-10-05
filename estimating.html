@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=362">
+<link rel="stylesheet" href="procore-ui.css?v=366">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=362"></script>
-<script src="auth.js?v=362"></script>
-<script src="est-totals.js?v=362"></script>
-<script src="procore-ui.js?v=362"></script>
-<script src="nw-catalog-picker.js?v=362"></script>
-<script src="nw-proposal.js?v=362"></script>
-<script src="bid-actions.js?v=362"></script>
+<script src="supabase-config.js?v=366"></script>
+<script src="auth.js?v=366"></script>
+<script src="est-totals.js?v=366"></script>
+<script src="procore-ui.js?v=366"></script>
+<script src="nw-catalog-picker.js?v=366"></script>
+<script src="nw-proposal.js?v=366"></script>
+<script src="bid-actions.js?v=366"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -1522,7 +1522,7 @@ requireAuth().catch(function(){});
   function layerLocked(li) { return !!(li && li.layer_id); }
   function layerLockHint(li) {
     var l = layerForLine(li);
-    return 'From takeoff layer' + (l && l.name ? ' "' + l.name + '"' : '') + ' — click the quantity to change it, other fields on the Takeoff tab';
+    return 'From takeoff layer' + (l && l.name ? ' "' + l.name + '"' : '') + ' — click the quantity or the price to change it here, other fields on the Takeoff tab';
   }
   function isCellEditable(col, li) {
     if (!canEdit || !col.editable) return false;
@@ -1530,11 +1530,14 @@ requireAuth().catch(function(){});
     if (col.editable === 'subtotal_cost' && li && lineTotals(li).materialDropped) return false;   // material not priced on this line
     if (SCHEMA_FIELDS.indexOf(col.editable) >= 0 && !schemaOk) return false;
     if (col.rate && isLocked()) return false;
-    if (layerLocked(li) && LAYER_FIELDS.indexOf(col.editable) >= 0) return false;
+    if (layerLocked(li) && LAYER_FIELDS.indexOf(col.editable) >= 0 && !isLayerPriceField(col.editable)) return false;
     if (li && li._kids && li._kids.length && (col.agg || col.aggPct)) return false;   // folded assembly totals
     return true;
   }
-  function isCellLayerLocked(col, li) { return canEdit && !!col.editable && layerLocked(li) && LAYER_FIELDS.indexOf(col.editable) >= 0; }
+  function isCellLayerLocked(col, li) { return canEdit && !!col.editable && layerLocked(li) && LAYER_FIELDS.indexOf(col.editable) >= 0 && !isLayerPriceField(col.editable); }
+  // The price of a takeoff-linked line can be typed here (Unit Cost / Subtotal Item Cost): the number is written to the takeoff layer as well
+  // (saveLayerUnitCost), so the layer, the takeoff panel and the line agree and the next sync keeps it.
+  function isLayerPriceField(f) { return f === 'subtotal_cost' || f === 'unit_material_cost'; }
 
   // ── grid render ──────────────────────────────────────────────────────────
   function renderGrid() {
@@ -1813,9 +1816,15 @@ requireAuth().catch(function(){});
       if (typeof v === 'number' && isNaN(v)) { showToast('Enter a number', 'error'); td.innerHTML = orig; return; }
       var f = col.editable;
       if (f === 'subtotal_cost') {
+        var layerLine = layerLocked(li);
+        if (layerLine && !(lineTotals(li).totalQty > 0)) { showToast('This line has no quantity yet — add it on the Takeoff tab first', 'error'); td.innerHTML = orig; return; }
         var sp = subtotalPatch(li, v);
         if (sp.error) { showToast(sp.error, 'error'); td.innerHTML = orig; return; }
         if (!sp.patch) { td.innerHTML = orig; moveFocus(next, td); return; }
+        if (layerLine) {   // takeoff-linked: the layer carries the price too, so the takeoff panel and the next sync agree
+          var le = await saveLayerUnitCost(li, sp.patch.unit_material_cost);
+          if (le) { showToast('Could not save the price to the takeoff layer: ' + le, 'error'); td.innerHTML = orig; return; }
+        }
         var rs = await supabaseClient.from('estimate_line_items').update(cleanPatch(sp.patch)).eq('id', li.id);
         if (rs.error) { showToast('Save failed: ' + rs.error.message, 'error'); td.innerHTML = orig; return; }
         Object.assign(li, sp.patch);
@@ -1832,6 +1841,10 @@ requireAuth().catch(function(){});
       if (same) { td.innerHTML = orig; moveFocus(next, td); return; }
       var patch = { updated_at: nowIso() }; patch[f] = v;
       if (f === 'description' && !v) { showToast('Name is required', 'error'); td.innerHTML = orig; return; }
+      if (f === 'unit_material_cost' && layerLocked(li)) {
+        var le2 = await saveLayerUnitCost(li, v);
+        if (le2) { showToast('Could not save the price to the takeoff layer: ' + le2, 'error'); td.innerHTML = orig; return; }
+      }
       var r = await supabaseClient.from('estimate_line_items').update(cleanPatch(patch)).eq('id', li.id);
       if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); td.innerHTML = orig; return; }
       li[f] = v; li.updated_at = patch.updated_at;
@@ -2451,6 +2464,17 @@ requireAuth().catch(function(){});
     refreshAll();
   }
 
+  // A layer-linked line's unit cost = the layer's unit material cost × (1 + waste %) (takeoff.html lineFromLayer). A price typed in the grid goes back
+  // into the layer (divided by the waste factor) so the takeoff's own totals match and syncLayerLines does not write the old price over it.
+  // Returns an error message or null.
+  async function saveLayerUnitCost(li, unit) {
+    var lr = await supabaseClient.from('estimate_takeoff_layers').select('id, waste_pct').eq('id', li.layer_id).maybeSingle();
+    if (lr.error) return lr.error.message;
+    if (!lr.data) return 'takeoff layer not found';
+    var base = Math.round(num(unit) / (1 + num(lr.data.waste_pct) / 100) * 10000) / 10000;
+    var u = await supabaseClient.from('estimate_takeoff_layers').update({ unit_material_cost: base }).eq('id', li.layer_id);
+    return u.error ? u.error.message : null;
+  }
   // A layer-linked line's quantity = marks on the plans + the layer's Extra quantity (takeoff.html syncLayerLines). Typing a new total here sets the
   // Extra quantity to (total − marks), so the takeoff and the estimate keep agreeing and the next sync does not undo it.
   async function adjustLayerQuantity(li) {
@@ -3602,6 +3626,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=362"></script>
+<script src="sw-register.js?v=366"></script>
 </body>
 </html>
