@@ -758,28 +758,198 @@
   //  Export PDF — html2pdf (letter, margin 0) → arraybuffer → pdf-lib merge
   //  cover + proposal + appendix → download. Returns a Promise<Uint8Array>.
   // ─────────────────────────────────────────────────────────────────────────
-  function exportPdf(paperEl, opts) {
-    opts = opts || {};
+  // Fallback: html2pdf photographs the sheet (picture pages, not selectable). Resolves Uint8Array.
+  function rasterPdf(sheet, filename) {
     if (typeof window.html2pdf !== 'function') {
       toast('PDF library (html2pdf) not loaded — refresh the page', 'error');
       return Promise.reject(new Error('html2pdf not loaded'));
     }
+    return window.html2pdf().set({
+      margin: 0,
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['p', 'li', 'tr', '.nwp-h', '.nwp-group'] }
+    }).from(sheet).outputPdf('arraybuffer').then(function (ab) { return new Uint8Array(ab); });
+  }
+
+  // ── Text PDF ─────────────────────────────────────────────────────────────
+  // The sheet is laid out by the browser (so the preview, the margins and the line breaks are exactly what the person sees); every line of
+  // text, border, background and image is then read back from that layout and drawn with jsPDF as real text. Letter page = 816 × 1056 css px
+  // = 612 × 792 pt, so px × 0.75 = pt. Text is measured in Arial and drawn in Helvetica (same advance widths) so lines do not drift.
+  var V = { PX: 0.75, PAGE_H: 1056, TOP: 53, BOT: 62, FONT: 'Arial,Helvetica,"Liberation Sans",sans-serif' };
+  var KEEP_WITH_NEXT = '.nwp-h, .nwp-group, h1, h2, h3, h4, h5';
+  function pdfText(t) {
+    return String(t).replace(/[     ]/g, ' ').replace(/[​‌‍﻿]/g, '')
+      .replace(/→/g, '->').replace(/←/g, '<-').replace(/≥/g, '>=').replace(/≤/g, '<=').replace(/−/g, '-')
+      .replace(/[^\x09\x0A\x0D\x20-\x7E¡-ÿ–—‘’“”•…™€]/g, '');
+  }
+  function cssColor(c) {
+    var m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null;
+    var p = m[1].split(',').map(function (x) { return parseFloat(x); });
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  }
+  function imgDataUrl(img) {
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, k = Math.min(1, 900 / w), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/png');
+  }
+
+  // Everything drawable in the sheet, in sheet pixels: { kind, top, bottom, … }
+  function collectDrawables(root) {
+    var R0 = root.getBoundingClientRect(), ox = R0.left, oy = R0.top, items = [], forced = [];
+    function addLine(x1, y1, x2, y2, w, col) { items.push({ kind: 'line', x1: x1 - ox, y1: y1 - oy, x2: x2 - ox, y2: y2 - oy, w: w, col: col, top: Math.min(y1, y2) - oy, bottom: Math.max(y1, y2) - oy }); }
+    function walk(el) {
+      var cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return;
+      var r = el.getBoundingClientRect();
+      if (el !== root && (cs.breakBefore === 'page' || cs.pageBreakBefore === 'always')) forced.push(r.top - oy);
+      var bg = cssColor(cs.backgroundColor);
+      if (bg && bg.a > 0.05 && !(bg.r > 250 && bg.g > 250 && bg.b > 250) && r.width > 0 && r.height > 0 && r.height < 400)
+        items.push({ kind: 'rect', x: r.left - ox, y: r.top - oy, w: r.width, h: r.height, col: bg, top: r.top - oy, bottom: r.bottom - oy });
+      if (r.width > 0 || r.height > 0) {
+        [['Top', r.left, r.top, r.right, r.top], ['Bottom', r.left, r.bottom, r.right, r.bottom], ['Left', r.left, r.top, r.left, r.bottom], ['Right', r.right, r.top, r.right, r.bottom]].forEach(function (s) {
+          var w = parseFloat(cs['border' + s[0] + 'Width']) || 0, st = cs['border' + s[0] + 'Style'], col = cssColor(cs['border' + s[0] + 'Color']);
+          if (w > 0 && st !== 'none' && st !== 'hidden' && col && col.a > 0.05) addLine(s[1], s[2] - (s[0] === 'Bottom' ? w / 2 : -w / 2), s[3], s[4] - (s[0] === 'Bottom' ? w / 2 : -w / 2), w, col);
+        });
+      }
+      if (el.tagName === 'IMG') {
+        if (r.width > 0 && r.height > 0) items.push({ kind: 'img', x: r.left - ox, y: r.top - oy, w: r.width, h: r.height, data: imgDataUrl(el), top: r.top - oy, bottom: r.bottom - oy });
+        return;
+      }
+      if (el.tagName === 'LI' && cs.display === 'list-item' && cs.listStyleType && cs.listStyleType !== 'none') {
+        var rg = document.createRange(); rg.selectNodeContents(el);
+        var fr = rg.getClientRects()[0], size = parseFloat(cs.fontSize) || 12, col = cssColor(cs.color) || { r: 0, g: 0, b: 0 };
+        if (fr) {
+          if (/^(decimal|lower|upper)/.test(cs.listStyleType)) {
+            var idx = 0, sib = el; while ((sib = sib.previousElementSibling)) if (sib.tagName === 'LI') idx++;
+            var start = el.parentNode && el.parentNode.getAttribute && parseInt(el.parentNode.getAttribute('start'), 10); idx += (isNaN(start) || !start ? 1 : start);
+            items.push({ kind: 'text', text: idx + '.', x: r.left - ox - size * 0.35, y: fr.top - oy, h: fr.height, size: size, bold: false, italic: false, color: col, align: 'right', top: fr.top - oy, bottom: fr.bottom - oy, keep: false });
+          } else {
+            items.push({ kind: 'dot', x: r.left - ox - size * 0.85, y: fr.top - oy + fr.height * 0.52, r: size * 0.17, col: col, hollow: cs.listStyleType === 'circle', top: fr.top - oy, bottom: fr.bottom - oy });
+          }
+        }
+      }
+      var keep = !!(el.closest && el.closest(KEEP_WITH_NEXT));
+      Array.prototype.forEach.call(el.childNodes, function (n) {
+        if (n.nodeType === 1) walk(n);
+        else if (n.nodeType === 3) textLines(n, cs, keep);
+      });
+    }
+    function textLines(node, cs, keep) {
+      var data = node.nodeValue; if (!data || !/\S/.test(data)) return;
+      var size = parseFloat(cs.fontSize) || 12, wt = cs.fontWeight, bold = wt === 'bold' || wt === 'bolder' || (parseInt(wt, 10) || 400) >= 600;
+      var italic = cs.fontStyle === 'italic' || cs.fontStyle === 'oblique', col = cssColor(cs.color) || { r: 0, g: 0, b: 0 }, under = /underline/.test(cs.textDecorationLine || cs.textDecoration || '');
+      var upper = cs.textTransform === 'uppercase', lower = cs.textTransform === 'lowercase';
+      var re = /\S+/g, m, lines = [], rng = document.createRange();
+      while ((m = re.exec(data))) {
+        rng.setStart(node, m.index); rng.setEnd(node, m.index + m[0].length);
+        var rc = rng.getClientRects()[0]; if (!rc || (!rc.width && !rc.height)) continue;
+        var w = upper ? m[0].toUpperCase() : lower ? m[0].toLowerCase() : m[0], last = lines[lines.length - 1];
+        if (last && Math.abs(rc.top - last.rtop) < 2 && rc.left >= last.right - 1) { last.text += ' ' + w; last.right = rc.right; }
+        else lines.push({ text: w, left: rc.left, right: rc.right, rtop: rc.top, height: rc.height });
+      }
+      lines.forEach(function (l) {
+        items.push({ kind: 'text', text: l.text, x: l.left - ox, y: l.rtop - oy, h: l.height, w: l.right - l.left, size: size, bold: bold, italic: italic, color: col, under: under, top: l.rtop - oy, bottom: l.rtop - oy + l.height, keep: keep });
+      });
+    }
+    walk(root);
+    return { items: items, forced: forced.sort(function (a, b) { return a - b; }) };
+  }
+
+  // Page numbers for every drawable: a line is never cut in half, a heading is not left alone at the bottom, a forced break (page-break-before) starts a new page
+  function paginate(items, forced) {
+    var order = items.map(function (_, i) { return i; }).sort(function (a, b) { return (items[a].top - items[b].top) || (a - b); });
+    var off = [0], page = 0, pageOf = new Array(items.length), fi = 0;
+    function limit() { return off[page] + V.PAGE_H - V.BOT; }
+    function newPage(k, backtrack) {
+      var j = k;
+      if (backtrack) while (j > 0 && items[order[j - 1]].kind === 'text' && items[order[j - 1]].keep && pageOf[order[j - 1]] === page && items[order[j - 1]].top > off[page] + 1) j--;
+      page++; off[page] = items[order[j]].top - V.TOP;
+      for (var t = j; t < k; t++) pageOf[order[t]] = page;
+    }
+    for (var k = 0; k < order.length; k++) {
+      var it = items[order[k]];
+      while (fi < forced.length && it.top >= forced[fi] - 0.5) {
+        fi++;
+        if (it.top - off[page] > V.TOP + 20) newPage(k, false);   // the forced break only matters when the current page already has content
+      }
+      if (it.bottom - off[page] > limit() - off[page] && (it.bottom - it.top) < 300 && it.top - off[page] > V.TOP + 1) newPage(k, true);
+      pageOf[order[k]] = page;
+    }
+    return { pageOf: pageOf, off: off, pages: page + 1 };
+  }
+
+  function vectorPdf(sheet, filename) {
+    return ensureJsPdf().then(function (jsPDF) {
+      var host = document.createElement('div');
+      host.className = 'nwp-vexport';
+      host.style.cssText = 'position:fixed;left:-12000px;top:0;width:8.5in;background:#fff;z-index:-1';
+      var st = document.createElement('style');
+      st.textContent = '.nwp-vexport,.nwp-vexport *{font-family:' + V.FONT + ' !important;-webkit-font-smoothing:auto}';
+      host.appendChild(st);
+      var clone = sheet.cloneNode(true);
+      clone.removeAttribute('contenteditable'); clone.removeAttribute('id');
+      clone.style.margin = '0'; clone.style.width = '8.5in'; clone.style.minHeight = '0';
+      host.appendChild(clone); document.body.appendChild(host);
+      var imgs = Array.prototype.slice.call(clone.querySelectorAll('img'));
+      return Promise.all(imgs.map(function (im) {
+        return im.complete && im.naturalWidth ? Promise.resolve() : new Promise(function (res) { im.onload = im.onerror = res; });
+      })).then(function () {
+        var got = collectDrawables(clone), items = got.items;
+        if (!items.some(function (i) { return i.kind === 'text'; })) throw new Error('nothing to draw');
+        var pg = paginate(items, got.forced);
+        var doc = new jsPDF({ unit: 'pt', format: 'letter', compress: true }), PX = V.PX;
+        doc.setProperties({ title: String(filename || 'Proposal').replace(/\.pdf$/i, ''), author: 'Northern Wolves Air Conditioning', creator: 'NWAC' });
+        for (var p = 0; p < pg.pages; p++) {
+          if (p) doc.addPage();
+          var order = [];
+          items.forEach(function (it, i) { if (pg.pageOf[i] === p) order.push(i); });
+          // backgrounds first, then lines / pictures, text on top
+          var rank = { rect: 0, img: 1, line: 2, dot: 3, text: 4 };
+          order.sort(function (a, b) { return (rank[items[a].kind] - rank[items[b].kind]) || (a - b); });
+          order.forEach(function (i) {
+            var it = items[i], dy = pg.off[p];
+            if (it.kind === 'rect') { doc.setFillColor(it.col.r, it.col.g, it.col.b); doc.rect(it.x * PX, (it.y - dy) * PX, it.w * PX, it.h * PX, 'F'); }
+            else if (it.kind === 'img') { try { doc.addImage(it.data, 'PNG', it.x * PX, (it.y - dy) * PX, it.w * PX, it.h * PX); } catch (e) { console.warn('[nw-proposal] image skipped', e); } }
+            else if (it.kind === 'line') { doc.setDrawColor(it.col.r, it.col.g, it.col.b); doc.setLineWidth(Math.max(0.4, it.w * PX)); doc.line(it.x1 * PX, (it.y1 - dy) * PX, it.x2 * PX, (it.y2 - dy) * PX); }
+            else if (it.kind === 'dot') {
+              doc.setFillColor(it.col.r, it.col.g, it.col.b); doc.setDrawColor(it.col.r, it.col.g, it.col.b); doc.setLineWidth(0.6);
+              doc.circle(it.x * PX, (it.y - dy) * PX, it.r * PX, it.hollow ? 'S' : 'F');
+            } else {
+              var txt = pdfText(it.text); if (!txt) return;
+              doc.setFont('helvetica', it.bold && it.italic ? 'bolditalic' : it.bold ? 'bold' : it.italic ? 'italic' : 'normal');
+              doc.setFontSize(it.size * PX); doc.setTextColor(it.color.r, it.color.g, it.color.b);
+              var base = (it.y - dy + it.h * 0.82) * PX;
+              doc.text(txt, it.x * PX, base, it.align === 'right' ? { align: 'right' } : undefined);
+              if (it.under) { doc.setDrawColor(it.color.r, it.color.g, it.color.b); doc.setLineWidth(0.5); var tw = doc.getTextWidth(txt); doc.line(it.x * PX, base + 1.4, it.x * PX + tw, base + 1.4); }
+            }
+          });
+        }
+        return new Uint8Array(doc.output('arraybuffer'));
+      }).then(function (bytes) { host.remove(); return bytes; }, function (err) { host.remove(); throw err; });
+    });
+  }
+
+  function exportPdf(paperEl, opts) {
+    opts = opts || {};
     if (typeof paperEl === 'string') paperEl = document.querySelector(paperEl);
     if (!paperEl) return Promise.reject(new Error('exportPdf: paper element not found'));
     var filename = opts.filename || 'proposal.pdf';
     if (!/\.pdf$/i.test(filename)) filename += '.pdf';
+    // The Proposal tab hands over its padded wrapper (#propPaper, max 960 px + padding) around the 8.5 in sheet; exporting the wrapper
+    // shifted the sheet right and cut its right edge. Always work from the sheet itself.
+    var sheet = (paperEl.classList && paperEl.classList.contains('nwp-paper')) ? paperEl : (paperEl.querySelector && paperEl.querySelector('.nwp-paper')) || paperEl;
 
-    var worker = window.html2pdf().set({
-      margin: 0,
-      filename: filename,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'] }
-    }).from(paperEl);
+    // text PDF first (selectable, sharp, small, clean page breaks); the old picture-based export stays as the fallback
+    var build = vectorPdf(sheet, filename).catch(function (err) {
+      console.warn('[nw-proposal] text PDF failed, falling back to the picture export', err);
+      return rasterPdf(sheet, filename);
+    });
 
-    return worker.outputPdf('arraybuffer').then(function (ab) {
-      var bytes = new Uint8Array(ab);
+    return build.then(function (bytes) {
       var hasExtras = (opts.coverBytes && opts.coverBytes.byteLength) || (opts.appendixBytes && opts.appendixBytes.byteLength);
       if (!hasExtras) return bytes;
       if (!window.PDFLib || !window.PDFLib.PDFDocument) {
@@ -1141,6 +1311,7 @@
     totalsOf: totalsOf,
     render: render,
     exportPdf: exportPdf,
+    vectorPdf: vectorPdf,   // text PDF of a sheet (used by exportPdf; exposed for checks)
     exportLetter: exportLetter,
     exportXlsx: exportXlsx,
     money: money,
