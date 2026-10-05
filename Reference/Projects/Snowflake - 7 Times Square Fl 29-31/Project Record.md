@@ -86,3 +86,11 @@ overlay key plan), amounts unchanged.
 Rev 4 10/01 per Ruslan markups: 29th $29,600, 30th $20,150, 31st $17,030 = $66,780.
 Rev 5 10/01: area 29-2 excluded - per Bulletin 3 the 56x16 main stays as installed (matches Structure Tone's field
 report). Revised total $53,555 (29th $16,375, 30th $20,150, 31st $17,030). Ready to send to Samuel.
+
+## 4. New CO - perimeter linear diffusers (SD R2 revision) - status 10/05
+
+Folder `Reference/Change Orders/2026-10 Snowflake Perimeter Linear Diffusers/`. Shop drawings M-529/530/531 SD R2
+bubble 49 perimeter linear diffusers in plenum boxes 48x4x26 lined, 12x10 branches with VD/CO off the perimeter mains:
+29th 23 (6,400 CFM), 30th 12 (3,300 CFM), 31st 14 (3,800 CFM). Quantity breakdown per floor issued to Ruslan
+(no pricing). Next: answer the open questions in the CO Record (deletions / credits, mains new or existing, F&I of
+diffusers, VD/CO), then price.
