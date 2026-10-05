@@ -18,9 +18,9 @@ const EMAIL_CONFIG = {
   // The branded HTML template "NW Branded Email (HTML)" (EmailJS: content = {{{html_body}}}, subject = {{subject}}, to = {{to_emails}}, cloned from
   // the plain one on 2026-10-02). Empty = every email keeps using the plain-text template above.
   EMAILJS_TEMPLATE_HTML_ID: 'template_pz6hovr',
-  // PILOT: until the branded email has been seen in a real inbox (Gmail + phone), only emails whose recipients are ALL @northernwolvesac.com use it;
-  // anything going to a client still uses the plain template. Set to false once it looks right.
-  EMAILJS_HTML_INTERNAL_ONLY: true,
+  // Pilot switch: true = only emails whose recipients are ALL @northernwolvesac.com use the branded template (clients keep the plain one).
+  // Seen in Gmail on 2026-10-04 (Russ's Snowflake CO test) and switched off — branded for everyone. Flip back to true to roll back.
+  EMAILJS_HTML_INTERNAL_ONLY: false,
 
   // Google Apps Script web app URL (uploads PDF to Drive, returns link)
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzvkMp9DdSa4JUC8CNxLPnGuiYnkMoidltHbQvvUYQPh7ZfLICPWRcRG7iKcbKH-A3c/exec',
