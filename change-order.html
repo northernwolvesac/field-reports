@@ -8,24 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=363"></script>
-<script src="auth.js?v=363"></script>
-<script src="labor-rates.js?v=363"></script>
-<script src="cloud-save.js?v=363"></script>
+<script src="supabase-config.js?v=364"></script>
+<script src="auth.js?v=364"></script>
+<script src="labor-rates.js?v=364"></script>
+<script src="cloud-save.js?v=364"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=363"></script>
-<script src="edit-utils.js?v=363"></script>
-<script src="project-utils.js?v=363"></script>
-<script src="customer-utils.js?v=363"></script>
+<script src="draft-utils.js?v=364"></script>
+<script src="edit-utils.js?v=364"></script>
+<script src="project-utils.js?v=364"></script>
+<script src="customer-utils.js?v=364"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=363"></script>
-<script src="nw-email.js?v=363"></script>
-<script src="ai-summary.js?v=363"></script>
-<script src="ai-chat.js?v=363"></script>
+<script src="email-utils.js?v=364"></script>
+<script src="nw-email.js?v=364"></script>
+<script src="ai-summary.js?v=364"></script>
+<script src="ai-chat.js?v=364"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=363"></script>
+<script src="pdf-utils.js?v=364"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -1152,6 +1152,7 @@ async function confirmSendEmail(){
   var origText=btn.innerHTML;
   btn.disabled=true;
   btn.innerHTML='<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px"></span>Sending\u2026';
+  const T0=Date.now(), lap=function(m){ console.log('[CO send] '+m+' — '+((Date.now()-T0)/1000).toFixed(1)+' s'); };   // where the minutes go (browser console)
   try{
     const d=collectData?collectData():{};
     if(typeof saveToHistory==='function') saveToHistory('change-order',d);
@@ -1168,13 +1169,27 @@ async function confirmSendEmail(){
       var drivePhotos = await uploadAllPhotosToDrive(_projName, projId, _coNum);
       d._photos = drivePhotos;
     }
-    // Save or update in cloud
-    if (_editCloudId) {
-      // Update existing CO (revision) — bump revision number
+    lap('photos done');
+    // Revision number / status first: the PDF shows them, so it can be built (and uploaded) before the cloud save finishes
+    const isRevision = !!_editCloudId;
+    if (isRevision) {
       _revisionNumber = (_revisionNumber || 1) + 1;
       d._revisionNumber = _revisionNumber;
       d._coStatus = 'revised';
       _coStatus = 'revised';
+    } else {
+      d._coStatus = 'submitted';
+      d._revisionNumber = 1;
+    }
+    // The e-mail needs a link-shared copy of the PDF in the "NW Field Reports" folder. Saving the CO also files the same PDF in the project
+    // folder (nw-form-kit) — both are slow uploads, so they run side by side instead of one after the other (~3 min → about half).
+    const v=id=>(document.getElementById(id)||{}).value||'';
+    const fn=`ChangeOrder_${v('custName').replace(/\s+/g,'_')||'CO'}_${v('coDate')}.pdf`;
+    showToast('Uploading report...');
+    const emailUpload=(async function(){ const r=await uploadToGoogleDrive(generatePDF(),fn); lap('email PDF uploaded'); return r; })();
+    emailUpload.catch(function(){});   // surfaced at the await below
+    // Save or update in cloud
+    if (isRevision) {
       var revResult = await updateReportInCloud(_editCloudId, { form_data: d, status: 'revised' });
       if (revResult && revResult.error) {
         console.error('[change-order] revision save failed:', revResult.error);
@@ -1182,8 +1197,6 @@ async function confirmSendEmail(){
       }
       console.log('[CO] Updated existing CO:', _editCloudId, 'Rev:', _revisionNumber);
     } else {
-      d._coStatus = 'submitted';
-      d._revisionNumber = 1;
       var cloudResult = await (typeof saveOrUpdateReport === 'function'
         ? saveOrUpdateReport('change-order', d, { reportId: reportId, projectId: projId })
         : saveReportToCloud('change-order', d, { reportId: reportId, projectId: projId }));
@@ -1192,16 +1205,13 @@ async function confirmSendEmail(){
         if (typeof showToast === 'function') showToast('⚠️ Cloud save failed — email still sent. Check console.');
       }
     }
+    lap('cloud save + project-folder filing done');
     await syncCOToPrimeContract(projId || _urlProjectId);
-    const v=id=>(document.getElementById(id)||{}).value||'';
-    const doc=generatePDF();
-    const fn=`ChangeOrder_${v('custName').replace(/\s+/g,'_')||'CO'}_${v('coDate')}.pdf`;
     const subject=document.getElementById('emailSubject').value;
     const bodyText=document.getElementById('emailBody').value;
     const ccEmail=document.getElementById('emailCc').value.trim();
 
-    showToast('Uploading report...');
-    const driveResult=await uploadToGoogleDrive(doc,fn);
+    const driveResult=await emailUpload;
     showToast('Sending email...');
 
     // Build recipients — use editable To field + optional CC
@@ -1218,6 +1228,7 @@ async function confirmSendEmail(){
     if(driveResult.driveUrl&&projId){
       updateProjectDocUrl(projId,reportId,driveResult.driveUrl,driveResult.viewUrl);
     }
+    lap('email sent');
     document.getElementById('emailModal').style.display='none';
     showToast('Change Order sent!');
     setTimeout(function(){if(window.history.length>1){history.back()}else{location.href='index.html'}},1500);
@@ -1314,9 +1325,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=363"></script>
-<script src="nw-drive.js?v=363"></script>
-<script src="nw-form-kit.js?v=363"></script>
-<script src="sw-register.js?v=363"></script>
+<script src="form-utils.js?v=364"></script>
+<script src="nw-drive.js?v=364"></script>
+<script src="nw-form-kit.js?v=364"></script>
+<script src="sw-register.js?v=364"></script>
 </body>
 </html>

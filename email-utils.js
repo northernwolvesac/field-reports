@@ -15,9 +15,12 @@ const EMAIL_CONFIG = {
   EMAILJS_PUBLIC_KEY:  '2D_ekI2psvgG5W9Bi',
   EMAILJS_SERVICE_ID:  'service_48i790s',
   EMAILJS_TEMPLATE_ID: 'template_97sktpv',
-  // The branded HTML template (EmailJS → Email Templates → content = {{{html_body}}}, subject = {{subject}}, to = {{to_emails}}).
-  // While empty, emails keep going through the old plain-text template above; set it and every email gets the new layout (nw-email.js).
-  EMAILJS_TEMPLATE_HTML_ID: '',
+  // The branded HTML template "NW Branded Email (HTML)" (EmailJS: content = {{{html_body}}}, subject = {{subject}}, to = {{to_emails}}, cloned from
+  // the plain one on 2026-10-02). Empty = every email keeps using the plain-text template above.
+  EMAILJS_TEMPLATE_HTML_ID: 'template_pz6hovr',
+  // PILOT: until the branded email has been seen in a real inbox (Gmail + phone), only emails whose recipients are ALL @northernwolvesac.com use it;
+  // anything going to a client still uses the plain template. Set to false once it looks right.
+  EMAILJS_HTML_INTERNAL_ONLY: true,
 
   // Google Apps Script web app URL (uploads PDF to Drive, returns link)
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzvkMp9DdSa4JUC8CNxLPnGuiYnkMoidltHbQvvUYQPh7ZfLICPWRcRG7iKcbKH-A3c/exec',
@@ -258,7 +261,8 @@ async function nwSendBrandedEmail(o) {
     tech_name:     o.techName || ''
   };
   var template = EMAIL_CONFIG.EMAILJS_TEMPLATE_ID;
-  if (EMAIL_CONFIG.EMAILJS_TEMPLATE_HTML_ID && window.NWEmail) {
+  var internalOnly = nwEmailList(o.to).split(', ').every(function(e) { return /@northernwolvesac\.com$/i.test(e); });
+  if (EMAIL_CONFIG.EMAILJS_TEMPLATE_HTML_ID && window.NWEmail && (!EMAIL_CONFIG.EMAILJS_HTML_INTERNAL_ONLY || internalOnly)) {
     template = EMAIL_CONFIG.EMAILJS_TEMPLATE_HTML_ID;
     params.html_body = NWEmail.build({
       reportType: o.reportType, title: o.title, subtitle: o.subtitle, bodyText: o.bodyText, senderName: o.senderName || o.techName,
