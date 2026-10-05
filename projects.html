@@ -8,12 +8,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=327"></script>
-<script src="nw-drive.js?v=221"></script>
-<script src="nw-drive-browser.js?v=327"></script>
-<script src="auth.js?v=327"></script>
-<script src="cloud-save.js?v=132"></script>
-<script src="schedule-utils.js?v=137"></script>
+<script src="supabase-config.js?v=368"></script>
+<script src="nw-drive.js?v=368"></script>
+<script src="nw-drive-browser.js?v=368"></script>
+<script src="auth.js?v=368"></script>
+<script src="cloud-save.js?v=368"></script>
+<script src="schedule-utils.js?v=368"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Projects — Northern Wolves AC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1842,7 +1842,7 @@ requireAuth().catch(function(){});
 
       html += '<div class="co-card" data-coid="' + co.id + '">';
       html += '<div class="co-card-top">';
-      html += '<div class="co-card-number">CO #' + escHtml(String(coNum)) + (rev > 1 ? ' <span style="font-size:11px;color:#94a3b8;font-weight:400">Rev ' + rev + '</span>' : '') + '</div>';
+      html += '<div class="co-card-number">CO #' + escHtml(String(coNum)) + (fd.coType === 'credit' ? ' <span style="font-size:10px;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:1px 6px;margin-left:4px">CREDIT</span>' : '') + (rev > 1 ? ' <span style="font-size:11px;color:#94a3b8;font-weight:400">Rev ' + rev + '</span>' : '') + '</div>';
       html += '<div style="position:relative;">';
       html += '<span class="' + badgeClass + '" data-status-toggle="' + co.id + '">' + coStatus + '</span>';
       html += '<div class="co-status-menu" id="coMenu_' + co.id + '">';
@@ -2446,6 +2446,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=327"></script>
+<script src="sw-register.js?v=368"></script>
 </body>
 </html>

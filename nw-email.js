@@ -82,8 +82,8 @@
     // a single "Total: $5,849.00" line is the amount the client is approving — give it a banner
     if (b.length === 1 && /^(grand total|total|amount|contract total|change order total)\b/i.test(b[0]) && KV.test(b[0])) {
       var m = KV.exec(b[0]), amount = m[2];
-      var n = /^\$?\s*(\d+(?:\.\d+)?)$/.exec(amount.trim());   // $5849.00 -> $5,849.00
-      if (n) amount = '$' + Number(n[1]).toLocaleString('en-US', { minimumFractionDigits: n[1].indexOf('.') >= 0 ? 2 : 0, maximumFractionDigits: 2 });
+      var n = /^(-)?\s*\$?\s*(-)?\s*(\d+(?:\.\d+)?)$/.exec(amount.trim());   // $5849.00 -> $5,849.00, -$5849.00 (a credit) -> -$5,849.00
+      if (n) amount = ((n[1] || n[2]) ? '-' : '') + '$' + Number(n[3]).toLocaleString('en-US', { minimumFractionDigits: n[3].indexOf('.') >= 0 ? 2 : 0, maximumFractionDigits: 2 });
       return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 18px"><tr><td style="background:' + C.panel + ';border-left:4px solid ' + C.accent + ';padding:14px 18px">' +
         '<span style="font:600 12px ' + FONT + ';color:' + C.soft + ';text-transform:uppercase;letter-spacing:.8px">' + esc(m[1]) + '</span><br>' +
         '<span style="font:700 24px/1.3 ' + FONT + ';color:' + C.ink + '">' + esc(amount) + '</span></td></tr></table>';

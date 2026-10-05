@@ -11,7 +11,7 @@
   'use strict';
   var PAGES = {
     'rfi.html':                 { type: 'rfi',          label: 'RFI',                 folder: 'RFI',                   category: 'rfi',            title: function(d) { return d.rfiSubject; } },
-    'change-order.html':        { type: 'change-order', label: 'Change Order',        folder: 'Change Orders',         category: 'change-orders',  title: function(d) { return d.coNumber ? '#' + d.coNumber : ''; }, ownRevisions: true },
+    'change-order.html':        { type: 'change-order', label: 'Change Order',        folder: 'Change Orders',         category: 'change-orders',  title: function(d) { return (d.coType === 'credit' ? 'CREDIT ' : '') + (d.coNumber ? '#' + d.coNumber : ''); }, ownRevisions: true },
     'service-call-report.html': { type: 'service-call', label: 'Service Call Report', folder: 'Reports/Service Calls', category: 'reports',        title: function(d) { return d.custName; } },
     'startup-report.html':      { type: 'startup',      label: 'Start-Up Report',     folder: 'Reports/Start-Up',      category: 'reports',        title: function(d) { return d.custName || d.projectName; } },
     'site-survey-report.html':  { type: 'site-survey',  label: 'Site Survey',         folder: 'Reports/Site Surveys',  category: 'reports',        title: function(d) { return d.custName || d.siteName; } },
