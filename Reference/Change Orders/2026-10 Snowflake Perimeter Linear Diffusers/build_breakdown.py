@@ -222,14 +222,12 @@ def summary_page(c):
     y -= 8
     y -= para(c, 'Open questions before pricing', sth, x, y, 560) + 4
     qs = [
-        'What is removed or credited: the Bulletin 3 design served the perimeter with ceiling linear diffusers (G tags) '
-        'set in from the window line. Which of those, and their branch duct, are deleted, and are any already installed?',
+        'What is removed or credited: Bulletin 3 had 36 ceiling linear diffusers (G, 13,400 CFM) where the 49 LDs go. '
+        'Delete them and their branch duct? Any already installed? (screenshots sent 10/05 for confirmation)',
         'Perimeter mains inside the clouds (flat oval 26.1/10 to 34.4/12): existing to remain with new taps only, or new / '
-        'rerouted? The 29-1 corner shows a 26.1/10 offset down and reroute along Broadway.',
-        'Linear diffusers and plenum boxes: furnished by us (F&amp;I) or diffuser by others? Slot count / finish per '
-        'architect.',
-        'VD/CO: tagged on all 29th / 30th floor connections except 29-3 (2 of 6) and 29-6 (3 of 4); most 31st floor '
-        'connections untagged. Assume a VD with concealed operator on every connection?',
+        'rerouted? (screenshots sent 10/05)',
+        '<b>Answered 10/05:</b> linear diffusers and plenum boxes furnished and installed by us - price them. '
+        'VD/CO on every connection (49). CO number not assigned yet.',
         'Soffit openings, access and patching by GC. M-531 title block still dated 08/17/2026.',
     ]
     for i, n in enumerate(qs, 1):

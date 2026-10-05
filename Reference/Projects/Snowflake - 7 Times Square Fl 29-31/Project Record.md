@@ -92,5 +92,6 @@ report). Revised total $53,555 (29th $16,375, 30th $20,150, 31st $17,030). Ready
 Folder `Reference/Change Orders/2026-10 Snowflake Perimeter Linear Diffusers/`. Shop drawings M-529/530/531 SD R2
 bubble 49 perimeter linear diffusers in plenum boxes 48x4x26 lined, 12x10 branches with VD/CO off the perimeter mains:
 29th 23 (6,400 CFM), 30th 12 (3,300 CFM), 31st 14 (3,800 CFM). Quantity breakdown per floor issued to Ruslan
-(no pricing). Next: answer the open questions in the CO Record (deletions / credits, mains new or existing, F&I of
-diffusers, VD/CO), then price.
+(no pricing). 10/05 Ruslan: we F&I the LDs and plenum boxes (price them), VD/CO on every branch, no CO number yet.
+Bulletin 3 vs SD R2 screenshots sent for him to confirm (1) deletion of the 36 G ceiling diffusers they replace and
+(2) whether the perimeter mains stay. Then price.

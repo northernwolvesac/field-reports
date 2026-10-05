@@ -20,14 +20,20 @@ Per area (location, CFM, branch lengths, main in the cloud) is in the `AREAS` li
 counts are checked against the PLENUM / CFM text inside each cloud. Clouds are found from the red arc paths.
 
 ## Open questions before pricing
-1. What is deleted / credited: the G ceiling linear diffusers and branches they replace; any already installed?
+1. What is deleted / credited: Bulletin 3 has 36 G ceiling linear diffusers (13,400 CFM) in the clouds
+   (29th 17, 30th 8, 31st 11 - per area in `build_comparison.py` output). Delete with branches? Any installed?
 2. Perimeter mains inside the clouds: existing to remain (new taps only) or new / rerouted (29-1 corner shows a
    26.1/10 offset down and reroute along Broadway)?
-3. Linear diffusers and plenum boxes F&I by us, or diffusers by others?
-4. VD/CO on every connection (31st floor mostly untagged)?
-5. Soffit openings / access by GC. CO number.
+   -> 1 and 2: Bulletin 3 vs SD R2 screenshots sent to Ruslan 10/05 (`Perimeter Linear Diffusers - Bulletin 3 vs
+   SD R2.pdf`, built by `build_comparison.py`), waiting on his confirmation.
+3. ANSWERED 10/05: we furnish and install the linear diffusers and plenum boxes - price them.
+4. ANSWERED 10/05: VD/CO on every connection (49).
+5. ANSWERED 10/05: no CO number yet. Soffit openings / access by GC.
 
 ## Files
 - `Perimeter Linear Diffusers - Breakdown by Floor.pdf` (7 pages: summary, then per floor screenshots + quantities)
   and `.xlsx` (quantities by area with empty Material $ / Labor MH / Total $ columns for pricing).
+- `Perimeter Linear Diffusers - Bulletin 3 vs SD R2.pdf` (6 pages) by `build_comparison.py`: per area the Bulletin 3
+  crop (cloud outline dashed) next to the SD R2 crop, G count vs LD count, main in cloud. SD R2 maps onto Bulletin 3
+  as B3 = 0.5 x SD + t per sheet, fitted on room numbers (exact).
 - `source/` - the three SD R2 PDFs.
