@@ -94,4 +94,6 @@ bubble 49 perimeter linear diffusers in plenum boxes 48x4x26 lined, 12x10 branch
 29th 23 (6,400 CFM), 30th 12 (3,300 CFM), 31st 14 (3,800 CFM). Quantity breakdown per floor issued to Ruslan
 (no pricing). 10/05 Ruslan: we F&I the LDs and plenum boxes (price them), VD/CO on every branch, no CO number yet.
 Bulletin 3 vs SD R2 screenshots sent; Ruslan confirmed: the 36 G ceiling diffusers are deleted with NO credit (all
-delivered, factory will not take them back); all mains stay, price only the add starting at the new taps. Next: pricing.
+delivered, factory will not take them back); all mains stay, price only the add starting at the new taps.
+10/06 priced per Ruslan ($90/LF LD, 5.5 MH/LD, foreman 30/15/15 hr, TAB, shop dwgs): 29th $37,917.50, 30th $19,545,
+31st $22,090, total $79,552.50 (`build_co.py`). No note on the G credit. CO number to be assigned.

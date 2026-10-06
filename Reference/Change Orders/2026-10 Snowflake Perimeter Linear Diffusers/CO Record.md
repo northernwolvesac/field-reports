@@ -26,9 +26,24 @@ counts are checked against the PLENUM / CFM text inside each cloud. Clouds are f
 3. We furnish and install the linear diffusers and plenum boxes - price them.
 4. VD/CO on every connection (49).
 5. No CO number yet.
-Still open for pricing: unit material costs (LD 48", plenum box, branch, VD/CO), labor per LD, TAB, drafting.
+
+## Pricing (Ruslan, 10/06/2026) - `build_co.py`
+- Linear diffuser $90/LF x 4 LF = $360 each. Plenum box $95, branch $45, VD/CO $85 each (our estimate, kept).
+  Material $585 per diffuser.
+- Mechanic 5.5 MH per diffuser at $125. Foreman 30 hr (29th), 15 hr (30th), 15 hr (31st) at $155.
+- Air balancing $2,500 / $1,200 / $1,200. Shop drawings $1,500 / $750 / $750.
+- No note about the deleted G diffusers or credit (Ruslan: explain only if asked). No CO number yet.
+
+| Floor | LD | Material | Labor | Foreman | TAB | Shop dwgs | Total |
+|---|---|---|---|---|---|---|---|
+| 29th | 23 | $13,455 | $15,812.50 | $4,650 | $2,500 | $1,500 | $37,917.50 |
+| 30th | 12 | $7,020 | $8,250 | $2,325 | $1,200 | $750 | $19,545 |
+| 31st | 14 | $8,190 | $9,625 | $2,325 | $1,200 | $750 | $22,090 |
+| Total | 49 | $28,665 | $33,687.50 | $9,300 | $4,900 | $3,000 | $79,552.50 |
 
 ## Files
+- `Perimeter Linear Diffusers - Change Order Breakdown.pdf` (7 pages: summary, then per floor change-area screenshots +
+  scope and cost) and `.xlsx` (Rates sheet drives By area / By floor formulas), built by `build_co.py`.
 - `Perimeter Linear Diffusers - Breakdown by Floor.pdf` (7 pages: summary, then per floor screenshots + quantities)
   and `.xlsx` (quantities by area with empty Material $ / Labor MH / Total $ columns for pricing).
 - `Perimeter Linear Diffusers - Bulletin 3 vs SD R2.pdf` (6 pages) by `build_comparison.py`: per area the Bulletin 3
