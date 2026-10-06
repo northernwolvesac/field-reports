@@ -20,7 +20,7 @@ mk = importlib.util.module_from_spec(spec); spec.loader.exec_module(mk)   # regi
 
 OUT_PDF = S + "VE Vendor RFQ - Sunrise Rye Brook.pdf"
 OUT_XLS = S + "VE Vendor RFQ - Sunrise Rye Brook.xlsx"
-DATE, REV = "10/6/2026", "Rev 0"
+DATE, REV = "10/6/2026", "Rev 1"
 PW, PH = letter
 BLUE = colors.HexColor("#236fa1"); GREY = colors.HexColor("#aeaeae"); LIGHT = colors.HexColor("#eef3f8")
 LINE = colors.HexColor("#c7ced6")
@@ -130,8 +130,9 @@ s = [Paragraph("Project: <b>Sunrise Rye Brook - 900 King St, Rye Brook, NY 10573
      Paragraph("The heating design is being revised from a hot water boiler plant to electric heat. Please provide "
                "revised pricing for the items below: new items (section 1 and 2), credits for items deleted from your "
                "previous quote (section 3) and alternate deducts (section 4). Quote per line in the attached xlsx, "
-               "with lead times. Electric heat voltage to be confirmed by the electrical engineer: quote 277 V / 1 ph "
-               "up to 5 kW and 480 V / 3 ph above 5 kW, and note any other standard voltage. Controls are standalone "
+               "with lead times. Electric heat: quote all heaters and electric reheat coils at 208 V / 3 ph (heaters rated "
+               "at 208 V, kW as listed at 208 V - not 240 V units derated). Where a 208 V / 3 ph model is not "
+               "available in the listed kW, note it and offer 208 V / 1 ph. Controls are standalone "
                "(no BMS): factory-mounted standalone controllers with wall thermostats / sensors.", pS)]
 
 s += [Paragraph("1. VAV terminal units (1st floor common areas)", pH),
@@ -190,7 +191,7 @@ rfq.save(OUT_PDF + ".tmp", garbage=3, deflate=True); os.replace(OUT_PDF + ".tmp"
 wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Pricing"
 B = Font(bold=True); H = PatternFill("solid", fgColor="EEF3F8"); thin = Side(style="thin", color="C7CED6")
 ws.append(["Sunrise Rye Brook - VE request for pricing %s %s - Northern Wolves AC" % (REV, DATE)]); ws["A1"].font = Font(bold=True, size=12)
-ws.append(["Fill in unit price and lead time. Electric heat: 277 V/1 ph up to 5 kW, 480 V/3 ph above (to be confirmed)."])
+ws.append(["Fill in unit price and lead time. Electric heat: all 208 V / 3 ph, kW rated at 208 V (note any item only available 208 V / 1 ph)."])
 ws.append([])
 hdr = ["Section", "Tag / item", "Description", "Inlet", "Max CFM", "Min CFM", "Elec. heat kW", "Qty", "Unit",
        "Unit price", "Extended", "Lead time", "Notes"]

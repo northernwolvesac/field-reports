@@ -8,4 +8,10 @@
   electric heat once the boilers are deleted); 1B 4 cooling-only VAV; 1C 18 VAV cancelled (credit); 2A 10 electric
   cabinet heaters (58.1 kW); 2B 9 electric unit heaters (35 kW); 3 credits for deleted hydronic equipment;
   4 alternates (283 FSD at apartment branches, 283 TX-A fans).
-- Voltage note: 277 V/1 ph up to 5 kW, 480 V/3 ph above, to be confirmed by EE. Standalone controls, no BMS.
+- Standalone controls, no BMS.
+
+## Rev 1 - 10/06/2026
+- Per Ruslan: one voltage for all electric heat. 208 V / 3 ph (building has 208Y/120 for PTACs / mini-splits;
+  no 230/240 V system here). Heaters rated at 208 V, not 240 V units derated (25% loss at 208 V). 208 V / 1 ph
+  offered where no 3 ph model exists. ~193 kW total at 208 V / 3 ph is ~535 A on the 208 V system - EE to confirm
+  the 208 V transformer / panel capacity.
