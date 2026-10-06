@@ -11,7 +11,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
 from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle,
-                                Image, KeepTogether, CondPageBreak)
+                                Image, KeepTogether, CondPageBreak, PageBreak)
 from reportlab.lib.styles import ParagraphStyle
 
 S = os.path.dirname(os.path.abspath(__file__)) + "/"
@@ -28,7 +28,7 @@ registerFontFamily("Arial", normal="Arial", bold="Arial-Bold", italic="Arial-Ita
 PW, PH = letter
 BLUE = colors.HexColor("#236fa1"); GREY = colors.HexColor("#aeaeae"); LIGHT = colors.HexColor("#eef3f8")
 LINE = colors.HexColor("#c7ced6")
-REV, DATE, QUOTE = "Rev 0", "10/1/2026", "3112"
+REV, DATE, QUOTE = "Rev 1", "10/6/2026", "3112"
 
 VE = [
   dict(no="VE-01", title="Heating plant: delete boilers and hot water / glycol systems",
@@ -53,72 +53,75 @@ VE = [
        imgs=[("m5000_boiler_room", "M5000 Hydronic flow diagram - boiler room"),
              ("m2002_boiler_room", "M2002 AL basement - boiler room, pumps, heat exchangers, chimney enclosures"),
              ("m6001_boiler_pump", "M6001 Boiler and pump schedules")]),
-  dict(no="VE-02", title="VAV reheat: hot water coils to electric reheat",
-       area="1st floor common areas, IL and AL (VAV-01 to VAV-47)",
+  dict(no="VE-02", title="VAV reheat: electric reheat only where needed",
+       area="1st floor common areas, IL and AL (VAV-1 to VAV-47)",
        designed=[
          "47 VAV boxes with hot water reheat coils (629 MBH, 45 GPM) on 5 rooftop units",
          "Hot water piping, control valves, balancing and insulation to every box (M2014 to M2016)",
        ],
        proposed=[
-         "Factory electric reheat coils with SCR control on the same VAV boxes; no piping, no control valves",
-         "IMEG to confirm which interior zones need reheat at all (rooftop units already supply gas-heated air); "
-         "cooling-only boxes where reheat is not required",
+         "Same rooftop units as designed (gas heat). VAV boxes kept in enclosed rooms (VE-03) get factory electric "
+         "reheat coils with SCR control and a simple standalone thermostat: 25 boxes",
+         "Interior / back-of-house rooms: VAV box kept cooling-only, no reheat required since the rooftop units are "
+         "gas heat (VAV-8, VAV-14, VAV-31, VAV-32)",
+         "No hot water piping, coil packages or control valves at any box. See mark-ups M2010, M2011, M2013",
        ],
-       benefits="Deletes 1st floor hot water piping and 47 valve / coil packages; fewer BMS points.",
+       benefits="Deletes 1st floor hot water piping and 47 valve / coil packages; standalone thermostats instead of "
+                "BMS zone control.",
        needs="IMEG redesign and energy code check (VAV minimums); electrical service capacity by EE.",
-       kw="About +185 kW connected (less if interior zones are cooling-only)",
-       imgs=[("m5000_vav_ch", "M5000 Hydronic flow diagram - IL and AL VAV reheat and cabinet heaters"),
-             ("m2015_hw_piping", "M2015 1st floor piping IL area B - hot water to VAV boxes and cabinet heaters"),
+       kw="About +90 kW connected (25 boxes), versus about 185 kW if all 47 were electric",
+       imgs=[("mk_m2010_b", "Mark-up M2010 IL area A - reception / lounge / bistro and offices"),
+             ("m5000_vav_ch", "M5000 Hydronic flow diagram - IL and AL VAV reheat and cabinet heaters"),
              ("m6000_vav_sched", "M6000 VAV schedule - hydronic reheat (partial)")]),
-  dict(no="VE-03", title="Common areas: single-zone rooftop units in lieu of VAV zoning (alternate to VE-02)",
-       area="1st floor dining, lobby, activity, kitchen and offices",
-       designed=[
-         "5 large VAV rooftop units (7,000 to 11,000 CFM) serving 47 VAV zones with reheat",
-       ],
+  dict(no="VE-03", title="Common areas: cancel VAV boxes in open areas and circulation",
+       area="1st floor lounges, bistros, dining rooms, reception, corridors, kitchen, restrooms",
+       designed=["47 VAV zones on 5 rooftop units, including open areas that are one space with their neighbors"],
        proposed=[
-         "Large open spaces on single-zone constant-volume gas / DX rooftop units, one per space type",
-         "Offices and small rooms on ductless heat pumps; delete the VAV boxes and reheat",
-         "Ductless units recirculate only: each small room keeps a ventilation air branch (code outdoor air) "
-         "with a diffuser, preferably tempered air from the DOAS (or a small ERV per room cluster), not raw "
-         "rooftop unit supply air that would fight the ductless unit",
-         "Same approach as other recent Sunrise communities (e.g. Sunrise of Northport: small single-zone "
-         "rooftop units plus heat pump terminals, no VAV, no boilers)",
+         "Same rooftop units and main ductwork as designed. Cancel 18 VAV boxes in open areas and circulation "
+         "(lounge, bistro, coffee shop, reception, formal / casual / AL dining, parlor, kitchen, corridors, restrooms)",
+         "Branch ducts stay, with manual volume dampers balanced to the design maximum CFM; the area is served "
+         "directly by its rooftop unit (rooftop unit space sensor in that area), gas heat from the rooftop unit",
+         "VAV boxes stay only in enclosed rooms (offices, theaters, activity, fitness, salon, private dining, "
+         "library, family rooms) - see VE-02. No ductless units added",
+         "Each box is marked on the attached mark-ups: CANCEL VAV / KEEP VAV - ELEC. REHEAT / KEEP VAV - NO REHEAT",
        ],
-       benefits="Deletes 47 VAV boxes, reheat and their controls; simpler operation for the community.",
-       needs="IMEG zoning concept, ventilation air source and redesign; Sunrise approval.",
-       kw="Heat pumps for small rooms only (less than electric reheat)",
-       imgs=[("m2011_vav_duct", "M2011 1st floor ductwork - VAV boxes and cabinet heaters in dining / kitchen area")]),
+       benefits="18 fewer VAV boxes, reheat coils, thermostats and controls; simpler operation.",
+       needs="IMEG zoning review (rooftop unit control zone per unit); Sunrise approval.",
+       kw="Reduces electric reheat (included in VE-02 figure)",
+       imgs=[("mk_m2010_a", "Mark-up M2010 IL area A - multi-purpose, theater, salon, offices, corridor"),
+             ("mk_m2011", "Mark-up M2011 IL area B - dining rooms, kitchen, restrooms"),
+             ("mk_m2013", "Mark-up M2013 AL area D - bistro, parlor, reception, corridor, activity rooms")]),
   dict(no="VE-04", title="Cabinet heaters: hot water to electric",
-       area="Entries, vestibules and stairs (CH-1 to CH-12)",
-       designed=["12 hot water cabinet heaters (234 MBH) with piping and BMS control"],
-       proposed=["Electric cabinet heaters with integral thermostats, no piping, no BMS points"],
-       benefits="Deletes piping to 12 remote locations; standalone control.",
+       area="Entries, vestibules and trash room (CH-1, CH-3 to CH-12)",
+       designed=["11 hot water cabinet heaters in the schedule (CH-8 not shown on plans) with piping and BMS control"],
+       proposed=["Electric cabinet heaters with integral thermostats at the same locations; no piping, no BMS "
+                 "points. Each heater is marked on mark-ups M2010 and M2011"],
+       benefits="Deletes piping to 11 remote locations; standalone control.",
        needs="IMEG; EE.",
-       kw="About +70 kW connected",
-       imgs=[("m6001_ch_sched", "M6001 Cabinet heater schedule"),
-             ("m2011_vav_duct", "M2011 1st floor - CH-7, CH-9, CH-10, CH-11 locations")]),
-  dict(no="VE-05", title="Basement back-of-house fan coil units",
-       area="IL and AL basement: storage, trash, laundry, electrical, mechanical, staff rooms (FCU-A)",
+       kw="About +60 kW connected (5.3 kW typical, CH-9 10.4 kW)",
+       imgs=[("mk_m2010_a", "Mark-up M2010 - CH-12 and other entries"),
+             ("m6001_ch_sched", "M6001 Cabinet heater schedule")]),
+  dict(no="VE-05", title="Basement fan coil units: electric unit heaters",
+       area="IL and AL basement back-of-house rooms (FCU-A)",
        designed=[
          "FCU-A, quantity 20, \"basement heating\", hot water / glycol heating coil only (schedule data blank); "
          "M5000 shows FCU-1 to FCU-17 on the glycol loop with RAD-1/2",
-         "Each FCU takes a small DOAS branch at its inlet and recirculates the room (booster fan plus reheat)",
+         "Each FCU takes a small DOAS branch at its inlet and recirculates the room",
          "No glycol or hot water piping to these units is drawn on M2001 / M2003",
        ],
        proposed=[
-         "Delete the 20 FCUs and RAD-1/2; extend the DOAS branch ducts directly to the room diffusers",
-         "Electric unit / wall heaters with integral thermostats only where there is freeze risk "
-         "(trash rooms, rooms at areaways, louvers or exterior walls)",
-         "Occupied rooms (staff lounge, corridor) on a small ductless heat pump or duct heater",
-         "Electrical rooms, MDF and laundry need cooling and ventilation, not heat: ductless AC for MDF and "
-         "electrical rooms, thermostatic exhaust / make-up for laundry (not on the drawings today)",
+         "Delete the FCUs and RAD-1/2. Electric unit heater with integral thermostat in each room that had an FCU "
+         "(storage, trash, corridor, staff lounge, mechanical); DOAS branch duct extended directly to the room "
+         "diffuser, return grille deleted. Each unit is marked on mark-ups M2000 and M2002",
+         "Electrical room B123 and central laundry B121: FCU deleted; these rooms need cooling / ventilation, "
+         "not heat - see RFI-01 (separate page, not priced)",
        ],
-       benefits="Deletes 20 fan coils, glycol piping and controls. Corrects the missing cooling in equipment rooms.",
+       benefits="Deletes the fan coils, glycol piping and their controls.",
        needs="IMEG; fire protection designer to confirm freeze-protection locations.",
-       kw="About +30 kW connected",
-       imgs=[("m2002_basement_fcu", "M2002 AL basement - FCUs in kitchen storage, residents' storage, corridor"),
-             ("m2002_boiler_room", "M2002 AL basement - FCUs in electrical B123, central laundry, staff lounge"),
-             ("m2000_trash_storage", "M2000 IL basement - FCU in residents' storage, FCU-A in trash collection"),
+       kw="About +30 kW connected (about 3 kW per heater)",
+       imgs=[("mk_m2002_n", "Mark-up M2002 AL basement - storage, corridor, staff lounge, mechanical, electrical, laundry"),
+             ("mk_m2002_s", "Mark-up M2002 AL basement south - trash and storage rooms"),
+             ("mk_m2000", "Mark-up M2000 IL basement - residents' storage, trash collection"),
              ("m6000_fcu_sched", "M6000 Fan coil unit schedule (FCU-A, quantity 20, no data)")]),
   dict(no="VE-06", title="Garage ramp snow melt",
        area="North and south garage ramps (HX-3, P-3 / P-4, 120 F glycol)",
@@ -186,8 +189,7 @@ GAPS = [
   "Basement piping sheets M2001 / M2003 show no boiler room, main or glycol piping.",
   "FCU counts do not match: schedule FCU-A quantity 20 (all data blank), M5000 FCU-1 to FCU-17, plans about 12.",
   "Pump schedule PP-1 / PP-2 blank. RTU-5 heating output 864 MBH is greater than its 600 MBH input.",
-  "Electrical rooms, MDF and central laundry have no cooling or ventilation scheduled (heating-only FCUs).",
-  "AL unit plans show DOAS return grilles RG-2 in some unit types; floor plans connect the return trunk to only a few rooms.",
+    "AL unit plans show DOAS return grilles RG-2 in some unit types; floor plans connect the return trunk to only a few rooms.",
 ]
 
 pB = ParagraphStyle("b", fontName="Arial", fontSize=9.5, leading=12)
@@ -269,7 +271,7 @@ t.setStyle(TableStyle([("FONT", (0, 0), (-1, 0), "Arial-Bold", 8.5), ("FONT", (0
                        ("GRID", (0, 0), (-1, -1), 0.4, LINE),
                        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
 st += [t, Spacer(1, 4),
-       Paragraph("VE-01 requires VE-02 (or VE-03) and VE-04 to VE-06. Electrical work for electric heat by EC; "
+       Paragraph("VE-01 requires VE-02 to VE-06. Electrical work for electric heat by EC; "
                  "electrical service capacity to be confirmed by the EE and utility.", pS)]
 
 for v in VE:
@@ -287,6 +289,20 @@ for v in VE:
 st.append(CondPageBreak(150))
 st.append(Paragraph("Coordination items found during the review (RFI to follow)", pH))
 st += bullets(GAPS)
+
+# RFI-01 (same text as the mark-up set), on its own page, not priced
+import importlib.util
+_spec = importlib.util.spec_from_file_location("mk", S + "../VE Mark-ups/build_markups.py")
+_mk = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_mk)
+st += [PageBreak(), Paragraph("RFI-01 - Cooling and ventilation of equipment rooms (to IMEG)", pH),
+       Paragraph("Reference: mechanical GMP set dated 07.15.2026, sheets M2000, M2002, M2013, M6000. "
+                 "Not included in our VE proposals or pricing.", pS), Spacer(1, 6)]
+rows = [["#", "Room", "Question"]] + [[str(i), Paragraph(r, pS), Paragraph(q, pS)] for i, (r, q) in enumerate(_mk.RFI, 1)]
+t = Table(rows, colWidths=[20, 150, 352])
+t.setStyle(TableStyle([("FONT", (0, 0), (-1, 0), "Arial-Bold", 8.5), ("BACKGROUND", (0, 0), (-1, 0), LIGHT),
+                       ("VALIGN", (0, 0), (-1, -1), "TOP"), ("GRID", (0, 0), (-1, -1), 0.4, LINE)]))
+st += [t, Spacer(1, 6), Paragraph("Response requested: design load and the system to be provided for each room, "
+                                  "so it can be priced separately.", pS)]
 
 doc.build(st)
 print(OUT)

@@ -91,6 +91,10 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   connect the return trunk to only a few rooms (clarify with IMEG).
 - 10/06/2026: VE-03 (int. VE-12) clarified - ductless units for small rooms still need a ventilation air branch per
   room (tempered DOAS air or small ERV per cluster); savings are the VAV box, reheat and controls, not the duct.
+- 10/06/2026 Ruslan: no ductless units. Same RTUs; cancel VAVs in open areas (18), keep VAVs in rooms with electric
+  reheat + standalone T-stat (25, ~90 kW), 4 cooling-only (RTU gas heat). Cabinet heaters and basement FCUs to
+  electric heaters. Equipment room cooling / exhaust = RFI-01, not priced. Drawing mark-ups in `VE Mark-ups/`;
+  VE Proposals rev 1 updated to match. Neither sent yet.
 
 ## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (reviewed 10/01/2026)
 

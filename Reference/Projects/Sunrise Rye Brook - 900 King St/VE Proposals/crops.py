@@ -20,11 +20,26 @@ CROPS = {
   "m2011_vav_duct":      (7,  0.270, 0.100, 0.620, 0.620, 90),
   "m2108_al_units":      (36, 0.100, 0.100, 0.300, 0.660, 110),
 }
+MK = S + "../VE Mark-ups/VE Mark-ups - Sunrise Rye Brook.pdf"
+# marked-up sheets (page index in the mark-up set: 3 M2010, 4 M2011, 5 M2013, 6 M2000, 7 M2002)
+MARKED = {
+  "mk_m2010_a": (3, 0.300, 0.550, 0.620, 0.880, 90),
+  "mk_m2010_b": (3, 0.450, 0.580, 0.800, 0.860, 85),
+  "mk_m2011":   (4, 0.260, 0.120, 0.680, 0.820, 60),
+  "mk_m2013":   (5, 0.260, 0.340, 0.540, 0.800, 75),
+  "mk_m2000":   (6, 0.140, 0.720, 0.400, 0.860, 110),
+  "mk_m2002_n": (7, 0.140, 0.030, 0.660, 0.440, 70),
+  "mk_m2002_s": (7, 0.140, 0.700, 0.660, 0.860, 80),
+}
 d = pymupdf.open(P)
-names = sys.argv[1:] or list(CROPS)
+names = sys.argv[1:] or list(CROPS) + list(MARKED)
+mk = pymupdf.open(MK)
 for n in names:
-    pg, x0, y0, x1, y1, dpi = CROPS[n]
-    p = d[pg - 1]; W, H = p.rect.width, p.rect.height
+    if n in MARKED:
+        pg, x0, y0, x1, y1, dpi = MARKED[n]; p = mk[pg]
+    else:
+        pg, x0, y0, x1, y1, dpi = CROPS[n]; p = d[pg - 1]
+    W, H = p.rect.width, p.rect.height
     clip = pymupdf.Rect(x0 * W, y0 * H, x1 * W, y1 * H)
     p.get_pixmap(dpi=dpi, clip=clip).save(S + "img/%s.png" % n)
     print(n)

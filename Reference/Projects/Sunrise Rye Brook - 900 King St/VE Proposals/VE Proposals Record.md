@@ -11,3 +11,10 @@
 - Ends with coordination items for an RFI (basement piping not drawn, FCU counts, PP-1/2 blank, RTU-5 heat,
   equipment room cooling, RG-2 return grilles in some AL unit types vs floor plans).
 - Priced budget version stays in `VE Log/` (internal).
+
+## Rev 1 - 10/06/2026
+- VE-02 now electric reheat only in the 25 boxes kept in enclosed rooms (~90 kW), 4 boxes cooling-only (no reheat,
+  RTU gas heat). VE-03 changed: same RTUs, cancel 18 VAVs in open areas / circulation, no ductless units.
+- VE-04 / VE-05 electric heaters per mark-ups; equipment room cooling / ventilation moved to RFI-01 (own page).
+- Screenshots of the marked-up sheets (`mk_*` crops from `../VE Mark-ups/`) added; crops.py renders both sources
+  (build the mark-ups first).
