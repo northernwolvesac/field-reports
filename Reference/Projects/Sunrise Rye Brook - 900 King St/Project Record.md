@@ -89,6 +89,8 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   others) -> `VE Proposals/VE Proposals - Sunrise Rye Brook.pdf` (VE-01..VE-09). Not sent yet.
 - Found in review: AL unit plans (M2107-M2110) show DOAS return grille RG-2 in some unit types, while floor plans
   connect the return trunk to only a few rooms (clarify with IMEG).
+- 10/06/2026: VE-03 (int. VE-12) clarified - ductless units for small rooms still need a ventilation air branch per
+  room (tempered DOAS air or small ERV per cluster); savings are the VAV box, reheat and controls, not the duct.
 
 ## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (reviewed 10/01/2026)
 

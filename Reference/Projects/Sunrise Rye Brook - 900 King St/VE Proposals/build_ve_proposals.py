@@ -78,11 +78,14 @@ VE = [
        proposed=[
          "Large open spaces on single-zone constant-volume gas / DX rooftop units, one per space type",
          "Offices and small rooms on ductless heat pumps; delete the VAV boxes and reheat",
+         "Ductless units recirculate only: each small room keeps a ventilation air branch (code outdoor air) "
+         "with a diffuser, preferably tempered air from the DOAS (or a small ERV per room cluster), not raw "
+         "rooftop unit supply air that would fight the ductless unit",
          "Same approach as other recent Sunrise communities (e.g. Sunrise of Northport: small single-zone "
          "rooftop units plus heat pump terminals, no VAV, no boilers)",
        ],
        benefits="Deletes 47 VAV boxes, reheat and their controls; simpler operation for the community.",
-       needs="IMEG zoning concept and redesign; Sunrise approval.",
+       needs="IMEG zoning concept, ventilation air source and redesign; Sunrise approval.",
        kw="Heat pumps for small rooms only (less than electric reheat)",
        imgs=[("m2011_vav_duct", "M2011 1st floor ductwork - VAV boxes and cabinet heaters in dining / kitchen area")]),
   dict(no="VE-04", title="Cabinet heaters: hot water to electric",
