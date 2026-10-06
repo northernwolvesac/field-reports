@@ -20,7 +20,7 @@ S = os.path.dirname(os.path.abspath(__file__)) + "/"
 SRC = S + "../source/06 - Mechanical - IL AL GMP SET 2026-07-15.pdf"
 LOGO = os.path.join(S, "..", "..", "..", "..", "logo-full.png")
 OUT = S + "VE Mark-ups - Sunrise Rye Brook.pdf"
-DATE, REV = "10/6/2026", "Rev 0"
+DATE, REV = "10/6/2026", "Rev 1"
 FONT = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 BOLD = pymupdf.Font(fontfile=FONT)
 
@@ -105,6 +105,19 @@ MBH = {1: 26.9, 2: 44, 3: 37.5, 4: 12.2, 5: 13, 6: 13, 7: 8.1, 8: 3.3, 9: 4.9, 1
        35: 8.1, 36: 4.9, 37: 4.9, 38: 10.9, 39: 8.9, 40: 3.3, 41: 4.9, 42: 7.6, 43: 13, 44: 16.3, 45: 11.5,
        46: 8.1, 47: 9.8}
 
+TREATMENT_KW = 3.0  # Treatment Rm 1041C box (duplicate VAV-18 tag): no scheduled MBH, small room
+
+
+def vav_kw(row):
+    """Electric reheat kW for a box kept with reheat: scheduled HW MBH / 3.412, rounded up to 0.5 kW."""
+    if row[2] != "EREHEAT":
+        return 0.0
+    if len(row) > 5 and row[3].startswith("Treatment"):
+        return TREATMENT_KW
+    import math
+    return max(1.0, math.ceil(MBH[int(row[1].split("-")[1])] / 3.412 * 2) / 2)
+
+
 CH = [
   (6, "CH-1", "Movement Studio entry", 5.3), (6, "CH-3", "Pool deck / stair entry", 5.3),
   (6, "CH-4", "Exterior door at gallery", 5.3), (6, "CH-5", "Fitness entry", 5.3),
@@ -113,18 +126,18 @@ CH = [
   (7, "CH-10", "Casual Dining entry", 5.3), (7, "CH-11", "Casual Dining entry", 5.3),
 ]
 
-FCU = [  # (page, tag, x, y in points as found, action, room)
-  (2, "FCU", 822, 2023, "EUH", "Residents' Storage B107"),
-  (2, "FCU-A", 919, 1993, "EUH", "Trash Collection B106"),
-  (4, "FCU", 723, 892, "EUH", "Kitchen Storage B113"),
-  (4, "FCU", 1263, 761, "EUH", "Corridor B100"),
-  (4, "FCU", 1269, 843, "EUH", "Residents' Storage B115"),
-  (4, "FCU", 1717, 651, "EUH", "Team Member Lounge B119A"),
-  (4, "FCU", 2079, 563, "EUH", "Mechanical B118"),
-  (4, "FCU", 828, 2042, "EUH", "Trash room, AL south (400 CFM exhaust)"),
-  (4, "FCU", 1656, 2031, "EUH", "Storage room, AL south"),
-  (4, "FCU", 1911, 312, "RFI", "Electrical B123"),
-  (4, "FCU", 1853, 497, "RFI", "Central Laundry B121"),
+FCU = [  # (page, tag, x, y in points as found, action, room, approx. electric heat kW)
+  (2, "FCU", 822, 2023, "EUH", "Residents' Storage B107", 3),
+  (2, "FCU-A", 919, 1993, "EUH", "Trash Collection B106 (exhaust make-up)", 5),
+  (4, "FCU", 723, 892, "EUH", "Kitchen Storage B113", 5),
+  (4, "FCU", 1263, 761, "EUH", "Corridor B100", 3),
+  (4, "FCU", 1269, 843, "EUH", "Residents' Storage B115", 3),
+  (4, "FCU", 1717, 651, "EUH", "Team Member Lounge B119A", 3),
+  (4, "FCU", 2079, 563, "EUH", "Mechanical B118", 5),
+  (4, "FCU", 828, 2042, "EUH", "Trash room, AL south (400 CFM exhaust make-up)", 5),
+  (4, "FCU", 1656, 2031, "EUH", "Storage room, AL south", 3),
+  (4, "FCU", 1911, 312, "RFI", "Electrical B123", 0),
+  (4, "FCU", 1853, 497, "RFI", "Central Laundry B121", 0),
 ]
 
 SHEETS = [(6, "M2010"), (7, "M2011"), (9, "M2013"), (2, "M2000"), (4, "M2002")]
@@ -216,24 +229,25 @@ def build_sheets():
             near = row[5] if len(row) > 5 else None
             if act == "NC":
                 continue
+            kw = vav_kw(row)
             for r in find(page, tag, near):
-                mark(page, r, act)
+                mark(page, r, act, ("%g kW" % kw) if kw else "")
             counts[act] = counts.get(act, 0) + 1
             if act not in acts: acts.append(act)
         for p, tag, room, kw in CH:
             if p != pn:
                 continue
             for r in find(page, tag):
-                mark(page, r, "ECH")
+                mark(page, r, "ECH", "%g kW" % kw)
             counts["ECH"] = counts.get("ECH", 0) + 1
             if "ECH" not in acts: acts.append("ECH")
-        for p, tag, x, y, act, room in FCU:
+        for p, tag, x, y, act, room, kw in FCU:
             if p != pn:
                 continue
             hits = [pymupdf.Rect(w[:4]) for w in page.get_text("words") if w[4] == tag
                     and abs(w[0] - x) < 3 and abs(w[1] - y) < 3]
             for r in hits:
-                mark(page, r, act)
+                mark(page, r, act, ("%g kW" % kw) if kw else "")
             counts[act] = counts.get(act, 0) + 1
             if act not in acts: acts.append(act)
         legend(page, sheet, acts, counts)
@@ -307,36 +321,42 @@ def build_text_pages():
                            for i, a in enumerate(["CANCEL", "EREHEAT", "NOREHEAT", "ECH", "EUH", "RFI", "NC"], 1)]))
     s += [t]
 
-    def kw_of(tag):
-        n = int(tag.split("-")[1]); return MBH[n] / 3.412
     cnt = {a: sum(1 for r in VAV if r[2] == a) for a in ACT}
-    kw_reheat = sum(kw_of(r[1]) for r in VAV if r[2] == "EREHEAT" and len(r) == 5)
+    kw_reheat = sum(vav_kw(r) for r in VAV)
     s += [Paragraph("VAV boxes (47 on the drawings)", pH),
           Paragraph("Cancel %d / keep with electric reheat %d / keep without reheat %d / no change %d (one tag, "
-                    "VAV-18, appears twice on M2010). Electric reheat about %.0f kW connected for the boxes kept "
-                    "with reheat (from scheduled hot water MBH), versus about 185 kW for all 47." %
+                    "VAV-18, appears twice on M2010). Electric reheat kW = scheduled hot water reheat MBH / 3.412, "
+                    "rounded up to 0.5 kW (approx., final sizing by IMEG): total about %.0f kW connected, versus "
+                    "about 185 kW if all 47 boxes were electric." %
                     (cnt["CANCEL"], cnt["EREHEAT"], cnt["NOREHEAT"], cnt["NC"], kw_reheat), pS), Spacer(1, 3)]
-    rows = [["Sheet", "VAV", "Room / area served", "Note", "Proposal", ""]]
+    rows = [["Sheet", "VAV", "Room / area served", "Note", "Proposal", "Elec. heat", ""]]
     sheet = {6: "M2010", 7: "M2011", 9: "M2013"}
     for r in VAV:
-        rows.append([sheet[r[0]], r[1], Paragraph(r[3], pS), Paragraph(r[4], pS), ACT[r[2]][0], r[2]])
-    tb = table(rows, [38, 40, 170, 104, 170, 0], colorcol=4)
+        kw = vav_kw(r)
+        rows.append([sheet[r[0]], r[1], Paragraph(r[3], pS), Paragraph(r[4], pS), ACT[r[2]][0],
+                     ("%g kW" % kw) if kw else "-", r[2]])
+    rows.append(["", "", "Total electric reheat", "", "", "%g kW" % kw_reheat, "EREHEAT"])
+    tb = table(rows, [38, 40, 150, 94, 150, 50, 0], colorcol=4)
     s += [tb]
     s += [Paragraph("Cabinet heaters (VE-04)", pH),
           Paragraph("All hot water cabinet heaters on the plans become electric with integral thermostats. "
                     "CH-8 is in the schedule but not shown on the plans; CH-2 is not used. Please confirm.", pS),
           Spacer(1, 3)]
-    rows = [["Sheet", "Tag", "Location", "Electric (approx.)", "Proposal", ""]]
+    rows = [["Sheet", "Tag", "Location", "Proposal", "Elec. heat", ""]]
     for p, tag, room, kw in CH:
-        rows.append([sheet[p], tag, room, "%.1f kW" % kw, ACT["ECH"][0], "ECH"])
-    s += [table(rows, [38, 40, 200, 70, 174, 0], colorcol=4)]
+        rows.append([sheet[p], tag, room, ACT["ECH"][0], "%g kW" % kw, "ECH"])
+    rows.append(["", "", "Total (scheduled MBH / 3.412)", "", "%g kW" % sum(c[3] for c in CH), "ECH"])
+    s += [table(rows, [38, 40, 200, 174, 70, 0], colorcol=3)]
     s += [Paragraph("Basement fan coil units (VE-05)", pH), Spacer(1, 3)]
-    rows = [["Sheet", "Tag", "Room", "Proposal", ""]]
+    rows = [["Sheet", "Tag", "Room", "Proposal", "Elec. heat", ""]]
     fsheet = {2: "M2000", 4: "M2002"}
-    for p, tag, x, y, act, room in FCU:
-        rows.append([fsheet[p], tag, room, ACT[act][0], act])
-    s += [table(rows, [38, 40, 230, 214, 0], colorcol=3),
-          Paragraph("Electric unit heaters about 3 kW each, sized by IMEG. DX-FCUs on M2002 are not changed.", pS)]
+    for p, tag, x, y, act, room, kw in FCU:
+        rows.append([fsheet[p], tag, Paragraph(room, pS), ACT[act][0], ("%g kW" % kw) if kw else "RFI-01", act])
+    rows.append(["", "", "Total electric unit heaters", "", "%g kW" % sum(f[6] for f in FCU), "EUH"])
+    s += [table(rows, [38, 40, 200, 194, 50, 0], colorcol=3),
+          Paragraph("FCU schedule data is blank, so unit heater kW is approximate by room use: 3 kW storage / "
+                    "corridor / lounge, 5 kW larger rooms and trash rooms (exhaust make-up air). Final sizing by IMEG. "
+                    "DX-FCUs on M2002 are not changed.", pS)]
 
     s += [PageBreak(), Paragraph("RFI-01 - Cooling and ventilation of equipment rooms (to IMEG)", pH),
           Paragraph("To: IMEG (via Callahan Construction Managers). From: Northern Wolves AC. Date: %s. "

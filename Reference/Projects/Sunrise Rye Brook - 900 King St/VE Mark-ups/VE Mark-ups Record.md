@@ -27,3 +27,11 @@ DX-FCUs unchanged.
 
 RFI-01 (not priced): electrical rooms B111 / B120 / B122 / B123, MDF B116 and IDFs, central laundry B121,
 mechanical B112 / B118 ventilation after boiler deletion.
+
+## Rev 1 - 10/06/2026 - approx. electric heat kW added (per Ruslan)
+- VAV electric reheat per box = scheduled HW reheat MBH / 3.412, rounded up to 0.5 kW (Treatment Rm 1041C, no
+  scheduled MBH: 3 kW). Total ~97 kW for the 25 boxes. Shown on each mark and in the VAV table.
+- Basement electric unit heaters (FCU schedule blank, so by room use): 3 kW storage / corridor / lounge, 5 kW kitchen
+  storage, mechanical B118 and trash rooms (exhaust make-up air). Total 35 kW.
+- Cabinet heaters: 58.1 kW for the 10 on the plans (scheduled MBH / 3.412).
+- All approximate; final sizing by IMEG.

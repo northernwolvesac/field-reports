@@ -95,6 +95,8 @@ Mechanical GMP set M-sheets dated 07/15/2026 in `source/` (44 sheets; schedules 
   reheat + standalone T-stat (25, ~90 kW), 4 cooling-only (RTU gas heat). Cabinet heaters and basement FCUs to
   electric heaters. Equipment room cooling / exhaust = RFI-01, not priced. Drawing mark-ups in `VE Mark-ups/`;
   VE Proposals rev 1 updated to match. Neither sent yet.
+- Mark-ups rev 1 (10/06): approx. kW on every electric heat item - VAV reheat ~97 kW (25 boxes), cabinet heaters
+  ~58 kW, basement unit heaters ~35 kW; ~190 kW total new electric heat for EE / utility check.
 
 ## Reference job: Sunrise of Northport (Huntington NY) - for VE comparison only (reviewed 10/01/2026)
 
