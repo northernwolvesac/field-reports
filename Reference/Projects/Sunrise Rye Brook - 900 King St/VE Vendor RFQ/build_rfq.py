@@ -36,7 +36,12 @@ VSCH = {1: (12, 1200, 825), 2: (14, 1450, 1350), 3: (14, 2250, 1150), 4: (8, 700
         36: (8, 350, 150), 37: (8, 250, 150), 38: (8, 450, 300), 39: (6, 400, 250), 40: (6, 200, 100),
         41: (8, 400, 150), 42: (12, 600, 200), 43: (14, 1000, 400), 44: (16, 1100, 500), 45: (8, 450, 350),
         46: (6, 400, 200), 47: (6, 450, 300)}
-VAV10_KW = 3.0   # VAV-10 (locker area) keeps a box; with the boiler plant deleted it needs electric reheat too
+VAV10_KW = 3.0
+VAV_1PH_MAX_KW = 5.0   # VAV electric coils up to 5 kW at 208 V / 1 ph, larger at 208 V / 3 ph
+
+
+def vav_volt(kw):
+    return "208/1" if kw <= VAV_1PH_MAX_KW else "208/3"   # VAV-10 (locker area) keeps a box; with the boiler plant deleted it needs electric reheat too
 
 # ---------------------------------------------------------------- item lists
 vav_e, vav_c, vav_del = [], [], []
@@ -130,19 +135,19 @@ s = [Paragraph("Project: <b>Sunrise Rye Brook - 900 King St, Rye Brook, NY 10573
      Paragraph("The heating design is being revised from a hot water boiler plant to electric heat. Please provide "
                "revised pricing for the items below: new items (section 1 and 2), credits for items deleted from your "
                "previous quote (section 3) and alternate deducts (section 4). Quote per line in the attached xlsx, "
-               "with lead times. Electric heat: quote all heaters and electric reheat coils at 208 V / 3 ph (heaters rated "
-               "at 208 V, kW as listed at 208 V - not 240 V units derated). Where a 208 V / 3 ph model is not "
-               "available in the listed kW, note it and offer 208 V / 1 ph. Controls are standalone "
+               "with lead times. Electric heat at 208 V, kW rated at 208 V (not 240 V units derated): VAV electric reheat "
+               "coils up to 5 kW at 208 V / 1 ph, above 5 kW at 208 V / 3 ph (voltage listed per box); cabinet and unit "
+               "heaters at 208 V / 3 ph (note any item only available 208 V / 1 ph). Controls are standalone "
                "(no BMS): factory-mounted standalone controllers with wall thermostats / sensors.", pS)]
 
 s += [Paragraph("1. VAV terminal units (1st floor common areas)", pH),
       Paragraph("1A. Single-duct VAV with factory electric reheat coil, SCR control, airflow switch, disconnect, "
                 "standalone pressure-independent controller and wall thermostat (%d)" % len(vav_e), pH2)]
-rows = [["Tag", "Room served", "Inlet", "Max CFM", "Min CFM", "Elec. heat"]]  # noqa
+rows = [["Tag", "Room served", "Inlet", "Max CFM", "Min CFM", "Elec. heat", "Volts / ph"]]
 for t, room, sz, mx, mn, kw in vav_e:
-    rows.append([t, Paragraph(room, pS), ('%s"' % sz) if sz != "TBD" else "TBD", mx, mn, "%g kW" % kw])
-rows.append(["Total", "", "", "", "", "%g kW" % sum(r[5] for r in vav_e)])
-s += [tbl(rows, [50, 220, 45, 60, 60, 87], total=True),
+    rows.append([t, Paragraph(room, pS), ('%s"' % sz) if sz != "TBD" else "TBD", mx, mn, "%g kW" % kw, vav_volt(kw)])
+rows.append(["Total", "", "", "", "", "%g kW" % sum(r[5] for r in vav_e), ""])
+s += [tbl(rows, [46, 200, 40, 55, 55, 60, 66], total=True),
       Paragraph("Heating airflow at the scheduled minimum CFM; confirm minimum airflow for the electric coil. "
                 "VAV-18A: second VAV-18 tag on M2010 (Treatment Rm 1041C), size per vendor at 3 kW.", pS)]
 s += [Paragraph("1B. Single-duct VAV, cooling only (no reheat coil), standalone controller and wall thermostat (%d)"
@@ -191,10 +196,10 @@ rfq.save(OUT_PDF + ".tmp", garbage=3, deflate=True); os.replace(OUT_PDF + ".tmp"
 wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Pricing"
 B = Font(bold=True); H = PatternFill("solid", fgColor="EEF3F8"); thin = Side(style="thin", color="C7CED6")
 ws.append(["Sunrise Rye Brook - VE request for pricing %s %s - Northern Wolves AC" % (REV, DATE)]); ws["A1"].font = Font(bold=True, size=12)
-ws.append(["Fill in unit price and lead time. Electric heat: all 208 V / 3 ph, kW rated at 208 V (note any item only available 208 V / 1 ph)."])
+ws.append(["Fill in unit price and lead time. Electric heat at 208 V (kW rated at 208 V): VAV coils per Volts column, heaters 208 V / 3 ph."])
 ws.append([])
 hdr = ["Section", "Tag / item", "Description", "Inlet", "Max CFM", "Min CFM", "Elec. heat kW", "Qty", "Unit",
-       "Unit price", "Extended", "Lead time", "Notes"]
+       "Unit price", "Extended", "Lead time", "Notes / volts"]
 
 
 def section(title, items):
@@ -208,11 +213,11 @@ def section(title, items):
     ws.append([])
 
 
-section("1A VAV with electric reheat", [["1A", t, room, sz, mx, mn, kw, 1, "ea"] for t, room, sz, mx, mn, kw in vav_e])
+section("1A VAV with electric reheat", [["1A", t, room, sz, mx, mn, kw, 1, "ea", None, None, None, vav_volt(kw)] for t, room, sz, mx, mn, kw in vav_e])
 section("1B VAV cooling only", [["1B", t, room, sz, mx, mn, "", 1, "ea"] for t, room, sz, mx, mn in vav_c])
 section("1C VAV cancelled - credit", [["1C", t, room, sz, mx, mn, "", -1, "ea"] for t, room, sz, mx, mn in vav_del])
-section("2A Electric cabinet heaters", [["2A", t, room, "", "1,050" if t == "CH-9" else "450", "", kw, 1, "ea"] for t, room, kw in ch])
-section("2B Electric unit heaters", [["2B", "EUH-%d" % i, room, "", "", "", kw, 1, "ea"] for i, (room, kw) in enumerate(euh, 1)])
+section("2A Electric cabinet heaters", [["2A", t, room, "", "1,050" if t == "CH-9" else "450", "", kw, 1, "ea", None, None, None, "208/3"] for t, room, kw in ch])
+section("2B Electric unit heaters", [["2B", "EUH-%d" % i, room, "", "", "", kw, 1, "ea", None, None, None, "208/3"] for i, (room, kw) in enumerate(euh, 1)])
 section("3 Deleted - credit", [["3", "", d, "", "", "", "", -q, u] for d, q, u in DELETED])
 section("4 Alternate deducts", [["4", a, d, "", "", "", "", -q, u] for a, d, q, u in ALTERNATES])
 for col, w in zip("ABCDEFGHIJKLM", [9, 11, 52, 7, 9, 9, 12, 6, 6, 12, 13, 12, 30]):

@@ -15,3 +15,6 @@
   no 230/240 V system here). Heaters rated at 208 V, not 240 V units derated (25% loss at 208 V). 208 V / 1 ph
   offered where no 3 ph model exists. ~193 kW total at 208 V / 3 ph is ~535 A on the 208 V system - EE to confirm
   the 208 V transformer / panel capacity.
+- Then per Ruslan "make small VAVs 1 ph": VAV electric coils up to 5 kW at 208 V / 1 ph (23 boxes), above 5 kW at
+  208 V / 3 ph (VAV-1 8 kW, VAV-2 13 kW, VAV-3 11 kW). Cabinet and unit heaters stay 208 V / 3 ph. Voltage column
+  added per box in the PDF and xlsx ("Notes / volts").
