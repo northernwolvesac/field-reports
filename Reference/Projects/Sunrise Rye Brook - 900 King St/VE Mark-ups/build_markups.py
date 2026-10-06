@@ -43,6 +43,7 @@ ACT = {
           "directly to the room diffuser; return grille deleted."),
   "RFI": ("DELETE FCU - SEE RFI-01", (0.70, 0.35, 0.10),
           "Delete heating-only FCU. Room needs cooling / ventilation, not heat: see RFI-01 (not priced)."),
+  "DEL": ("DELETE FCU", (0.70, 0.35, 0.10), "Delete FCU; no heater in this scope."),
   "NC": ("NO CHANGE", (0.45, 0.45, 0.45), "No change (pool / sauna area by others, or not part of this VE)."),
 }
 
@@ -215,7 +216,9 @@ def legend(page, sheet, acts, counts):
         y += (fs + 3) * nlines + 3
 
 
-def build_sheets():
+def build_sheets(vendor=False):
+    """vendor=True: vendor copy - RFI-01 references replaced by a plain DELETE FCU mark."""
+    PLACED.clear()
     src = pymupdf.open(SRC)
     out = pymupdf.open()
     for pn, sheet in SHEETS:
@@ -244,6 +247,8 @@ def build_sheets():
         for p, tag, x, y, act, room, kw in FCU:
             if p != pn:
                 continue
+            if vendor and act == "RFI":
+                act = "DEL"
             hits = [pymupdf.Rect(w[:4]) for w in page.get_text("words") if w[4] == tag
                     and abs(w[0] - x) < 3 and abs(w[1] - y) < 3]
             for r in hits:
