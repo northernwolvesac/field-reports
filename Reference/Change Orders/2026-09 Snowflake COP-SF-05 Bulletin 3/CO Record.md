@@ -62,3 +62,9 @@
   original per-floor split).
 - Totals: 29th $29,600, 30th $20,150, 31st $17,030 = $66,780, equal to COP-SF-05 as submitted.
 - Overlay legend in the screenshot page headers now drawn with colored line samples (Ruslan boxed it on p.1).
+
+## Rev 5 - 10/01/2026 (area 29-2 excluded)
+- Per Ruslan: as decided under Bulletin 3, the 29th floor 56x16 main (area 29-2) stays as installed; that ductwork
+  is not changed. Area 29-2 ($13,225 in rev 4) removed from the pricing and shown on the 29th floor scope page as
+  "Excluded" with that reason. 29-1 / 29-3 keep their numbers.
+- Totals: 29th $16,375, 30th $20,150, 31st $17,030 = $53,555 revised (COP-SF-05 as submitted $66,780).
