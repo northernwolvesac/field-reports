@@ -1,6 +1,7 @@
 """Back charges to ADLS Enterprises, LLC (sheet metal / install sub) against their final invoices 234 and 235.
 
-Run: python3 build_back_charges.py  ->  BC-ADLS-001-2026 Sompo.pdf, BC-ADLS-002-2026 Matchaful.pdf
+Run: python3 build_back_charges.py  ->  BC-ADLS-001-2026 Sompo.pdf, BC-ADLS-002-2026 Matchaful.pdf,
+     BC-ADLS-003-2026 Sompo - Clune SCO 003.pdf (Clune GC back charge passed through, SCO attached, contract sums redacted)
 """
 import os
 from reportlab.lib import colors
@@ -26,16 +27,38 @@ DATE = '10/07/2026'
 RATE = 125
 SUB = ['ADLS Enterprises, LLC', '912 N Erie Ave', 'Lindenhurst, NY 11757', 'adlsenterprisesllc@gmail.com  |  347-988-9453']
 
+OWN_WORK = ('Northern Wolves AC hereby issues a back charge to ADLS Enterprises, LLC for labor performed by Northern Wolves AC '
+            'mechanics on the <b>{project}</b> project to complete work within the ADLS scope of work. '
+            'This back charge will be deducted from ADLS Invoice #{inv}.')
+
+# items: (description, dates, hours, rate, amount); prior: earlier back charges already taken against the same invoice
 BCS = [
     dict(no='BC-ADLS-001-2026', project='Sompo', file='BC-ADLS-001-2026 Sompo.pdf',
-         inv='234', inv_date='09/17/2026', inv_amt=9800, contract=29000,
-         dates='09/14/2026 - 09/21/2026', hours=64,
-         work='Completion of ductwork installation and diffuser installation left incomplete under the ADLS subcontract.'),
+         inv='234', inv_date='09/17/2026', inv_amt=9800, contract=29000, dates='09/14/2026 - 09/21/2026',
+         intro=OWN_WORK, prior=[],
+         items=[('Completion of ductwork installation and diffuser installation left incomplete under the ADLS subcontract.',
+                 '09/14/2026\n- 09/21/2026', '64', f'${RATE:.2f}/hr', 64 * RATE)]),
     dict(no='BC-ADLS-002-2026', project='Matchaful', file='BC-ADLS-002-2026 Matchaful.pdf',
-         inv='235', inv_date='09/17/2026', inv_amt=8000, contract=None,
-         dates='08/04/2026 - 08/07/2026', hours=84,
-         work='Completion of AC unit and condenser installation, connection of fresh air ductwork and diffuser installation '
-              'left incomplete under the ADLS subcontract.'),
+         inv='235', inv_date='09/17/2026', inv_amt=8000, contract=None, dates='08/04/2026 - 08/07/2026',
+         intro=OWN_WORK, prior=[],
+         items=[('Completion of AC unit and condenser installation, connection of fresh air ductwork and diffuser '
+                 'installation left incomplete under the ADLS subcontract.',
+                 '08/04/2026\n- 08/07/2026', '84', f'${RATE:.2f}/hr', 84 * RATE)]),
+    # GC back charge passed through at cost; Clune's SCO is attached with our contract sums redacted
+    dict(no='BC-ADLS-003-2026', project='Sompo', file='BC-ADLS-003-2026 Sompo - Clune SCO 003.pdf',
+         inv='234', inv_date='09/17/2026', inv_amt=9800, contract=29000, dates='08/01, 08/06, 08/08/2026',
+         gc_ref='Clune SCO No. 003 (IT004)',
+         intro=('Clune Construction Company LP, the general contractor on the <b>Sompo</b> project (1001 Franklin Ave, '
+                'Floors 2 &amp; 3), issued a back charge to Northern Wolves AC under Subcontract Change Order No. 003, '
+                'item IT004, dated 08/20/2026, for Clune superintendent and labor time. This back charge is passed through '
+                'to ADLS Enterprises, LLC at cost and will be deducted from ADLS Invoice #{inv}. A copy of the Clune '
+                'change order is attached.'),
+         prior=[('BC-ADLS-001-2026', 8000)],
+         items=[('Clune superintendent and labor, Saturday', '08/01/2026', '8', 'per Clune', None),
+                ('Clune superintendent and labor, Thursday', '08/06/2026', '4', 'per Clune', None),
+                ('Clune superintendent and labor, Saturday', '08/08/2026', '8', 'per Clune', None)],
+         total=5440, attach='source/Clune SCO 003 signed - Sompo back charge.pdf',
+         redact=[(20, 535, 596, 598)]),
 ]
 
 
@@ -59,9 +82,12 @@ def table(c, data, x, ytop, widths, bold_rows=(), head=True):
 
 
 def build(bc):
-    amt = bc['hours'] * RATE
-    net = bc['inv_amt'] - amt
-    c = canvas.Canvas(os.path.join(HERE, bc['file']), pagesize=letter)
+    amt = bc.get('total') or sum(i[4] for i in bc['items'])
+    assert amt == sum(i[4] for i in bc['items'] if i[4] is not None) or bc.get('total')
+    prior = sum(v for _, v in bc['prior'])
+    net = bc['inv_amt'] - prior - amt
+    path = os.path.join(HERE, bc['file'])
+    c = canvas.Canvas(path, pagesize=letter)
     c.setTitle(f"Back Charge {bc['no']} - {bc['project']}"); c.setAuthor('Northern Wolves AC')
     # header: company logo (black text, so on white) + title, navy rule underneath
     lh = 58; lw = lh * LOGO_W / LOGO_H
@@ -80,38 +106,40 @@ def build(bc):
     c.setFont('LS', 10)
     for i, l in enumerate(SUB):
         c.drawString(M, y - 15 - i * 13, l)
-    info = [('Date:', DATE), ('Project:', bc['project']), ('Reference:', f"ADLS Invoice #{bc['inv']} dated {bc['inv_date']}"),
-            ('Work dates:', bc['dates'])]
+    info = [('Date:', DATE), ('Project:', bc['project']), ('Reference:', f"ADLS Invoice #{bc['inv']} dated {bc['inv_date']}")]
+    if bc.get('gc_ref'):
+        info.append(('GC ref.:', bc['gc_ref']))
+    info.append(('Work dates:', bc['dates']))
     for i, (k, v) in enumerate(info):
         c.setFont('LSB', 10); c.drawString(330, y - i * 15, k)
         c.setFont('LS', 10); c.drawString(400, y - i * 15, v)
 
     y -= 90
-    p = Paragraph(
-        f"Northern Wolves AC hereby issues a back charge to ADLS Enterprises, LLC for labor performed by Northern Wolves AC "
-        f"mechanics on the <b>{bc['project']}</b> project to complete work within the ADLS scope of work. "
-        f"This back charge will be deducted from ADLS Invoice #{bc['inv']}.", st)
+    p = Paragraph(bc['intro'].format(project=bc['project'], inv=bc['inv']), st)
     _, h = p.wrap(W - 2 * M, 200); p.drawOn(c, M, y - h); y -= h + 16
 
-    rows = [['Description', 'Dates', 'Hours', 'Rate', 'Amount'],
-            [Paragraph(bc['work'], st), bc['dates'].replace(' - ', '\n- '), f"{bc['hours']}", f'${RATE:.2f}/hr', money(amt)],
-            ['Total back charge', '', '', '', money(amt)]]
-    y -= table(c, rows, M, y, [230, 90, 50, 60, 82], bold_rows=(2,)) + 22
+    rows = [['Description', 'Dates', 'Hours', 'Rate', 'Amount']]
+    for d, dt, hr, rate, a in bc['items']:
+        rows.append([Paragraph(d, st), dt, hr, rate, money(a) if a is not None else ''])
+    rows.append(['Total back charge', '', str(sum(int(i[2]) for i in bc['items'])), '', money(amt)])
+    y -= table(c, rows, M, y, [230, 90, 50, 60, 82], bold_rows=(len(rows) - 1,)) + 22
 
     c.setFont('LSB', 11); c.drawString(M, y, 'Application to ADLS Invoice #' + bc['inv']); y -= 8
     rec = [['', 'Amount'],
            [f"ADLS Invoice #{bc['inv']} - final balance" + (f" (original contract ${bc['contract']:,})" if bc['contract'] else ''),
-            money(bc['inv_amt'])],
-           [f"Less: Back Charge {bc['no']}", money(-amt)]]
+            money(bc['inv_amt'])]]
+    for no, v in bc['prior']:
+        rec.append([f'Less: Back Charge {no} (previously issued)', money(-v)])
+    rec.append([f"Less: Back Charge {bc['no']}", money(-amt)])
     if net >= 0:
         rec.append(['Net amount payable to ADLS Enterprises, LLC', money(net)])
     else:
         rec.append(['Balance due from ADLS Enterprises, LLC to Northern Wolves AC', money(-net)])
-    y -= table(c, rec, M, y, [430, 82], bold_rows=(3,)) + 18
+    y -= table(c, rec, M, y, [430, 82], bold_rows=(len(rec) - 1,)) + 18
 
     if net < 0:
         p = Paragraph(
-            f"The back charge exceeds Invoice #{bc['inv']}. Invoice #{bc['inv']} is offset in full, and the remaining "
+            f"The back charges exceed Invoice #{bc['inv']}. Invoice #{bc['inv']} is offset in full, and the remaining "
             f"<b>{money(-net)}</b> is due from ADLS Enterprises, LLC to Northern Wolves AC. Northern Wolves AC may deduct this "
             f"amount from any other payment due to ADLS Enterprises, LLC.", st)
         _, h = p.wrap(W - 2 * M, 200); p.drawOn(c, M, y - h); y -= h + 14
@@ -129,6 +157,20 @@ def build(bc):
     c.setFont('LS', 8); c.setFillColor(colors.gray)
     c.drawString(M, 30, f"Northern Wolves AC  |  Back Charge {bc['no']}  |  {bc['project']}  |  {DATE}")
     c.save()
+
+    if bc.get('attach'):
+        import pymupdf
+        doc = pymupdf.open(path)
+        src = pymupdf.open(os.path.join(HERE, bc['attach']))
+        for r in bc.get('redact', []):     # hide our contract sums with the GC before sending to the sub
+            src[0].add_redact_annot(pymupdf.Rect(r), fill=(1, 1, 1))
+        src[0].apply_redactions()
+        src[0].insert_text((20, 575), '[Contract sums removed]', fontsize=9, color=(0.4, 0.4, 0.4))
+        doc.insert_pdf(src)
+        last = doc[-1]
+        last.insert_text((40, 780), f"Attachment to Back Charge {bc['no']}: {bc['gc_ref']}", fontsize=9, color=(0.12, 0.23, 0.37))
+        tmp = path + '.tmp'
+        doc.save(tmp, garbage=4, deflate=True); doc.close(); os.replace(tmp, path)
     return amt, net
 
 
