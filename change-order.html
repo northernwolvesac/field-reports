@@ -8,24 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=368"></script>
-<script src="auth.js?v=368"></script>
-<script src="labor-rates.js?v=368"></script>
-<script src="cloud-save.js?v=368"></script>
+<script src="supabase-config.js?v=369"></script>
+<script src="auth.js?v=369"></script>
+<script src="labor-rates.js?v=369"></script>
+<script src="cloud-save.js?v=369"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=368"></script>
-<script src="edit-utils.js?v=368"></script>
-<script src="project-utils.js?v=368"></script>
-<script src="customer-utils.js?v=368"></script>
+<script src="draft-utils.js?v=369"></script>
+<script src="edit-utils.js?v=369"></script>
+<script src="project-utils.js?v=369"></script>
+<script src="customer-utils.js?v=369"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=368"></script>
-<script src="nw-email.js?v=368"></script>
-<script src="ai-summary.js?v=368"></script>
-<script src="ai-chat.js?v=368"></script>
+<script src="email-utils.js?v=369"></script>
+<script src="nw-email.js?v=369"></script>
+<script src="ai-summary.js?v=369"></script>
+<script src="ai-chat.js?v=369"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=368"></script>
+<script src="pdf-utils.js?v=369"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -71,7 +71,7 @@ body{padding-bottom:100px}
 <div class="section">
   <div class="section-header" onclick="toggleSection(this)"><span class="icon">📋</span> Change Order Details<span class="collapse-arrow">▼</span></div>
   <div class="section-body">
-    <div class="row"><div class="field"><label>Date</label><input type="date" id="coDate" data-save></div><div class="field"><label>CO #</label><input type="text" id="coNumber" data-save></div></div>
+    <div class="row"><div class="field"><label>Date</label><input type="date" id="coDate" data-save></div><div class="field"><label>CO #</label><input type="text" id="coNumber" data-save></div><div class="field" style="max-width:90px"><label>Rev #</label><input type="number" id="coRev" min="1" step="1" value="1" data-save title="Revision number: goes up by 1 each time an edited CO is sent again; set it by hand before downloading the PDF"></div></div>
     <div class="field"><label>Project Name</label><input type="text" id="projectName" data-save></div>
     <div class="field"><label>Original Contract # / WO #</label><input type="text" id="originalRef" data-save></div>
   </div>
@@ -505,7 +505,7 @@ async function prefillFromContract(projId){
 
 // ========== EDIT MODE ==========
 var _editCloudId = null;
-var _revisionNumber = 1;
+var _revisionNumber = 1, _revBumped = false;
 var _coStatus = 'submitted';
 
 (async function checkEditMode() {
@@ -561,6 +561,7 @@ var _coStatus = 'submitted';
       aiSummaryText: fd.aiSummary,
       costMode: fd.costMode,
       coType: fd.coType,
+      coRev: fd._revisionNumber || 1,
       lumpSumAmount: fd.lumpSumAmount,
       ohpMode: fd.ohpMode || 'show'
     };
@@ -671,6 +672,16 @@ function addLabor(){const r=document.createElement('div');r.className='labor-row
 // Credit CO: the person types the amounts being removed as positive numbers; everything shown, printed, e-mailed and sent to the prime contract is negative.
 function isCredit(){return (document.getElementById('coType')||{}).value==='credit'}
 function creditSign(x){x=Number(x)||0;return isCredit()?-Math.abs(x):x}   // a Charge keeps whatever was typed (old COs entered negatives by hand)
+// Revision: the Rev # field (1 = original). +1 automatically when an edited CO is sent again; can be set by hand (e.g. before downloading the PDF).
+function curRev(){return Math.max(1,parseInt((document.getElementById('coRev')||{}).value,10)||_revisionNumber||1)}
+// Every CO PDF is named "CO #<number> - [Rev <n> - ]<project name>.pdf" (download, e-mail link copy, project-folder copy — nw-form-kit.js calls this too)
+function nwCoFileName(o){
+  var n=String(o.number||'').trim()||String(o.reportId||'').trim()||'draft';
+  var head=/^co/i.test(n)?n:'CO #'+n;   // a hand-typed "COP-SF-05" stays as it is
+  var rev=parseInt(o.rev,10)||1, proj=String(o.project||'Change Order').trim();
+  return (head+(rev>1?' - Rev '+rev:'')+' - '+proj).replace(/[\\\/:*?"<>|\r\n]+/g,'-').replace(/\s+/g,' ').trim().slice(0,150)+'.pdf';
+}
+function coPdfName(){const v=id=>(document.getElementById(id)||{}).value||'';return nwCoFileName({number:v('coNumber'),rev:curRev(),project:v('projectName')||v('custName'),reportId:reportId})}
 function usd(n){n=Number(n)||0;return (n<0?'-':'')+'$'+Math.abs(n).toFixed(2)}
 function calcCosts(){
   let matRaw=0;document.querySelectorAll('.parts-row').forEach(r=>{const q=parseFloat(r.querySelector('.part-qty')?.value)||1;const c=parseFloat(r.querySelector('.part-cost')?.value)||0;matRaw+=q*c});
@@ -993,7 +1004,7 @@ lumpSumAmount:v('lumpSumAmount'),
 ohpMode:v('ohpMode')||'show',
 _projectId: typeof getSelectedProjectId === 'function' ? getSelectedProjectId() : null,
 _cloudId: _editCloudId || null,
-_revisionNumber: _revisionNumber || 1,
+_revisionNumber: curRev(),
 _coStatus: _coStatus || 'submitted',
 _parts: collectPartsData(),
 _labor: collectLaborData(),
@@ -1019,7 +1030,7 @@ function generatePDF(){
   try{doc.addImage(logoBase64,'JPEG',M,y-6,120,66)}catch(e){}
   doc.setFont('helvetica','bold');doc.setFontSize(20);doc.setTextColor(...ink);doc.text(isCredit()?'CREDIT CHANGE ORDER':'CHANGE ORDER',R,y+14,{align:'right'});
   doc.setFontSize(10);doc.setTextColor(...blue);
-  doc.text(((status||'Proposed')+((typeof _revisionNumber!=='undefined'&&_revisionNumber>1)?' — Rev '+_revisionNumber:'')).toUpperCase(),R,y+30,{align:'right'});
+  doc.text(((status||'Proposed')+(curRev()>1?' — Rev '+curRev():'')).toUpperCase(),R,y+30,{align:'right'});
   doc.setFont('helvetica','normal');doc.setTextColor(...ink);doc.setFontSize(10);
   doc.text('No. '+(v('coNumber')||'—')+'    Date '+(fmtD(v('coDate'))||'—'),R,y+46,{align:'right'});
   y+=76;doc.setDrawColor(...ink);doc.setLineWidth(1.2);doc.line(M,y,R,y);y+=22;
@@ -1116,10 +1127,7 @@ function generatePDF(){
 
 function generateAndDownload(){
   try {
-    const v=id=>(document.getElementById(id)||{}).value||'';
-    const safeName=(v('custName')||'CO').replace(/\s+/g,'_');
-    const safeDate=v('coDate')||new Date().toISOString().split('T')[0];
-    generatePDF().save(`ChangeOrder_${safeName}_${safeDate}.pdf`);
+    generatePDF().save(coPdfName());
     showToast('PDF downloaded!');
   } catch (err) {
     console.error('[PDF] generateAndDownload failed:', err);
@@ -1191,18 +1199,20 @@ async function confirmSendEmail(){
     // Revision number / status first: the PDF shows them, so it can be built (and uploaded) before the cloud save finishes
     const isRevision = !!_editCloudId;
     if (isRevision) {
-      _revisionNumber = (_revisionNumber || 1) + 1;
+      if (!_revBumped) { _revisionNumber = Math.max(curRev(), (_revisionNumber || 1) + 1); _revBumped = true; }   // a retry after a failed send must not bump again
+      else _revisionNumber = curRev();
+      document.getElementById('coRev').value = _revisionNumber;
       d._revisionNumber = _revisionNumber;
       d._coStatus = 'revised';
       _coStatus = 'revised';
     } else {
       d._coStatus = 'submitted';
-      d._revisionNumber = 1;
+      d._revisionNumber = curRev();
     }
     // The e-mail needs a link-shared copy of the PDF in the "NW Field Reports" folder. Saving the CO also files the same PDF in the project
     // folder (nw-form-kit) — both are slow uploads, so they run side by side instead of one after the other (~3 min → about half).
     const v=id=>(document.getElementById(id)||{}).value||'';
-    const fn=`${isCredit()?'CreditChangeOrder':'ChangeOrder'}_${v('custName').replace(/\s+/g,'_')||'CO'}_${v('coDate')}.pdf`;
+    const fn=coPdfName();
     showToast('Uploading report...');
     const emailUpload=(async function(){ const r=await uploadToGoogleDrive(generatePDF(),fn); lap('email PDF uploaded'); return r; })();
     emailUpload.catch(function(){});   // surfaced at the await below
@@ -1343,9 +1353,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=368"></script>
-<script src="nw-drive.js?v=368"></script>
-<script src="nw-form-kit.js?v=368"></script>
-<script src="sw-register.js?v=368"></script>
+<script src="form-utils.js?v=369"></script>
+<script src="nw-drive.js?v=369"></script>
+<script src="nw-form-kit.js?v=369"></script>
+<script src="sw-register.js?v=369"></script>
 </body>
 </html>

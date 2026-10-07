@@ -11,7 +11,9 @@
   'use strict';
   var PAGES = {
     'rfi.html':                 { type: 'rfi',          label: 'RFI',                 folder: 'RFI',                   category: 'rfi',            title: function(d) { return d.rfiSubject; } },
-    'change-order.html':        { type: 'change-order', label: 'Change Order',        folder: 'Change Orders',         category: 'change-orders',  title: function(d) { return (d.coType === 'credit' ? 'CREDIT ' : '') + (d.coNumber ? '#' + d.coNumber : ''); }, ownRevisions: true },
+    'change-order.html':        { type: 'change-order', label: 'Change Order',        folder: 'Change Orders',         category: 'change-orders',  title: function(d) { return (d.coType === 'credit' ? 'CREDIT ' : '') + (d.coNumber ? '#' + d.coNumber : ''); }, ownRevisions: true,
+                                      // "CO #001 - Rev 2 - <project name>.pdf" (nwCoFileName lives in change-order.html)
+                                      fileName: function(d) { return window.nwCoFileName ? window.nwCoFileName({ number: d.coNumber, rev: d._revisionNumber, project: d.projectName || d.custName, reportId: d.reportId }) : null; } },
     'service-call-report.html': { type: 'service-call', label: 'Service Call Report', folder: 'Reports/Service Calls', category: 'reports',        title: function(d) { return d.custName; } },
     'startup-report.html':      { type: 'startup',      label: 'Start-Up Report',     folder: 'Reports/Start-Up',      category: 'reports',        title: function(d) { return d.custName || d.projectName; } },
     'site-survey-report.html':  { type: 'site-survey',  label: 'Site Survey',         folder: 'Reports/Site Surveys',  category: 'reports',        title: function(d) { return d.custName || d.siteName; } },
@@ -314,8 +316,12 @@
       var extra = ''; try { extra = (cfg.title && cfg.title(fd)) || ''; } catch (e) {}
       var rev = cfg.ownRevisions && fd._revisionNumber > 1 ? ' Rev ' + fd._revisionNumber : '';
       var name = (num + ' - ' + cfg.label + (extra ? ' - ' + String(extra).slice(0, 50) : '') + rev).replace(/[\\/:*?"<>|]+/g, '-') + '.pdf';
+      if (cfg.fileName) { var cn = cfg.fileName(fd, row); if (cn) name = cn; }
       var b64 = await NWDrive.toBase64(blob), res = null, isNew = false;
       var existing = fd._driveId || K.driveId;
+      // a NEW revision of a change order keeps the earlier revisions' PDFs in the folder: only a save of the same revision replaces the file
+      var curRevNo = cfg.ownRevisions ? (parseInt(fd._revisionNumber, 10) || 1) : 0;
+      if (existing && curRevNo && fd._driveRev != null && Number(fd._driveRev) !== curRevNo) existing = null;
       if (existing) {
         try { res = await NWDrive.request({ action: 'replace_file', fileId: existing, fileData: b64, mimeType: 'application/pdf', fileName: name }); }
         catch (e) { console.warn('[form-kit] replace failed, uploading a new copy', e); res = null; }
@@ -327,8 +333,8 @@
       }
       var f = res.file;
       K.driveId = f.id; K.driveUrl = f.viewUrl || f.url;
-      if (fd._driveId !== f.id || fd._driveUrl !== K.driveUrl) {
-        fd._driveId = f.id; fd._driveUrl = K.driveUrl;
+      if (fd._driveId !== f.id || fd._driveUrl !== K.driveUrl || (curRevNo && fd._driveRev !== curRevNo)) {
+        fd._driveId = f.id; fd._driveUrl = K.driveUrl; if (curRevNo) fd._driveRev = curRevNo;
         await origUpdate(row.id, { form_data: fd });
       }
       if (isNew) {
