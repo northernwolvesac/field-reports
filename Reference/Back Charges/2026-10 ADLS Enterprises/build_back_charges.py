@@ -12,6 +12,9 @@ from reportlab.platypus import Paragraph, Table, TableStyle
 from reportlab.pdfgen import canvas
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# company logo from the app root (2367 x 1303 RGBA, transparent background)
+LOGO = os.path.join(HERE, '..', '..', '..', 'logo-full.png')
+LOGO_W, LOGO_H = 2367, 1303
 pdfmetrics.registerFont(TTFont('LS', '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'))
 pdfmetrics.registerFont(TTFont('LSB', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'))
 pdfmetrics.registerFontFamily('LS', normal='LS', bold='LSB', italic='LS', boldItalic='LSB')
@@ -60,16 +63,19 @@ def build(bc):
     net = bc['inv_amt'] - amt
     c = canvas.Canvas(os.path.join(HERE, bc['file']), pagesize=letter)
     c.setTitle(f"Back Charge {bc['no']} - {bc['project']}"); c.setAuthor('Northern Wolves AC')
-    # header
-    c.setFillColor(NAVY); c.rect(0, H - 80, W, 80, stroke=0, fill=1)
-    c.setFillColor(colors.white)
-    c.setFont('LSB', 18); c.drawString(M, H - 38, 'NORTHERN WOLVES AC')
-    c.setFont('LS', 9.5); c.drawString(M, H - 54, '55 9th St, 55-A2, Brooklyn, NY 11215  |  (347) 463-9248')
-    c.setFont('LSB', 20); c.drawRightString(W - M, H - 40, 'BACK CHARGE')
-    c.setFont('LS', 10); c.drawRightString(W - M, H - 57, f"No. {bc['no']}")
-    c.setFillColor(colors.black)
+    # header: company logo (black text, so on white) + title, navy rule underneath
+    lh = 58; lw = lh * LOGO_W / LOGO_H
+    c.drawImage(LOGO, M, H - 22 - lh, lw, lh, mask='auto')
+    c.setFillColor(colors.black); c.setFont('LS', 9)
+    c.drawString(M + lw + 12, H - 50, '55 9th St, 55-A2, Brooklyn, NY 11215')
+    c.drawString(M + lw + 12, H - 62, '(347) 463-9248')
+    c.setFillColor(NAVY)
+    c.setFont('LSB', 20); c.drawRightString(W - M, H - 48, 'BACK CHARGE')
+    c.setFont('LSB', 11); c.drawRightString(W - M, H - 64, f"No. {bc['no']}")
+    c.setStrokeColor(NAVY); c.setLineWidth(2.5); c.line(M, H - 90, W - M, H - 90); c.setLineWidth(1)
+    c.setFillColor(colors.black); c.setStrokeColor(colors.black)
 
-    y = H - 110
+    y = H - 118
     c.setFont('LSB', 10); c.drawString(M, y, 'To (Subcontractor):')
     c.setFont('LS', 10)
     for i, l in enumerate(SUB):
