@@ -24,11 +24,11 @@ RATE = 125
 SUB = ['ADLS Enterprises, LLC', '912 N Erie Ave', 'Lindenhurst, NY 11757', 'adlsenterprisesllc@gmail.com  |  347-988-9453']
 
 BCS = [
-    dict(no='BC-2026-001', project='Sompo', file='BC-2026-001 Sompo.pdf',
+    dict(no='BC-ADLS-001-2026', project='Sompo', file='BC-ADLS-001-2026 Sompo.pdf',
          inv='234', inv_date='09/17/2026', inv_amt=9800, contract=29000,
          dates='09/14/2026 - 09/21/2026', hours=64,
          work='Completion of ductwork installation and diffuser installation left incomplete under the ADLS subcontract.'),
-    dict(no='BC-2026-002', project='Matchaful', file='BC-2026-002 Matchaful.pdf',
+    dict(no='BC-ADLS-002-2026', project='Matchaful', file='BC-ADLS-002-2026 Matchaful.pdf',
          inv='235', inv_date='09/17/2026', inv_amt=8000, contract=None,
          dates='08/04/2026 - 08/07/2026', hours=84,
          work='Completion of AC unit and condenser installation, connection of fresh air ductwork and diffuser installation '
