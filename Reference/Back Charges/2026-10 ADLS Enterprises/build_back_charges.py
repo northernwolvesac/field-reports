@@ -1,6 +1,6 @@
 """Back charges to ADLS Enterprises, LLC (sheet metal / install sub) against their final invoices 234 and 235.
 
-Run: python3 build_back_charges.py  ->  BC-2026-001 Sompo.pdf, BC-2026-002 Matchaful.pdf
+Run: python3 build_back_charges.py  ->  BC-ADLS-001-2026 Sompo.pdf, BC-ADLS-002-2026 Matchaful.pdf
 """
 import os
 from reportlab.lib import colors
