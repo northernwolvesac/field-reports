@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=370">
+<link rel="stylesheet" href="procore-ui.css?v=371">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=370"></script>
-<script src="auth.js?v=370"></script>
-<script src="est-totals.js?v=370"></script>
-<script src="procore-ui.js?v=370"></script>
+<script src="supabase-config.js?v=371"></script>
+<script src="auth.js?v=371"></script>
+<script src="est-totals.js?v=371"></script>
+<script src="procore-ui.js?v=371"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=370"></script>
-<script src="est-drawings.js?v=370"></script>
-<script src="nw-catalog-picker.js?v=370"></script>
-<script src="geo-takeoff.js?v=370"></script>
+<script src="bid-actions.js?v=371"></script>
+<script src="est-drawings.js?v=371"></script>
+<script src="nw-catalog-picker.js?v=371"></script>
+<script src="geo-takeoff.js?v=371"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -835,10 +835,11 @@ requireAuth().catch(function(){});
     if (l.is_locked) { toast('Layer is locked — unlock it to replace the catalog item', 'error'); return; }
     if (!window.NWCatalogPicker) { toast('Catalog picker is not loaded (nw-catalog-picker.js)', 'error'); return; }
     var lid = l.id, picked = false, oldItem = l.catalog_item_id ? await catItem(l.catalog_item_id) : null;
-    function reopen() { if (layerById(lid)) openLayerPopover(lid, document.querySelector('[data-lmenu="' + lid + '"]')); }
+    // idempotent: openLayerPopover is a toggle (a second call would close the card again), and the catalog's onClose fires before onSelect finishes
+    function reopen() { if (!layerById(lid)) return; if (pop && popLayerId === lid) { renderPopover(); return; } openLayerPopover(lid, document.querySelector('[data-lmenu="' + lid + '"]')); }
     closePopover();
     NWCatalogPicker.open({ multi: false, title: (l.catalog_item_id ? 'Replace catalog item' : 'Select catalog item') + ' — ' + l.name,
-      onClose: function() { if (!picked) setTimeout(reopen, 50); },
+      onClose: function() { setTimeout(function() { if (!picked) reopen(); }, 80); },
       onSelect: async function(rows) {
         var x = rows && rows[0]; if (!x) return; picked = true; catCache[x.id] = x;
         var cat = x.nw_category || guessCat(x.name), cur = layerById(lid) || l;
@@ -2031,6 +2032,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=370"></script>
+<script src="sw-register.js?v=371"></script>
 </body>
 </html>
