@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=362">
+<link rel="stylesheet" href="procore-ui.css?v=370">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=362"></script>
-<script src="auth.js?v=362"></script>
-<script src="est-totals.js?v=362"></script>
-<script src="procore-ui.js?v=362"></script>
+<script src="supabase-config.js?v=370"></script>
+<script src="auth.js?v=370"></script>
+<script src="est-totals.js?v=370"></script>
+<script src="procore-ui.js?v=370"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=362"></script>
-<script src="est-drawings.js?v=362"></script>
-<script src="nw-catalog-picker.js?v=362"></script>
-<script src="geo-takeoff.js?v=362"></script>
+<script src="bid-actions.js?v=370"></script>
+<script src="est-drawings.js?v=370"></script>
+<script src="nw-catalog-picker.js?v=370"></script>
+<script src="geo-takeoff.js?v=370"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -719,7 +719,7 @@ requireAuth().catch(function(){});
         popField('Takeoff Display Name', '<input type="text" class="pc-input" data-f="name" data-kind="text" value="' + esc(l.name) + '">') +
         '<div class="pc-grid2">' + popField('Tag', '<input type="text" class="pc-input" data-f="tag" data-kind="text" value="' + esc(l.tag || '') + '" placeholder="e.g. L2, Phase 1">') + popField('Multiplier', numIn('multiplier', l.multiplier == null ? 1 : l.multiplier, 0.01)) + '</div>' +
         popField('Group', '<input type="text" class="pc-input" data-f="group_name" data-kind="text" list="tkGroupList" value="' + esc(l.group_name || 'Default Group') + '"><datalist id="tkGroupList">' + groupNames().map(function(g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist>') +
-        '<div class="subh">Associated Catalog item</div><div class="cat-card" id="popCatCard">' + (l.catalog_item_id ? '<div class="pc-muted">Loading…</div>' : '<div><div>No catalog item</div><div class="meta">Rates on this layer are a project snapshot.</div></div>') + '<span class="ic" data-act="swapcat" title="Replace catalog item">' + ic('find_replace', 20) + '</span></div>' +
+        '<div class="subh">Associated Catalog item</div><div class="cat-card" id="popCatCard">' + (l.catalog_item_id ? '<div class="pc-muted">Loading…</div>' : '<div><div>No catalog item</div><div class="meta">Rates on this layer are a project snapshot.</div></div>') + '<span class="ic" data-act="swapcat" title="Replace the catalog item" style="gap:4px;align-items:center;font-size:12px;font-weight:600">' + ic('find_replace', 18) + (l.catalog_item_id ? 'Replace' : 'Choose') + '</span></div>' +
         '<div class="pc-field" style="margin-top:12px"><label class="pc-label">Resulting ' + (l.takeoff_type === 'linear' ? 'Length' : l.takeoff_type === 'area' ? 'Area' : 'Count') + '</label><div class="ro" data-rd="qty">' + qtyStr(t.qty, l.takeoff_type) + '</div></div>';
     } else if (popTab === 'params') {
       var pr = l.params || {}, area = l.takeoff_type === 'area' ? t.qty : 0, vol = Number(pr.height_ft || 0) * area, wt = Number(pr.weight_per_unit || 0) * t.qty;
@@ -770,7 +770,7 @@ requireAuth().catch(function(){});
   function catMeta(x) { return 'UoM ' + P.uom(x.unit || '') + ' · UC ' + P.money(x.unit_cost || 0) + ' · ULT ' + (Number(x.unit_labor_min || 0) / 60).toFixed(2) + ' hrs · CN ' + (x.catalog_number || 'n/a') + ' · CC ' + String(x.folder_path || '').replace(/\s*\/\s*/g, ' > '); }
   async function fillCatCard(l) {
     var x = await catItem(l.catalog_item_id), card = pop && pop.querySelector('#popCatCard'); if (!card || popLayerId !== l.id) return;
-    card.innerHTML = (x ? '<div style="min-width:0"><div>' + esc(x.name) + '</div><div class="meta">' + esc(catMeta(x)) + '</div>' + (x.description ? '<div class="meta">' + esc(x.description) + '</div>' : '') + '</div>' : '<div><div>Catalog item #' + l.catalog_item_id + '</div><div class="meta">not found in est_catalog_items</div></div>') + '<span class="ic" data-act="swapcat" title="Replace catalog item">' + ic('find_replace', 20) + '</span>';
+    card.innerHTML = (x ? '<div style="min-width:0"><div>' + esc(x.name) + '</div><div class="meta">' + esc(catMeta(x)) + '</div>' + (x.description ? '<div class="meta">' + esc(x.description) + '</div>' : '') + '</div>' : '<div><div>Catalog item #' + l.catalog_item_id + '</div><div class="meta">not found in est_catalog_items</div></div>') + '<span class="ic" data-act="swapcat" title="Replace the catalog item" style="gap:4px;align-items:center;font-size:12px;font-weight:600">' + ic('find_replace', 18) + 'Replace</span>';
   }
   function onPopChange(e) {
     var el = e.target, l = layerById(popLayerId); if (!l || !el) return;
@@ -827,11 +827,30 @@ requireAuth().catch(function(){});
     if (r.error) { toast(r.error.message, 'error'); return; }
     layers.push(r.data); closePopover(); renderAll(); toast('Layer copied', 'success');
   }
-  function swapCatalog(l) {
+  // Replace (or pick) the layer's catalog item. The layer properties card (z-index 960) sat ON TOP of the catalog window (900) and hid the item names,
+  // so it is closed while the catalog is open and comes back afterwards. The new item brings its price, labor, waste, estimate category and crew;
+  // the layer keeps its measurement type and marks. The layer name follows the item only when it was the old item's name (a custom name stays).
+  async function swapCatalog(l) {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    if (l.is_locked) { toast('Layer is locked — unlock it to replace the catalog item', 'error'); return; }
     if (!window.NWCatalogPicker) { toast('Catalog picker is not loaded (nw-catalog-picker.js)', 'error'); return; }
-    NWCatalogPicker.open({ multi: false, title: 'Select catalog item', onSelect: function(rows) { var x = rows && rows[0]; if (!x) return; catCache[x.id] = x;
-      saveLayer(l.id, { catalog_item_id: x.id, unit_material_cost: Number(x.unit_cost || 0), unit_labor_hours: Math.round(Number(x.unit_labor_min || 0) / 60 * 10000) / 10000, waste_pct: Number(x.waste_pct || 0) }); } });
+    var lid = l.id, picked = false, oldItem = l.catalog_item_id ? await catItem(l.catalog_item_id) : null;
+    function reopen() { if (layerById(lid)) openLayerPopover(lid, document.querySelector('[data-lmenu="' + lid + '"]')); }
+    closePopover();
+    NWCatalogPicker.open({ multi: false, title: (l.catalog_item_id ? 'Replace catalog item' : 'Select catalog item') + ' — ' + l.name,
+      onClose: function() { if (!picked) setTimeout(reopen, 50); },
+      onSelect: async function(rows) {
+        var x = rows && rows[0]; if (!x) return; picked = true; catCache[x.id] = x;
+        var cat = x.nw_category || guessCat(x.name), cur = layerById(lid) || l;
+        var patch = { catalog_item_id: /^\d+$/.test(String(x.id)) ? Number(x.id) : null, unit_material_cost: Number(x.unit_cost || 0),
+          unit_labor_hours: Math.round(Number(x.unit_labor_min || 0) / 60 * 10000) / 10000, waste_pct: Number(x.waste_pct || 0) };
+        if (cat && CATS[cat]) { patch.category = cat; patch.labor_crew_type = CAT_CREW[cat] || cur.labor_crew_type || 'sm'; }
+        var renamed = oldItem && String(cur.name || '').trim().toLowerCase() === String(oldItem.name || '').trim().toLowerCase() && x.name && x.name !== cur.name;
+        if (renamed) patch.name = x.name;
+        var ok = await saveLayer(lid, patch);
+        if (ok) toast('Catalog item replaced by "' + x.name + '" — ' + P.money(patch.unit_material_cost) + ' / unit' + (renamed ? ', layer renamed' : (oldItem ? '' : '')) + '. The estimate line follows automatically.', 'success');
+        setTimeout(reopen, 50);
+      } });
   }
   function splitDialog(l) {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
@@ -2012,6 +2031,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=362"></script>
+<script src="sw-register.js?v=370"></script>
 </body>
 </html>
