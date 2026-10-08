@@ -51,14 +51,15 @@ BCS = [
          intro=('Clune Construction Company LP, the general contractor on the <b>Sompo</b> project (1001 Franklin Ave, '
                 'Floors 2 &amp; 3), issued a back charge to Northern Wolves AC under Subcontract Change Order No. 003, '
                 'item IT004, dated 08/20/2026, for Clune superintendent and labor time. This back charge is passed through '
-                'to ADLS Enterprises, LLC at cost and will be deducted from ADLS Invoice #{inv}. A copy of the Clune '
-                'change order is attached.'),
+                'to ADLS Enterprises, LLC at cost and will be deducted from ADLS Invoice #{inv}. Attached as backup: the Clune '
+                'change order and Clune\'s email of 08/11/2026 regarding the duct delays and the back charge.'),
          prior=[('BC-ADLS-001-2026', 8000)],
          items=[('Clune superintendent and labor, Saturday', '08/01/2026', '8', 'per Clune', None),
                 ('Clune superintendent and labor, Thursday', '08/06/2026', '4', 'per Clune', None),
                 ('Clune superintendent and labor, Saturday', '08/08/2026', '8', 'per Clune', None)],
          total=5440, attach='source/Clune SCO 003 signed - Sompo back charge.pdf',
-         redact=[(20, 535, 596, 598)]),
+         redact=[(20, 535, 596, 598)],
+         backup=[('source/Clune email RE N.W. Backcharge - Sompo 2026-08-11.pdf', "Clune email 'RE: N. W. Backcharge', 08/11/2026")]),
 ]
 
 
@@ -169,6 +170,14 @@ def build(bc):
         doc.insert_pdf(src)
         last = doc[-1]
         last.insert_text((40, 780), f"Attachment to Back Charge {bc['no']}: {bc['gc_ref']}", fontsize=9, color=(0.12, 0.23, 0.37))
+        for f, label in bc.get('backup', []):       # other backup (emails), fitted onto a letter page
+            b = pymupdf.open(os.path.join(HERE, f))
+            for i in range(len(b)):
+                pg = doc.new_page(width=W, height=H)
+                r = b[i].rect; box = pymupdf.Rect(30, 30, W - 30, H - 40)
+                sc = min(box.width / r.width, box.height / r.height)
+                pg.show_pdf_page(pymupdf.Rect(box.x0, box.y0, box.x0 + r.width * sc, box.y0 + r.height * sc), b, i)
+                pg.insert_text((40, H - 12), f"Attachment to Back Charge {bc['no']}: {label}", fontsize=9, color=(0.12, 0.23, 0.37))
         tmp = path + '.tmp'
         doc.save(tmp, garbage=4, deflate=True); doc.close(); os.replace(tmp, path)
     return amt, net
