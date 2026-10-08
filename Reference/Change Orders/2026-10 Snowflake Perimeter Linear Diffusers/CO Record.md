@@ -50,3 +50,5 @@ counts are checked against the PLENUM / CFM text inside each cloud. Clouds are f
   crop (cloud outline dashed) next to the SD R2 crop, G count vs LD count, main in cloud. SD R2 maps onto Bulletin 3
   as B3 = 0.5 x SD + t per sheet, fitted on room numbers (exact).
 - `source/` - the three SD R2 PDFs.
+- Exclusions (Ruslan, 10/08): 1. soffit and ceiling openings, framing, access panels, patching and painting;
+  2. relocation of lights, electrical wires, j-boxes or other trades' work discovered after the soffits are opened.

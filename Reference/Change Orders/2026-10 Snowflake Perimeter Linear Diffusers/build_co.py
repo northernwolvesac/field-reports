@@ -87,9 +87,9 @@ def summary_page(c):
         y -= bb.para(c, f'{i}. {n}', st, x, y, w) + 5
     y -= 8
     y -= bb.para(c, 'Exclusions', sth, x, y, w) + 4
-    for i, n in enumerate(['Soffit and ceiling openings, framing, access panels, patching and painting (by GC).',
-                           'Overtime / premium time.',
-                           'Work not shown in the clouds on the SD R2 drawings.'], 1):
+    for i, n in enumerate(['Soffit and ceiling openings, framing, access panels, patching and painting.',
+                           'Relocation of any lights, electrical wires, j-boxes, or any other trades work that could be '
+                           'discovered after soffits will be opened.'], 1):
         y -= bb.para(c, f'{i}. {n}', st, x, y, w) + 5
 
     x = 610; y = PH - TOP; w = PW - M - x
