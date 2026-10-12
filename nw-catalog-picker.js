@@ -24,6 +24,18 @@
   'use strict';
 
   var PAGE_SIZE = 40;
+  // Natural order for item names: numbers compare as numbers ("6x4" < "6x6" < "8x4" < "10x4" < "16x4"), "×" = "x", case-insensitive.
+  // Plain SQL ordering put "16x4" before "6x4"; a duct size list has to run small -> big.
+  function natChunks(s) { return String(s || '').toLowerCase().replace(/×/g, 'x').match(/\d+(?:\.\d+)?|\D+/g) || []; }
+  function natCompare(a, b) {
+    var x = natChunks(a), y = natChunks(b), n = Math.min(x.length, y.length);
+    for (var i = 0; i < n; i++) {
+      var p = x[i], q = y[i], pn = /^\d/.test(p), qn = /^\d/.test(q);
+      if (pn && qn) { var d = parseFloat(p) - parseFloat(q); if (d) return d; }
+      else if (p !== q) return p < q ? -1 : 1;
+    }
+    return x.length - y.length;
+  }
   var MRU_KEY = 'nw_cat_mru';
   var MRU_MAX = 40;
   var CSS_ID = 'nw-catalog-picker-css';
@@ -618,9 +630,10 @@
     }
 
     // ── data ────────────────────────────────────────────────────────────
-    var loadSeq = 0;
-    async function load() {
+    var loadSeq = 0, natCache = null;   // natCache: every row of the current search/folder in natural order, kept while paging
+    async function load(keepCache) {
       var seq = ++loadSeq;
+      if (!keepCache) natCache = null;
       listEl.innerHTML = '<div class="ncp-empty">Loading…</div>';
       titleEl.textContent = st.node.kind === 'all' ? 'All Catalog Items' : st.node.kind === 'mru' ? 'Most Recently Used Items' :
         st.node.kind === 'legacy' ? 'Legacy assemblies (read-only)' : (st.node.folder.name || 'Folder');
@@ -665,6 +678,23 @@
       q = applyUnitFilter(q, st.filters.unit);
       if (st.filters.taxable) q = q.eq('is_untaxed', false);
       if (st.filters.category) q = q.eq('nw_category', st.filters.category);
+      if (st.sort === 'common' || st.sort === 'name') {
+        // natural order needs every match: fetch them all (1,000 per request, stable by id), sort here, page locally
+        if (!natCache) {
+          var all = [], from = 0, total = 0, guard = 0;
+          while (guard++ < 12) {
+            var rr = await q.order('id').range(from, from + 999);
+            if (rr.error) return { error: rr.error };
+            all = all.concat(rr.data || []); total = rr.count || 0;
+            if (!rr.data || rr.data.length < 1000 || all.length >= total) break;
+            from += 1000;
+          }
+          var customFirst = st.sort === 'common';
+          all.sort(function (a, b) { return (customFirst ? (b.is_custom ? 1 : 0) - (a.is_custom ? 1 : 0) : 0) || natCompare(a.name, b.name); });
+          natCache = all;
+        }
+        return { rows: natCache.slice(st.page * PAGE_SIZE, (st.page + 1) * PAGE_SIZE), count: natCache.length };
+      }
       q = applySort(q, false).range(st.page * PAGE_SIZE, st.page * PAGE_SIZE + PAGE_SIZE - 1);
       var r = await q;
       if (r.error) return { error: r.error };
@@ -789,9 +819,9 @@
         '<span>Page: ' + sel + '</span>' +
         '<button type="button" class="pc-btn pc-btn-icon pc-btn-ghost" data-prev' + (st.page <= 0 ? ' disabled' : '') + '>' + icon('chevron_left', 18) + '</button>' +
         '<button type="button" class="pc-btn pc-btn-icon pc-btn-ghost" data-next' + (st.page >= pages - 1 ? ' disabled' : '') + '>' + icon('chevron_right', 18) + '</button>';
-      pagerEl.querySelector('[data-pg]').addEventListener('change', function () { st.page = Number(this.value); load(); });
-      pagerEl.querySelector('[data-prev]').addEventListener('click', function () { if (st.page > 0) { st.page--; load(); } });
-      pagerEl.querySelector('[data-next]').addEventListener('click', function () { if (st.page < pages - 1) { st.page++; load(); } });
+      pagerEl.querySelector('[data-pg]').addEventListener('change', function () { st.page = Number(this.value); load(true); });
+      pagerEl.querySelector('[data-prev]').addEventListener('click', function () { if (st.page > 0) { st.page--; load(true); } });
+      pagerEl.querySelector('[data-next]').addEventListener('click', function () { if (st.page < pages - 1) { st.page++; load(true); } });
     }
 
     // ── init ────────────────────────────────────────────────────────────
