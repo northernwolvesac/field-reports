@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=374">
+<link rel="stylesheet" href="procore-ui.css?v=375">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=374"></script>
-<script src="auth.js?v=374"></script>
-<script src="est-totals.js?v=374"></script>
-<script src="procore-ui.js?v=374"></script>
+<script src="supabase-config.js?v=375"></script>
+<script src="auth.js?v=375"></script>
+<script src="est-totals.js?v=375"></script>
+<script src="procore-ui.js?v=375"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=374"></script>
-<script src="est-drawings.js?v=374"></script>
-<script src="nw-proposal.js?v=374"></script>
+<script src="bid-actions.js?v=375"></script>
+<script src="est-drawings.js?v=375"></script>
+<script src="nw-proposal.js?v=375"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -32,9 +32,9 @@
   body.pc-page { background: var(--pc-bg, #f5f6f7); }
   .bp-head { background: #fff; border-bottom: 1px solid var(--pc-border, #e5e7eb); }
   .bp-head .pc-title-row { border-bottom: 0; }
-  .bp-head .pc-crumb { padding: 10px 24px 0; }
-  .bp-head .pc-title-row { padding-left: 24px; padding-right: 24px; }
-  .bp-main { padding: 16px 24px 24px; }
+  .bp-head .pc-crumb { padding: 10px 16px 0; }
+  .bp-head .pc-title-row { padding-left: 16px; padding-right: 16px; }
+  .bp-main { padding: 12px 16px 24px; }
   .bp-main.frame-mode { padding: 0; }
   .bp-pane[hidden] { display: none !important; }
   .bp-frame { display: block; width: 100%; border: 0; background: #fff; min-height: 480px; }
@@ -67,11 +67,11 @@
   /* ── overview ── */
   .bp-2col { display: grid; grid-template-columns: 1fr 420px; gap: 16px; align-items: start; }
   @media (max-width: 1100px) { .bp-2col { grid-template-columns: 1fr; } }
-  .bp-card-title { font-size: 15px; font-weight: 600; padding: 16px 16px 8px; display: flex; align-items: center; gap: 8px; }
+  .bp-card-title { font-size: 16px; font-weight: 600; padding: 16px 16px 8px; display: flex; align-items: center; gap: 8px; }
   .bp-card-title .spacer { flex: 1; }
   .bp-total-chip { font-size: 12px; font-weight: 600; color: var(--pc-link, #1a66e0); background: var(--pc-link-bg, #e8f0fe); padding: 3px 10px; border-radius: 12px; }
   .bp-form { padding: 4px 16px 16px; }
-  .bp-form .pc-label { color: var(--pc-text, #1f2933); font-weight: 500; }
+  .bp-form .pc-label { color: var(--pc-text, #232729); font-weight: 600; }
   .bp-form textarea.pc-textarea { height: auto; min-height: 64px; padding: 8px 10px; resize: vertical; }
   .bp-form .pc-input[disabled], .bp-form .pc-select[disabled], .bp-form .pc-textarea[disabled] { background: #f9fafb; color: var(--pc-muted, #6b7280); }
   .bp-icon-field { position: relative; }
@@ -1878,6 +1878,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=374"></script>
+<script src="sw-register.js?v=375"></script>
 </body>
 </html>
