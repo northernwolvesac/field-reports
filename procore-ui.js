@@ -741,7 +741,7 @@
     if (typeof container === 'string') container = document.querySelector(container);
     if (!container) return;
     container.classList.add('pc-head-block');
-    var html = '<div class="pc-wrap">';
+    var html = '<div class="pc-wrap pc-wrap-flush">';
     if (opts.crumb) {
       html += '<div class="pc-crumb"><a href="' + esc(opts.crumb.href || 'bid-board.html') + '">' + esc(opts.crumb.label || 'Bid Board') + '</a>' +
         '<span class="sep"></span>' + (opts.crumb.text ? '<span>' + esc(opts.crumb.text) + '</span>' : '') + '</div>';   // .sep::before draws '>' (procore-ui.css)

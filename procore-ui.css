@@ -49,6 +49,7 @@ body.pc-page *, body.pc-page *::before, body.pc-page *::after { box-sizing: bord
 body.pc-page svg { flex-shrink: 0; }
 .pc-wrap { max-width: none; margin: 0; padding: 0 16px; }
 .pc-wrap-fluid { padding: 0 16px; }
+.pc-wrap.pc-wrap-flush { padding: 0; }   /* title row + crumb carry their own 16px gutter */
 
 /* ── 2b. NW logo header (markup copied from index.html by PC.nwHeaderHtml).
         index.html keeps these rules inline, not in styles.css, so a scoped

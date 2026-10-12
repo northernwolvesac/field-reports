@@ -218,7 +218,8 @@
   function pctFmt(p) { return (Number(p || 0) * 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' %'; }
   function todayShort() {
     var d = new Date();
-    return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+    var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p2(d.getMonth() + 1) + '/' + p2(d.getDate()) + '/' + d.getFullYear();   // MM/DD/YYYY like Procore
   }
   function toast(msg, type) {
     if (window.PC && typeof PC.toast === 'function') PC.toast(msg, type || 'info');
