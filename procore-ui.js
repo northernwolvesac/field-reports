@@ -1007,9 +1007,8 @@
     var badge = document.createElement('button');
     badge.type = 'button';
     badge.className = 'pc-btn pc-btn-ghost pc-est-badge-btn';
-    badge.style.padding = '0 4px';
-    badge.title = 'Estimate ' + (curIdx + 1) + ' of ' + versions.length + ' — click to switch';
-    badge.innerHTML = '<span class="pc-est-badge">E ' + (curIdx + 1) + '</span>' + PC.icon('expand_more', 18);
+        badge.title = 'Estimate ' + (curIdx + 1) + ' of ' + versions.length + ' — click to switch';
+    badge.innerHTML = '<span class="pc-est-badge">E</span><span class="pc-est-badge">' + (curIdx + 1) + '</span>' + PC.icon('expand_more', 18);
     badge.addEventListener('click', function () {
       var items = [{ head: true, label: 'Estimates (' + versions.length + ')' }].concat(versions.map(function (v) {
         return { label: stripLabel(v), hint: PC.money(st.totals[v.id] || 0) + (v.parent_estimate_id ? '' : ' · primary'), checked: v.id === cur,
@@ -1025,7 +1024,7 @@
 
     var tabs = document.createElement('div');
     tabs.className = 'pc-est-tabs';
-    tabs.style.cssText = 'display:flex;gap:6px;align-items:center;overflow-x:auto;flex:1;min-width:0';
+    tabs.style.cssText = 'display:flex;gap:6px;align-items:center;overflow-x:auto;flex:0 1 auto;min-width:0;margin-left:6px';
     if (st.error) {
       var err = document.createElement('span'); err.className = 'pc-muted'; err.style.fontSize = '12px'; err.textContent = st.error; tabs.appendChild(err);
     }
@@ -1375,7 +1374,7 @@
       wrap.appendChild(btn);
       valueDesc.set.call(inp, toText(iso));
       inp.addEventListener('input', function (e) {
-        var t = valueDesc.get.call(inp), clean = t.replace(isTime ? /[^0-9:apm\s.]/gi : /[^0-9\/]/g, '');
+        var t = valueDesc.get.call(inp), clean = t.replace(isTime ? /[^0-9:apm\s.]/gi : /[^0-9\/]/g, '').replace(/\/{2,}/g, '/');
         if (!isTime && e.inputType && e.inputType.indexOf('delete') !== 0 && (/^\d{2}$/.test(clean) || /^\d{1,2}\/\d{2}$/.test(clean))) clean += '/';
         if (clean !== t) valueDesc.set.call(inp, clean);
         inp.classList.remove('error');
