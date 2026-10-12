@@ -1233,5 +1233,172 @@
     return h;
   };
 
+  /* ─── US date / time fields ─────────────────────────────────────────────
+     Native <input type=date|time> shows the browser/OS locale (dd/mm/yyyy for some people).
+     Every such input on a procore-ui page becomes a text field "MM/DD/YYYY" / "hh:mm aa" with a
+     calendar / clock button like Procore. The element stays the same input and keeps its
+     ISO ('YYYY-MM-DD' / 'HH:MM') .value, so the pages' existing code (data-col, set(), save) is unchanged. */
+  (function () {
+    var valueDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    function isoToUs(v) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || ''); return m ? m[2] + '/' + m[3] + '/' + m[1] : ''; }
+    function usToIso(t) {
+      var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})$/.exec(String(t || '').trim());
+      if (!m) return '';
+      var mo = +m[1], d = +m[2], y = +m[3];
+      if (m[3].length === 2) y += 2000;
+      var dt = new Date(y, mo - 1, d);
+      if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
+      return y + '-' + p2(mo) + '-' + p2(d);
+    }
+    function parseTime(t) {
+      var m = /^(\d{1,2})(?::?(\d{2}))?\s*([ap])?\.?m?\.?$/.exec(String(t || '').trim().toLowerCase());
+      if (!m) return '';
+      var h = +m[1], mi = m[2] ? +m[2] : 0, ap = m[3];
+      if (mi > 59) return '';
+      if (ap) { if (h < 1 || h > 12) return ''; if (ap === 'p' && h < 12) h += 12; if (ap === 'a' && h === 12) h = 0; }
+      else if (h > 23) return '';
+      return p2(h) + ':' + p2(mi);
+    }
+    function fmtTime(v) {
+      var m = /^(\d{1,2}):(\d{2})/.exec(v || '');
+      if (!m) return '';
+      var h = +m[1];
+      return p2(h % 12 || 12) + ':' + m[2] + ' ' + (h >= 12 ? 'PM' : 'AM');
+    }
+    var pop = null;
+    function closePop() {
+      if (!pop) return;
+      pop.el.remove(); pop = null;
+      document.removeEventListener('mousedown', onDocDown, true);
+      document.removeEventListener('keydown', onDocKey, true);
+      window.removeEventListener('resize', closePop);
+    }
+    function onDocDown(e) { if (pop && !pop.el.contains(e.target) && !pop.wrap.contains(e.target)) closePop(); }
+    function onDocKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closePop(); } }
+    function place(el, wrap) {
+      document.body.appendChild(el);
+      var r = wrap.getBoundingClientRect(), h = el.offsetHeight, w = el.offsetWidth;
+      var top = r.bottom + 4;
+      if (top + h > window.innerHeight - 8 && r.top - 4 - h > 8) top = r.top - 4 - h;
+      el.style.top = Math.max(8, top) + 'px';
+      el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    }
+    function listen() {
+      document.addEventListener('mousedown', onDocDown, true);
+      document.addEventListener('keydown', onDocKey, true);
+      window.addEventListener('resize', closePop);
+    }
+    function commit(inp, iso) {
+      inp.value = iso;
+      inp.classList.remove('error');
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function openDate(inp, wrap) {
+      closePop();
+      var cur = inp.value, base = cur ? PC.parseLocalDate(cur) : new Date();
+      var year = base.getFullYear(), month = base.getMonth();
+      var el = document.createElement('div');
+      el.className = 'pc-cal';
+      var MN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      function draw() {
+        var first = new Date(year, month, 1), start = -first.getDay() + 1, today = PC.isoDate();
+        var h = '<div class="pc-cal-hd"><button type="button" data-nav="-1" aria-label="Previous month">‹</button><b>' +
+          MN[month] + ' ' + year + '</b><button type="button" data-nav="1" aria-label="Next month">›</button></div><div class="pc-cal-grid">';
+        ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach(function (d) { h += '<span class="pc-cal-dow">' + d + '</span>'; });
+        for (var i = 0; i < 42; i++) {
+          var d = new Date(year, month, start + i), iso = PC.isoDate(d);
+          h += '<button type="button" class="pc-cal-day' + (d.getMonth() !== month ? ' out' : '') + (iso === today ? ' today' : '') +
+            (iso === cur ? ' sel' : '') + '" data-iso="' + iso + '">' + d.getDate() + '</button>';
+        }
+        el.innerHTML = h + '</div><div class="pc-cal-ft"><button type="button" data-act="today">Today</button><button type="button" data-act="clear">Clear</button></div>';
+      }
+      draw();
+      el.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.nav) { month += +b.dataset.nav; if (month < 0) { month = 11; year--; } if (month > 11) { month = 0; year++; } draw(); return; }
+        var iso = b.dataset.iso || (b.dataset.act === 'today' ? PC.isoDate() : b.dataset.act === 'clear' ? '' : null);
+        if (iso === null) return;
+        commit(inp, iso); closePop(); inp.focus();
+      });
+      pop = { el: el, wrap: wrap };
+      place(el, wrap);
+      listen();
+    }
+    function openTime(inp, wrap) {
+      closePop();
+      var cur = String(inp.value).slice(0, 5), el = document.createElement('div'), h = '';
+      el.className = 'pc-cal pc-cal-times';
+      for (var m = 0; m < 1440; m += 30) {
+        var v = p2(Math.floor(m / 60)) + ':' + p2(m % 60);
+        h += '<button type="button" class="pc-cal-time' + (v === cur ? ' sel' : '') + '" data-v="' + v + '">' + fmtTime(v) + '</button>';
+      }
+      el.innerHTML = h;
+      el.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        commit(inp, b.dataset.v); closePop(); inp.focus();
+      });
+      pop = { el: el, wrap: wrap };
+      place(el, wrap);
+      var s = el.querySelector('.sel') || el.querySelector('[data-v="09:00"]');
+      if (s) el.scrollTop = Math.max(0, s.offsetTop - 80);
+      listen();
+    }
+    function enhance(inp) {
+      if (inp.dataset.pcDate) return;
+      var isTime = inp.type === 'time';
+      inp.dataset.pcDate = isTime ? 'time' : 'date';
+      var iso = inp.value;                       // still the native ISO value here
+      inp.type = 'text';
+      inp.autocomplete = 'off';
+      inp.placeholder = isTime ? 'hh:mm aa' : 'MM/DD/YYYY';
+      inp.inputMode = 'numeric';
+      var toText = isTime ? fmtTime : isoToUs, toIso = isTime ? parseTime : usToIso;
+      Object.defineProperty(inp, 'value', {
+        configurable: true,
+        get: function () { return toIso(valueDesc.get.call(inp)); },
+        set: function (v) { valueDesc.set.call(inp, toText(v == null ? '' : String(v))); inp.classList.remove('error'); }
+      });
+      var wrap = document.createElement('span');
+      wrap.className = 'pc-datef';
+      inp.parentNode.insertBefore(wrap, inp);
+      wrap.appendChild(inp);
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.tabIndex = -1; btn.className = 'pc-datef-btn';
+      btn.setAttribute('aria-label', isTime ? 'Pick a time' : 'Pick a date');
+      btn.innerHTML = PC.icon(isTime ? 'schedule' : 'event', 18);
+      btn.addEventListener('click', function () {
+        if (inp.disabled || inp.readOnly) return;
+        if (pop && pop.wrap === wrap) closePop(); else (isTime ? openTime : openDate)(inp, wrap);
+      });
+      wrap.appendChild(btn);
+      valueDesc.set.call(inp, toText(iso));
+      inp.addEventListener('input', function (e) {
+        var t = valueDesc.get.call(inp), clean = t.replace(isTime ? /[^0-9:apm\s.]/gi : /[^0-9\/]/g, '');
+        if (!isTime && e.inputType && e.inputType.indexOf('delete') !== 0 && (/^\d{2}$/.test(clean) || /^\d{1,2}\/\d{2}$/.test(clean))) clean += '/';
+        if (clean !== t) valueDesc.set.call(inp, clean);
+        inp.classList.remove('error');
+      });
+      inp.addEventListener('blur', function () {
+        var t = valueDesc.get.call(inp).trim();
+        if (!t) { inp.classList.remove('error'); return; }
+        var ok = toIso(t);
+        if (ok) { valueDesc.set.call(inp, toText(ok)); inp.classList.remove('error'); }
+        else { inp.classList.add('error'); inp.title = isTime ? 'Use hh:mm aa, e.g. 02:30 PM' : 'Use MM/DD/YYYY, e.g. 10/05/2026'; }
+      });
+    }
+    PC.dateFields = function (root) {
+      (root || document).querySelectorAll('input[type=date],input[type=time]').forEach(function (i) { try { enhance(i); } catch (e) { console.warn('date field', e); } });
+    };
+    function start() {
+      PC.dateFields(document);
+      new MutationObserver(function (list) {
+        for (var i = 0; i < list.length; i++) if (list[i].addedNodes.length) { PC.dateFields(document); break; }
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+    if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+  })();
+
   window.PC = PC;
 })();

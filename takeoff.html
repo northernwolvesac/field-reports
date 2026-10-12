@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=372">
+<link rel="stylesheet" href="procore-ui.css?v=373">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=372"></script>
-<script src="auth.js?v=372"></script>
-<script src="est-totals.js?v=372"></script>
-<script src="procore-ui.js?v=372"></script>
+<script src="supabase-config.js?v=373"></script>
+<script src="auth.js?v=373"></script>
+<script src="est-totals.js?v=373"></script>
+<script src="procore-ui.js?v=373"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=372"></script>
-<script src="est-drawings.js?v=372"></script>
-<script src="nw-catalog-picker.js?v=372"></script>
-<script src="geo-takeoff.js?v=372"></script>
+<script src="bid-actions.js?v=373"></script>
+<script src="est-drawings.js?v=373"></script>
+<script src="nw-catalog-picker.js?v=373"></script>
+<script src="geo-takeoff.js?v=373"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -28,7 +28,7 @@
   .grow { flex: 1; }
 
   /* ─── workspace ─── */
-  .tk-work { flex: 1; display: grid; grid-template-columns: 300px 1fr; gap: 12px; padding: 12px; min-height: 0; background: var(--pc-bg, #f5f6f7); box-sizing: border-box; }
+  .tk-work { flex: 1; display: grid; grid-template-columns: 360px 1fr; gap: 12px; padding: 12px; min-height: 0; background: var(--pc-bg, #f5f6f7); box-sizing: border-box; }
   body.tk-left-collapsed .tk-work { grid-template-columns: 14px 1fr; }
   body.pc-embed .tk-work { padding: 0; gap: 0; }
   body.pc-embed .tk-left { border-radius: 0; border-width: 0 1px 0 0; }
@@ -41,9 +41,9 @@
   body.tk-left-collapsed .tk-left > *:not(.collapse-handle) { display: none; }
   .collapse-handle { position: absolute; right: -11px; top: 50%; transform: translateY(-50%); width: 20px; height: 44px; background: #fff; border: 1px solid var(--pc-border, #e5e7eb); border-radius: 0 6px 6px 0; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--pc-muted, #6b7280); z-index: 6; }
   body.tk-left-collapsed .collapse-handle { right: auto; left: 0; border-radius: 6px; }
-  .tk-ph { display: flex; align-items: center; gap: 8px; padding: 12px 10px 6px 14px; }
-  .tk-ph-title { font-size: 16px; font-weight: 700; flex: 1; }
-  .tk-ph-title span { font-weight: 700; }
+  .tk-ph { display: flex; align-items: center; gap: 8px; padding: 14px 10px 6px 16px; }
+  .tk-ph-title { font-size: 16px; font-weight: 600; color: #232729; flex: 1; }
+  .tk-ph-title span { font-weight: 600; }
   .tk-search { margin: 6px 14px 8px; }
   .tk-search input { height: 34px; }
   .tk-actrow { display: flex; align-items: center; gap: 4px; padding: 4px 8px 6px 10px; border-bottom: 1px solid var(--pc-border, #e5e7eb); }
@@ -51,11 +51,11 @@
   .tk-actrow .sel button { border: 0; background: transparent; cursor: pointer; color: var(--pc-text, #1f2933); display: inline-flex; padding: 2px; }
   .tk-tree { flex: 1; overflow-y: auto; min-height: 0; }
   .tk-grp { border-bottom: 1px solid var(--pc-row-sep, #eceff3); }
-  .tk-grp-h { display: flex; align-items: center; gap: 6px; padding: 7px 6px 7px 10px; font-weight: 700; font-size: 13px; cursor: pointer; user-select: none; }
+  .tk-grp-h { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; min-height: 49px; font-weight: 700; font-size: 12px; color: #232729; cursor: pointer; user-select: none; }
   .tk-grp-h:hover { background: var(--pc-row-active, #f3f6fb); }
-  .tk-grp-h .chev { color: var(--pc-muted, #6b7280); display: inline-flex; }
+  .tk-grp-h .chev { color: #75838a; display: inline-flex; }
   .tk-grp-h .gname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tk-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 10px; cursor: pointer; border-left: 3px solid transparent; font-size: 12px; }
+  .tk-row { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; min-height: 49px; cursor: pointer; border-left: 3px solid transparent; font-size: 12px; }
   .tk-row:hover { background: var(--pc-row-active, #f3f6fb); }
   .tk-row.tk-row-checked { background: var(--pc-row-active, #f3f6fb); }
   .tk-row.active { background: var(--pc-link-bg, #e8f0fe); border-left-color: var(--pc-link, #1a66e0); }
@@ -63,8 +63,8 @@
   .tk-row.drop-before { box-shadow: inset 0 2px 0 var(--pc-link, #1a66e0); } .tk-row.drop-after { box-shadow: inset 0 -2px 0 var(--pc-link, #1a66e0); }
   .tk-grp-h.drop-before { box-shadow: inset 0 2px 0 var(--pc-link, #1a66e0); } .tk-grp-h.drop-into { background: var(--pc-link-bg, #e8f0fe); }
   .tk-row .nm2 { flex: 1; min-width: 0; padding-left: 4px; }
-  .tk-row .n1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pc-text, #1f2933); }
-  .tk-row .n2 { color: var(--pc-muted, #6b7280); font-size: 12px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .tk-row .n1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #232729; font-size: 12px; font-weight: 400; }
+  .tk-row .n2 { color: #232729; font-size: 12px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
   .tk-row .lock { color: var(--pc-muted, #6b7280); display: inline-flex; }
   .eye { cursor: pointer; color: var(--pc-muted, #6b7280); width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 4px; }
   .eye:hover { background: var(--pc-secondary, #f0f1f3); }
@@ -408,6 +408,8 @@ requireAuth().catch(function(){});
   function typeUnit(t) { return t === 'linear' ? 'ft' : t === 'area' ? 'sqft' : 'ea'; }
   function lineUnit(t) { return t === 'linear' ? 'lf' : t === 'area' ? 'sf' : 'ea'; }
   function qtyStr(q, t) { return P.qty(q, P.uom(typeUnit(t))); }
+  // layer tree: Procore shows a bare number for counts (no 'ea')
+  function qtyTree(q, t) { var s = qtyStr(q, t); return t === 'count' ? s.replace(/\s+ea$/i, '') : s; }
   // quantity of one mark for its layer (after multiplier, slope, drops, deduct)
   function markQty(m, l) {
     if (!l || m.tool_type === 'scale' || m.tool_type === 'note' || m.tool_type === 'measure') return 0;
@@ -461,13 +463,13 @@ requireAuth().catch(function(){});
       var ls = groups[g] || [], open = !isCollapsed(g), gv = ls.length ? ls.every(function(l) { return l.is_visible !== false; }) : true;
       var nSel = ls.filter(function(l) { return selectedLayerIds.has(l.id); }).length, cbState = !ls.length || !nSel ? '' : nSel === ls.length ? ' checked' : ' data-ind="1"';
       html += '<div class="tk-grp"><div class="tk-grp-h" data-grp="' + esc(g) + '"' + dnd + '><span class="eye' + (gv ? '' : ' off') + '" data-geye="' + esc(g) + '" title="Show / hide group">' + ic(gv ? 'visibility' : 'visibility_off', 16) + '</span>' +
-        '<input type="checkbox" class="tk-cb" data-gcb="' + esc(g) + '"' + cbState + '><span class="chev">' + ic(open ? 'expand_more' : 'chevron_right', 18) + '</span><span class="gname" title="' + esc(g) + '">' + esc(g) + '</span>' +
+        '<input type="checkbox" class="tk-cb" data-gcb="' + esc(g) + '"' + cbState + '><span class="chev">' + ic(open ? 'expand_more' : 'chevron_right', 20) + '</span><span class="gname" title="' + esc(g) + '">' + esc(g) + '</span>' +
         '<button class="tk-kebab" data-gmenu="' + esc(g) + '" title="Group actions">' + ic('more_vert', 18) + '</button></div>';
       if (open) ls.forEach(function(l) {
         var t = layerTotals(l), pq = pdfPage ? pageQty(l) : 0, hid = l.is_visible === false;
         html += '<div class="tk-row' + (l.id === activeLayerId ? ' active' : '') + (selectedLayerIds.has(l.id) ? ' tk-row-checked' : '') + (hid ? ' hidden-layer' : '') + '" data-lay="' + l.id + '"' + dnd + '>' +
           '<span class="eye' + (hid ? ' off' : '') + '" data-eye="' + l.id + '">' + ic(hid ? 'visibility_off' : 'visibility', 16) + '</span><input type="checkbox" class="tk-cb" data-lcb="' + l.id + '"' + (selectedLayerIds.has(l.id) ? ' checked' : '') + '>' +
-          '<div class="nm2"><div class="n1" title="' + esc(l.name) + '">' + esc(l.name) + '</div><div class="n2"><span class="pc-dot" style="background:' + esc(l.color) + '"></span><span title="Total on all plans' + (pdfPage ? ' · this plan: ' + qtyStr(pq, l.takeoff_type) : '') + '">' + qtyStr(t.qty, l.takeoff_type) + (pdfPage && pq ? ' <span class="pc-muted">(' + qtyStr(pq, l.takeoff_type).split(' ')[0] + ')</span>' : '') + (!t.marks && Number(l.extra_count) ? ' <span class="pc-muted" title="Entered by hand (Extra quantity) — nothing is drawn on the plans for this layer">· by hand</span>' : '') + '</span></div></div>' +
+          '<div class="nm2"><div class="n1" title="' + esc(l.name) + '">' + esc(l.name) + '</div><div class="n2"><span class="pc-dot" style="background:' + esc(l.color) + '"></span><span title="Total on all plans' + (pdfPage ? ' · this plan: ' + qtyStr(pq, l.takeoff_type) : '') + '">' + qtyTree(t.qty, l.takeoff_type) + (pdfPage && pq ? ' <span class="pc-muted">(' + qtyTree(pq, l.takeoff_type).split(' ')[0] + ')</span>' : '') + (!t.marks && Number(l.extra_count) ? ' <span class="pc-muted" title="Entered by hand (Extra quantity) — nothing is drawn on the plans for this layer">· by hand</span>' : '') + '</span></div></div>' +
           (l.is_locked ? '<span class="lock" title="Locked">' + ic('lock', 14) + '</span>' : '') + '<button class="tk-kebab" data-lmenu="' + l.id + '" title="Layer properties">' + ic('more_vert', 18) + '</button></div>';
       });
       html += '</div>';
@@ -2032,6 +2034,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=372"></script>
+<script src="sw-register.js?v=373"></script>
 </body>
 </html>

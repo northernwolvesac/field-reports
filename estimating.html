@@ -11,39 +11,39 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=372">
+<link rel="stylesheet" href="procore-ui.css?v=373">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=372"></script>
-<script src="auth.js?v=372"></script>
-<script src="est-totals.js?v=372"></script>
-<script src="procore-ui.js?v=372"></script>
-<script src="nw-catalog-picker.js?v=372"></script>
-<script src="nw-proposal.js?v=372"></script>
-<script src="bid-actions.js?v=372"></script>
+<script src="supabase-config.js?v=373"></script>
+<script src="auth.js?v=373"></script>
+<script src="est-totals.js?v=373"></script>
+<script src="procore-ui.js?v=373"></script>
+<script src="nw-catalog-picker.js?v=373"></script>
+<script src="nw-proposal.js?v=373"></script>
+<script src="bid-actions.js?v=373"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
-  .es-page { max-width: 1600px; margin: 0 auto; }
+  .es-page { max-width: none; margin: 0; }
   body.pc-embed .es-page { max-width: none; margin: 0; }   /* inside the bid project the Estimating grid uses the whole window width */
-  .es-banner { margin: 12px 24px 0; }
+  .es-banner { margin: 12px 16px 0; }
   .es-banner-warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; padding: 10px 14px; border-radius: 4px; font-size: 13px; }
   .es-banner-warn code { background: #fff; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
 
   /* ── LIST mode ──────────────────────────────────────────────── */
-  .es-listbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 24px; font-size: 13px; }
+  .es-listbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 16px; font-size: 13px; }
   .es-listbar a { color: var(--pc-link, #1a66e0); text-decoration: none; }
   .es-listbar a:hover { text-decoration: underline; }
   .es-listbar label { color: var(--pc-muted, #6b7280); display: inline-flex; align-items: center; gap: 6px; }
   .es-listbar select { height: 30px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; padding: 0 8px; font: inherit; background: #fff; }
-  .es-listwrap { margin: 0 24px 24px; }
+  .es-listwrap { margin: 0 16px 24px; }
   .es-listwrap .pc-table tbody tr { cursor: pointer; }
   .es-listwrap .pc-table td b { font-weight: 600; }
 
   /* ── DETAIL workspace ───────────────────────────────────────── */
-  .es-layout { display: flex; gap: 0; padding: 12px 24px 12px; align-items: stretch; min-height: 420px; }
+  .es-layout { display: flex; gap: 0; padding: 12px 16px 12px; align-items: stretch; min-height: 420px; }
   body.pc-embed .es-layout { padding: 4px; box-sizing: border-box; }   /* height set by fitWorkspace() */
   .es-views { width: 330px; flex: none; display: none; margin-right: 12px; flex-direction: column; }
   .es-layout.views-open .es-views { display: flex; }
@@ -68,46 +68,53 @@
   .es-bulkbar.on { display: flex; }
   .es-bulkbar .count { margin-left: auto; font-size: 13px; color: #1e3a8a; font-weight: 600; }
   .es-gridscroll { flex: 1; overflow: auto; position: relative; min-height: 240px; }
-  .es-gridfoot { padding: 6px 12px; font-style: italic; color: var(--pc-muted, #6b7280); font-size: 12px; border-top: 1px solid var(--pc-border, #e5e7eb); }
+  .es-gridfoot { padding: 10px 16px; color: #6a767c; font-size: 14px; border-top: 1px solid var(--pc-border, #e5e7eb); }
 
   /* grid table */
-  .es-grid { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-  .es-grid th, .es-grid td { border-bottom: 1px solid var(--pc-row-sep, #eceff3); border-right: 1px solid var(--pc-row-sep, #eceff3); padding: 8px; white-space: nowrap; vertical-align: middle; box-sizing: border-box; }
-  .es-grid th { background: #f5f6f7; color: #4b5563; font-size: 12px; font-weight: 600; text-align: left; position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--pc-border, #e5e7eb); }
+  .es-grid { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; color: #232729; }
+  .es-grid th, .es-grid td { border-bottom: 1px solid var(--pc-row-sep, #eceff3); border-right: 1px solid var(--pc-row-sep, #eceff3); padding: 0 8px; height: 48px; white-space: nowrap; vertical-align: middle; box-sizing: border-box; }
+  .es-grid th { background: #f4f5f6; color: #232729; font-size: 12px; font-weight: 700; height: 48px; text-align: left; position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--pc-border, #e5e7eb); }
   .es-grid th .th-in { display: flex; align-items: center; gap: 4px; }
   .es-grid th .th-in .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-  .es-grid th .th-btn { width: 20px; height: 20px; border: 0; background: transparent; color: #6b7280; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; opacity: .55; }
+  .es-grid th .th-btn { width: 20px; height: 20px; border: 0; background: transparent; color: #6a767c; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; opacity: .55; }
   .es-grid th .th-btn:hover, .es-grid th .th-btn.on { opacity: 1; background: #e5e7eb; color: #1f2933; }
   .es-grid th .th-btn.on { color: var(--pc-link, #1a66e0); }
   .es-grid th.num .th-in { flex-direction: row-reverse; }
   .es-grid td.num, .es-grid th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .es-grid td.editable { color: var(--pc-link, #1a66e0); cursor: text; }
+  .es-grid td.editable { cursor: text; }
   .es-grid td.editable.bool { cursor: pointer; }
-  .es-grid td.muted { color: var(--pc-muted, #6b7280); }
+  .es-grid td.muted { color: #6a767c; }
+  .es-grid td a.dlink, .es-grid td .dlink { color: #1d5cc9; text-decoration: none; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 100%; vertical-align: middle; }
   .es-grid tr:hover td { background: var(--pc-row-active, #f3f6fb); }
   .es-grid tr.selected td { background: #e8f0fe; }
   .es-grid tr.es-group td { font-weight: 600; }
-  .es-grid tr.es-group td.agg { color: var(--pc-link, #1a66e0); font-weight: 600; }
+  .es-grid tr.es-group td.c-name .nm { font-weight: 700; }
+  .es-grid tr.es-group td.agg { color: #232729; font-weight: 700; }
+  /* children keep a thin rail on the left like Procore's grouped rows */
+  .es-grid tr.es-item td.c-handle { box-shadow: inset 3px 0 0 #d6dadc; }
   .es-grid tr.es-item.optional td { opacity: .6; font-style: italic; }
-  .es-grid tr.es-item.child td.c-name { padding-left: 34px; }
+  .es-grid tr.es-item.child td.c-name { padding-left: 28px; }
   .es-grid tr.es-item[draggable="true"] .drag { cursor: grab; }
   .es-grid tr.drag-over td { border-top: 2px solid var(--pc-link, #1a66e0); }
   .es-grid tr.es-group.drag-over td { border-top: 0; box-shadow: inset 0 0 0 2px var(--pc-link, #1a66e0); }
   .es-grid tr.dragging td { opacity: .4; }
   .es-grid .sticky-l { position: sticky; background: #fff; z-index: 2; }
-  .es-grid th.sticky-l { z-index: 4; background: #f5f6f7; }
+  .es-grid th.sticky-l { z-index: 4; background: #f4f5f6; }
   .es-grid tr:hover td.sticky-l { background: var(--pc-row-active, #f3f6fb); }
   .es-grid tr.selected td.sticky-l { background: #e8f0fe; }
-  .es-grid .c-handle { width: 30px; min-width: 30px; left: 0; text-align: center; color: #9ca3af; padding: 8px 4px; }
-  .es-grid .c-check { width: 34px; min-width: 34px; left: 30px; text-align: center; padding: 8px 4px; }
-  .es-grid .c-check input { margin: 0; vertical-align: middle; }
-  .es-grid .c-name { left: 64px; min-width: 280px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; border-right: 2px solid var(--pc-border, #e5e7eb); }
+  .es-grid .c-handle { width: 36px; min-width: 36px; left: 0; text-align: center; color: #75838a; padding: 0 4px; }
+  .es-grid .c-check { width: 64px; min-width: 64px; left: 36px; text-align: left; padding: 0 4px 0 2px; }
+  .es-grid .c-check input { margin: 0; vertical-align: middle; width: 16px; height: 16px; }
+  .es-grid .c-check .exp, .es-grid .c-check .exp-all { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; cursor: pointer; vertical-align: middle; border: 0; background: transparent; padding: 0; border-radius: 3px; color: #75838a; }
+  .es-grid .c-check .exp.closed, .es-grid .c-check .exp-all.closed { color: #2066df; }
+  .es-grid .c-check .exp:hover, .es-grid .c-check .exp-all:hover { background: #e5e9eb; }
+  .es-grid .c-check .exp.sp { cursor: default; pointer-events: none; }
+  .es-grid .c-name { left: 100px; min-width: 350px; max-width: 480px; overflow: hidden; text-overflow: ellipsis; border-right: 2px solid var(--pc-border, #e5e7eb); }
   .es-grid .c-name .nm { vertical-align: middle; }
-  .es-grid .c-name .exp { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; cursor: pointer; color: var(--pc-link, #1a66e0); margin-right: 4px; vertical-align: middle; }
-  .es-grid .c-name .rowbtns { display: inline-flex; gap: 2px; margin-left: 8px; vertical-align: middle; }
-  .es-grid .rowbtn { width: 22px; height: 22px; border: 0; background: transparent; color: #4b5563; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; }
-  .es-grid .rowbtn:hover { background: #e5e7eb; color: #1f2933; }
-  .es-grid .rowbtn.blue { color: var(--pc-link, #1a66e0); }
+    .es-grid .c-name .rowbtns { display: inline-flex; gap: 2px; margin-left: 8px; vertical-align: middle; }
+  .es-grid .rowbtn { width: 24px; height: 24px; border: 0; background: transparent; color: #75838a; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; }
+  .es-grid .rowbtn:hover { background: #e5e9eb; color: #232729; }
+  .es-grid .rowbtn.blue { color: #1d5cc9; }
   .es-grid .chip { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-style: normal; font-weight: 600; letter-spacing: .03em; vertical-align: middle; }
   .es-grid .chip.alt { background: #e2e8f0; color: #334155; }
   .es-grid .chip.budget { background: #fef3c7; color: #92400e; }
@@ -117,19 +124,19 @@
   .es-grid td.locked { color: #9ca3af; cursor: not-allowed; }
   .es-grid .c-name .lock { display: inline-flex; color: #9ca3af; margin-left: 4px; vertical-align: middle; }
   .es-grid .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 6px; border: 1px solid rgba(0,0,0,.15); }
-  .es-grid tfoot td { position: sticky; bottom: 0; background: #f5f6f7; border-top: 1px solid var(--pc-border, #e5e7eb); font-weight: 600; z-index: 3; }
-  .es-grid tfoot td.sticky-l { z-index: 4; background: #f5f6f7; }
-  .es-grid tfoot td.agg { color: var(--pc-link, #1a66e0); }
-  .es-grid .newgroup { display: inline-flex; align-items: center; gap: 6px; background: #e5e7eb; border: 0; border-radius: 4px; padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; color: #1f2933; }
+  .es-grid tfoot td { position: sticky; bottom: 0; background: #f4f5f6; border-top: 1px solid var(--pc-border, #e5e7eb); font-weight: 600; z-index: 3; }
+  .es-grid tfoot td.sticky-l { z-index: 4; background: #f4f5f6; }
+  .es-grid tfoot td.agg { color: #232729; }
+  .es-grid .newgroup { display: inline-flex; align-items: center; gap: 6px; background: #e5e7eb; border: 0; border-radius: 4px; padding: 6px 12px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; color: #232729; }
   .es-grid .newgroup:hover { background: #d1d5db; }
   .es-grid .newgroup input { font: inherit; font-size: 12px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 3px; padding: 2px 6px; width: 160px; }
-  .es-grid td .cell-in { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; border: 1px solid var(--pc-link, #1a66e0); border-radius: 3px; padding: 2px 6px; outline: none; background: #fff; color: #1f2933; }
+  .es-grid td .cell-in { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; border: 1px solid var(--pc-link, #1a66e0); border-radius: 3px; padding: 2px 6px; outline: none; background: #fff; color: #1f2933; }
   .es-grid td.num .cell-in { text-align: right; }
   .es-grid td.editable:hover { background: #eef4ff; }
   .es-grid .budget-link { color: var(--pc-link, #1a66e0); text-decoration: underline; cursor: pointer; }
   .es-empty { padding: 40px; text-align: center; color: var(--pc-muted, #6b7280); }
-  body.pc-rh-small .es-grid td { padding: 4px 8px; }
-  body.pc-rh-large .es-grid td { padding: 12px 8px; }
+  body.pc-rh-small .es-grid td { height: 36px; }
+  body.pc-rh-large .es-grid td { height: 60px; }
 
   /* filter popover */
   .es-pop { position: fixed; z-index: 1001; background: #fff; border: 1px solid var(--pc-border, #e5e7eb); border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 12px; width: 240px; font-size: 13px; }
@@ -523,7 +530,7 @@ requireAuth().catch(function(){});
   //   editable: estimate_line_items column written by inline edit; type: num | money | pct | text | bool
   //   agg: nwGroupTotals key shown bold blue on group rows + footer
   var COLUMNS = [
-    { key: 'cost_item',        label: 'Cost item',          visible: true,  width: 300, fixed: true },
+    { key: 'cost_item',        label: 'Cost item',          visible: true,  width: 350, fixed: true },
     { key: 'description',      label: 'Description',        visible: true,  width: 180, editable: 'notes', type: 'text' },
     { key: 'color',            label: 'Color',              visible: true,  width: 70 },
     { key: 'budget_code',      label: 'Budget Code',        visible: true,  width: 110 },
@@ -1119,7 +1126,7 @@ requireAuth().catch(function(){});
     var ids = []; currentLines.forEach(function(l) { if (l.catalog_item_id && ids.indexOf(l.catalog_item_id) < 0) ids.push(l.catalog_item_id); });
     if (!ids.length) return;
     try {
-      var r = await supabaseClient.from('est_catalog_items').select('id, name, manufacturer, supplier, catalog_number, folder_path, unit_cost, unit_labor_min, waste_pct, item_type').in('id', ids);
+      var r = await supabaseClient.from('est_catalog_items').select('id, name, description, manufacturer, supplier, catalog_number, folder_path, unit_cost, unit_labor_min, waste_pct, item_type').in('id', ids);
       if (!r.error) (r.data || []).forEach(function(c) { catalogById[c.id] = c; });
     } catch (e) {}
   }
@@ -1455,7 +1462,10 @@ requireAuth().catch(function(){});
     var layer = null;
     switch (col.key) {
       case 'cost_item':        return { raw: li.description || '', text: li.description || '' };
-      case 'description':      return { raw: li.notes || '', text: li.notes || '--', muted: !li.notes };
+      case 'description':
+        // takeoff-synced lines carry 'Takeoff: n marks…' in notes (shown in the Notes column); here Procore shows the catalog item's description
+        if (layerLocked(li) || /^Takeoff:/.test(li.notes || '')) { var cd = (cat && cat.description) || ''; return { raw: cd, text: cd || '--', muted: !cd, html: cd ? '<span class="dlink" title="' + escAttr(cd) + '">' + escHtml(cd) + '</span>' : '' }; }
+        return { raw: li.notes || '', text: li.notes || '--', muted: !li.notes, html: li.notes ? '<span class="dlink" title="' + escAttr(li.notes) + '">' + escHtml(li.notes) + '</span>' : '' };
       case 'color':
         layer = layerForLine(li);
         return layer ? { raw: layer.color, text: layer.color, html: '<span class="swatch" style="background:' + escAttr(layer.color) + '"></span>' } : { raw: '', text: '--', muted: true };
@@ -1549,16 +1559,17 @@ requireAuth().catch(function(){});
     var groups = buildGroups();
     var footAgg = nwGroupTotals(currentLines, currentEst);   // per-line manual-group multipliers, every mode
     var allSel = currentLines.length > 0 && currentLines.every(function(l) { return state.selected[l.id]; });
+    var allCollapsed = groups.length > 0 && groups.every(function(g) { return !!state.collapsed[g.key]; });
 
     // header
     var html = '<thead><tr>' +
       '<th class="sticky-l c-handle"></th>' +
-      '<th class="sticky-l c-check"><input type="checkbox" id="selAll"' + (allSel ? ' checked' : '') + '></th>';
+      '<th class="sticky-l c-check"><button class="exp-all' + (allCollapsed ? ' closed' : '') + '" id="expAll" title="' + (allCollapsed ? 'Expand all groups' : 'Collapse all groups') + '">' + icon(allCollapsed ? 'chevron_right' : 'expand_more', 20) + '</button><input type="checkbox" id="selAll"' + (allSel ? ' checked' : '') + '></th>';
     cols.forEach(function(c) {
       var cls = (c.key === 'cost_item' ? 'sticky-l c-name' : '') + (c.num ? ' num' : '');
       var f = state.colFilters[c.key], on = f && f.text ? ' on' : '';
       var sortMark = state.sort && state.sort.key === c.key ? icon(state.sort.dir === 'desc' ? 'arrow_downward' : 'arrow_upward', 14) : '';
-      html += '<th class="' + cls + '" data-col="' + c.key + '" style="width:' + c.width + 'px;min-width:' + (c.key === 'cost_item' ? 280 : c.width) + 'px">' +
+      html += '<th class="' + cls + '" data-col="' + c.key + '" style="width:' + c.width + 'px;min-width:' + (c.key === 'cost_item' ? 350 : c.width) + 'px">' +
         '<div class="th-in"><span class="lbl">' + escHtml(c.label) + ' ' + sortMark + '</span>' +
         '<button class="th-btn' + on + '" data-filter="' + c.key + '" title="Filter">' + icon('filter_list', 15) + '</button>' +
         '<button class="th-btn" data-colmenu="' + c.key + '" title="Column menu">' + icon('more_vert', 15) + '</button></div></th>';
@@ -1576,17 +1587,15 @@ requireAuth().catch(function(){});
       rowCount++;
       html += '<tr class="es-group" data-group="' + escAttr(g.key) + '">' +
         '<td class="sticky-l c-handle">' + icon('drag_indicator', 16) + '</td>' +
-        '<td class="sticky-l c-check"><input type="checkbox" data-gsel="' + escAttr(g.key) + '"' + (g.lines.length && selCount === g.lines.length ? ' checked' : '') + (selCount && selCount < g.lines.length ? ' data-ind="1"' : '') + '></td>';
+        '<td class="sticky-l c-check"><span class="exp' + (collapsed ? ' closed' : '') + '" data-exp="' + escAttr(g.key) + '">' + icon(collapsed ? 'chevron_right' : 'expand_more', 20) + '</span><input type="checkbox" data-gsel="' + escAttr(g.key) + '"' + (g.lines.length && selCount === g.lines.length ? ' checked' : '') + (selCount && selCount < g.lines.length ? ' data-ind="1"' : '') + '></td>';
       cols.forEach(function(c) {
         if (c.key === 'cost_item') {
           html += '<td class="sticky-l c-name">' +
-            '<span class="exp" data-exp="' + escAttr(g.key) + '">' + icon(collapsed ? 'chevron_right' : 'expand_more', 18) + '</span>' +
             '<span class="nm" title="' + escAttr(g.name) + '">' + escHtml(g.name) + '</span>' +
             (canEdit ? '<span class="rowbtns">' +
               '<button class="rowbtn" data-gadd="' + escAttr(g.key) + '" title="Create item">' + icon('add', 16) + '</button>' +
               (g.manual ? '<button class="rowbtn" data-gren="' + escAttr(g.key) + '" title="Rename group">' + icon('edit', 15) + '</button>' : '') +
               '<button class="rowbtn" data-gmenu="' + escAttr(g.key) + '" title="Group menu">' + icon('more_vert', 16) + '</button></span>' : '') +
-            '<span class="sub pc-muted" style="margin-left:8px;font-weight:400;font-size:11px">' + g.lines.length + '</span>' +
           '</td>';
           return;
         }
@@ -1607,7 +1616,7 @@ requireAuth().catch(function(){});
         var kidsAgg = (li._kids && li._kids.length) ? nwGroupTotals([li].concat(li._kids), currentEst) : null;
         html += '<tr class="es-item' + (li.is_optional ? ' optional' : '') + (li._child ? ' child' : '') + (sel ? ' selected' : '') + (locked ? ' layer' : '') + '" data-id="' + li.id + '" data-group="' + escAttr(g.key) + '"' + (canEdit ? ' draggable="true"' : '') + '>' +
           '<td class="sticky-l c-handle"><span class="drag">' + icon('drag_indicator', 16) + '</span></td>' +
-          '<td class="sticky-l c-check"><input type="checkbox" data-sel="' + li.id + '"' + (sel ? ' checked' : '') + '></td>';
+          '<td class="sticky-l c-check"><span class="exp sp"></span><input type="checkbox" data-sel="' + li.id + '"' + (sel ? ' checked' : '') + '></td>';
         cols.forEach(function(c) {
           if (c.key === 'cost_item') {
             html += '<td class="sticky-l c-name">' +
@@ -1619,7 +1628,7 @@ requireAuth().catch(function(){});
               (li.is_wet_tap ? '<span class="chip wet">WET-TAP</span>' : '') +
               '<span class="rowbtns">' +
                 '<button class="rowbtn" data-info="' + li.id + '" title="Item details">' + icon('info', 15) + '</button>' +
-                (canEdit && !locked ? '<button class="rowbtn" data-ren="' + li.id + '" title="Rename">' + icon('edit', 15) + '</button>' : '') +
+                (canEdit ? '<button class="rowbtn" data-ren="' + li.id + '" title="' + (locked ? escAttr(lockHint) : 'Rename') + '">' + icon('edit', 15) + '</button>' : '') +
                 (canEdit ? '<button class="rowbtn" data-imenu="' + li.id + '" title="Item menu">' + icon('more_vert', 16) + '</button>' : '') +
               '</span></td>';
             return;
@@ -1682,6 +1691,12 @@ requireAuth().catch(function(){});
         if (cb.checked) state.selected[id] = true; else delete state.selected[id];
         renderGrid();
       });
+    });
+    var expAll = $('expAll');
+    if (expAll) expAll.addEventListener('click', function() {
+      var gs = buildGroups(), anyOpen = gs.some(function(g) { return !state.collapsed[g.key]; });
+      gs.forEach(function(g) { state.collapsed[g.key] = anyOpen; });
+      renderGrid();
     });
     table.querySelectorAll('[data-exp]').forEach(function(el) {
       el.addEventListener('click', function() {
@@ -3626,6 +3641,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=372"></script>
+<script src="sw-register.js?v=373"></script>
 </body>
 </html>
