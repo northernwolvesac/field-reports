@@ -1251,7 +1251,9 @@
       return y + '-' + p2(mo) + '-' + p2(d);
     }
     function parseTime(t) {
-      var m = /^(\d{1,2})(?::?(\d{2}))?\s*([ap])?\.?m?\.?$/.exec(String(t || '').trim().toLowerCase());
+      t = String(t || '').trim().toLowerCase();
+      // '9', '9:30', '930', '0930', '9:30 pm', '930p'
+      var m = /^(\d{1,2}):(\d{2})\s*([ap])?\.?m?\.?$/.exec(t) || /^(\d{1,2})(\d{2})\s*([ap])?\.?m?\.?$/.exec(t) || /^(\d{1,2})()\s*([ap])?\.?m?\.?$/.exec(t);
       if (!m) return '';
       var h = +m[1], mi = m[2] ? +m[2] : 0, ap = m[3];
       if (mi > 59) return '';
@@ -1352,7 +1354,7 @@
       inp.type = 'text';
       inp.autocomplete = 'off';
       inp.placeholder = isTime ? 'hh:mm aa' : 'MM/DD/YYYY';
-      inp.inputMode = 'numeric';
+      inp.inputMode = isTime ? 'text' : 'numeric';
       var toText = isTime ? fmtTime : isoToUs, toIso = isTime ? parseTime : usToIso;
       Object.defineProperty(inp, 'value', {
         configurable: true,
