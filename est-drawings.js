@@ -108,6 +108,29 @@
     if (r.error) throw new Error(r.error.message);
     return r.data || [];
   }
+  // ─── file order: estimates.settings.drawing_order on the ROOT estimate (array of drawing ids). Files that are not
+  // listed (new uploads) follow in upload order, so a fresh upload never jumps in front of the others.
+  async function loadOrder(rootId) {
+    try { var r = await sb().from('estimates').select('settings').eq('id', rootId).maybeSingle(); var st = r.data && r.data.settings; return (st && Array.isArray(st.drawing_order)) ? st.drawing_order : []; }
+    catch (e) { return []; }
+  }
+  function applyOrder(rows, order) {
+    rows = (rows || []).slice(); if (!order || !order.length) return rows;
+    var pos = {}; order.forEach(function (id, i) { pos[id] = i; });
+    var listed = rows.filter(function (r) { return pos[r.id] != null; }).sort(function (a, b) { return pos[a.id] - pos[b.id]; });
+    return listed.concat(rows.filter(function (r) { return pos[r.id] == null; }));
+  }
+  // moves one file up (-1) / down (+1) in `rows` (already in display order) and saves the order
+  async function moveDrawing(rootId, rows, id, delta) {
+    var ids = (rows || []).map(function (r) { return r.id; }), i = ids.indexOf(id), j = i + delta;
+    if (i < 0 || j < 0 || j >= ids.length) return ids;
+    ids.splice(j, 0, ids.splice(i, 1)[0]);
+    var cur = await sb().from('estimates').select('settings').eq('id', rootId).maybeSingle();
+    var settings = Object.assign({}, (cur.data && cur.data.settings) || {}, { drawing_order: ids });
+    var u = await sb().from('estimates').update({ settings: settings }).eq('id', rootId);
+    if (u.error) throw new Error(u.error.message);
+    return ids;
+  }
   function pages(rows) {
     var out = [];
     (rows || []).forEach(function (d) {
@@ -123,6 +146,7 @@
   async function upload(rootId, fileList, opts) {
     opts = opts || {};
     var files = Array.prototype.slice.call(fileList || []);
+    if (files.length > 1 && !opts.keepOrder) files.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' }); });
     var rows = [], errors = [];
     if (!rootId) throw new Error('upload: rootId is required');
     if (!files.length) return { rows: rows, errors: errors };
@@ -294,7 +318,7 @@
   window.EstDrawings = {
     BUCKET: BUCKET, SHEET_RE: SHEET_RE, SCALE_RE: SCALE_RE, PDFJS_VERSION: PDFJS_VERSION,
     ensurePdfjs: ensurePdfjs,
-    list: list, pages: pages, upload: upload,
+    list: list, pages: pages, upload: upload, loadOrder: loadOrder, applyOrder: applyOrder, moveDrawing: moveDrawing,
     detectPage: detectPage, detectSheets: detectSheets,
     signedUrl: signedUrl, doc: doc, thumbnail: thumbnail, forget: forget,
     remove: remove, rename: rename, download: download,

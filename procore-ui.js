@@ -496,14 +496,19 @@
 
   /* ─── Toast ────────────────────────────────────────────────────────── */
   var toastEl = null, toastTimer = null;
-  PC.toast = function (msg, type, ms) {
+  PC.toast = function (msg, type, ms, action) {
     if (!toastEl) {
       toastEl = document.createElement('div');
       toastEl.className = 'pc-toast';
       document.body.appendChild(toastEl);
     }
     toastEl.textContent = msg;
-    toastEl.className = 'pc-toast show' + (type && type !== 'info' ? ' ' + type : '');
+    toastEl.className = 'pc-toast show' + (type && type !== 'info' ? ' ' + type : '') + (action ? ' has-act' : '');
+    if (action) {   // PC.toast(msg, 'info', 7000, { label: 'Undo', onClick: fn })
+      var ab = document.createElement('button'); ab.type = 'button'; ab.className = 'pc-toast-act'; ab.textContent = action.label || 'Undo';
+      ab.onclick = function () { toastEl.classList.remove('show'); try { action.onClick(); } catch (e) { console.warn(e); } };
+      toastEl.appendChild(ab);
+    }
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 3200);
   };

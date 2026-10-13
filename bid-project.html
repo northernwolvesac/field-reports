@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=377">
+<link rel="stylesheet" href="procore-ui.css?v=378">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=377"></script>
-<script src="auth.js?v=377"></script>
-<script src="est-totals.js?v=377"></script>
-<script src="procore-ui.js?v=377"></script>
+<script src="supabase-config.js?v=378"></script>
+<script src="auth.js?v=378"></script>
+<script src="est-totals.js?v=378"></script>
+<script src="procore-ui.js?v=378"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=377"></script>
-<script src="est-drawings.js?v=377"></script>
-<script src="nw-proposal.js?v=377"></script>
+<script src="bid-actions.js?v=378"></script>
+<script src="est-drawings.js?v=378"></script>
+<script src="nw-proposal.js?v=378"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -1232,6 +1232,7 @@ requireAuth().catch(function(){});
     var d = await supabaseClient.from('estimate_drawings').select('*').eq('estimate_id', rootId()).order('created_at');
     if (d.error) { $('docList').innerHTML = '<div class="pc-empty" style="color:#dc2626">' + esc(d.error.message) + '</div>'; return; }
     drawings = d.data || [];
+    if (window.EstDrawings && EstDrawings.applyOrder) drawings = EstDrawings.applyOrder(drawings, await EstDrawings.loadOrder(rootId()));   // file order = what the takeoff shows
     var a = await supabaseClient.from('project_files').select('id, filename, size_bytes, category, storage_path, content_type, uploaded_by, created_at').eq('estimate_id', rootId()).order('created_at', { ascending: false });
     attachments = a.error ? [] : (a.data || []);
     if (docSel.type === 'drawing' && !drawings.some(function(x) { return x.id === docSel.id; })) docSel = { type: 'drawings', id: null };
@@ -1276,9 +1277,17 @@ requireAuth().catch(function(){});
     });
   }
 
+  async function moveDrawingBy(d, delta) {
+    if (!canEdit) return viewOnly();
+    try { await EstDrawings.moveDrawing(rootId(), drawings, d.id, delta); toast('File order saved — the Takeoff uses it too', 'success'); await loadDocs(); if (frameReady && frameReady.takeoff) sendCmd('takeoff', 'refresh'); }
+    catch(e) { toast('Could not change the order: ' + (e.message || e), 'error'); }
+  }
   function drawingMenu(d) {
+    var idx = drawings.findIndex(function(x) { return x.id === d.id; });
     return [
       { label: 'Rename', icon: 'edit', disabled: !canEdit, onClick: function() { renameDrawing(d); } },
+      { label: 'Move up', icon: 'arrow_upward', disabled: !canEdit || idx <= 0, onClick: function() { moveDrawingBy(d, -1); } },
+      { label: 'Move down', icon: 'arrow_downward', disabled: !canEdit || idx < 0 || idx >= drawings.length - 1, onClick: function() { moveDrawingBy(d, 1); } },
       { label: 'Start Takeoff', icon: 'straighten', onClick: function() { startTakeoffOn(d, 1); } },
       { label: 'Download', icon: 'download', onClick: function() { downloadDrawing(d); } },
       { sep: true },
@@ -1878,6 +1887,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=377"></script>
+<script src="sw-register.js?v=378"></script>
 </body>
 </html>

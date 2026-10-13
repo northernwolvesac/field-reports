@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=377">
+<link rel="stylesheet" href="procore-ui.css?v=378">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=377"></script>
-<script src="auth.js?v=377"></script>
-<script src="est-totals.js?v=377"></script>
-<script src="procore-ui.js?v=377"></script>
+<script src="supabase-config.js?v=378"></script>
+<script src="auth.js?v=378"></script>
+<script src="est-totals.js?v=378"></script>
+<script src="procore-ui.js?v=378"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=377"></script>
-<script src="est-drawings.js?v=377"></script>
-<script src="nw-catalog-picker.js?v=377"></script>
-<script src="geo-takeoff.js?v=377"></script>
+<script src="bid-actions.js?v=378"></script>
+<script src="est-drawings.js?v=378"></script>
+<script src="nw-catalog-picker.js?v=378"></script>
+<script src="geo-takeoff.js?v=378"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -135,6 +135,16 @@
   .thumb .im img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
   .thumb .lb { font-size: 11px; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; justify-content: space-between; gap: 4px; }
   .thumb .lb small { color: var(--pc-link, #1a66e0); font-weight: 700; }
+  .thumb .lb .bd { display: inline-flex; gap: 3px; flex: none; }
+  .thumb .lb .bd small { font-size: 10px; line-height: 14px; padding: 0 5px; border-radius: 8px; color: #fff; background: var(--pc-link, #1a66e0); }
+  .thumb .lb .bd small.n { background: #d97706; } .thumb .lb .bd small.a { background: #dc2626; }
+  .thumb.marked .im { box-shadow: inset 0 0 0 2px var(--pc-link, #1a66e0); }
+  .thumb { position: relative; }
+  .tfile { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; max-width: 150px; padding: 0 12px 0 4px; border-right: 1px solid var(--pc-border, #e5e7eb); font-size: 11px; }
+  .tfile b { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+  .tfile span { color: var(--pc-muted, #6b7280); }
+  .tk-doc-dd { max-width: 260px; }
+  .tk-doc-dd #docLabel, .tk-plan-dd #planLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; display: inline-block; vertical-align: bottom; }
   .tk-status { padding: 5px 12px; font-size: 11px; color: #475569; background: #fff; border-top: 1px solid var(--pc-border, #e5e7eb); display: flex; gap: 14px; align-items: center; min-height: 18px; flex: none; }
   .tk-status b { color: var(--pc-text, #1f2933); }
   .tk-status .kbd { font-family: 'Courier New', monospace; background: var(--pc-secondary, #f0f1f3); border: 1px solid var(--pc-border, #e5e7eb); border-radius: 4px; padding: 0 5px; font-size: 10px; }
@@ -167,6 +177,18 @@
   .tk-pop .pc-field { margin-bottom: 12px; }
   .tk-pop .pc-input, .tk-pop .pc-select { height: 32px; }
   .tk-pop .ro { color: var(--pc-text, #1f2933); font-weight: 600; }
+  .tk-sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--pc-border, #e5e7eb); }
+  .tk-undo { height: 32px; padding: 0 10px; gap: 4px; } .tk-undo:disabled { opacity: .4; cursor: default; }
+  .tf-bar { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; }
+  .tf-bar .pc-select { width: auto; } .tf-bar #tfFont { min-width: 150px; } .tf-bar #tfSize { width: 72px; }
+  .tf-bar .tf-st { width: 34px; height: 34px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; background: #fff; }
+  .tf-bar .tf-st.on { background: var(--pc-link-bg, #e8f0fe); border-color: var(--pc-link, #1a66e0); color: var(--pc-link, #1a66e0); }
+  .tf-prev { min-height: 44px; padding: 8px 12px; border-radius: 4px; background: #f9fafb; border: 1px dashed var(--pc-border-strong, #d1d5db); overflow: auto; max-height: 160px; display: inline-block; max-width: 100%; box-sizing: border-box; }
+  .tk-price-box { border: 1px solid var(--pc-border, #e5e7eb); border-radius: 6px; padding: 4px 12px; background: #fafbfc; }
+  .tk-price-box .pr { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 12px; border-bottom: 1px solid var(--pc-row-sep, #eceff3); }
+  .tk-price-box .pr:last-child { border-bottom: 0; } .tk-price-box .pr.strong { font-size: 13px; }
+  .tk-price-box .pr b { font-weight: 600; text-align: right; }
+  .tk-row .n2 .tk-price { margin-left: auto; color: #6a767c; font-size: 11px; }
   .tk-pop .subh { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--pc-head, #4b5563); font-weight: 700; margin: 14px 0 8px; }
   .seg { display: inline-flex; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
   .seg button { border: 0; border-right: 1px solid var(--pc-border-strong, #d1d5db); background: #fff; padding: 6px 14px; font: inherit; cursor: pointer; color: var(--pc-text, #1f2933); }
@@ -224,11 +246,15 @@
     <div class="tk-toolbar">
       <button class="tk-ib" id="prevPlan" title="Previous plan (PageUp)"></button>
       <button class="tk-ib" id="nextPlan" title="Next plan (PageDown)"></button>
+      <button class="pc-btn pc-btn-secondary tk-doc-dd" id="docBtn" title="Switch document (file) — each file keeps its own pages, takeoff marks and notes"><span id="docLabel">No file</span><span id="docCaret"></span></button>
       <button class="pc-btn pc-btn-secondary tk-plan-dd" id="planBtn"><span id="planLabel">— No plans yet —</span><span id="planCaret"></span></button>
       <button class="pc-btn pc-btn-ghost" id="compareBtn" title="Overlay another plan"></button>
       <span class="pc-pill-dd" id="comparePill" style="display:none"><span id="comparePillText"></span><span id="compareClose" style="display:inline-flex;cursor:pointer"></span></span>
       <button class="tk-ib" id="openNewBtn" title="Open the PDF in a new tab"></button>
       <button class="tk-ib" id="downloadBtn" title="Download the PDF"></button>
+      <span class="tk-sep"></span>
+      <button class="pc-btn pc-btn-outline tk-undo" id="undoTop" title="Undo the last change (Ctrl+Z) — drawing, deleting, moving, editing text"></button>
+      <button class="pc-btn pc-btn-outline tk-undo" id="redoTop" title="Redo (Ctrl+Y / Ctrl+Shift+Z)"></button>
       <span class="grow"></span>
       <span class="pc-muted" style="font-size:12px">Drawing Scale</span>
       <a class="scale-chip unset" id="scaleChip" title="Drawing scale on this plan — click to change">not defined yet</a>
@@ -286,11 +312,20 @@ requireAuth().catch(function(){});
   var pdfPage = null, pdfCanvas, overlayCanvas, ctx, renderScale = 1, zoom = 1, viewport1 = null;
   var tool = 'select', activeLayerId = null, selectedIds = new Set(), selectedLayerIds = new Set(), draft = [], draftDrops = [], draftDeduct = false, hover = null, measureLine = null, panState = null, dragState = null, marquee = null, undoStack = [], redoStack = [], clipboard = [], scaleScopeNext = '', dndSrc = null;
   var scalePpf = null, scaleLabel = null, compareIdx = -1, layerFilter = '', laborRate = 60;
-  var annotVisible = true, thumbsOn = false, thumbBusy = false, stampPoint = null, legendOn = false, orthoOn = false, catCache = {};
+  var annotVisible = true, marksOnly = false, thumbDoc = null, lastPage = {}, thumbsOn = false, thumbBusy = false, stampPoint = null, legendOn = false, orthoOn = false, catCache = {};
   var VS = { labels: true, opacity: 1, lineWidth: 3, numberMarks: true };   // view settings (tune popover), per browser
   var STAMPS = ['RFI', 'VERIFY', 'EXISTING', 'DEMO', 'BY OTHERS', 'NOT IN SCOPE', 'ADD ALT', 'HOLD', 'RELOCATE', 'NEW'];
-  function isAnnot(m) { return !m.layer_id && /^(stamp|cloud|highlight)$/.test(m.notes || ''); }
-  try { thumbsOn = localStorage.getItem('tk_thumbs') === '1'; var vs = JSON.parse(localStorage.getItem('tk_settings') || 'null'); if (vs) VS = Object.assign(VS, vs); } catch (e) {}
+  function isAnnot(m) { return !m.layer_id && /^(stamp|cloud|highlight)(\||$)/.test(m.notes || ''); }
+  // notes column = kind, optionally followed by '|' + JSON text format: 'stamp', 'note|{"s":14,"b":1,"c":"#dc2626"}'
+  function annKind(m) { var t = m.notes || '', i = t.indexOf('|'); return i < 0 ? t : t.slice(0, i); }
+  function fmtOf(m) {
+    var t = m.notes || '', i = t.indexOf('|'), f = {}, k = annKind(m);
+    if (i >= 0) { try { f = JSON.parse(t.slice(i + 1)) || {}; } catch (e) {} }
+    var d = k === 'stamp' ? { s: 12, f: 'Arial', b: 1, i: 0, u: 0 } : k === 'cloud' ? { s: 11, f: 'Arial', b: 1, i: 0, u: 0 } : { s: 11, f: 'Arial', b: 0, i: 0, u: 0, bx: 1 };
+    return Object.assign(d, f);
+  }
+  function fontStr(f) { return (f.i ? 'italic ' : '') + (f.b ? 'bold ' : '') + (f.s || 11) + 'px "' + (f.f || 'Arial') + '", Arial, sans-serif'; }
+  try { marksOnly = localStorage.getItem('tk_marked') === '1'; thumbsOn = localStorage.getItem('tk_thumbs') === '1'; var vs = JSON.parse(localStorage.getItem('tk_settings') || 'null'); if (vs) VS = Object.assign(VS, vs); } catch (e) {}
   var $ = function(id) { return document.getElementById(id); };
   var sb = window.supabaseClient;
   function toast(m, kind) { P.toast(m, kind === 'error' ? 'error' : kind === 'success' ? 'success' : 'info'); }
@@ -469,7 +504,7 @@ requireAuth().catch(function(){});
         var t = layerTotals(l), pq = pdfPage ? pageQty(l) : 0, hid = l.is_visible === false;
         html += '<div class="tk-row' + (l.id === activeLayerId ? ' active' : '') + (selectedLayerIds.has(l.id) ? ' tk-row-checked' : '') + (hid ? ' hidden-layer' : '') + '" data-lay="' + l.id + '"' + dnd + '>' +
           '<span class="eye' + (hid ? ' off' : '') + '" data-eye="' + l.id + '">' + ic(hid ? 'visibility_off' : 'visibility', 16) + '</span><input type="checkbox" class="tk-cb" data-lcb="' + l.id + '"' + (selectedLayerIds.has(l.id) ? ' checked' : '') + '>' +
-          '<div class="nm2"><div class="n1" title="' + esc(l.name) + '">' + esc(l.name) + '</div><div class="n2"><span class="pc-dot" style="background:' + esc(l.color) + '"></span><span title="Total on all plans' + (pdfPage ? ' · this plan: ' + qtyStr(pq, l.takeoff_type) : '') + '">' + qtyTree(t.qty, l.takeoff_type) + (pdfPage && pq ? ' <span class="pc-muted">(' + qtyTree(pq, l.takeoff_type).split(' ')[0] + ')</span>' : '') + (!t.marks && Number(l.extra_count) ? ' <span class="pc-muted" title="Entered by hand (Extra quantity) — nothing is drawn on the plans for this layer">· by hand</span>' : '') + '</span></div></div>' +
+          '<div class="nm2"><div class="n1" title="' + esc(l.name) + '">' + esc(l.name) + '</div><div class="n2"><span class="pc-dot" style="background:' + esc(l.color) + '"></span><span title="Total on all plans' + (pdfPage ? ' · this plan: ' + qtyStr(pq, l.takeoff_type) : '') + '">' + qtyTree(t.qty, l.takeoff_type) + (pdfPage && pq ? ' <span class="pc-muted">(' + qtyTree(pq, l.takeoff_type).split(' ')[0] + ')</span>' : '') + (!t.marks && Number(l.extra_count) ? ' <span class="pc-muted" title="Entered by hand (Extra quantity) — nothing is drawn on the plans for this layer">· by hand</span>' : '') + '</span>' + (t.total > 0 ? '<span class="tk-price" title="Price of this layer: material + labor">' + fmtMoney(t.total) + '</span>' : '') + '</div></div>' +
           (l.is_locked ? '<span class="lock" title="Locked">' + ic('lock', 14) + '</span>' : '') + '<button class="tk-kebab" data-lmenu="' + l.id + '" title="Layer properties">' + ic('more_vert', 18) + '</button></div>';
       });
       html += '</div>';
@@ -559,7 +594,7 @@ requireAuth().catch(function(){});
     if ((el = t.closest('[data-lmenu]'))) { e.stopPropagation(); openLayerPopover(el.getAttribute('data-lmenu'), el); return; }
     if (t.closest('#annotEye')) { annotVisible = !annotVisible; renderLayerTree(); redraw(); return; }
     if ((el = t.closest('[data-grp]'))) { var name = el.getAttribute('data-grp'); setCollapsed(name, !isCollapsed(name)); renderLayerTree(); return; }
-    if ((el = t.closest('[data-lay]'))) { var lid = el.getAttribute('data-lay'); if (lid.indexOf('legacy:') === 0) return; selectLayer(lid); }
+    if ((el = t.closest('[data-lay]'))) { var lid = el.getAttribute('data-lay'); if (lid.indexOf('legacy:') === 0) return; selectLayer(lid, true); }
   }
   async function toggleGroupVis(g) {
     var ls = layers.filter(function(l) { return (l.group_name || 'Default Group') === g; }), vis = !ls.every(function(l) { return l.is_visible !== false; });
@@ -572,7 +607,13 @@ requireAuth().catch(function(){});
     layers.forEach(function(l) { l.is_visible = vis; }); renderLayerTree(); redraw(); renderLegend();
     await sb.from('estimate_takeoff_layers').update({ is_visible: vis }).eq('estimate_id', estimateId);
   }
-  function selectLayer(id) {
+  // the layer row works as a toggle: clicking the active layer again (or Esc) leaves nothing selected and goes back to the Select tool
+  function deselectLayer() {
+    activeLayerId = null; selectedIds.clear(); draft = []; draftDrops = []; draftDeduct = false;
+    setTool('select'); renderLayerTree(); renderProps(); renderModebar(); redraw();
+  }
+  function selectLayer(id, toggle) {
+    if (toggle && activeLayerId === id) { deselectLayer(); return; }
     activeLayerId = id; selectedIds.clear(); draft = []; draftDrops = []; draftDeduct = false;
     var l = layerById(id);
     if (l) { setTool(l.takeoff_type === 'linear' ? 'linear' : l.takeoff_type === 'area' ? 'area' : 'count'); if (l.is_visible === false) { l.is_visible = true; sb.from('estimate_takeoff_layers').update({ is_visible: true }).eq('id', l.id).then(function() {}); } }
@@ -722,7 +763,8 @@ requireAuth().catch(function(){});
         '<div class="pc-grid2">' + popField('Tag', '<input type="text" class="pc-input" data-f="tag" data-kind="text" value="' + esc(l.tag || '') + '" placeholder="e.g. L2, Phase 1">') + popField('Multiplier', numIn('multiplier', l.multiplier == null ? 1 : l.multiplier, 0.01)) + '</div>' +
         popField('Group', '<input type="text" class="pc-input" data-f="group_name" data-kind="text" list="tkGroupList" value="' + esc(l.group_name || 'Default Group') + '"><datalist id="tkGroupList">' + groupNames().map(function(g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist>') +
         '<div class="subh">Associated Catalog item</div><div class="cat-card" id="popCatCard">' + (l.catalog_item_id ? '<div class="pc-muted">Loading…</div>' : '<div><div>No catalog item</div><div class="meta">Rates on this layer are a project snapshot.</div></div>') + '<span class="ic" data-act="swapcat" title="Replace the catalog item" style="gap:4px;align-items:center;font-size:12px;font-weight:600">' + ic('find_replace', 18) + (l.catalog_item_id ? 'Replace' : 'Choose') + '</span></div>' +
-        '<div class="pc-field" style="margin-top:12px"><label class="pc-label">Resulting ' + (l.takeoff_type === 'linear' ? 'Length' : l.takeoff_type === 'area' ? 'Area' : 'Count') + '</label><div class="ro" data-rd="qty">' + qtyStr(t.qty, l.takeoff_type) + '</div></div>';
+        '<div class="pc-field" style="margin-top:12px"><label class="pc-label">Resulting ' + (l.takeoff_type === 'linear' ? 'Length' : l.takeoff_type === 'area' ? 'Area' : 'Count') + '</label><div class="ro" data-rd="qty">' + qtyStr(t.qty, l.takeoff_type) + '</div></div>' +
+        '<div class="subh">Price</div><div class="tk-price-box" data-rd="price">' + popPriceHtml(l, t) + '</div>';
     } else if (popTab === 'params') {
       var pr = l.params || {}, area = l.takeoff_type === 'area' ? t.qty : 0, vol = Number(pr.height_ft || 0) * area, wt = Number(pr.weight_per_unit || 0) * t.qty;
       html += '<div class="pc-grid2">' + popField('Slope rise : run', '<div style="display:flex;gap:6px;align-items:center">' + numIn('rise', l.rise || 0, 0.1) + '<span>:</span>' + numIn('run', l.run == null ? 12 : l.run, 0.1) + '</div>') + popField('Drop length (ft)', numIn('drop_length_ft', l.drop_length_ft || 0, 0.1), 'added per drop point (D while drawing)') + '</div>' +
@@ -747,6 +789,15 @@ requireAuth().catch(function(){});
   // derived read-outs of the popover (also patched in place while the user is typing in it)
   function popVolText(l, t) { var pr = l.params || {}, area = l.takeoff_type === 'area' ? t.qty : 0, vol = Number(pr.height_ft || 0) * area; return 'Volume: ' + (area ? (vol.toFixed(1) + ' cu ft') : 'area layers only'); }
   function popWtText(l, t) { var wt = Number((l.params || {}).weight_per_unit || 0) * t.qty; return 'Resulting weight: ' + (wt ? wt.toFixed(1) + ' lb' : '—'); }
+  // price of the layer = material (qty + waste × unit cost) + labor (hours × labor rate); shown in Main Details and live-patched while typing
+  function popPriceHtml(l, t) {
+    var u = P.uom(typeUnit(l.takeoff_type)), q = t.qty || 0, unitAll = q ? t.total / q : 0;
+    function row(a, b, strong) { return '<div class="pr' + (strong ? ' strong' : '') + '"><span>' + a + '</span><b>' + b + '</b></div>'; }
+    return row('Unit material', P.money(l.unit_material_cost || 0) + ' / ' + u + (Number(l.waste_pct) ? ' <span class="pc-muted">+' + l.waste_pct + '% waste</span>' : '')) +
+      row('Unit labor', (Math.round(Number(l.unit_labor_hours || 0) * 60 * 10) / 10) + ' min / ' + u + (Number(l.labor_factor) !== 1 ? ' <span class="pc-muted">×' + l.labor_factor + '</span>' : '')) +
+      row('Material', P.money(t.mat)) + row('Labor', t.hrs.toFixed(2) + ' h × ' + P.money0(laborRate) + ' = ' + P.money(t.labor)) +
+      row('Total price', P.money(t.total) + (q ? ' <span class="pc-muted">· ' + P.money(unitAll) + ' / ' + u + '</span>' : ''), true);
+  }
   function popLabText(l) { return '= ' + (Math.round(Number(l.unit_labor_hours || 0) * 1000) / 1000) + ' h per ' + P.uom(typeUnit(l.takeoff_type)); }
   // popover fields save on `change`, which fires on blur — the next field is already being typed in by the time the UPDATE
   // returns, so a full rebuild would wipe it and drop the focus. With a text field focused only the read-outs are patched.
@@ -758,7 +809,7 @@ requireAuth().catch(function(){});
     function set(k, v, html) { var el = pop.querySelector('[data-rd="' + k + '"]'); if (!el) return; if (html) el.innerHTML = v; else el.textContent = v; }
     var dot = pop.querySelector('[data-rd="dot"]'); if (dot) dot.style.background = l.color;
     set('name', l.name); set('lockic', l.is_locked ? ic('lock', 16) : '', true);
-    set('qty', qtyStr(t.qty, l.takeoff_type)); set('vol', popVolText(l, t)); set('wt', popWtText(l, t)); set('labh', popLabText(l));
+    set('qty', qtyStr(t.qty, l.takeoff_type)); set('price', popPriceHtml(l, t), true); set('vol', popVolText(l, t)); set('wt', popWtText(l, t)); set('labh', popLabText(l));
     // selects / checkboxes have no half-typed state — keep the ones not in use in step with the row (e.g. crew auto-set by the category)
     pop.querySelectorAll('select[data-f], input[type=checkbox][data-p]').forEach(function(el) { if (el === a) return; var f = el.getAttribute('data-f');
       if (f) { if (l[f] != null && String(el.value) !== String(l[f])) el.value = l[f]; } else { var k = el.getAttribute('data-p'); el.checked = !((l.params || {})[k] === false); } });
@@ -1017,7 +1068,9 @@ requireAuth().catch(function(){});
   async function loadDrawings() {
     var prev = plans, curKey = planIdx >= 0 && plans[planIdx] ? plans[planIdx].key : null;
     var r = await sb.from('estimate_drawings').select('*').eq('estimate_id', rootId).order('created_at');
-    drawings = r.data || []; plans = window.EstDrawings ? EstDrawings.pages(drawings) : [];
+    drawings = r.data || [];
+    if (window.EstDrawings && EstDrawings.applyOrder) drawings = EstDrawings.applyOrder(drawings, await EstDrawings.loadOrder(rootId));   // saved file order (Documents → Move up / down)
+    plans = window.EstDrawings ? EstDrawings.pages(drawings) : [];
     if (!window.EstDrawings) drawings.forEach(function(d) { for (var p = 1; p <= (d.page_count || 1); p++) { var meta = (d.page_meta || {})[String(p)] || {}; plans.push({ drawing: d, page: p, sheet: meta.sheet || null, scale: meta.scale || null, key: d.id + ':' + p }); } });
     // keep the per-plan caches (thumbnail, scale check) of the plans that are still there
     prev.forEach(function(o) { var n = plans.find(function(x) { return x.key === o.key; }); if (n) { if (o.thumb) n.thumb = o.thumb; if (o.scaleChecked) n.scaleChecked = true; } });
@@ -1039,29 +1092,67 @@ requireAuth().catch(function(){});
   function planShort(p) { return p.sheet || (p.drawing.filename.replace(/\.pdf$/i, '').slice(0, 18) + ' p' + p.page); }
   function updatePlanLabel() {
     var p = plans[planIdx], b = $('planBtn');
-    $('planLabel').textContent = p ? p.drawing.filename.replace(/\.pdf$/i, '') + ' - Page ' + p.page : (plans.length ? 'Pick a plan' : '— No plans yet —');
+    $('planLabel').textContent = p ? 'Page ' + p.page + ' of ' + (p.drawing.page_count || 1) + (p.sheet ? ' · ' + p.sheet : '') : (plans.length ? 'Pick a plan' : '— No plans yet —');
+    $('docLabel').textContent = p ? p.drawing.filename.replace(/\.pdf$/i, '') : (plans.length ? 'Pick a file' : 'No file'); $('docBtn').disabled = !plans.length;
     b.title = p ? (p.sheet ? p.sheet + ' · ' : '') + (p.title ? p.title + ' · ' : '') + p.drawing.filename : ''; b.disabled = !plans.length;
     $('prevPlan').disabled = planIdx <= 0; $('nextPlan').disabled = planIdx >= plans.length - 1;
     $('openNewBtn').disabled = $('downloadBtn').disabled = !p;
   }
+  // ─── which pages carry markups: layer marks · text notes · stamps / clouds / highlights ───
+  function pageStats() {
+    var st = {};
+    allMeas.forEach(function(m) { if (m.tool_type === 'scale') return; var k = m.drawing_id + ':' + m.page_number, o = st[k] || (st[k] = { marks: 0, notes: 0, annots: 0 });
+      if (isAnnot(m)) o.annots++; else if (m.tool_type === 'note') o.notes++; else o.marks++; });
+    return st;
+  }
+  function statText(o) { if (!o) return ''; var a = []; if (o.marks) a.push(o.marks + ' mark' + (o.marks === 1 ? '' : 's')); if (o.notes) a.push(o.notes + ' note' + (o.notes === 1 ? '' : 's')); if (o.annots) a.push(o.annots + ' markup' + (o.annots === 1 ? '' : 's')); return a.join(' · '); }
+  function hasMarkup(o) { return !!(o && (o.marks || o.notes || o.annots)); }
+  function jumpMarked(dir) {
+    var st = pageStats(), i = planIdx;
+    for (var k = 0; k < plans.length; k++) { i += dir; if (i < 0 || i >= plans.length) break; var q = plans[i]; if (hasMarkup(st[q.drawing.id + ':' + q.page])) { openPlan(i); return; } }
+    toast('No more pages with markups in that direction');
+  }
+  // pages of the file that is open (the page list and the thumbnail strip never mix files)
+  function docPlans() { var cur = plans[planIdx], out = []; plans.forEach(function(q, i) { if (!cur || q.drawing.id === cur.drawing.id) out.push(i); }); return out; }
   function openPlanMenu(anchor) {
     if (!plans.length) { toast('No plans yet — upload the drawing set from the page menu'); return; }
-    P.menu(anchor, plans.map(function(p, i) { return { label: planLabel(p), checked: i === planIdx, onClick: function() { openPlan(i); } }; }));
+    var st = pageStats(), cur = plans[planIdx], items = [
+      { label: 'Only pages with markups', checked: marksOnly, onClick: function() { marksOnly = !marksOnly; try { localStorage.setItem('tk_marked', marksOnly ? '1' : '0'); } catch (e) {} renderThumbs(); } },
+      { label: 'Previous page with markups  [', icon: 'chevron_left', onClick: function() { jumpMarked(-1); } },
+      { label: 'Next page with markups  ]', icon: 'chevron_right', onClick: function() { jumpMarked(1); } }, { sep: true }];
+    if (cur) items.push({ head: true, label: cur.drawing.filename + ' · ' + (cur.drawing.page_count || 1) + ' page' + ((cur.drawing.page_count || 1) === 1 ? '' : 's') });
+    docPlans().forEach(function(i) { var q = plans[i], o = st[q.drawing.id + ':' + q.page];
+      if (marksOnly && !hasMarkup(o) && i !== planIdx) return;
+      items.push({ label: (hasMarkup(o) ? '● ' : '') + 'Page ' + q.page + (q.sheet ? ' · ' + q.sheet : '') + (q.title ? ' — ' + q.title : ''), hint: statText(o), checked: i === planIdx, onClick: function() { openPlan(i); } }); });
+    P.menu(anchor, items);
+  }
+  function openDocMenu(anchor) {
+    if (!plans.length) { toast('No plans yet — upload the drawing set from the page menu'); return; }
+    var st = pageStats(), cur = plans[planIdx];
+    P.menu(anchor, drawings.map(function(d) {
+      var tot = { marks: 0, notes: 0, annots: 0 }, pg = 0; Object.keys(st).forEach(function(k) { if (k.indexOf(d.id + ':') === 0) { tot.marks += st[k].marks; tot.notes += st[k].notes; tot.annots += st[k].annots; pg++; } });
+      return { label: d.filename, hint: (d.page_count || 1) + ' pg' + (hasMarkup(tot) ? ' · ' + pg + ' marked' : ''), checked: !!(cur && cur.drawing.id === d.id), onClick: function() {
+        var i = lastPage[d.id] != null && plans[lastPage[d.id]] && plans[lastPage[d.id]].drawing.id === d.id ? lastPage[d.id] : plans.findIndex(function(q) { return q.drawing.id === d.id; }); if (i >= 0) openPlan(i); } }; }));
   }
   function getDoc(d) { return EstDrawings.doc(d); }
   // ─── sheet thumbnails (EstDrawings.thumbnail cache, rendered in the background) ───
   function renderThumbs() {
     var host = $('thumbs'); host.classList.toggle('hidden', !thumbsOn); var tb = $('thumbsBtn'); if (tb) tb.classList.toggle('on', thumbsOn);
     if (!thumbsOn) return;
-    var counts = {}; allMeas.forEach(function(m) { if (m.tool_type === 'scale') return; var k = m.drawing_id + ':' + m.page_number; counts[k] = (counts[k] || 0) + 1; });
-    host.innerHTML = plans.map(function(p, i) { var k = p.drawing.id + ':' + p.page; return '<div class="thumb' + (i === planIdx ? ' on' : '') + '" data-plan="' + i + '" title="' + esc((p.sheet || 'p' + p.page) + (p.title ? ' — ' + p.title : '')) + '"><div class="im">' + (p.thumb ? '<img src="' + p.thumb + '">' : 'p' + p.page) + '</div><div class="lb"><span>' + esc(p.sheet || 'p' + p.page) + '</span>' + (counts[k] ? '<small>' + counts[k] + '</small>' : '') + '</div></div>'; }).join('');
+    var st = pageStats(), cur = plans[planIdx], list = docPlans(), marked = 0;
+    thumbDoc = cur ? cur.drawing.id : null;
+    list.forEach(function(i) { var q = plans[i]; if (hasMarkup(st[q.drawing.id + ':' + q.page])) marked++; });
+    host.innerHTML = (cur ? '<div class="tfile" title="' + esc(cur.drawing.filename) + '"><b>' + esc(cur.drawing.filename.replace(/\.pdf$/i, '')) + '</b><span>' + list.length + ' page' + (list.length === 1 ? '' : 's') + (marked ? ' · ' + marked + ' with markups' : '') + '</span></div>' : '') +
+      list.map(function(i) { var p = plans[i], o = st[p.drawing.id + ':' + p.page]; if (marksOnly && !hasMarkup(o) && i !== planIdx) return '';
+        return '<div class="thumb' + (i === planIdx ? ' on' : '') + (hasMarkup(o) ? ' marked' : '') + '" data-plan="' + i + '" title="' + esc('Page ' + p.page + (p.sheet ? ' · ' + p.sheet : '') + (p.title ? ' — ' + p.title : '') + (hasMarkup(o) ? ' — ' + statText(o) : '')) + '"><div class="im">' + (p.thumb ? '<img src="' + p.thumb + '">' : 'p' + p.page) + '</div><div class="lb"><span>' + esc(p.sheet || 'p' + p.page) + '</span>' +
+          (hasMarkup(o) ? '<span class="bd">' + (o.marks ? '<small title="' + o.marks + ' takeoff marks">' + o.marks + '</small>' : '') + (o.notes ? '<small class="n" title="' + o.notes + ' notes">✎' + o.notes + '</small>' : '') + (o.annots ? '<small class="a" title="' + o.annots + ' stamps / clouds / highlights">☁' + o.annots + '</small>' : '') + '</span>' : '') + '</div></div>'; }).join('');
     host.querySelectorAll('[data-plan]').forEach(function(el) { el.onclick = function() { openPlan(+el.getAttribute('data-plan')); }; });
     var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' });
     buildThumbs();
   }
   async function buildThumbs() {
     if (thumbBusy || !thumbsOn) return; thumbBusy = true;
-    try { for (var i = 0; i < plans.length && thumbsOn; i++) { var p = plans[i]; if (p.thumb) continue; p.thumb = await EstDrawings.thumbnail(p.drawing, p.page, 142); var el = $('thumbs').querySelector('[data-plan="' + i + '"] .im'); if (el) el.innerHTML = '<img src="' + p.thumb + '">'; } }
+    try { var mine = docPlans(); for (var j = 0; j < mine.length && thumbsOn; j++) { var i = mine[j], p = plans[i]; if (p.thumb) continue; p.thumb = await EstDrawings.thumbnail(p.drawing, p.page, 142); var el = $('thumbs').querySelector('[data-plan="' + i + '"] .im'); if (el) el.innerHTML = '<img src="' + p.thumb + '">'; } }
     catch (e) { console.warn('thumbs', e); }
     thumbBusy = false;
   }
@@ -1070,7 +1161,7 @@ requireAuth().catch(function(){});
     if (i < 0 || i >= plans.length) return;
     var my = ++openSeq;
     planIdx = i; selectedIds.clear(); draft = []; draftDrops = []; measureLine = null; marquee = null; updatePlanLabel();
-    var p = plans[i];
+    var p = plans[i]; lastPage[p.drawing.id] = i;
     try { var doc = await getDoc(p.drawing); var page = await doc.getPage(p.page); } catch (e) { toast('Could not open the plan: ' + e.message, 'error'); return; }
     if (my !== openSeq) return;                     // the user already moved to another plan
     pdfPage = page; viewport1 = pdfPage.getViewport({ scale: 1 });
@@ -1081,7 +1172,8 @@ requireAuth().catch(function(){});
     centerOnOpen();
     if (!p.sheet || (!scalePpf && !p.scaleChecked)) detectPageMeta(p);
     renderLayerTree(); renderProps(); renderLegend(); updateStatus();
-    if (thumbsOn) { var host = $('thumbs'); host.querySelectorAll('.thumb').forEach(function(el) { el.classList.toggle('on', +el.getAttribute('data-plan') === planIdx); }); var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }
+    if (thumbsOn && thumbDoc !== p.drawing.id) renderThumbs();
+    else if (thumbsOn) { var host = $('thumbs'); host.querySelectorAll('.thumb').forEach(function(el) { el.classList.toggle('on', +el.getAttribute('data-plan') === planIdx); }); var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }
   }
   // sheet number + scale from the page text (EstDrawings) — auto-applies the scale when the sheet states it
   async function detectPageMeta(p) {
@@ -1195,24 +1287,28 @@ requireAuth().catch(function(){});
     if (!e.ctrlKey && !e.metaKey && Math.abs(dx) > Math.abs(dy) * 2) { vp.scrollLeft += dx; return; }
     zoomBy(Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0016)), e.clientX - r.left, e.clientY - r.top);
   }
-  function startPan(e) {   // wheel-press (or Space / Alt / Hand tool + drag): the hand opens and the sheet follows the mouse anywhere in the free space
+  function startPan(e, origin, right) {   // wheel-press / right button / Space / Alt / Hand tool + drag (or a left drag that starts on an empty spot): the sheet follows the mouse anywhere in the free space
     e.preventDefault(); var vp = $('viewport');
-    panDrag = { x: e.clientX, y: e.clientY, l: vp.scrollLeft, t: vp.scrollTop };
+    panDrag = { x: origin ? origin.x : e.clientX, y: origin ? origin.y : e.clientY, l: vp.scrollLeft, t: vp.scrollTop, right: !!right, moved: false };
     vp.classList.add('panning');
     document.addEventListener('mousemove', panMove, true); document.addEventListener('mouseup', panEnd, true); window.addEventListener('blur', panEnd);
   }
   function panMove(e) {
     if (!panDrag) return;
     if (e.buttons === 0) { panEnd(); return; }
+    if (Math.hypot(e.clientX - panDrag.x, e.clientY - panDrag.y) > 4) panDrag.moved = true;
     var vp = $('viewport'); vp.scrollLeft = panDrag.l - (e.clientX - panDrag.x); vp.scrollTop = panDrag.t - (e.clientY - panDrag.y); e.preventDefault();
   }
+  var suppressCtx = 0;
   function panEnd() {
-    if (!panDrag) return; panDrag = null; $('viewport').classList.remove('panning');
+    if (!panDrag) return; if (panDrag.right && panDrag.moved) suppressCtx = Date.now() + 500; panDrag = null; $('viewport').classList.remove('panning');
     document.removeEventListener('mousemove', panMove, true); document.removeEventListener('mouseup', panEnd, true); window.removeEventListener('blur', panEnd);
   }
   function onVpDown(e) {   // presses on the empty margin (the canvas handler covers presses on the sheet itself)
     if (e.target && e.target.id === 'overlayCanvas') return;
-    if (e.button === 1 || (e.button === 0 && (e.altKey || spaceDown || tool === 'pan'))) startPan(e);
+    if (e.button === 1) startPan(e);
+    else if (e.button === 2) startPan(e, null, true);
+    else if (e.button === 0 && tool !== 'marquee') startPan(e);   // nothing to hit out here: any left drag moves the sheet
   }
 
   // ─── scale ───
@@ -1274,8 +1370,8 @@ requireAuth().catch(function(){});
   function tb(t, icon, tip) { return '<button class="tk-ib" data-tool="' + t + '" title="' + esc(tip) + '">' + ic(icon, 20) + '</button>'; }
   function buildChrome() {
     $('newLayerBtn').innerHTML = ic('add', 20); $('layerSearchIcon').innerHTML = ic('search', 18); $('actionsCaret').innerHTML = ic('expand_more', 16); $('leftCollapse').innerHTML = ic('chevron_left', 18);
-    $('prevPlan').innerHTML = ic('chevron_left', 20); $('nextPlan').innerHTML = ic('chevron_right', 20); $('planCaret').innerHTML = ic('expand_more', 16);
-    $('compareBtn').innerHTML = ic('picture_in_picture', 18) + 'Compare'; $('compareClose').innerHTML = ic('close', 14); $('openNewBtn').innerHTML = ic('open_in_new', 18); $('downloadBtn').innerHTML = ic('download', 18);
+    $('prevPlan').innerHTML = ic('chevron_left', 20); $('nextPlan').innerHTML = ic('chevron_right', 20); $('planCaret').innerHTML = ic('expand_more', 16); $('docCaret').innerHTML = ic('expand_more', 16);
+    $('compareBtn').innerHTML = ic('picture_in_picture', 18) + 'Compare'; $('compareClose').innerHTML = ic('close', 14); $('undoTop').innerHTML = ic('undo', 18) + 'Undo'; $('redoTop').innerHTML = ic('redo', 18); $('openNewBtn').innerHTML = ic('open_in_new', 18); $('downloadBtn').innerHTML = ic('download', 18);
     $('emptyIcon').innerHTML = ic('straighten', 56); $('rightClose').innerHTML = ic('close', 18);
     $('rail').innerHTML = '<div class="tk-float">' + tb('pan', 'pan_tool', 'Pan (H) — or hold Space / Alt and drag') + tb('select', 'near_me', 'Select / move marks (V)') + tb('marquee', 'select_all', 'Marquee select — drag a rectangle') + ib('undoBtn', 'undo', 'Undo (Ctrl+Z)') + ib('redoBtn', 'redo', 'Redo (Ctrl+Y / Ctrl+Shift+Z)') + ib('layersBtn', 'layers', 'Show / hide the takeoff panel') + '</div>' +
       '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
@@ -1321,14 +1417,14 @@ requireAuth().catch(function(){});
 
   // ═══════════════════════ tools & drawing ═══════════════════════
   var DRAFT_TOOLS = ['linear', 'area', 'countline', 'cloud', 'arealen', 'arc', 'rect'];
-  function setTool(t) { tool = t; draft = []; draftDrops = []; measureLine = null; marquee = null; if (['linear', 'arc', 'area', 'rect'].indexOf(t) < 0) draftDeduct = false;
+  function setTool(t) { tool = t; if (overlayCanvas) { overlayCanvas.style.cursor = ''; overlayCanvas.removeAttribute('data-cur'); } draft = []; draftDrops = []; measureLine = null; marquee = null; if (['linear', 'arc', 'area', 'rect'].indexOf(t) < 0) draftDeduct = false;
     document.querySelectorAll('[data-tool]').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-tool') === t); });
     var db = $('deductBtn'); if (db) db.classList.toggle('on', draftDeduct);
     if (overlayCanvas) { overlayCanvas.classList.toggle('hand', t === 'pan'); $('viewport').classList.toggle('hand', t === 'pan'); overlayCanvas.classList.toggle('sel', t === 'select' || t === 'marquee'); } updateStatus(); redraw(); }
   function updateStatus() {
     var l = layerById(activeLayerId), h = $('statusHint'), who = l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a layer first';
-    var hints = { select: 'Click a mark to select it, drag its points to move, <span class="kbd">Del</span> deletes, <span class="kbd">Ctrl+C</span>/<span class="kbd">Ctrl+V</span> copy & paste.', marquee: 'Drag a rectangle to select the marks inside it, then drag them, <span class="kbd">Del</span> or <span class="kbd">Ctrl+C</span>.',
-      pan: 'Drag to pan. <span class="kbd">Space</span>/<span class="kbd">Alt</span> + drag works with any tool.',
+    var hints = { select: 'Click a mark to select it · drag the line (or symbol / area) to move it · drag a corner dot to reshape · arrow keys nudge (<span class="kbd">Shift</span> ×10) · <span class="kbd">Del</span> deletes · <span class="kbd">Ctrl+Z</span> undoes. Drag an empty spot to pan.', marquee: 'Drag a rectangle to select the marks inside it, then drag them, <span class="kbd">Del</span> or <span class="kbd">Ctrl+C</span>.',
+      pan: 'Drag to pan. With any tool: right-button drag, <span class="kbd">Space</span> / <span class="kbd">Alt</span> + drag or the wheel button pans too.',
       count: 'Click each item' + who + '. <span class="kbd">Shift</span>+click removes.',
       linear: 'Click points along the run' + who + (draftDeduct ? ' <b style="color:var(--pc-danger)">(deduct)</b>' : '') + '. <span class="kbd">Enter</span>/double-click finishes, <span class="kbd">D</span> adds a drop at the last point, <span class="kbd">Shift</span> locks 90°, <span class="kbd">Backspace</span> removes a point.',
       area: 'Click the corners' + who + '. <span class="kbd">Enter</span>/double-click closes.', rect: 'Click two opposite corners' + who + '.', arealen: 'Draw the area' + who + ', <span class="kbd">Enter</span> closes it, then type the width to convert it to a length.',
@@ -1337,43 +1433,56 @@ requireAuth().catch(function(){});
       stamp: 'Click where the stamp goes.', cloud: 'Click the corners of the cloud. <span class="kbd">Enter</span>/double-click closes it.', highlight: 'Click two opposite corners.', scale: 'Click both ends of a known dimension.' };
     h.innerHTML = (!scalePpf && pdfPage && ['count', 'note', 'select', 'marquee', 'pan', 'stamp', 'cloud', 'highlight', 'scale'].indexOf(tool) < 0) ? '<b style="color:var(--pc-danger)">Set the scale first</b> — click "Drawing Scale" above the plan.' : (hints[tool] || '');
     $('statusPage').textContent = pdfPage ? (plans[planIdx].sheet ? plans[planIdx].sheet + ' · ' : '') + meas.filter(function(m) { return m.tool_type !== 'scale'; }).length + ' marks on this plan' + (selectedIds.size ? ' · ' + selectedIds.size + ' selected' : '') : '';
-    var ub = $('undoBtn'); if (ub) ub.disabled = !undoStack.length && !draft.length;
-    var rb = $('redoBtn'); if (rb) rb.disabled = !redoStack.length;
+    ['undoBtn', 'undoTop'].forEach(function(id) { var ub = $(id); if (ub) ub.disabled = !undoStack.length && !draft.length; });
+    ['redoBtn', 'redoTop'].forEach(function(id) { var rb = $(id); if (rb) rb.disabled = !redoStack.length; });
   }
   function bindOverlay() {
     overlayCanvas.onmousedown = onDown; overlayCanvas.onmousemove = onMove; overlayCanvas.onmouseup = onUp; overlayCanvas.onmouseleave = onUp;
     overlayCanvas.ondblclick = function(e) { e.preventDefault(); if (DRAFT_TOOLS.indexOf(tool) >= 0 && draft.length >= 2) finishDraft(); };
-    overlayCanvas.oncontextmenu = function(e) { e.preventDefault(); if (draft.length >= 2 && tool !== 'highlight' && tool !== 'rect') finishDraft(); else { draft = []; redraw(); } };
+    overlayCanvas.oncontextmenu = function(e) { e.preventDefault(); if (Date.now() < suppressCtx) return; if (draft.length >= 2 && tool !== 'highlight' && tool !== 'rect') finishDraft(); else { draft = []; redraw(); } };
     overlayCanvas.onclick = onClick;
-    var vpEl = $('viewport'); vpEl.onwheel = onWheel; vpEl.onmousedown = onVpDown; vpEl.onscroll = positionMarkCard;
+    var vpEl = $('viewport'); vpEl.onwheel = onWheel; vpEl.onmousedown = onVpDown; vpEl.onscroll = positionMarkCard; vpEl.oncontextmenu = function(e) { e.preventDefault(); };
     if (!vpExtras) { vpExtras = true; try { new ResizeObserver(function() { updatePad(); }).observe(vpEl); } catch (e) {} vpEl.addEventListener('auxclick', function(e) { if (e.button === 1) e.preventDefault(); }); }
   }
   function pt(e) { var r = overlayCanvas.getBoundingClientRect(); return [(e.clientX - r.left) * (overlayCanvas.width / r.width) / renderScale, (e.clientY - r.top) * (overlayCanvas.height / r.height) / renderScale]; }
   function ortho(p) { if (!draft.length) return p; var a = draft[draft.length - 1]; return Math.abs(p[0] - a[0]) > Math.abs(p[1] - a[1]) ? [p[0], a[1]] : [a[0], p[1]]; }
   function snap(e, p) { return (e.shiftKey || orthoOn) && draft.length ? ortho(p) : p; }
   function lockedMark(m) { var l = layerById(m.layer_id); return !!(l && l.is_locked); }
-  var spaceDown = false;
+  var spaceDown = false, pend = null, justPanned = false, lastHover = 0, nudgeSt = null;
   function onDown(e) {
+    justPanned = false; pend = null; nudgeFlush();
+    if (e.button === 2) { startPan(e, null, true); return; }   // right button drag = pan with any tool (a plain right click still finishes the run)
     if (e.button === 1 || e.altKey || spaceDown || tool === 'pan') { startPan(e); return; }
     if (e.button !== 0) return;
     var p = pt(e);
     if (tool === 'marquee') { marquee = { a: p, b: p }; if (!e.shiftKey) selectedIds.clear(); redraw(); return; }
-    if (tool === 'select' && me.canEdit) {
-      var h = hitTest(p);
+    if (tool === 'select') {
+      var h = me.canEdit ? hitTest(p) : null;
       if (h) {
         if (lockedMark(h.m)) { toast('Layer is locked', 'error'); selectedIds.clear(); selectedIds.add(h.m.id); renderProps(); redraw(); return; }
-        if (e.shiftKey) { if (selectedIds.has(h.m.id)) selectedIds.delete(h.m.id); else selectedIds.add(h.m.id); renderProps(); redraw(); return; }
+        if (e.shiftKey || e.ctrlKey || e.metaKey) { if (selectedIds.has(h.m.id)) selectedIds.delete(h.m.id); else selectedIds.add(h.m.id); renderProps(); redraw(); updateStatus(); return; }
+        var wasSel = selectedIds.size === 1 && selectedIds.has(h.m.id);   // a second plain click on the only selected mark (no drag) deselects it
         if (!selectedIds.has(h.m.id)) { selectedIds.clear(); selectedIds.add(h.m.id); }
         var ids = selectedIds.size > 1 ? Array.from(selectedIds) : [h.m.id];
-        dragState = { ids: ids, vertex: ids.length === 1 ? h.vertex : null, start: p, orig: {}, moved: false };
+        dragState = { ids: ids, vertex: ids.length === 1 ? h.vertex : null, start: p, orig: {}, moved: false, wasSel: wasSel };
         ids.forEach(function(id) { var m = meas.find(function(x) { return x.id === id; }); if (m) dragState.orig[id] = JSON.parse(JSON.stringify(m.points)); });
         renderProps(); redraw();
-      } else { selectedIds.clear(); renderProps(); redraw(); }
+      } else pend = { x: e.clientX, y: e.clientY, kind: 'empty' };   // empty spot: a click deselects, a drag pans and keeps the selection
+      return;
     }
+    pend = { x: e.clientX, y: e.clientY, kind: 'draw' };            // drawing tools: a press that turns into a drag pans instead of placing a point
+  }
+  // pointer cursor on the Select tool: 'move' over a mark you can drag, crosshair over a corner of the selected mark
+  function hoverCursor(p) {
+    var now = Date.now(); if (now - lastHover < 60) return; lastHover = now;
+    var h = hitTest(p), c = h ? ((h.vertex != null && selectedIds.has(h.m.id)) ? 'crosshair' : 'move') : '';
+    if (overlayCanvas.getAttribute('data-cur') !== c) { overlayCanvas.setAttribute('data-cur', c); overlayCanvas.style.cursor = c; }
   }
   function onMove(e) {
     if (panState) { var vp = $('viewport'); vp.scrollLeft = panState.l - (e.clientX - panState.x); vp.scrollTop = panState.t - (e.clientY - panState.y); return; }
+    if (pend && (e.buttons & 1)) { if (!pend.panned && Math.hypot(e.clientX - pend.x, e.clientY - pend.y) > 5) { pend.panned = true; justPanned = true; startPan(e, pend); } return; }
     var p = pt(e);
+    if (tool === 'select' && me.canEdit && !dragState && !marquee) hoverCursor(p);
     if (marquee) { marquee.b = p; redraw(); return; }
     if (dragState) { dragState.moved = true; var dx = p[0] - dragState.start[0], dy = p[1] - dragState.start[1];
       dragState.ids.forEach(function(id) { var m = meas.find(function(x) { return x.id === id; }), o = dragState.orig[id]; if (!m || !o) return;
@@ -1385,20 +1494,38 @@ requireAuth().catch(function(){});
   }
   async function onUp(e) {
     if (panState) { panState = null; overlayCanvas.classList.remove('grabbing'); }
+    if (pend) { var pd = pend; pend = null; if (!pd.panned && pd.kind === 'empty' && e.type === 'mouseup' && selectedIds.size) { selectedIds.clear(); renderProps(); redraw(); updateStatus(); } if (pd.panned) return; }
     if (marquee) { var r = marquee; marquee = null;
       var x0 = Math.min(r.a[0], r.b[0]), x1 = Math.max(r.a[0], r.b[0]), y0 = Math.min(r.a[1], r.b[1]), y1 = Math.max(r.a[1], r.b[1]);
       if (x1 - x0 > 2 && y1 - y0 > 2) meas.forEach(function(m) { if (m.tool_type === 'scale') return; var l = layerById(m.layer_id); if (l && l.is_visible === false) return; if (!annotVisible && isAnnot(m)) return; if (m.points.every(function(q) { return q[0] >= x0 && q[0] <= x1 && q[1] >= y0 && q[1] <= y1; })) selectedIds.add(m.id); });
       renderProps(); redraw(); updateStatus(); return; }
-    if (dragState) { var d = dragState; dragState = null; if (!d.moved) { positionMarkCard(); return; }
-      var undoItems = [], ok = true;
-      for (var i = 0; i < d.ids.length; i++) { var m = meas.find(function(x) { return x.id === d.ids[i]; }); if (!m) continue;
-        if (m.tool_type === 'length') m.computed_value = scalePpf ? polyLen(m.points) / scalePpf : 0; if (m.tool_type === 'area') m.computed_value = scalePpf ? polyArea(m.points) / (scalePpf * scalePpf) : 0;
-        var u = await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); if (u.error) { toast(u.error.message, 'error'); ok = false; break; }
-        undoItems.push({ id: m.id, points: d.orig[m.id] }); }
-      if (ok) pushUndo(undoItems.length === 1 ? { type: 'move', id: undoItems[0].id, points: undoItems[0].points } : { type: 'move-multi', items: undoItems });
-      renderAll(); scheduleSync(); }
+    if (dragState) { var d = dragState; dragState = null;
+      if (!d.moved) { if (d.wasSel) { selectedIds.clear(); renderProps(); redraw(); updateStatus(); } else positionMarkCard(); return; }
+      await saveMoved(d.ids, d.orig); }
   }
+  // saves marks that were dragged / nudged (orig = their points before) and records one Undo step
+  async function saveMoved(ids, orig) {
+    var undoItems = [], ok = true;
+    for (var i = 0; i < ids.length; i++) { var m = meas.find(function(x) { return x.id === ids[i]; }); if (!m) continue;
+      if (m.tool_type === 'length') m.computed_value = scalePpf ? polyLen(m.points) / scalePpf : 0; if (m.tool_type === 'area') m.computed_value = scalePpf ? polyArea(m.points) / (scalePpf * scalePpf) : 0;
+      var u = await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); if (u.error) { toast(u.error.message, 'error'); ok = false; break; }
+      undoItems.push({ id: m.id, points: orig[m.id] }); }
+    if (ok && undoItems.length) pushUndo(undoItems.length === 1 ? { type: 'move', id: undoItems[0].id, points: undoItems[0].points } : { type: 'move-multi', items: undoItems });
+    renderAll(); scheduleSync();
+  }
+  // arrow keys nudge the selection (Shift = 10 px); a burst of key presses is one Undo step
+  function nudge(dx, dy) {
+    if (!me.canEdit) return;
+    var ids = Array.from(selectedIds).filter(function(id) { var m = meas.find(function(x) { return x.id === id; }); return m && !lockedMark(m); });
+    if (!ids.length) { if (selectedIds.size) toast('Layer is locked', 'error'); return; }
+    if (!nudgeSt) { nudgeSt = { ids: ids, orig: {}, t: null }; ids.forEach(function(id) { var m = meas.find(function(x) { return x.id === id; }); nudgeSt.orig[id] = JSON.parse(JSON.stringify(m.points)); }); }
+    var ox = dx / renderScale, oy = dy / renderScale;
+    nudgeSt.ids.forEach(function(id) { var m = meas.find(function(x) { return x.id === id; }); if (m) m.points = m.points.map(function(q) { return [q[0] + ox, q[1] + oy]; }); });
+    redraw(); positionMarkCard(); clearTimeout(nudgeSt.t); nudgeSt.t = setTimeout(nudgeFlush, 700);
+  }
+  async function nudgeFlush() { var st = nudgeSt; if (!st) return; nudgeSt = null; clearTimeout(st.t); await saveMoved(st.ids, st.orig); }
   function onClick(e) {
+    if (justPanned) { justPanned = false; return; }
     if (e.altKey || spaceDown || tool === 'pan' || tool === 'select' || tool === 'marquee') return;
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
     var p = snap(e, pt(e));
@@ -1503,14 +1630,51 @@ requireAuth().catch(function(){});
     toast(r.data.length + ' marks placed every ' + sp + ' ft (' + (polyLen(path) / scalePpf).toFixed(0) + ' ft path)', 'success'); renderAll(); scheduleSync();
   }
   async function addNote() {
-    var t = await P.prompt({ title: 'Note', label: 'Text', okLabel: 'Add note' }); t = (t || '').trim();
-    if (!t || !draft.length) { draft = []; return; }
-    var p = plans[planIdx], q = draft[0]; draft = [];
-    var r = await sb.from('estimate_measurements').insert({ drawing_id: p.drawing.id, page_number: p.page, tool_type: 'note', points: [q], label: t, computed_value: 0, computed_unit: null, color: '#f59e0b' }).select().single();
-    if (r.error) { toast(r.error.message, 'error'); return; }
-    allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll();
+    if (!draft.length) return;
+    var q = draft[0]; draft = []; redraw();
+    openTextFormat(null, { point: q });
   }
-  async function deleteMark(id, silent) {
+  // ─── text notes / stamps / cloud labels: text + font + size + color + bold / italic / underline ───
+  var TF_FONTS = ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana'], TF_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48], TF_COLORS = ['#78350f', '#1f2933', '#dc2626', '#1a66e0', '#16a34a', '#f59e0b', '#7c3aed', '#ffffff'];
+  function openTextFormat(m, o) {
+    o = o || {}; var kind = m ? (annKind(m) || 'note') : 'note', isNote = kind === 'note';
+    var f = m ? fmtOf(m) : fmtOf({ notes: null }), color = m ? (isNote ? (f.c || '#78350f') : (m.color || '#dc2626')) : '#78350f';
+    if (!TF_COLORS.some(function(c) { return c === color; })) TF_COLORS = TF_COLORS.concat([color]);
+    var body = '<div class="pc-field"><label class="pc-label">' + (kind === 'cloud' ? 'Label (optional)' : 'Text') + '</label><textarea class="pc-textarea" id="tfText" rows="' + (isNote ? 3 : 1) + '" maxlength="600" style="height:auto;padding:8px 10px">' + esc(m ? (m.label || '') : '') + '</textarea></div>' +
+      '<div class="tf-bar"><select class="pc-select" id="tfFont" title="Font">' + TF_FONTS.map(function(x) { return '<option' + (x === f.f ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>' +
+      '<select class="pc-select" id="tfSize" title="Size">' + TF_SIZES.map(function(x) { return '<option' + (x === f.s ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>' +
+      '<button type="button" class="tk-ib tf-st" id="tfB" title="Bold"><b>B</b></button><button type="button" class="tk-ib tf-st" id="tfI" title="Italic"><i>I</i></button><button type="button" class="tk-ib tf-st" id="tfU" title="Underline"><u>U</u></button></div>' +
+      '<div class="pc-field"><label class="pc-label">Text color</label><div class="swatches" id="tfColors">' + TF_COLORS.map(function(c) { return '<span style="background:' + c + ';' + (c === '#ffffff' ? 'border:1px solid #cbd5e1;' : '') + '" data-c="' + c + '"></span>'; }).join('') + '<input type="color" id="tfPick" value="' + (/^#[0-9a-f]{6}$/i.test(color) ? color : '#78350f') + '" title="Any color" style="width:26px;height:26px;padding:0;border:0;background:none;cursor:pointer"></div></div>' +
+      (isNote ? '<div class="pc-field"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="tk-cb" id="tfBox"' + (f.bx !== 0 ? ' checked' : '') + '>Show the note box</label></div>' : '') +
+      '<div class="pc-label" style="margin-top:4px">Preview</div><div class="tf-prev" id="tfPrev"></div>';
+    var dlg = P.modal({ title: m ? 'Text & format' : 'Note', body: body, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: m ? 'Save' : 'Add note', primary: true, close: false, closeOnDone: false, onClick: function() { return save(); } }] });
+    function paint() {
+      var pv = $('tfPrev'); if (!pv) return; pv.textContent = $('tfText').value || (kind === 'stamp' ? 'STAMP' : 'Your text');
+      pv.style.cssText = 'font-family:"' + f.f + '",Arial,sans-serif;font-size:' + f.s + 'px;font-weight:' + (f.b ? 700 : 400) + ';font-style:' + (f.i ? 'italic' : 'normal') + ';text-decoration:' + (f.u ? 'underline' : 'none') + ';color:' + color + ';white-space:pre-wrap;' + (isNote && f.bx === 0 ? '' : 'background:#fef3c7;border:1.5px solid ' + (isNote ? '#f59e0b' : color) + ';');
+      ['tfB', 'tfI', 'tfU'].forEach(function(id) { $(id).classList.toggle('on', !!f[{ tfB: 'b', tfI: 'i', tfU: 'u' }[id]]); });
+      $('tfColors').querySelectorAll('span').forEach(function(x) { x.classList.toggle('on', x.getAttribute('data-c') === color); });
+    }
+    $('tfText').addEventListener('input', paint); $('tfFont').onchange = function() { f.f = this.value; paint(); }; $('tfSize').onchange = function() { f.s = Number(this.value); paint(); };
+    [['tfB', 'b'], ['tfI', 'i'], ['tfU', 'u']].forEach(function(x) { $(x[0]).onclick = function() { f[x[1]] = f[x[1]] ? 0 : 1; paint(); }; });
+    $('tfColors').querySelectorAll('span').forEach(function(sw) { sw.onclick = function() { color = sw.getAttribute('data-c'); paint(); }; });
+    $('tfPick').oninput = function() { color = this.value; paint(); };
+    if ($('tfBox')) $('tfBox').onchange = function() { f.bx = this.checked ? 1 : 0; paint(); };
+    $('tfText').addEventListener('keydown', function(e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || !isNote)) { e.preventDefault(); save(); } });
+    paint(); setTimeout(function() { $('tfText').focus(); $('tfText').select(); }, 50);
+    async function save() {
+      var t = $('tfText').value.replace(/\s+$/, ''); if (kind === 'stamp') t = t.trim().toUpperCase();
+      if (!t && kind !== 'cloud') { toast('Type the text', 'error'); return false; }
+      var fs = { s: f.s, f: f.f, b: f.b ? 1 : 0, i: f.i ? 1 : 0, u: f.u ? 1 : 0 }; if (isNote) { fs.bx = f.bx === 0 ? 0 : 1; fs.c = color; }
+      dlg.close();
+      if (!m) {
+        var pg = plans[planIdx], r = await sb.from('estimate_measurements').insert({ drawing_id: pg.drawing.id, page_number: pg.page, tool_type: 'note', points: [o.point], label: t, computed_value: 0, computed_unit: null, color: '#f59e0b', notes: 'note|' + JSON.stringify(fs) }).select().single();
+        if (r.error) { toast(r.error.message, 'error'); return; }
+        allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll(); return;
+      }
+      await patchMark(m, { label: t || null, notes: kind + '|' + JSON.stringify(fs), color: isNote ? m.color : color });
+    }
+  }
+    async function deleteMark(id, silent) {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
     var m = meas.find(function(x) { return x.id === id; }); if (!m) return;
     if (!silent && lockedMark(m)) { toast('Layer is locked', 'error'); return; }
@@ -1518,7 +1682,7 @@ requireAuth().catch(function(){});
     if (r.error) { toast(r.error.message, 'error'); return; }
     if (!silent) pushUndo({ type: 'delete', row: m });
     allMeas = allMeas.filter(function(x) { return x.id !== id; }); meas = meas.filter(function(x) { return x.id !== id; });
-    selectedIds.delete(id); renderAll(); scheduleSync();
+    selectedIds.delete(id); renderAll(); scheduleSync(); if (!silent) toastUndo('Mark deleted');
   }
   async function deleteSelected() {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }   // marquee / Ctrl+A selection is fine for viewers, deleting is not
@@ -1528,7 +1692,7 @@ requireAuth().catch(function(){});
     var rows = ids.map(function(id) { return meas.find(function(x) { return x.id === id; }); });
     var r = await sb.from('estimate_measurements').delete().in('id', ids); if (r.error) { toast(r.error.message, 'error'); return; }
     pushUndo({ type: 'delete-multi', rows: rows });
-    allMeas = allMeas.filter(function(x) { return ids.indexOf(x.id) < 0; }); meas = meas.filter(function(x) { return ids.indexOf(x.id) < 0; }); selectedIds.clear(); renderAll(); scheduleSync();
+    allMeas = allMeas.filter(function(x) { return ids.indexOf(x.id) < 0; }); meas = meas.filter(function(x) { return ids.indexOf(x.id) < 0; }); selectedIds.clear(); renderAll(); scheduleSync(); toastUndo(rows.length + ' marks deleted');
   }
   function copySelected() {
     clipboard = Array.from(selectedIds).map(function(id) { return meas.find(function(x) { return x.id === id; }); }).filter(Boolean).map(function(m) { return JSON.parse(JSON.stringify(m)); });
@@ -1549,13 +1713,27 @@ requireAuth().catch(function(){});
     clipboard = clipboard.map(function(m) { m.points = m.points.map(function(q) { return [q[0] + off, q[1] + off]; }); return m; });   // the next paste lands further along
     renderAll(); scheduleSync(); toast(r.data.length + ' mark(s) pasted', 'success');
   }
-  function pushUndo(u) { undoStack.push(u); redoStack.length = 0; }
+  function pushUndo(u) { undoStack.push(u); redoStack.length = 0; if (undoStack.length > 300) undoStack.shift(); updateStatus(); }
+  // edit of a mark's own fields (text, format, label, drops, deduct, layer …) — one Undo step; before = the old values
+  async function patchMark(m, patch) {
+    var before = {}; Object.keys(patch).forEach(function(k) { before[k] = m[k] === undefined ? null : m[k]; });
+    var r = await sb.from('estimate_measurements').update(patch).eq('id', m.id); if (r.error) { toast(r.error.message, 'error'); return false; }
+    Object.assign(m, patch); var am = allMeas.find(function(x) { return x.id === m.id; }); if (am && am !== m) Object.assign(am, patch);
+    pushUndo({ type: 'patch', id: m.id, before: before, after: Object.assign({}, patch) }); renderAll(); scheduleSync(); return true;
+  }
+  async function applyPatch(id, patch) {
+    var m = allMeas.find(function(x) { return x.id === id; }); if (!m) return false;
+    var r = await sb.from('estimate_measurements').update(patch).eq('id', id); if (r.error) { toast(r.error.message, 'error'); return false; }
+    Object.assign(m, patch); return true;
+  }
+  function toastUndo(msg) { P.toast(msg, 'info', 7000, { label: 'Undo', onClick: undo }); }
   async function undo() {
     if (draft.length) { draft.pop(); redraw(); updateStatus(); return; }
     var u = undoStack.pop(); if (!u) return;
     if (u.type === 'add') { var was = allMeas.find(function(x) { return x.id === u.id; }); if (was) redoStack.push({ type: 'add', row: Object.assign({}, was) }); await deleteMark(u.id, true); }
     else if (u.type === 'delete' || u.type === 'delete-multi') { var rows = (u.rows || [u.row]).map(function(x) { var row = Object.assign({}, x); delete row.id; delete row.created_at; delete row.updated_at; return row; });
       var r = await sb.from('estimate_measurements').insert(rows).select(); if (!r.error) { r.data.forEach(function(m) { allMeas.push(m); if (m.drawing_id === plans[planIdx].drawing.id && m.page_number === plans[planIdx].page) meas.push(m); }); redoStack.push({ type: 'del', ids: r.data.map(function(m) { return m.id; }) }); } renderAll(); scheduleSync(); }
+    else if (u.type === 'patch') { if (await applyPatch(u.id, u.before)) redoStack.push(u); renderAll(); scheduleSync(); }
     else if (u.type === 'move' || u.type === 'move-multi') { var items = u.items || [{ id: u.id, points: u.points }], redoItems = [];
       for (var i = 0; i < items.length; i++) { var m = allMeas.find(function(x) { return x.id === items[i].id; }); if (!m) continue; redoItems.push({ id: m.id, points: m.points }); m.points = items[i].points; m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value; await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
       if (redoItems.length) redoStack.push({ type: 'move', items: redoItems });
@@ -1575,6 +1753,8 @@ requireAuth().catch(function(){});
       var d = await sb.from('estimate_measurements').delete().in('id', u.ids);
       if (!d.error) { allMeas = allMeas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); meas = meas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); selectedIds.clear(); undoStack.push({ type: 'delete-multi', rows: rows }); }
       renderAll(); scheduleSync();
+    } else if (u.type === 'patch') {
+      if (await applyPatch(u.id, u.after)) undoStack.push(u); renderAll(); scheduleSync();
     } else if (u.type === 'move') {
       var prev = [];
       for (var i = 0; i < u.items.length; i++) { var m = allMeas.find(function(x) { return x.id === u.items[i].id; }); if (!m) continue; prev.push({ id: m.id, points: m.points }); m.points = u.items[i].points;
@@ -1587,9 +1767,10 @@ requireAuth().catch(function(){});
   }
   // hit test in PDF units: vertex within 7 px, segment within 5 px, polygon inside, count symbol within 10 px
   function hitTest(p) {
-    var tolV = 7 / renderScale, tolS = 5 / renderScale, best = null;
+    var tolV = 9 / renderScale, tolS = 8 / renderScale, best = null;
     for (var i = meas.length - 1; i >= 0; i--) { var m = meas[i]; if (m.tool_type === 'scale' && m.points.length < 2) continue; var l = layerById(m.layer_id); if (l && l.is_visible === false) continue; if (!annotVisible && isAnnot(m)) continue;
       var pts = m.points;
+      if (m.tool_type === 'note' && m._box && p[0] >= m._box[0] && p[0] <= m._box[0] + m._box[2] && p[1] >= m._box[1] && p[1] <= m._box[1] + m._box[3]) return { m: m, vertex: null };
       for (var k = 0; k < pts.length; k++) if (dist(p, pts[k]) <= (m.tool_type === 'count' || m.tool_type === 'note' ? 12 / renderScale : tolV)) return { m: m, vertex: (m.tool_type === 'count' || m.tool_type === 'note') ? null : k };
       if (m.tool_type === 'length' || m.tool_type === 'scale') { for (var j = 1; j < pts.length; j++) if (segDist(p, pts[j - 1], pts[j]) <= tolS) best = best || { m: m, vertex: null }; }
       if (m.tool_type === 'area' && inPoly(p, pts)) best = best || { m: m, vertex: null }; }
@@ -1618,8 +1799,7 @@ requireAuth().catch(function(){});
     if (isAnnot(m)) { drawAnnot(m, pts, sel); return; }
     ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = sel ? lw + 2 : lw; ctx.setLineDash(m.deduct ? [8, 5] : []);
     if (m.tool_type === 'count') { symbol(pts[0], l ? l.symbol : 'circle', col, sel, showNo(l) ? m.mark_no : null); }
-    else if (m.tool_type === 'note') { ctx.setLineDash([]); ctx.font = '11px Arial'; var w = Math.min(260, ctx.measureText(m.label || '').width + 16); ctx.fillStyle = '#fef3c7'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5;
-      ctx.fillRect(pts[0][0], pts[0][1] - 20, w, 22); ctx.strokeRect(pts[0][0], pts[0][1] - 20, w, 22); ctx.fillStyle = '#78350f'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText((m.label || '').slice(0, 48), pts[0][0] + 8, pts[0][1] - 9); }
+    else if (m.tool_type === 'note') { drawNote(m, pts[0], sel); }
     else if (m.tool_type === 'length' || m.tool_type === 'scale') { if (m.tool_type === 'scale' && pts.length < 2) return; if (m.tool_type === 'scale') { ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 3; }
       ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); ctx.setLineDash([]);
       if (sel || pts.length <= 12) pts.forEach(function(q) { dot(q, m.tool_type === 'scale' ? '#dc2626' : col, sel); });
@@ -1628,10 +1808,22 @@ requireAuth().catch(function(){});
     else if (m.tool_type === 'area') { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]); ctx.closePath(); var ga = ctx.globalAlpha; ctx.globalAlpha = ga * (sel ? .35 : .2); ctx.fill(); ctx.globalAlpha = ga; ctx.stroke(); ctx.setLineDash([]);
       if (sel) pts.forEach(function(q) { dot(q, col, true); }); if (VS.labels || sel) label(centroid(pts), (m.deduct ? '−' : '') + Number(m.computed_value || 0).toFixed(0) + ' sf', col); }
   }
+  // a text note: any font / size / color / bold-italic-underline, several lines, optional box (format in notes → fmtOf)
+  function drawNote(m, p, sel) {
+    var f = fmtOf(m), lines = String(m.label || '').split('\n').slice(0, 14), lh = Math.round(f.s * 1.3);
+    ctx.setLineDash([]); ctx.font = fontStr(f); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    var tw = 0; lines.forEach(function(l) { tw = Math.max(tw, ctx.measureText(l).width); });
+    var w = Math.min(520, tw) + 16, h = lines.length * lh + 8, x = p[0], y = p[1] - h + 2;
+    if (f.bx !== 0) { ctx.fillStyle = '#fef3c7'; ctx.strokeStyle = m.color || '#f59e0b'; ctx.lineWidth = 1.5; ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h); }
+    ctx.fillStyle = f.c || '#78350f';
+    lines.forEach(function(l, i) { var ty = y + 4 + i * lh + lh / 2; ctx.fillText(l, x + 8, ty, 520); if (f.u) ctx.fillRect(x + 8, ty + f.s * 0.5, Math.min(520, ctx.measureText(l).width), Math.max(1, Math.round(f.s / 14))); });
+    if (sel) { ctx.strokeStyle = '#1a66e0'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(x - 3, y - 3, w + 6, h + 6); ctx.setLineDash([]); }
+    m._box = [x / renderScale, y / renderScale, w / renderScale, h / renderScale];
+  }
   function drawAnnot(m, pts, sel) {
-    var col = m.color || '#dc2626'; ctx.setLineDash([]);
-    if (m.notes === 'highlight') { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = col; var ga = ctx.globalAlpha; ctx.globalAlpha = ga * (sel ? .5 : .35); ctx.fill(); ctx.globalAlpha = ga; if (sel) { ctx.strokeStyle = '#1f2933'; ctx.lineWidth = 1; ctx.stroke(); } return; }
-    if (m.notes === 'cloud') {
+    var col = m.color || '#dc2626', kind = annKind(m); ctx.setLineDash([]);
+    if (kind === 'highlight') { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = col; var ga = ctx.globalAlpha; ctx.globalAlpha = ga * (sel ? .5 : .35); ctx.fill(); ctx.globalAlpha = ga; if (sel) { ctx.strokeStyle = '#1f2933'; ctx.lineWidth = 1; ctx.stroke(); } return; }
+    if (kind === 'cloud') {
       var r = 9, n = pts.length, area = 0; for (var k = 0; k < n; k++) { var a0 = pts[k], b0 = pts[(k + 1) % n]; area += a0[0] * b0[1] - b0[0] * a0[1]; }
       ctx.strokeStyle = col; ctx.lineWidth = sel ? 3 : 2; ctx.fillStyle = col;
       ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var j = 1; j < n; j++) ctx.lineTo(pts[j][0], pts[j][1]); ctx.closePath(); var g2 = ctx.globalAlpha; ctx.globalAlpha = g2 * .06; ctx.fill(); ctx.globalAlpha = g2;
@@ -1641,12 +1833,14 @@ requireAuth().catch(function(){});
         for (var q = 0; q < cnt; q++) { var cx = A[0] + ux * (q * seg + seg / 2), cy = A[1] + uy * (q * seg + seg / 2), rr = seg / 2;
           var sA = Math.atan2(-uy, -ux), eA = Math.atan2(uy, ux), mid = sA + ((eA - sA + Math.PI * 2) % (Math.PI * 2)) / 2, ccw = (Math.cos(mid) * nx + Math.sin(mid) * ny) < 0;
           ctx.beginPath(); ctx.arc(cx, cy, rr, sA, eA, ccw); ctx.stroke(); } }
-      if (m.label) label(centroid(pts), m.label, col); return; }
+      if (m.label) label(centroid(pts), m.label, col, fontStr(fmtOf(m))); return; }
     // stamp
-    ctx.font = 'bold 12px Arial'; var t = m.label || 'STAMP', w = ctx.measureText(t).width + 18, h = 24, x = pts[0][0], y = pts[0][1];
+    var sf = fmtOf(m); ctx.font = fontStr(sf); var t = m.label || 'STAMP', w = ctx.measureText(t).width + 18, h = Math.round(sf.s * 2), x = pts[0][0], y = pts[0][1];
+    m._box = [(x - w / 2) / renderScale, (y - h / 2) / renderScale, w / renderScale, h / renderScale];
     ctx.fillStyle = '#fff'; var g3 = ctx.globalAlpha; ctx.globalAlpha = g3 * .9; ctx.fillRect(x - w / 2, y - h / 2, w, h); ctx.globalAlpha = g3;
     ctx.strokeStyle = col; ctx.lineWidth = sel ? 3 : 2; ctx.strokeRect(x - w / 2, y - h / 2, w, h);
     ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y + 1);
+    if (sf.u) ctx.fillRect(x - ctx.measureText(t).width / 2, y + sf.s * 0.6, ctx.measureText(t).width, Math.max(1, Math.round(sf.s / 14)));
   }
   function symbol(p, sym, col, sel, no) {
     var r = sel ? 10 : 8; ctx.setLineDash([]); ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath();
@@ -1660,7 +1854,7 @@ requireAuth().catch(function(){});
   }
   function dot(p, col, big) { ctx.setLineDash([]); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0], p[1], big ? 5 : 3.5, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke(); }
   function glyph(p, t, col) { ctx.fillStyle = col; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(t, p[0], p[1] - 6); }
-  function label(p, text, col) { ctx.setLineDash([]); ctx.font = 'bold 11px Arial'; var w = ctx.measureText(text).width + 8; ctx.fillStyle = col; var ga = ctx.globalAlpha; ctx.globalAlpha = ga * .92; ctx.fillRect(p[0] - w / 2, p[1] - 8, w, 16); ctx.globalAlpha = ga; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, p[0], p[1]); }
+  function label(p, text, col, fnt) { ctx.setLineDash([]); ctx.font = fnt || 'bold 11px Arial'; var w = ctx.measureText(text).width + 8, lhh = Math.max(16, (parseInt((/(\d+)px/.exec(ctx.font) || [0, 11])[1], 10) || 11) + 5); ctx.fillStyle = col; var ga = ctx.globalAlpha; ctx.globalAlpha = ga * .92; ctx.fillRect(p[0] - w / 2, p[1] - lhh / 2, w, lhh); ctx.globalAlpha = ga; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, p[0], p[1]); }
   function ftIn(ft) { var f = Math.floor(ft), i = Math.round((ft - f) * 12); if (i === 12) { f++; i = 0; } return f + '\'' + (i ? '-' + i + '"' : '') + ' (' + ft.toFixed(1) + ')'; }
 
   // ═══════════════════════ mark card (floating) + drawer props + totals ═══════════════════════
@@ -1675,6 +1869,11 @@ requireAuth().catch(function(){});
     x = Math.max(8, Math.min(x, st.width - 290)); y = Math.max(8, Math.min(y, st.height - card.offsetHeight - 8));
     card.style.left = x + 'px'; card.style.top = y + 'px';
   }
+  function markPriceRow(l, q) {
+    if (!l) return '';
+    var mat = q * (1 + Number(l.waste_pct || 0) / 100) * Number(l.unit_material_cost || 0), hrs = q * Number(l.unit_labor_hours || 0) * Number(l.labor_factor || 1), lab = hrs * laborRate;
+    return '<div class="row"><span>Price</span><b title="Material ' + P.money(mat) + ' + labor ' + hrs.toFixed(2) + ' h × ' + P.money0(laborRate) + ' = ' + P.money(lab) + '">' + P.money(mat + lab) + '</b></div>';
+  }
   function renderMarkCard() {
     var card = $('markCard');
     if (!selectedIds.size) { card.classList.remove('show'); card.innerHTML = ''; return; }
@@ -1686,30 +1885,32 @@ requireAuth().catch(function(){});
     }
     var l = layerById(m.layer_id), ro = !me.canEdit || lockedMark(m);
     if (isAnnot(m)) {
-      html = '<div class="hd"><span class="pc-dot" style="background:' + esc(m.color || '#dc2626') + '"></span>' + { stamp: 'Stamp', cloud: 'Revision cloud', highlight: 'Highlight' }[m.notes] + '<span class="x" id="mcClose">' + ic('close', 16) + '</span></div><div class="bd">' +
-        (m.notes !== 'highlight' ? '<div class="row"><span>Text</span><input type="text" id="pLabel" style="width:150px" value="' + esc(m.label || '') + '"' + (ro ? ' disabled' : '') + '></div>' : '') + '</div>' +
-        '<div class="ft">' + (m.notes !== 'highlight' ? '<button class="pc-btn pc-btn-outline" id="pSave"' + (ro ? ' disabled' : '') + '>Save</button>' : '') + '<button class="pc-btn pc-btn-outline" id="pDel" style="color:var(--pc-danger)"' + (ro ? ' disabled' : '') + '>' + ic('delete', 16) + 'Delete</button></div>';
+      var ak = annKind(m);
+      html = '<div class="hd"><span class="pc-dot" style="background:' + esc(m.color || '#dc2626') + '"></span>' + { stamp: 'Stamp', cloud: 'Revision cloud', highlight: 'Highlight' }[ak] + '<span class="x" id="mcClose">' + ic('close', 16) + '</span></div><div class="bd">' +
+        (ak !== 'highlight' ? '<div class="row"><span>Text</span><b style="font-weight:500;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(m.label || '—') + '</b></div>' : '') + '</div>' +
+        '<div class="ft">' + (ak !== 'highlight' ? '<button class="pc-btn pc-btn-outline" id="mcFmt"' + (ro ? ' disabled' : '') + '>Aa Text &amp; format</button>' : '') + '<button class="pc-btn pc-btn-outline" id="pDel" style="color:var(--pc-danger)"' + (ro ? ' disabled' : '') + '>' + ic('delete', 16) + 'Delete</button></div>';
       card.innerHTML = html; card.classList.add('show');
       $('mcClose').onclick = function() { selectedIds.clear(); renderProps(); redraw(); }; $('pDel').onclick = function() { deleteMark(m.id); };
-      if ($('pSave')) $('pSave').onclick = async function() { var v = $('pLabel').value.trim(); var r = await sb.from('estimate_measurements').update({ label: m.notes === 'stamp' ? v.toUpperCase() : (v || null) }).eq('id', m.id); if (r.error) { toast(r.error.message, 'error'); return; } m.label = m.notes === 'stamp' ? v.toUpperCase() : (v || null); renderAll(); };
+      if ($('mcFmt')) $('mcFmt').onclick = function() { openTextFormat(m); };
       positionMarkCard(); return;
     }
-    var q = markQty(m, l), unit = l ? l.takeoff_type : null;
+        var q = markQty(m, l), unit = l ? l.takeoff_type : null;
     html = '<div class="hd"><span class="pc-dot" style="background:' + ((l && l.color) || m.color) + '"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l ? l.name : (m.tool_type === 'note' ? 'Note' : m.tool_type === 'scale' ? 'Scale' : 'Legacy mark')) + '</span>' + (l && l.is_locked ? ic('lock', 14) : '') + '<span class="x" id="mcClose">' + ic('close', 16) + '</span></div><div class="bd">' +
-      (m.tool_type === 'note' ? '<div class="row"><span>Text</span><b style="font-weight:500">' + esc(m.label || '') + '</b></div>' : '') +
+      (m.tool_type === 'note' ? '<div class="row"><span>Text</span><b style="font-weight:500;white-space:pre-wrap;max-width:190px">' + esc(m.label || '') + '</b></div>' : '') +
       (m.tool_type !== 'note' && m.tool_type !== 'scale' ? '<div class="row"><span>Measured</span><b>' + (m.tool_type === 'count' ? '1 mark' + (m.mark_no ? ' #' + m.mark_no : '') : m.tool_type === 'area' ? Number(m.computed_value).toFixed(1) + ' sf' : ftIn(Number(m.computed_value))) + '</b></div>' +
-        '<div class="row"><span>Counts as</span><b>' + (unit ? qtyStr(q, unit) : Number(m.computed_value || 0).toFixed(2) + ' ' + (m.computed_unit || '')) + '</b></div>' +
+        '<div class="row"><span>Counts as</span><b>' + (unit ? qtyStr(q, unit) : Number(m.computed_value || 0).toFixed(2) + ' ' + (m.computed_unit || '')) + '</b></div>' + markPriceRow(l, q) +
         (m.tool_type === 'length' && l ? '<div class="row"><span>Drops (× ' + Number(l.drop_length_ft || 0) + ' ft)</span><input type="number" min="0" step="1" id="pDrops" value="' + Number(m.drops || 0) + '"' + (ro ? ' disabled' : '') + '></div>' : '') +
         '<div class="row"><span>Deduct (negative)</span><input type="checkbox" class="tk-cb" id="pDeduct"' + (m.deduct ? ' checked' : '') + (ro ? ' disabled' : '') + '></div>' +
         '<div class="row"><span>Label</span><input type="text" id="pLabel" value="' + esc(m.label || '') + '"' + (ro ? ' disabled' : '') + '></div>' +
         '<div class="row"><span>Layer</span><select id="pLayer"' + (ro ? ' disabled' : '') + '>' + layers.map(function(x) { return '<option value="' + x.id + '"' + (x.id === m.layer_id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>' : '') +
-      '</div><div class="ft"><button class="pc-btn pc-btn-outline" id="pSave"' + (ro ? ' disabled' : '') + '>Save</button><button class="pc-btn pc-btn-outline" id="pDel" style="color:var(--pc-danger)"' + (ro ? ' disabled' : '') + '>' + ic('delete', 16) + 'Delete</button></div>';
+      '</div><div class="ft">' + (m.tool_type === 'note' ? '<button class="pc-btn pc-btn-outline" id="mcFmt"' + (ro ? ' disabled' : '') + '>Aa Text &amp; format</button>' : '<button class="pc-btn pc-btn-outline" id="pSave"' + (ro ? ' disabled' : '') + '>Save</button>') + '<button class="pc-btn pc-btn-outline" id="pDel" style="color:var(--pc-danger)"' + (ro ? ' disabled' : '') + '>' + ic('delete', 16) + 'Delete</button></div>';
     card.innerHTML = html; card.classList.add('show');
     $('mcClose').onclick = function() { selectedIds.clear(); renderProps(); redraw(); }; $('pDel').onclick = function() { deleteMark(m.id); };
-    $('pSave').onclick = async function() { var patch = { label: ($('pLabel') ? $('pLabel').value.trim() : m.label) || null };
+    if ($('mcFmt')) $('mcFmt').onclick = function() { openTextFormat(m); };
+    if ($('pSave')) $('pSave').onclick = async function() { var patch = { label: ($('pLabel') ? $('pLabel').value.trim() : m.label) || null };
       if ($('pDrops')) patch.drops = Math.max(0, parseInt($('pDrops').value, 10) || 0); if ($('pDeduct')) patch.deduct = $('pDeduct').checked;
       if ($('pLayer') && $('pLayer').value !== m.layer_id) { var nl = layerById($('pLayer').value); if (nl) { patch.layer_id = nl.id; patch.layer_category = nl.category; patch.color = nl.color; } }
-      var r = await sb.from('estimate_measurements').update(patch).eq('id', m.id); if (r.error) { toast(r.error.message, 'error'); return; } Object.assign(m, patch); renderAll(); scheduleSync(); toast('Saved', 'success'); };
+      if (await patchMark(m, patch)) toast('Saved', 'success'); };
     positionMarkCard();
   }
   function renderProps() {
@@ -1968,7 +2169,7 @@ requireAuth().catch(function(){});
     $('layerTree').addEventListener('click', onTreeClick); bindTreeDnD($('layerTree'));
     $('allEye').onclick = toggleAllVis; $('actionsBtn').onclick = function(e) { e.stopPropagation(); openActionsMenu(this); };
     $('leftCollapse').onclick = toggleLeft;
-    $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); };
+    $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); }; $('docBtn').onclick = function(e) { e.stopPropagation(); openDocMenu(this); };
     $('prevPlan').onclick = function() { openPlan(planIdx - 1); }; $('nextPlan').onclick = function() { openPlan(planIdx + 1); };
     $('compareBtn').onclick = function(e) { e.stopPropagation(); openCompareMenu(this); }; $('compareClose').onclick = function() { setCompare(-1); };
     $('openNewBtn').onclick = async function() { var p = plans[planIdx]; if (!p) return; try { window.open(await EstDrawings.signedUrl(p.drawing.storage_path), '_blank', 'noopener'); } catch (e) { toast(e.message, 'error'); } };
@@ -1976,7 +2177,7 @@ requireAuth().catch(function(){});
     $('scaleChip').onclick = scaleDialog;
     // rail / bottom bar
     document.querySelectorAll('#rail [data-tool], #bottombar [data-tool]').forEach(function(b) { b.onclick = function() { setTool(b.getAttribute('data-tool')); }; });
-    $('undoBtn').onclick = undo; $('redoBtn').onclick = redo; $('layersBtn').onclick = toggleLeft; $('railMore').onclick = function(e) { e.stopPropagation(); railMenu(this); };
+    $('undoBtn').onclick = undo; $('redoBtn').onclick = redo; $('undoTop').onclick = undo; $('redoTop').onclick = redo; $('layersBtn').onclick = toggleLeft; $('railMore').onclick = function(e) { e.stopPropagation(); railMenu(this); };
     $('legendBtn').onclick = toggleLegend; $('pasteBtn').onclick = pasteMarks; $('swapBtn').onclick = swapCompare; $('swapBtn2').onclick = swapCompare;
     $('railCollapse').onclick = function() { var c = document.body.classList.toggle('tk-rail-collapsed'); this.innerHTML = ic(c ? 'chevron_left' : 'chevron_right', 20); };
     $('zoomIn').onclick = function() { setZoom(zoom * 1.25); }; $('zoomOut').onclick = function() { setZoom(zoom / 1.25); }; $('zoomFit').onclick = function() { fitView(); };
@@ -1999,7 +2200,8 @@ requireAuth().catch(function(){});
       if (document.querySelector('.pc-backdrop') || inField(e)) return;
       var k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
       if (e.key === 'Enter' && DRAFT_TOOLS.indexOf(tool) >= 0 && draft.length >= 2) finishDraft();
-      else if (e.key === 'Escape') { if (pop) { closePopover(); return; } draft = []; draftDrops = []; measureLine = null; marquee = null; selectedIds.clear(); renderProps(); redraw(); updateStatus(); }
+      else if (e.key === 'Escape') { if (pop) { closePopover(); return; } var busy = draft.length || measureLine || marquee || selectedIds.size; draft = []; draftDrops = []; measureLine = null; marquee = null; selectedIds.clear(); renderProps(); redraw(); updateStatus(); if (!busy && activeLayerId) deselectLayer(); }
+      else if (/^Arrow(Left|Right|Up|Down)$/.test(e.key) && selectedIds.size && !draft.length) { e.preventDefault(); var st = e.shiftKey ? 10 : 1; nudge(e.key === 'ArrowLeft' ? -st : e.key === 'ArrowRight' ? st : 0, e.key === 'ArrowUp' ? -st : e.key === 'ArrowDown' ? st : 0); }
       else if (e.key === 'Backspace' && draft.length) { e.preventDefault(); draft.pop(); draftDrops = draftDrops.filter(function(i) { return i < draft.length; }); redraw(); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size) { e.preventDefault(); if (me.canEdit) deleteSelected(); }
       else if (k === 'z' && mod) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
@@ -2011,6 +2213,7 @@ requireAuth().catch(function(){});
       else if (k === 'v') setTool('select'); else if (k === 'h') setTool('pan'); else if (k === 'c') setTool('count'); else if (k === 'l') setTool('linear'); else if (k === 'a') setTool('area'); else if (k === 'm') setTool('measure'); else if (k === 'n') setTool('note');
       else if (k === 'k') setTool('countline'); else if (k === 't') setTool('stamp'); else if (k === 'u') setTool('cloud'); else if (k === 'g') setTool('highlight'); else if (k === 'b') $('thumbsBtn').click();
       else if (e.key === '+' || e.key === '=') setZoom(zoom * 1.25); else if (e.key === '-') setZoom(zoom / 1.25); else if (e.key === '0') fitView();
+      else if (e.key === '[') jumpMarked(-1); else if (e.key === ']') jumpMarked(1);
       else if (e.key === 'PageUp') { e.preventDefault(); openPlan(planIdx - 1); } else if (e.key === 'PageDown') { e.preventDefault(); openPlan(planIdx + 1); }
     });
     document.addEventListener('keyup', function(e) { if (e.code === 'Space') { spaceDown = false; if (overlayCanvas && tool !== 'pan') overlayCanvas.classList.remove('hand'); if (tool !== 'pan') $('viewport').classList.remove('hand'); } });
@@ -2034,6 +2237,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=377"></script>
+<script src="sw-register.js?v=378"></script>
 </body>
 </html>
