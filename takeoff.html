@@ -6,18 +6,18 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=378">
+<link rel="stylesheet" href="procore-ui.css?v=379">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=378"></script>
-<script src="auth.js?v=378"></script>
-<script src="est-totals.js?v=378"></script>
-<script src="procore-ui.js?v=378"></script>
+<script src="supabase-config.js?v=379"></script>
+<script src="auth.js?v=379"></script>
+<script src="est-totals.js?v=379"></script>
+<script src="procore-ui.js?v=379"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=378"></script>
-<script src="est-drawings.js?v=378"></script>
-<script src="nw-catalog-picker.js?v=378"></script>
-<script src="geo-takeoff.js?v=378"></script>
+<script src="bid-actions.js?v=379"></script>
+<script src="est-drawings.js?v=379"></script>
+<script src="nw-catalog-picker.js?v=379"></script>
+<script src="geo-takeoff.js?v=379"></script>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -184,7 +184,7 @@
   .tf-bar .tf-st { width: 34px; height: 34px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; background: #fff; }
   .tf-bar .tf-st.on { background: var(--pc-link-bg, #e8f0fe); border-color: var(--pc-link, #1a66e0); color: var(--pc-link, #1a66e0); }
   .tf-prev { min-height: 44px; padding: 8px 12px; border-radius: 4px; background: #f9fafb; border: 1px dashed var(--pc-border-strong, #d1d5db); overflow: auto; max-height: 160px; display: inline-block; max-width: 100%; box-sizing: border-box; }
-  .tk-price-box { border: 1px solid var(--pc-border, #e5e7eb); border-radius: 6px; padding: 4px 12px; background: #fafbfc; }
+  .tk-price-box { border: 1px solid var(--pc-border, #e5e7eb); border-radius: 6px; padding: 4px 12px; background: #fafbfc; margin-bottom: 14px; }
   .tk-price-box .pr { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 12px; border-bottom: 1px solid var(--pc-row-sep, #eceff3); }
   .tk-price-box .pr:last-child { border-bottom: 0; } .tk-price-box .pr.strong { font-size: 13px; }
   .tk-price-box .pr b { font-weight: 600; text-align: right; }
@@ -755,6 +755,7 @@ requireAuth().catch(function(){});
     var html = '<div class="tk-pop-h"><span class="pc-dot" data-rd="dot" style="background:' + esc(l.color) + '"></span><span data-rd="name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l.name) + '</span><span data-rd="lockic">' + (l.is_locked ? ic('lock', 16) : '') + '</span><span class="x" data-act="close">' + ic('close', 18) + '</span></div>' +
       '<div class="tk-pop-tabs">' + tabs.map(function(x) { return '<span class="tk-pop-tab' + (popTab === x[0] ? ' active' : '') + '" data-tab="' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div><div class="tk-pop-b"' + (ro ? ' data-ro="1"' : '') + '>';
     if (popTab === 'main') {
+      html += '<div class="tk-price-box" data-rd="price">' + popPriceHtml(l, t) + '</div>';
       // Takeoff Type is information on an existing layer (as in Procore) — its marks were measured with this type; it is chosen in the create dialog only
       html += popField('Takeoff Type', '<div class="ro">' + l.takeoff_type[0].toUpperCase() + l.takeoff_type.slice(1) + ' <span class="pc-muted" style="font-weight:400">· ' + P.uom(typeUnit(l.takeoff_type)) + '</span></div>', TYPE_HINT[l.takeoff_type]) +
         '<div class="pc-grid2">' + popField('Line width', numIn('line_width', l.line_width || 3, 1, ' min="1" max="12"')) + popField('Symbol', '<select class="pc-select" data-f="symbol" data-kind="text">' + SYMBOLS.map(function(s) { return '<option value="' + s[0] + '"' + (l.symbol === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select>') + '</div>' +
@@ -763,8 +764,7 @@ requireAuth().catch(function(){});
         '<div class="pc-grid2">' + popField('Tag', '<input type="text" class="pc-input" data-f="tag" data-kind="text" value="' + esc(l.tag || '') + '" placeholder="e.g. L2, Phase 1">') + popField('Multiplier', numIn('multiplier', l.multiplier == null ? 1 : l.multiplier, 0.01)) + '</div>' +
         popField('Group', '<input type="text" class="pc-input" data-f="group_name" data-kind="text" list="tkGroupList" value="' + esc(l.group_name || 'Default Group') + '"><datalist id="tkGroupList">' + groupNames().map(function(g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist>') +
         '<div class="subh">Associated Catalog item</div><div class="cat-card" id="popCatCard">' + (l.catalog_item_id ? '<div class="pc-muted">Loading…</div>' : '<div><div>No catalog item</div><div class="meta">Rates on this layer are a project snapshot.</div></div>') + '<span class="ic" data-act="swapcat" title="Replace the catalog item" style="gap:4px;align-items:center;font-size:12px;font-weight:600">' + ic('find_replace', 18) + (l.catalog_item_id ? 'Replace' : 'Choose') + '</span></div>' +
-        '<div class="pc-field" style="margin-top:12px"><label class="pc-label">Resulting ' + (l.takeoff_type === 'linear' ? 'Length' : l.takeoff_type === 'area' ? 'Area' : 'Count') + '</label><div class="ro" data-rd="qty">' + qtyStr(t.qty, l.takeoff_type) + '</div></div>' +
-        '<div class="subh">Price</div><div class="tk-price-box" data-rd="price">' + popPriceHtml(l, t) + '</div>';
+        '<div class="pc-field" style="margin-top:12px"><label class="pc-label">Resulting ' + (l.takeoff_type === 'linear' ? 'Length' : l.takeoff_type === 'area' ? 'Area' : 'Count') + '</label><div class="ro" data-rd="qty">' + qtyStr(t.qty, l.takeoff_type) + '</div></div>';
     } else if (popTab === 'params') {
       var pr = l.params || {}, area = l.takeoff_type === 'area' ? t.qty : 0, vol = Number(pr.height_ft || 0) * area, wt = Number(pr.weight_per_unit || 0) * t.qty;
       html += '<div class="pc-grid2">' + popField('Slope rise : run', '<div style="display:flex;gap:6px;align-items:center">' + numIn('rise', l.rise || 0, 0.1) + '<span>:</span>' + numIn('run', l.run == null ? 12 : l.run, 0.1) + '</div>') + popField('Drop length (ft)', numIn('drop_length_ft', l.drop_length_ft || 0, 0.1), 'added per drop point (D while drawing)') + '</div>' +
@@ -793,10 +793,9 @@ requireAuth().catch(function(){});
   function popPriceHtml(l, t) {
     var u = P.uom(typeUnit(l.takeoff_type)), q = t.qty || 0, unitAll = q ? t.total / q : 0;
     function row(a, b, strong) { return '<div class="pr' + (strong ? ' strong' : '') + '"><span>' + a + '</span><b>' + b + '</b></div>'; }
-    return row('Unit material', P.money(l.unit_material_cost || 0) + ' / ' + u + (Number(l.waste_pct) ? ' <span class="pc-muted">+' + l.waste_pct + '% waste</span>' : '')) +
-      row('Unit labor', (Math.round(Number(l.unit_labor_hours || 0) * 60 * 10) / 10) + ' min / ' + u + (Number(l.labor_factor) !== 1 ? ' <span class="pc-muted">×' + l.labor_factor + '</span>' : '')) +
-      row('Material', P.money(t.mat)) + row('Labor', t.hrs.toFixed(2) + ' h × ' + P.money0(laborRate) + ' = ' + P.money(t.labor)) +
-      row('Total price', P.money(t.total) + (q ? ' <span class="pc-muted">· ' + P.money(unitAll) + ' / ' + u + '</span>' : ''), true);
+    return row('Total price', P.money(t.total) + (q ? ' <span class="pc-muted">· ' + P.money(unitAll) + ' / ' + u + '</span>' : ''), true) +
+      row('Material', P.money(t.mat) + ' <span class="pc-muted">· ' + P.money(l.unit_material_cost || 0) + ' / ' + u + (Number(l.waste_pct) ? ' +' + l.waste_pct + '% waste' : '') + '</span>') +
+      row('Labor', P.money(t.labor) + ' <span class="pc-muted">· ' + t.hrs.toFixed(2) + ' h × ' + P.money0(laborRate) + ' (' + (Math.round(Number(l.unit_labor_hours || 0) * 60 * 10) / 10) + ' min / ' + u + (Number(l.labor_factor) !== 1 ? ' ×' + l.labor_factor : '') + ')</span>');
   }
   function popLabText(l) { return '= ' + (Math.round(Number(l.unit_labor_hours || 0) * 1000) / 1000) + ' h per ' + P.uom(typeUnit(l.takeoff_type)); }
   // popover fields save on `change`, which fires on blur — the next field is already being typed in by the time the UPDATE
@@ -1484,7 +1483,7 @@ requireAuth().catch(function(){});
     var p = pt(e);
     if (tool === 'select' && me.canEdit && !dragState && !marquee) hoverCursor(p);
     if (marquee) { marquee.b = p; redraw(); return; }
-    if (dragState) { dragState.moved = true; var dx = p[0] - dragState.start[0], dy = p[1] - dragState.start[1];
+    if (dragState) { var dx = p[0] - dragState.start[0], dy = p[1] - dragState.start[1]; if (!dragState.moved && Math.hypot(dx, dy) * renderScale < 3) return; dragState.moved = true;
       dragState.ids.forEach(function(id) { var m = meas.find(function(x) { return x.id === id; }), o = dragState.orig[id]; if (!m || !o) return;
         if (dragState.vertex != null) m.points[dragState.vertex] = [o[dragState.vertex][0] + dx, o[dragState.vertex][1] + dy];
         else m.points = o.map(function(q) { return [q[0] + dx, q[1] + dy]; }); });
@@ -1521,7 +1520,7 @@ requireAuth().catch(function(){});
     if (!nudgeSt) { nudgeSt = { ids: ids, orig: {}, t: null }; ids.forEach(function(id) { var m = meas.find(function(x) { return x.id === id; }); nudgeSt.orig[id] = JSON.parse(JSON.stringify(m.points)); }); }
     var ox = dx / renderScale, oy = dy / renderScale;
     nudgeSt.ids.forEach(function(id) { var m = meas.find(function(x) { return x.id === id; }); if (m) m.points = m.points.map(function(q) { return [q[0] + ox, q[1] + oy]; }); });
-    redraw(); positionMarkCard(); clearTimeout(nudgeSt.t); nudgeSt.t = setTimeout(nudgeFlush, 700);
+    redraw(); positionMarkCard(); clearTimeout(nudgeSt.t); nudgeSt.t = setTimeout(nudgeFlush, 1000);
   }
   async function nudgeFlush() { var st = nudgeSt; if (!st) return; nudgeSt = null; clearTimeout(st.t); await saveMoved(st.ids, st.orig); }
   function onClick(e) {
@@ -2237,6 +2236,6 @@ requireAuth().catch(function(){});
     detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
 })();
 </script>
-<script src="sw-register.js?v=378"></script>
+<script src="sw-register.js?v=379"></script>
 </body>
 </html>
