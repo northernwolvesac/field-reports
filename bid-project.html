@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=379">
+<link rel="stylesheet" href="procore-ui.css?v=380">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=379"></script>
-<script src="auth.js?v=379"></script>
-<script src="est-totals.js?v=379"></script>
-<script src="procore-ui.js?v=379"></script>
+<script src="supabase-config.js?v=380"></script>
+<script src="auth.js?v=380"></script>
+<script src="est-totals.js?v=380"></script>
+<script src="procore-ui.js?v=380"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=379"></script>
-<script src="est-drawings.js?v=379"></script>
-<script src="nw-proposal.js?v=379"></script>
+<script src="bid-actions.js?v=380"></script>
+<script src="est-drawings.js?v=380"></script>
+<script src="nw-proposal.js?v=380"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -338,6 +338,11 @@
             <button type="button" class="prop-btn" data-cmd="bold" title="Bold"><b>B</b></button>
             <button type="button" class="prop-btn" data-cmd="italic" title="Italic"><i>I</i></button>
             <button type="button" class="prop-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+            <select id="propFont" class="prop-btn" title="Font"><option value="">Font</option><option>Arial</option><option>Times New Roman</option><option>Courier New</option></select>
+            <select id="propSize" class="prop-btn" title="Size"><option value="">Size</option><option value="1">7 pt</option><option value="2">8 pt</option><option value="3">Normal</option><option value="4">10 pt</option><option value="5">12 pt</option><option value="6">14 pt</option><option value="7">18 pt</option></select>
+            <input type="color" id="propColor" value="#1f2933" title="Text color" style="width:30px;height:28px;padding:0;border:1px solid var(--pc-border-strong,#d1d5db);border-radius:4px;background:#fff;cursor:pointer">
+            <button type="button" class="prop-btn" id="propUndo" title="Undo (Ctrl+Z)">&#8630; Undo</button>
+            <button type="button" class="prop-btn" id="propRedo" title="Redo (Ctrl+Y)">&#8631; Redo</button>
             <button type="button" class="prop-btn" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
             <button type="button" class="prop-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
             <button type="button" class="prop-btn" data-block="h2" title="Section heading">H2</button>
@@ -1581,6 +1586,8 @@ requireAuth().catch(function(){});
       b.addEventListener('click', function() { document.execCommand('formatBlock', false, b.getAttribute('data-block')); markPropDirty(); });
     });
     $('propPaper').addEventListener('input', function() { if (propSettings && propSettings.editMode) markPropDirty(); });
+    // font / size / color / Undo / Redo of Edit Mode (the paper itself is the editor; the browser's own Ctrl+Z / Ctrl+Y work too)
+    if (window.NWProposal && NWProposal.rich) NWProposal.rich.wire($('propPaper'), { font: $('propFont'), size: $('propSize'), color: $('propColor'), undo: $('propUndo'), redo: $('propRedo') }, function() { if (propSettings && propSettings.editMode) markPropDirty(); }, { noPaste: true });
     document.addEventListener('keydown', function(e) {
       if ((e.ctrlKey || e.metaKey) && e.key === 's' && currentTab === 'proposal') { e.preventDefault(); saveProposalHtml(true); }
     });
@@ -1621,8 +1628,8 @@ requireAuth().catch(function(){});
     if (letter) {
       html += '<div class="bp-ps-sec">Letter content</div>';
       html += '<div class="pc-field"><label class="pc-label">Mechanical drawings dated</label><input class="pc-input" id="propDrawDate" placeholder="e.g. 2/21/2025"' + (canEdit ? '' : ' disabled') + '></div>';
-      html += '<div class="pc-field"><label class="pc-label">Scope of Work <a href="#" id="propScopeReset" class="pc-link" style="font-weight:400;margin-left:6px">reset to automatic</a></label><textarea class="pc-input" id="propScope" rows="9" style="font:inherit;line-height:1.4"' + (canEdit ? '' : ' disabled') + '></textarea></div>';
-      html += '<div class="pc-field"><label class="pc-label">Exclusions / Notes <a href="#" id="propExclReset" class="pc-link" style="font-weight:400;margin-left:6px">reset to standard</a></label><textarea class="pc-input" id="propExcl" rows="9" style="font:inherit;line-height:1.4"' + (canEdit ? '' : ' disabled') + '></textarea></div>';
+      html += '<div class="pc-field"><label class="pc-label">Scope of Work <a href="#" id="propScopeReset" class="pc-link" style="font-weight:400;margin-left:6px">reset to automatic</a></label><div id="propScope"></div></div>';
+      html += '<div class="pc-field"><label class="pc-label">Exclusions / Notes <a href="#" id="propExclReset" class="pc-link" style="font-weight:400;margin-left:6px">reset to standard</a></label><div id="propExcl"></div></div>';
     }
     html += '<div class="bp-ps-sub">Proposal Builder</div>';
     html += '<div class="bp-ps-sec">Cover and Appendix Pages</div>';
@@ -1678,34 +1685,34 @@ requireAuth().catch(function(){});
   function rerenderSoon() { clearTimeout(letterRenderTimer); letterRenderTimer = setTimeout(function() { if (!propSettings.editMode) renderProposal(); }, 350); }
   async function fillLetterFields() {
     var sc = $('propScope'), ex = $('propExcl'), dd = $('propDrawDate');
-    if (!sc || !ex || !dd || !window.NWProposal) return;
+    if (!sc || !ex || !dd || !window.NWProposal || !NWProposal.rich) return;
     var lines = await loadLines();
+    if ($('propScope') !== sc) return;            // the panel was rebuilt while the lines loaded
     function autoScope() { return NWProposal.buildScope(currentVersion, lines).join('\n'); }
     function stdExcl() { return NWProposal.DEFAULT_EXCLUSIONS.join('\n'); }
-    sc.value = (currentVersion.scope_summary || '').trim() || autoScope(); sc.dataset.orig = sc.value;
-    ex.value = (currentVersion.exclusions || '').trim() || stdExcl(); ex.dataset.orig = ex.value;
     dd.value = propSettings.drawingsDate || '';
     dd.addEventListener('input', function() {
       if (!canEdit) return;
       propSettings.drawingsDate = dd.value.trim(); savePropSettings(); rerenderSoon();
     });
-    function bindArea(el, col, autoFn) {
-      el.addEventListener('change', function() {
-        if (!canEdit) { el.value = el.dataset.orig; return viewOnly(); }
-        var v = el.value.trim();
-        var saved = (v && v !== autoFn()) ? v : null;      // text equal to the automatic one stays automatic
-        currentVersion[col] = saved; queueSave(col, saved); el.dataset.orig = el.value; rerenderSoon();
-      });
+    // Scope / Exclusions are rich-text editors (font · size · color · B I U · lists · Undo / Redo). The value is stored as plain text while it has
+    // no formatting and as '<!--nwrich-->…' once it has (NWProposal.rich); text equal to the automatic / standard one stays automatic (null).
+    function saveField(col, v, autoFn) {
+      var saved = (v && v !== autoFn()) ? v : null;
+      if ((currentVersion[col] || null) === saved) return;
+      currentVersion[col] = saved; queueSave(col, saved); rerenderSoon();
     }
-    bindArea(sc, 'scope_summary', autoScope);
-    bindArea(ex, 'exclusions', stdExcl);
+    var scopeVal = (currentVersion.scope_summary || '').trim() ? currentVersion.scope_summary : autoScope();
+    var exclVal = (currentVersion.exclusions || '').trim() ? currentVersion.exclusions : stdExcl();
+    var scopeEd = NWProposal.rich.editor(sc, { value: scopeVal, disabled: !canEdit, placeholder: 'Scope of work', onChange: function(v) { saveField('scope_summary', v, autoScope); } });
+    var exclEd = NWProposal.rich.editor(ex, { value: exclVal, baseItalic: true, disabled: !canEdit, placeholder: 'Exclusions / notes', onChange: function(v) { saveField('exclusions', v, stdExcl); } });
     $('propScopeReset').addEventListener('click', function(ev) {
       ev.preventDefault(); if (!canEdit) return viewOnly();
-      currentVersion.scope_summary = null; queueSave('scope_summary', null); sc.value = autoScope(); sc.dataset.orig = sc.value; rerenderSoon();
+      currentVersion.scope_summary = null; queueSave('scope_summary', null); scopeEd.setValue(autoScope()); rerenderSoon();
     });
     $('propExclReset').addEventListener('click', function(ev) {
       ev.preventDefault(); if (!canEdit) return viewOnly();
-      currentVersion.exclusions = null; queueSave('exclusions', null); ex.value = stdExcl(); ex.dataset.orig = ex.value; rerenderSoon();
+      currentVersion.exclusions = null; queueSave('exclusions', null); exclEd.setValue(stdExcl()); rerenderSoon();
     });
   }
   function renderPropCustomer() {
@@ -1887,6 +1894,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=379"></script>
+<script src="sw-register.js?v=380"></script>
 </body>
 </html>

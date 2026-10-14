@@ -1,6 +1,6 @@
 // nw-proposal.js — Procore-style proposal renderer + exports for the NW estimating module.
 // window.NWProposal = { OFFICES, DEFAULT_EXCLUSIONS, defaultSettings, mergeSettings, compute,
-//                       render, exportPdf, exportLetter, exportXlsx }
+//                       render, exportPdf, exportLetter, exportXlsx, rich }   (rich = formatted Scope / Exclusions: see 'Rich text' below)
 //
 // Consumed by bid-project.html (Proposal tab: preview + Export PDF / Excel) and estimating.html
 // (Export proposal PDF → NWProposal.exportLetter, returns a Promise). All numbers come from est-totals.js
@@ -498,7 +498,10 @@
     '.nwp-sign .line.date{flex:0 0 2.2in}' +
     '.nwp-info p{margin:0 0 3px}.nwp-info .lbl{color:#6b7280}' +
     '.nwp-lines p{margin:0 0 6px;line-height:1.4}' +
-    '.nwp-lines.ex p{font-style:italic}' +
+    '.nwp-lines.ex p{font-style:italic}.nwp-lines.ex.rich p,.nwp-lines.ex.rich li{font-style:normal}' +
+    '.nwp-lines ul,.nwp-lines ol{margin:0 0 6px 20px;padding:0}.nwp-lines li{margin:0 0 3px;line-height:1.4}' +
+    '.nwp-paper .ff-times,.nwp-paper font[face*="Times"]{font-family:"Times New Roman",Times,serif}.nwp-paper .ff-courier,.nwp-paper font[face*="Courier"]{font-family:"Courier New",Courier,monospace}' +
+    '.nwp-paper font[size="1"]{font-size:7pt}.nwp-paper font[size="2"]{font-size:8pt}.nwp-paper font[size="3"]{font-size:8.6pt}.nwp-paper font[size="4"]{font-size:10pt}.nwp-paper font[size="5"]{font-size:12pt}.nwp-paper font[size="6"]{font-size:14pt}.nwp-paper font[size="7"]{font-size:18pt}' +
     '.nwp-page2{page-break-before:always;padding-top:4px}' +
     '.nwp-page2 .nwp-lines.n410 p{margin:0 0 5px}' +
     '.nwp-page2 .nwp-terms{margin:0 0 6px;line-height:1.5}' +
@@ -516,8 +519,9 @@
     ctx = ctx || {};
     var S = m.settings, T = m.totals, e = m.est, o = m.office;
     var clean = function (t) { return String(t || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean); };
-    var scope = (e.scope_summary && String(e.scope_summary).trim()) ? clean(e.scope_summary) : buildScope(e, m.lines);
-    var excl = clean(m.exclusions);
+    var scopeRich = isRich(e.scope_summary), exclRich = isRich(m.exclusions);
+    var scope = scopeRich ? [] : ((e.scope_summary && String(e.scope_summary).trim()) ? clean(e.scope_summary) : buildScope(e, m.lines));
+    var excl = exclRich ? [] : clean(m.exclusions);
     var show410 = S.r410a === 'on' || (S.r410a !== 'off' && hasR410a(e, m.lines));
     var cust = e.requester_company || e.client_name || '';
 
@@ -549,12 +553,12 @@
     if (S.drawingsDate) h += '<p><span class="lbl">Mechanical drawings dated:</span> ' + esc(S.drawingsDate) + '</p>';
     h += '</div>';
 
-    h += '<div class="nwp-h">Scope of Work</div><div class="nwp-lines">';
-    scope.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
+    h += '<div class="nwp-h">Scope of Work</div><div class="nwp-lines' + (scopeRich ? ' rich' : '') + '">';
+    if (scopeRich) h += richToHtml(e.scope_summary); else scope.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
     h += '</div>';
 
-    h += '<div class="nwp-h">Exclusions / Notes</div><div class="nwp-lines ex">';
-    excl.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
+    h += '<div class="nwp-h">Exclusions / Notes</div><div class="nwp-lines ex' + (exclRich ? ' rich' : '') + '">';
+    if (exclRich) h += richToHtml(m.exclusions); else excl.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
     h += '</div>';
 
     // page 2
@@ -635,7 +639,7 @@
          (e.project_number ? ' <span class="lbl">· Project # ' + esc(e.project_number) + '</span>' : '') + '</p>';
     h += '<div class="nwp-h">Scope of Work</div>';
     var scope = e.scope_summary || e.project_description || '';
-    if (scope) h += '<p class="nwp-scope">' + nl2br(scope) + '</p>';
+    if (scope) h += isRich(scope) ? '<div class="nwp-scope nwp-lines rich">' + richToHtml(scope) + '</div>' : '<p class="nwp-scope">' + nl2br(scope) + '</p>';
 
     // ── Groups
     function thead() {
@@ -690,7 +694,7 @@
     h += '<div class="nwp-notes"><div class="nwp-h">Notes</div>';
     if (e.notes) h += '<p>' + nl2br(e.notes) + '</p>';
     if (e.inclusions) h += '<h4>Inclusions</h4><p>' + nl2br(e.inclusions) + '</p>';
-    h += '<h4>Exclusions</h4><p>' + nl2br(m.exclusions) + '</p>';
+    h += '<h4>Exclusions</h4>' + (isRich(m.exclusions) ? '<div class="nwp-lines ex rich">' + richToHtml(m.exclusions) + '</div>' : '<p>' + nl2br(m.exclusions) + '</p>');
     h += '</div>';
 
     // ── Summary + Taxes (side by side)
@@ -844,6 +848,7 @@
       var size = parseFloat(cs.fontSize) || 12, wt = cs.fontWeight, bold = wt === 'bold' || wt === 'bolder' || (parseInt(wt, 10) || 400) >= 600;
       var italic = cs.fontStyle === 'italic' || cs.fontStyle === 'oblique', col = cssColor(cs.color) || { r: 0, g: 0, b: 0 }, under = /underline/.test(cs.textDecorationLine || cs.textDecoration || '');
       var upper = cs.textTransform === 'uppercase', lower = cs.textTransform === 'lowercase';
+      var ff = String(cs.fontFamily || '').split(',')[0].replace(/["']/g, '').trim().toLowerCase(), family = /^(times|liberation serif)/.test(ff) ? 'times' : /^(courier|liberation mono)/.test(ff) ? 'courier' : 'helvetica';
       var re = /\S+/g, m, lines = [], rng = document.createRange();
       while ((m = re.exec(data))) {
         rng.setStart(node, m.index); rng.setEnd(node, m.index + m[0].length);
@@ -853,7 +858,7 @@
         else lines.push({ text: w, left: rc.left, right: rc.right, rtop: rc.top, height: rc.height });
       }
       lines.forEach(function (l) {
-        items.push({ kind: 'text', text: l.text, x: l.left - ox, y: l.rtop - oy, h: l.height, w: l.right - l.left, size: size, bold: bold, italic: italic, color: col, under: under, top: l.rtop - oy, bottom: l.rtop - oy + l.height, keep: keep });
+        items.push({ kind: 'text', text: l.text, x: l.left - ox, y: l.rtop - oy, h: l.height, w: l.right - l.left, size: size, bold: bold, italic: italic, family: family, color: col, under: under, top: l.rtop - oy, bottom: l.rtop - oy + l.height, keep: keep });
       });
     }
     walk(root);
@@ -889,10 +894,16 @@
       host.className = 'nwp-vexport';
       host.style.cssText = 'position:fixed;left:-12000px;top:0;width:8.5in;background:#fff;z-index:-1';
       var st = document.createElement('style');
-      st.textContent = '.nwp-vexport,.nwp-vexport *{font-family:' + V.FONT + ' !important;-webkit-font-smoothing:auto}';
+      st.textContent = '.nwp-vexport,.nwp-vexport *{font-family:' + V.FONT + ' !important;-webkit-font-smoothing:auto}' +
+        '.nwp-vexport .ff-times{font-family:"Times New Roman","Liberation Serif",Times,serif !important}.nwp-vexport .ff-courier{font-family:"Courier New","Liberation Mono",Courier,monospace !important}';
       host.appendChild(st);
       var clone = sheet.cloneNode(true);
       clone.removeAttribute('contenteditable'); clone.removeAttribute('id');
+      // fonts picked in Edit Mode (<font face>, inline font-family) → the classes that survive the Arial override above
+      Array.prototype.forEach.call(clone.querySelectorAll('font[face],[style*="font-family"]'), function (el) {
+        var f = el.getAttribute('face') || el.style.fontFamily || '';
+        if (/times/i.test(f)) el.classList.add('ff-times'); else if (/courier/i.test(f)) el.classList.add('ff-courier');
+      });
       clone.style.margin = '0'; clone.style.width = '8.5in'; clone.style.minHeight = '0';
       host.appendChild(clone); document.body.appendChild(host);
       var imgs = Array.prototype.slice.call(clone.querySelectorAll('img'));
@@ -921,7 +932,7 @@
               doc.circle(it.x * PX, (it.y - dy) * PX, it.r * PX, it.hollow ? 'S' : 'F');
             } else {
               var txt = pdfText(it.text); if (!txt) return;
-              doc.setFont('helvetica', it.bold && it.italic ? 'bolditalic' : it.bold ? 'bold' : it.italic ? 'italic' : 'normal');
+              doc.setFont(it.family || 'helvetica', it.bold && it.italic ? 'bolditalic' : it.bold ? 'bold' : it.italic ? 'italic' : 'normal');
               doc.setFontSize(it.size * PX); doc.setTextColor(it.color.r, it.color.g, it.color.b);
               var base = (it.y - dy + it.h * 0.82) * PX;
               doc.text(txt, it.x * PX, base, it.align === 'right' ? { align: 'right' } : undefined);
@@ -1147,7 +1158,7 @@
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor.apply(doc, COLOR_BODY);
-    var scopeLines = String(est.scope_summary || '')
+    var scopeLines = richToText(est.scope_summary)
       .split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
     scopeLines.forEach(function(line, idx) {
       var wrapped = doc.splitTextToSize(line, RIGHT_X - BODY_X);
@@ -1167,7 +1178,7 @@
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(9);
     doc.setTextColor.apply(doc, COLOR_BODY);
-    var exclLines = String(est.exclusions || DEFAULT_EXCLUSIONS.join('\n'))
+    var exclLines = richToText(est.exclusions || DEFAULT_EXCLUSIONS.join('\n'))
       .split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
     exclLines.forEach(function(line, idx) {
       var wrapped = doc.splitTextToSize(line, RIGHT_X - BODY_X);
@@ -1294,6 +1305,231 @@
   }
   function round2(n) { return Math.round(num(n) * 100) / 100; }
 
+    // ─────────────────────────────────────────────────────────────────────────
+  //  Rich text for the letter fields (Scope of Work · Exclusions / Notes)
+  //  estimates.scope_summary / exclusions hold EITHER plain text (one paragraph per line — the old format, still what an
+  //  unformatted field is) OR '<!--nwrich-->' + canonical HTML: <p> / <ul> / <ol><li> blocks whose text may carry <b> <i> <u>
+  //  and <span> with color / font-size (pt) / font-family (Arial · Times New Roman · Courier New — the three families the PDF
+  //  can draw) only. Everything else a browser or Word adds on edit / paste is dropped by sanitize().
+  // ─────────────────────────────────────────────────────────────────────────
+  var RICH_TAG = '<!--nwrich-->';
+  var RICH_FONTS = { 'arial': 'Arial', 'helvetica': 'Arial', 'times new roman': 'Times New Roman', 'times': 'Times New Roman', 'courier new': 'Courier New', 'courier': 'Courier New' };
+  var RICH_SIZES = [7, 8, 8.6, 10, 12, 14, 18];   // pt for <font size="1".."7"> (3 = the letter's normal size, 8.6 pt = 11.5 px)
+  var BASE_PT = 8.6;
+  function isRich(s) { return typeof s === 'string' && s.indexOf(RICH_TAG) === 0; }
+  function rColor(c) {
+    c = String(c || '').trim().toLowerCase();
+    var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(c);
+    if (m) return c.length === 4 ? '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3] : c;
+    m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(c);
+    if (m) return '#' + [m[1], m[2], m[3]].map(function (x) { return ('0' + Math.min(255, +x).toString(16)).slice(-2); }).join('');
+    return '';
+  }
+  function rSize(v) {
+    var m = /^([\d.]+)(pt|px)$/.exec(String(v || '').trim().toLowerCase()); if (!m) return 0;
+    var pt = m[2] === 'px' ? +m[1] * 0.75 : +m[1];
+    return pt >= 6 && pt <= 48 ? Math.round(pt * 10) / 10 : 0;
+  }
+  function rFont(v) { return RICH_FONTS[String(v || '').split(',')[0].replace(/["']/g, '').trim().toLowerCase()] || ''; }
+  function rKey(st) { return [st.b ? 1 : 0, st.i ? 1 : 0, st.u ? 1 : 0, st.c || '', st.s || '', st.f || ''].join('|'); }
+  function rPlainStyle(st, baseItalic) { return !st.b && !st.u && !st.c && !(st.s && Math.abs(st.s - BASE_PT) > 0.05) && !(st.f && st.f !== 'Arial') && (baseItalic ? true : !st.i); }
+
+  // HTML (anything a contenteditable / Word / the web produces) → blocks: [{k:'p', runs:[{t,st}|{br}]}, {k:'ul'|'ol', items:[runs…]}]
+  function richBlocks(html) {
+    var root;
+    try { root = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html').body; } catch (e) { return []; }
+    var blocks = [], cur = null;
+    function flush() {
+      if (cur && cur.some(function (r) { return r.br || /\S/.test(r.t); })) {
+        while (cur.length && cur[0].t != null && !/\S/.test(cur[0].t)) cur.shift();
+        while (cur.length && cur[cur.length - 1].t != null && !/\S/.test(cur[cur.length - 1].t)) cur.pop();
+        blocks.push({ k: 'p', runs: cur });
+      }
+      cur = null;
+    }
+    function style(n, st) {
+      var s = Object.assign({}, st), tag = n.tagName, cs = n.style || {}, v;
+      if (tag === 'B' || tag === 'STRONG') s.b = 1;
+      if (tag === 'I' || tag === 'EM') s.i = 1;
+      if (tag === 'U') s.u = 1;
+      if (tag === 'FONT') {
+        if ((v = rColor(n.getAttribute('color')))) s.c = v;
+        if ((v = rFont(n.getAttribute('face')))) s.f = v;
+        var sz = parseInt(n.getAttribute('size'), 10); if (sz >= 1 && sz <= 7) s.s = RICH_SIZES[sz - 1];
+      }
+      if ((v = rColor(cs.color))) s.c = v;
+      if ((v = rSize(cs.fontSize))) s.s = v;
+      if ((v = rFont(cs.fontFamily))) s.f = v;
+      if (cs.fontWeight) s.b = (cs.fontWeight === 'bold' || cs.fontWeight === 'bolder' || (parseInt(cs.fontWeight, 10) || 400) >= 600) ? 1 : 0;
+      if (cs.fontStyle) s.i = /italic|oblique/.test(cs.fontStyle) ? 1 : 0;
+      if (/underline/.test(cs.textDecoration || cs.textDecorationLine || '')) s.u = 1;
+      return s;
+    }
+    function inline(n, st) {
+      if (n.nodeType === 3) {
+        var t = n.nodeValue.replace(/[ ​]/g, ' ').replace(/[\r\n\t ]+/g, ' ');
+        if (t) (cur = cur || []).push({ t: t, st: st });
+        return;
+      }
+      if (n.nodeType !== 1) return;
+      var tag = n.tagName;
+      if (/^(SCRIPT|STYLE|HEAD|META|LINK|TITLE|TEMPLATE)$/.test(tag)) return;
+      if (tag === 'BR') { (cur = cur || []).push({ br: true }); return; }
+      if (tag === 'UL' || tag === 'OL') { flush(); var items = []; listItems(n, st, items); if (items.length) blocks.push({ k: tag.toLowerCase(), items: items }); return; }
+      var s = style(n, st);
+      if (/^(DIV|P|H[1-6]|BLOCKQUOTE|PRE|SECTION|ARTICLE|TABLE|TBODY|TR|TD|TH|LI)$/.test(tag)) { flush(); kids(n, s); flush(); return; }
+      kids(n, s);
+    }
+    function kids(n, s) { Array.prototype.forEach.call(n.childNodes, function (c) { inline(c, s); }); }
+    function listItems(list, st, items) {
+      Array.prototype.forEach.call(list.children, function (li) {
+        if (li.tagName !== 'LI') return;
+        var s = style(li, st); cur = null;
+        Array.prototype.forEach.call(li.childNodes, function (c) {
+          if (c.nodeType === 1 && (c.tagName === 'UL' || c.tagName === 'OL')) {
+            if (cur && cur.some(function (r) { return r.br || /\S/.test(r.t); })) { items.push(cur); } cur = null; listItems(c, s, items);
+          } else inline(c, s);
+        });
+        if (cur && cur.some(function (r) { return r.br || /\S/.test(r.t); })) { while (cur.length && cur[0].t != null && !/\S/.test(cur[0].t)) cur.shift(); items.push(cur); }
+        cur = null;
+      });
+    }
+    kids(root, {}); flush();
+    return blocks;
+  }
+  function rRunsHtml(runs) {
+    var out = '', i = 0;
+    while (i < runs.length) {
+      var r = runs[i];
+      if (r.br) { out += '<br>'; i++; continue; }
+      var key = rKey(r.st), t = '';
+      while (i < runs.length && !runs[i].br && rKey(runs[i].st) === key) { t += runs[i].t; i++; }
+      var st = r.st, inner = esc(t);
+      if (st.u) inner = '<u>' + inner + '</u>';
+      if (st.i) inner = '<i>' + inner + '</i>';
+      if (st.b) inner = '<b>' + inner + '</b>';
+      var css = [], cls = '';
+      if (st.c) css.push('color:' + st.c);
+      if (st.s && Math.abs(st.s - BASE_PT) > 0.05) css.push('font-size:' + st.s + 'pt');
+      if (st.f && st.f !== 'Arial') { css.push("font-family:'" + st.f + "'"); cls = st.f === 'Times New Roman' ? 'ff-times' : 'ff-courier'; }
+      if (css.length) inner = '<span' + (cls ? ' class="' + cls + '"' : '') + ' style="' + css.join(';') + '">' + inner + '</span>';
+      out += inner;
+    }
+    return out;
+  }
+  function blocksHtml(blocks) {
+    return blocks.map(function (b) {
+      return b.k === 'p' ? '<p>' + rRunsHtml(b.runs) + '</p>' : '<' + b.k + '>' + b.items.map(function (it) { return '<li>' + rRunsHtml(it) + '</li>'; }).join('') + '</' + b.k + '>';
+    }).join('');
+  }
+  function richSanitize(html) { return blocksHtml(richBlocks(html)); }
+  function runsText(runs) { return runs.map(function (r) { return r.br ? '\n' : r.t; }).join('').replace(/[ \t]*\n[ \t]*/g, '\n').trim(); }
+  function blocksText(blocks) {
+    var out = [];
+    blocks.forEach(function (b) {
+      if (b.k === 'p') runsText(b.runs).split('\n').forEach(function (l) { if (l.trim()) out.push(l.trim()); });
+      else b.items.forEach(function (it, n) { var t = runsText(it).replace(/\n+/g, ' '); if (t) out.push((b.k === 'ol' ? (n + 1) + '. ' : '- ') + t); });
+    });
+    return out.join('\n');
+  }
+  // stored value → plain text lines (for every consumer that cannot show formatting)
+  function richToText(s) { return isRich(s) ? blocksText(richBlocks(s.slice(RICH_TAG.length))) : String(s == null ? '' : s); }
+  // stored value → paragraphs for the letter / the editor. Plain text: one <p> per non-empty line.
+  function richToHtml(s, opts) {
+    opts = opts || {};
+    if (isRich(s)) return richSanitize(s.slice(RICH_TAG.length));
+    return String(s || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean).map(function (x) { return '<p>' + (opts.baseItalic ? '<i>' + esc(x) + '</i>' : esc(x)) + '</p>'; }).join('');
+  }
+  // editor HTML → value to store. Without any formatting it stays PLAIN text (so an untouched / unformatted field keeps working
+  // everywhere); with formatting or lists it becomes '<!--nwrich-->…'.
+  function richFromEditor(html, opts) {
+    opts = opts || {};
+    var blocks = richBlocks(html);
+    if (!blocks.length) return '';
+    var plain = blocks.every(function (b) { return b.k === 'p' && b.runs.every(function (r) { return r.br || rPlainStyle(r.st, opts.baseItalic) && (!opts.baseItalic || r.st.i || !/\S/.test(r.t)); }); });
+    if (plain) return blocksText(blocks);
+    return RICH_TAG + blocksHtml(blocks);
+  }
+
+  // ── editor: toolbar (font · size · color · B I U · lists · Undo / Redo) + contenteditable ─────────────
+  var RICH_SWATCHES = ['#1f2933', '#dc2626', '#1a66e0', '#16a34a', '#d97706', '#7c3aed'];
+  function injectRichCss() {
+    if (document.getElementById('nwr-style')) return;
+    var s = document.createElement('style'); s.id = 'nwr-style';
+    var fs = ''; RICH_SIZES.forEach(function (pt, i) { fs += '.nwr-ed font[size="' + (i + 1) + '"]{font-size:' + pt + 'pt}'; });
+    s.textContent =
+      '.nwr-wrap{border:1px solid #75838a;border-radius:4px;background:#fff;font-size:12px}' +
+      '.nwr-wrap.dis{background:#f9fafb}' +
+      '.nwr-bar{display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:5px;border-bottom:1px solid #e5e7eb;background:#f4f5f6;border-radius:4px 4px 0 0}' +
+      '.nwr-bar select{height:26px;border:1px solid #cfd5d9;border-radius:3px;background:#fff;font:inherit;font-size:12px;padding:0 2px;max-width:96px}.nwr-bar select[data-f=size]{max-width:66px}' +
+      '.nwr-bar button{min-width:26px;height:26px;border:1px solid transparent;border-radius:3px;background:transparent;cursor:pointer;font:inherit;font-size:13px;padding:0 5px;color:#232729}' +
+      '.nwr-bar button:hover{background:#e4e7e9}.nwr-bar button:disabled{opacity:.4;cursor:default}' +
+      '.nwr-bar .sw{width:16px;min-width:16px;height:16px;border-radius:50%;padding:0;border:1px solid rgba(0,0,0,.2);margin:0 1px}' +
+      '.nwr-bar input[type=color]{width:24px;height:24px;padding:0;border:0;background:none;cursor:pointer}' +
+      '.nwr-bar .sep{width:1px;height:18px;background:#d6dadc;margin:0 3px}' +
+      '.nwr-ed{min-height:150px;max-height:420px;overflow:auto;padding:8px 10px;outline:0;font:11.5px/1.4 Arial,Helvetica,sans-serif;color:#1f2933}' +
+      '.nwr-ed:focus{box-shadow:inset 0 0 0 2px #e8f0fe}' +
+      '.nwr-ed p{margin:0 0 6px}.nwr-ed ul,.nwr-ed ol{margin:0 0 6px 18px;padding:0}.nwr-ed li{margin:0 0 3px}' +
+      '.nwr-ed .ff-times,.nwr-ed font[face*="Times"]{font-family:"Times New Roman",Times,serif}.nwr-ed .ff-courier,.nwr-ed font[face*="Courier"]{font-family:"Courier New",Courier,monospace}' + fs;
+    document.head.appendChild(s);
+  }
+  // wires formatting controls to a contenteditable. ctl = { font, size, color (input), swatches (container), bold, italic, underline, ul, ol, undo, redo, clear } (elements, all optional)
+  function wireFormatControls(ed, ctl, onEdit, opts) {
+    var saved = null;
+    function saveSel() { var sel = window.getSelection(); if (sel && sel.rangeCount && ed.contains(sel.anchorNode)) saved = sel.getRangeAt(0).cloneRange(); }
+    function restore() { ed.focus(); if (saved) { var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(saved); } }
+    document.addEventListener('selectionchange', function () { if (document.activeElement === ed) saveSel(); });
+    ed.addEventListener('blur', saveSel); ed.addEventListener('mouseup', saveSel); ed.addEventListener('keyup', saveSel);
+    function exec(cmd, val) { restore(); try { document.execCommand('styleWithCSS', false, false); document.execCommand(cmd, false, val == null ? null : val); } catch (e) { console.warn('[nw-proposal] ' + cmd, e); } saveSel(); if (onEdit) onEdit(); }
+    function keepFocus(b) { if (b) b.addEventListener('mousedown', function (e) { e.preventDefault(); }); }
+    [['bold', 'bold'], ['italic', 'italic'], ['underline', 'underline'], ['ul', 'insertUnorderedList'], ['ol', 'insertOrderedList'], ['undo', 'undo'], ['redo', 'redo']].forEach(function (p) {
+      var b = ctl[p[0]]; if (!b) return; keepFocus(b); b.addEventListener('click', function () { exec(p[1]); });
+    });
+    if (ctl.clear) { keepFocus(ctl.clear); ctl.clear.addEventListener('click', function () { exec('removeFormat'); }); }
+    if (ctl.font) ctl.font.addEventListener('change', function () { if (this.value) exec('fontName', this.value); this.selectedIndex = 0; });
+    if (ctl.size) ctl.size.addEventListener('change', function () { if (this.value) exec('fontSize', this.value); this.selectedIndex = 0; });
+    if (ctl.color) { ctl.color.addEventListener('input', function () { exec('foreColor', this.value); }); }
+    if (ctl.swatches) Array.prototype.forEach.call(ctl.swatches.querySelectorAll('[data-c]'), function (b) { keepFocus(b); b.addEventListener('click', function () { exec('foreColor', b.getAttribute('data-c')); }); });
+    ed.addEventListener('focus', function () { try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) {} });
+    // paste: keep the formatting that survives sanitize() (colors, sizes, fonts, bold…), drop everything else Word / web pages bring
+    if (!(opts && opts.noPaste)) ed.addEventListener('paste', function (e) {
+      var cd = e.clipboardData; if (!cd) return;
+      e.preventDefault();
+      var h = cd.getData('text/html'), t = cd.getData('text/plain');
+      var out = h ? richSanitize(h) : String(t || '').split(/\r?\n/).filter(function (x) { return x.trim(); }).map(function (x) { return '<p>' + esc(x) + '</p>'; }).join('');
+      if (out) { document.execCommand('insertHTML', false, out); if (onEdit) onEdit(); }
+    });
+    return { exec: exec, restore: restore };
+  }
+  function richEditor(host, opts) {
+    opts = opts || {};
+    injectRichCss();
+    var dis = !!opts.disabled;
+    host.innerHTML =
+      '<div class="nwr-wrap' + (dis ? ' dis' : '') + '"><div class="nwr-bar">' +
+        '<select data-f="font" title="Font"><option value="">Font</option><option>Arial</option><option>Times New Roman</option><option>Courier New</option></select>' +
+        '<select data-f="size" title="Size"><option value="">Size</option><option value="1">7 pt</option><option value="2">8 pt</option><option value="3">Normal</option><option value="4">10 pt</option><option value="5">12 pt</option><option value="6">14 pt</option><option value="7">18 pt</option></select>' +
+        '<span class="sep"></span><button type="button" data-f="bold" title="Bold (Ctrl+B)"><b>B</b></button><button type="button" data-f="italic" title="Italic (Ctrl+I)"><i>I</i></button><button type="button" data-f="underline" title="Underline (Ctrl+U)"><u>U</u></button>' +
+        '<span class="sep"></span><button type="button" data-f="ul" title="Bulleted list">&bull;&ndash;</button><button type="button" data-f="ol" title="Numbered list">1.</button>' +
+        '<span class="sep"></span><span data-f="swatches">' + RICH_SWATCHES.map(function (c) { return '<button type="button" class="sw" data-c="' + c + '" style="background:' + c + '" title="Text color"></button>'; }).join('') + '</span><input type="color" data-f="color" value="#1f2933" title="Any text color">' +
+        '<span class="sep"></span><button type="button" data-f="undo" title="Undo (Ctrl+Z)">&#8630;</button><button type="button" data-f="redo" title="Redo (Ctrl+Y)">&#8631;</button><button type="button" data-f="clear" title="Clear formatting of the selection">T<sub style="font-size:9px">x</sub></button>' +
+      '</div><div class="nwr-ed" contenteditable="' + (dis ? 'false' : 'true') + '" spellcheck="true"' + (opts.placeholder ? ' data-placeholder="' + esc(opts.placeholder) + '"' : '') + '></div></div>';
+    var ed = host.querySelector('.nwr-ed'), q = function (f) { return host.querySelector('[data-f="' + f + '"]'); };
+    var timer = null;
+    function fire() { if (opts.onChange && !dis) opts.onChange(getValue()); }
+    function schedule() { clearTimeout(timer); timer = setTimeout(fire, opts.delay || 700); }
+    function getValue() { return richFromEditor(ed.innerHTML, { baseItalic: opts.baseItalic }); }
+    function setValue(v) { ed.innerHTML = richToHtml(v, { baseItalic: opts.baseItalic }) || '<p><br></p>'; }
+    setValue(opts.value);
+    if (dis) host.querySelectorAll('.nwr-bar select, .nwr-bar button, .nwr-bar input').forEach(function (x) { x.disabled = true; });
+    else {
+      wireFormatControls(ed, { font: q('font'), size: q('size'), color: q('color'), swatches: q('swatches'), bold: q('bold'), italic: q('italic'), underline: q('underline'), ul: q('ul'), ol: q('ol'), undo: q('undo'), redo: q('redo'), clear: q('clear') }, schedule);
+      ed.addEventListener('input', schedule);
+      ed.addEventListener('blur', function () { clearTimeout(timer); fire(); });
+    }
+    return { el: ed, getValue: getValue, setValue: setValue, flush: function () { clearTimeout(timer); fire(); } };
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   window.NWProposal = {
     OFFICES: OFFICES,
@@ -1315,6 +1551,7 @@
     vectorPdf: vectorPdf,   // text PDF of a sheet (used by exportPdf; exposed for checks)
     exportLetter: exportLetter,
     exportXlsx: exportXlsx,
+    rich: { TAG: RICH_TAG, isRich: isRich, toText: richToText, toHtml: richToHtml, sanitize: richSanitize, fromEditor: richFromEditor, editor: richEditor, wire: wireFormatControls },
     money: money,
     qty: qtyFmt,
     pct: pctFmt

@@ -11,18 +11,18 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=379">
+<link rel="stylesheet" href="procore-ui.css?v=380">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=379"></script>
-<script src="auth.js?v=379"></script>
-<script src="est-totals.js?v=379"></script>
-<script src="procore-ui.js?v=379"></script>
-<script src="nw-catalog-picker.js?v=379"></script>
-<script src="nw-proposal.js?v=379"></script>
-<script src="bid-actions.js?v=379"></script>
+<script src="supabase-config.js?v=380"></script>
+<script src="auth.js?v=380"></script>
+<script src="est-totals.js?v=380"></script>
+<script src="procore-ui.js?v=380"></script>
+<script src="nw-catalog-picker.js?v=380"></script>
+<script src="nw-proposal.js?v=380"></script>
+<script src="bid-actions.js?v=380"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -958,6 +958,8 @@ requireAuth().catch(function(){});
   // ══════════════════════════════════════════════════════════════════════════
   var editingEstId = null;
 
+  var editRich = null, scopeFlush = null;
+  function plainOf(v) { return (window.NWProposal && NWProposal.rich && NWProposal.rich.isRich(v)) ? NWProposal.rich.toText(v) : stripHtml(v || ''); }
   async function openEstimateModal(estId) {
     editingEstId = estId || null;
     $('estModalTitle').textContent = estId ? 'Edit Estimate Details' : 'New Estimate';
@@ -985,9 +987,13 @@ requireAuth().catch(function(){});
     $('eClientName').value  = d.client_name || '';
     $('eClientAddr').value  = d.client_address || '';
     $('eProjectAddr').value = d.project_address || '';
-    $('eScope').value       = stripHtml(d.scope_summary || '');
+    // scope / exclusions may hold formatted text ('<!--nwrich-->…', made in the Proposal tab): the box shows it as plain text and the
+    // original is kept on Save while that text is not touched (so opening Edit details never strips the formatting)
+    editRich = { scope: d.scope_summary || '', excl: d.exclusions || '' };
+    $('eScope').value       = plainOf(d.scope_summary || '');
     $('eInclusions').value  = d.inclusions || '';
-    $('eExclusions').value  = d.exclusions || '';
+    $('eExclusions').value  = plainOf(d.exclusions || '');
+    editRich.scopePlain = $('eScope').value.trim(); editRich.exclPlain = $('eExclusions').value.trim();
     if (!estId) {
       var seqRes = await supabaseClient.from('estimates').select('quote_number')
         .order('quote_number', { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
@@ -1008,9 +1014,9 @@ requireAuth().catch(function(){});
       client_name:     $('eClientName').value.trim() || null,
       client_address:  $('eClientAddr').value.trim() || null,
       project_address: $('eProjectAddr').value.trim() || null,
-      scope_summary:   $('eScope').value.trim() || null,
+      scope_summary:   (editRich && editRich.scope && $('eScope').value.trim() === editRich.scopePlain) ? editRich.scope : ($('eScope').value.trim() || null),
       inclusions:      $('eInclusions').value.trim() || null,
-      exclusions:      $('eExclusions').value.trim() || null
+      exclusions:      (editRich && editRich.excl && $('eExclusions').value.trim() === editRich.exclPlain) ? editRich.excl : ($('eExclusions').value.trim() || null)
     };
     if (!patch.name) { showToast('Estimate name is required', 'error'); return; }
     var btn = $('estSave');
@@ -3026,37 +3032,25 @@ requireAuth().catch(function(){});
   function renderNotes() {
     var host = $('notesBody'); if (!host) return;
     // legacy rows may hold HTML (earlier editor build / ai-estimator) — shown and re-saved as text, never injected
-    var scope = stripHtml(currentEst.scope_summary || '');
+    if (scopeFlush) { try { scopeFlush(); } catch (e) {} scopeFlush = null; }     // unsaved typing is written before the panel is rebuilt
     var incl = (currentEst.inclusions || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
     var ro = !canEdit;
     host.innerHTML =
       '<div class="es-sub-h" style="margin-top:0">Scope of Work</div>' +
-      '<div class="es-editor-bar">' +
-        [['bold','B'],['italic','I'],['underline','U'],['strikeThrough','S']].map(function(b) { return '<button data-cmd="' + b[0] + '" title="' + b[0] + '" style="font-weight:' + (b[0] === 'bold' ? '700' : '400') + ';' + (b[0] === 'italic' ? 'font-style:italic;' : '') + (b[0] === 'underline' ? 'text-decoration:underline;' : '') + (b[0] === 'strikeThrough' ? 'text-decoration:line-through;' : '') + '">' + b[1] + '</button>'; }).join('') +
-        '<button data-cmd="justifyLeft" title="Align left">' + icon('list', 14) + '</button>' +
-        '<button data-cmd="justifyCenter" title="Align center">' + icon('view_column', 14) + '</button>' +
-        '<button data-cmd="insertUnorderedList" title="Bulleted list">&bull;</button>' +
-        '<button data-cmd="insertOrderedList" title="Numbered list">1.</button>' +
-      '</div>' +
-      '<div class="es-editor" id="scopeEditor" contenteditable="' + (ro ? 'false' : 'true') + '" data-placeholder="Scope of work shown on the proposal">' + escHtml(scope).replace(/\n/g, '<br>') + '</div>' +
-      '<div class="pc-muted" style="font-size:11px;margin-top:4px">Saved as plain text — line breaks and bullets carry to the proposal; bold / italic are for on-screen reading only.</div>' +
+      '<div id="scopeRich"></div>' +
+      '<div class="pc-muted" id="scopeSaved" style="font-size:11px;margin-top:4px">Font, size, color, bold, lists… carry to the proposal letter (also editable in the Proposal tab → Detail Settings).</div>' +
       '<div class="es-sub-h">Included' + (canEdit ? '<span class="lnk" id="inclBrowse">Browse library</span><button class="pc-btn pc-btn-icon pc-btn-ghost" id="inclAdd" style="height:24px;width:24px" title="Add">' + icon('add', 16) + '</button>' : '') + '</div>' +
       '<ul class="es-incl" id="inclList">' + (incl.length ? incl.map(function(s, i) { return '<li><span>' + escHtml(s) + '</span>' + (canEdit ? '<span class="x" data-inclx="' + i + '" title="Remove">' + icon('close', 14) + '</span>' : '') + '</li>'; }).join('') : '<li class="pc-muted">Nothing listed yet.</li>') + '</ul>' +
       '<div class="es-sub-h">Exclusions <span class="pc-muted" style="font-weight:400;font-size:12px;margin-left:6px">edit via Edit details</span></div>' +
-      '<div class="pc-muted" style="font-size:12px;white-space:pre-wrap">' + escHtml(currentEst.exclusions || '(NWAC standard exclusions apply)') + '</div>';
-    var ed = $('scopeEditor');
-    host.querySelectorAll('[data-cmd]').forEach(function(b) {
-      b.addEventListener('mousedown', function(e) { e.preventDefault(); });
-      b.addEventListener('click', function() { if (ro) return; ed.focus(); try { document.execCommand(b.getAttribute('data-cmd'), false, null); } catch (e) {} });
-    });
-    if (!ro) ed.addEventListener('blur', async function() {
-      var val = editorText(ed);
-      if (val === (currentEst.scope_summary || '')) return;
-      var r = await supabaseClient.from('estimates').update({ scope_summary: val || null }).eq('id', currentEst.id);
+      '<div class="pc-muted" style="font-size:12px;white-space:pre-wrap">' + escHtml(plainOf(currentEst.exclusions) || '(NWAC standard exclusions apply)') + '</div>';
+    var scopeRaw = currentEst.scope_summary || '';
+    var scopeEd = NWProposal.rich.editor($('scopeRich'), { value: NWProposal.rich.isRich(scopeRaw) ? scopeRaw : stripHtml(scopeRaw), disabled: ro, placeholder: 'Scope of work shown on the proposal', onChange: async function(v) {
+      v = v || null; if (v === (currentEst.scope_summary || null)) return;
+      var r = await supabaseClient.from('estimates').update({ scope_summary: v }).eq('id', currentEst.id);
       if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
-      currentEst.scope_summary = val || null;
-      showToast('Scope saved', 'success');
-    });
+      currentEst.scope_summary = v; var sv = $('scopeSaved'); if (sv) sv.textContent = 'Scope saved \u2713';
+    } });
+    scopeFlush = scopeEd.flush;
     async function saveIncl(list) {
       var v = list.join('\n') || null;
       var r = await supabaseClient.from('estimates').update({ inclusions: v }).eq('id', currentEst.id);
@@ -3641,6 +3635,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=379"></script>
+<script src="sw-register.js?v=380"></script>
 </body>
 </html>
