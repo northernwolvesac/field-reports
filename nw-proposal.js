@@ -895,7 +895,7 @@
       host.style.cssText = 'position:fixed;left:-12000px;top:0;width:8.5in;background:#fff;z-index:-1';
       var st = document.createElement('style');
       st.textContent = '.nwp-vexport,.nwp-vexport *{font-family:' + V.FONT + ' !important;-webkit-font-smoothing:auto}' +
-        '.nwp-vexport .ff-times{font-family:"Times New Roman","Liberation Serif",Times,serif !important}.nwp-vexport .ff-courier{font-family:"Courier New","Liberation Mono",Courier,monospace !important}';
+        '.nwp-vexport .ff-times,.nwp-vexport .ff-times *{font-family:"Times New Roman","Liberation Serif",Times,serif !important}.nwp-vexport .ff-courier,.nwp-vexport .ff-courier *{font-family:"Courier New","Liberation Mono",Courier,monospace !important}';
       host.appendChild(st);
       var clone = sheet.cloneNode(true);
       clone.removeAttribute('contenteditable'); clone.removeAttribute('id');
