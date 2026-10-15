@@ -391,37 +391,52 @@
     // 2. compose ~30 crops per sheet (rows), read once; then the same sheet with every crop turned 180°
     var GAP = 24, SW = 2400, results = {}, done = 0, GX = GAP, X0 = GAP;
     function score(r) { return r.conf + (isSizeLabel(r.txt) ? 150 : isPipeLabel(r.txt) ? 60 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
-    for (var s0 = 0; s0 < crops.length; s0 += 30) {
-      var batch = crops.slice(s0, s0 + 30), cells = [], x = X0, y = GAP, rowH = 0;
+    function layout(batch, framed) {   // reader mode: a framed cell with its number on top
+      var cells = [], x = X0, y = GAP, rowH = 0;
       batch.forEach(function (cr) {
-        var cwid = opts.reader ? Math.max(cr.c.width + 12, 74) : cr.c.width, chei = opts.reader ? cr.c.height + 42 : cr.c.height;   // reader mode: a framed cell with its number on top
+        var cwid = framed ? Math.max(cr.c.width + 12, 74) : cr.c.width, chei = framed ? cr.c.height + 42 : cr.c.height;
         if (x + cwid + GX > SW) { x = X0; y += rowH + GAP; rowH = 0; }
         cells.push({ i: cr.i, x: x, y: y, w: cwid, h: chei }); x += cwid + GX; rowH = Math.max(rowH, chei);
       });
-      var sheetH = y + rowH + GAP;
-      if (opts.reader) {
-        // vision reader: one numbered sheet, upright crops; the model transcribes each number (and turns upside-down crops itself)
-        try {
-          var sheetR = document.createElement('canvas'); sheetR.width = SW; sheetR.height = sheetH;
-          var scR = sheetR.getContext('2d'); scR.fillStyle = '#fff'; scR.fillRect(0, 0, SW, sheetH);
-          cells.forEach(function (cell, idx) {
-            scR.strokeStyle = '#8a8a8a'; scR.lineWidth = 2; scR.strokeRect(cell.x, cell.y, cell.w, cell.h);
-            scR.fillStyle = '#d00'; scR.font = 'bold 26px sans-serif'; scR.textBaseline = 'top'; scR.fillText(String(idx + 1), cell.x + 6, cell.y + 5);
-            scR.drawImage(batch[idx].c, cell.x + 6, cell.y + 36);
-          });
-          var reads = await opts.reader(sheetR, cells.length);
-          sheetR.width = sheetR.height = 0;
-          (reads || []).forEach(function (rd) {
-            var cl = cells[(rd.n | 0) - 1]; if (!cl) return;
-            var t = normOcr(rd.text || ''); if (t) results[cl.i] = { txt: t, conf: 90, flip: 0 };
-          });
-          done += batch.length; if (opts.onProgress) opts.onProgress(done, crops.length);
-          continue;
-        } catch (err) {
-          console.warn('[NWGeo] vision reader failed, using Tesseract:', err && err.message);
-          opts.reader = null; X0 = GAP;
+      return { cells: cells, sheetH: y + rowH + GAP };
+    }
+    var batches = []; for (var s0 = 0; s0 < crops.length; s0 += 30) batches.push(crops.slice(s0, s0 + 30));
+    var todo = batches.map(function (_, bi) { return bi; });
+    if (opts.reader) {
+      // vision reader: one numbered sheet per batch, upright crops; the model transcribes each number (and turns upside-down crops itself).
+      // Four sheets are read at a time (one after another took 40-90 s per drawing); a batch whose read fails goes to Tesseract.
+      var failed = [], nextB = 0, stop = false;
+      var lane = async function () {
+        while (nextB < batches.length) {
+          var bi = nextB++, batch = batches[bi];
+          if (stop) { failed.push(bi); continue; }
+          try {
+            var L = layout(batch, true), sheetR = document.createElement('canvas'); sheetR.width = SW; sheetR.height = L.sheetH;
+            var scR = sheetR.getContext('2d'); scR.fillStyle = '#fff'; scR.fillRect(0, 0, SW, L.sheetH);
+            L.cells.forEach(function (cell, idx) {
+              scR.strokeStyle = '#8a8a8a'; scR.lineWidth = 2; scR.strokeRect(cell.x, cell.y, cell.w, cell.h);
+              scR.fillStyle = '#d00'; scR.font = 'bold 26px sans-serif'; scR.textBaseline = 'top'; scR.fillText(String(idx + 1), cell.x + 6, cell.y + 5);
+              scR.drawImage(batch[idx].c, cell.x + 6, cell.y + 36);
+            });
+            var reads = await opts.reader(sheetR, L.cells.length);
+            sheetR.width = sheetR.height = 0;
+            (reads || []).forEach(function (rd) {
+              var cl = L.cells[(rd.n | 0) - 1]; if (!cl) return;
+              var t = normOcr(rd.text || ''); if (t) results[cl.i] = { txt: t, conf: 90, flip: 0 };
+            });
+            done += batch.length; if (opts.onProgress) opts.onProgress(done, crops.length);
+          } catch (err) {
+            if (!stop) console.warn('[NWGeo] vision reader failed, using Tesseract:', err && err.message);
+            stop = true; failed.push(bi);
+          }
         }
-      }
+      };
+      await Promise.all([lane(), lane(), lane(), lane()]);
+      todo = failed.sort(function (a, b) { return a - b; });
+      if (todo.length) opts.reader = null;
+    }
+    for (var ti = 0; ti < todo.length; ti++) {
+      var batch = batches[todo[ti]], LT = layout(batch, false), cells = LT.cells, sheetH = LT.sheetH;
       for (var flip = 0; flip < 2; flip++) {
         var sheet = document.createElement('canvas'); sheet.width = SW; sheet.height = sheetH;
         var sc = sheet.getContext('2d'); sc.fillStyle = '#fff'; sc.fillRect(0, 0, SW, sheetH);
@@ -499,6 +514,9 @@
         if (!a && !r) return;
         var w = +(a ? a[1] : r[1]), h = a ? +a[2] : w;
         if (w < 4 || h < 3) return;
+        // OCR glues a neighbouring digit on ("12x8" + the 6 of "(650)" = "12x86", Esquire: 12x62, 18x71, 8x94) — a duct that deep and that
+        // narrow is a misread, and it would be priced as an 86" duct
+        if (t.ocr && h >= 36 && h > 2.5 * w) return;
         labs.push({ txt: t.str, w: w, h: h, round: !!r, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
       });
       if (labs.length < 3) return { error: textScales.length ? 'fewer than 3 duct size labels' : 'no drawing scale found on the sheet', ptft: textScales.length ? textScales[0] * 72 : undefined };
@@ -1069,6 +1087,20 @@
       var pieces = [];
       Object.keys(chains).forEach(function (c) {
         var ids = chains[c], cnt = {}, majority = null;
+        // a dashed boundary drawn as filled dashes (BOSS bid set: the catwalk / scope outline round the whole floor, 250 dashes of 1-3 ft,
+        // with a 10"Ø label beside it = 530 ft) chains up too: most of its bars are short and touch no other bar end to end
+        if (ids.length >= 8) {
+          var dashes = ids.filter(function (i) {
+            if (B[i][6] > 3 * ptft) return false;
+            return !ids.some(function (j) {
+              if (j === i) return false;
+              var E = [[B[i][0], B[i][1]], [B[i][2], B[i][3]]], F = [[B[j][0], B[j][1]], [B[j][2], B[j][3]]];
+              for (var x = 0; x < 2; x++) for (var y = 0; y < 2; y++) if (hyp(E[x][0] - F[y][0], E[x][1] - F[y][1]) < 1.5) return true;
+              return Math.min(ptSeg(B[j][0], B[j][1], B[i]), ptSeg(B[j][2], B[j][3], B[i]), ptSeg(B[i][0], B[i][1], B[j]), ptSeg(B[i][2], B[i][3], B[j])) < 1.5;
+            });
+          }).length;
+          if (dashes >= 0.6 * ids.length) return;
+        }
         ids.forEach(function (i) { if (segSize[i]) cnt[segSize[i]] = (cnt[segSize[i]] || 0) + B[i][6]; });
         Object.keys(cnt).forEach(function (k) { if (majority === null || cnt[k] > cnt[majority]) majority = k; });
         if (majority === null) {
