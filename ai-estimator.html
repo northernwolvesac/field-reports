@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=389"></script>
-<script src="auth.js?v=389"></script>
-<script src="est-totals.js?v=389"></script>
-<script src="est-engine.js?v=389"></script>
-<script src="geo-takeoff.js?v=389"></script>
+<script src="supabase-config.js?v=390"></script>
+<script src="auth.js?v=390"></script>
+<script src="est-totals.js?v=390"></script>
+<script src="est-engine.js?v=390"></script>
+<script src="geo-takeoff.js?v=390"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -478,7 +478,7 @@ var AE = (function() {
             data.text = data.text.concat(ocr.items);
             data.fullText += ' ' + ocr.items.map(function (t) { return t.str; }).join(' ') + ' ' + (ocr.text || '');
             ocrInfo = { labels: ocr.items.length, words: ocr.words || null, secs: ocr.secs || null, cached: !!cached };
-            if (!cached) ocrSave = ocr.items;
+            if (!cached) { ocrSave = ocr.items; window.__ocrWords = ocr.wordList || null; }
           }
         }
         var aiScale = p.result && p.result.scale;
@@ -503,7 +503,7 @@ var AE = (function() {
         pdf.destroy();
       } catch (e) { geo = { error: String(e.message || e).slice(0, 200), at: new Date().toISOString() }; }
       var patch = {}; patch[riser ? 'geo_riser' : pipes ? 'geo_pipe' : 'geo'] = geo;
-      if (ocrSave) patch.ocr_labels = ocrSave;
+      if (ocrSave) { patch.ocr_labels = ocrSave; if (window.__ocrWords) patch.ocr_words = window.__ocrWords; }
       if (geoPipe) patch.geo_pipe = geoPipe;
       var res = Object.assign({}, p.result || {}, patch);
       await supabaseClient.from('ai_est_pages').update({ result: res }).eq('id', p.id);
@@ -917,6 +917,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=389"></script>
+<script src="sw-register.js?v=390"></script>
 </body>
 </html>

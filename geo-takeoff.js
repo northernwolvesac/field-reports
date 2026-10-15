@@ -238,7 +238,8 @@
   var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
   var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
-  var KW_OCR = /^(EXISTING|EXIST\.?|REMAINS?|PERFORMED|SCOPE|OUT|NOT|N\.?I\.?C\.?|MATCH|MATCHLINE|DRAWING)$/i;
+  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DWG)$/i;
+  function kwWord(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }   // "REMAIN," / "DRAWING'B'" → the word
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
   function hasScale(s) { return M_SCALE_RE.test(s || ''); }
@@ -503,10 +504,11 @@
         items.push({ str: r.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, conf: Math.round(r.conf) });
       // scope words keep their place too: "EXISTING TO REMAIN / NO WORK PERFORMED / OUT OF SCOPE" marks the far side of the area-of-work
       // boundary, "MATCH LINE" / "DRAWING 'A'" the sheet's edge against its neighbour (measure() uses them with the heavy dashed lines)
-      else if (KW_OCR.test(r.txt))
-        items.push({ str: r.txt.toUpperCase(), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
+      else if (KW_OCR.test(kwWord(r.txt)))
+        items.push({ str: kwWord(r.txt), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
     });
-    return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' ') };
+    var wordList = []; Object.keys(results).forEach(function (i) { var r = results[i], w = words[+i]; if (r.txt) wordList.push([r.txt, Math.round((w.box[0] + w.box[2]) / 2), Math.round((w.box[1] + w.box[3]) / 2)]); });
+    return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' '), wordList: wordList };
   }
 
   // ─── 2. geometry (runs inside a Web Worker) ───
@@ -1042,19 +1044,20 @@
       var c = ex * (py - a[1]) - ey * (px - a[0]);
       return c > 0 ? 1 : -1;
     }
-    var KW_STRONG = /^(REMAINS?|PERFORMED|N\.?I\.?C\.?)$/i, KW_WEAK = /^(EXISTING|EXIST\.?|SCOPE|OUT|NOT)$/i;
+    var KW_STRONG = /^(REMAIN\w*|PERFORM\w*|NIC)$/i, KW_WEAK = /^(EXIST\w*|SCOPE|OUT|NOT)$/i;
+    function kwOf(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }
     var KW_TEXT = /\bTO REMAIN\b|\bNO WORK\b|\bNOT IN (SCOPE|CONTRACT)\b|\bOUT OF SCOPE\b|\bN\.I\.C\b/i;
-    var KW_MATCH_W = /^(MATCH|MATCHLINE|DRAWING)$/i, KW_MATCH_T = /MATCH\s*-?\s*LINE|SEE (DWG|DRAWING|SHEET)/i;
+    var KW_MATCH_W = /^(MATCH\w*|DRAWING|DWG)$/i, KW_MATCH_T = /MATCH\s*-?\s*LINE|SEE (DWG|DRAWING|SHEET)/i;
     // the notes that name a no-work zone or a match line, with their place on the sheet (OCR words or text-layer strings)
     function zoneSeeds(D) {
       var items = (D.text || []).map(function (t) { return { s: String(t.str || '').trim(), x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2, ocr: !!t.ocr }; });
       var noWork = [], match = [];
       items.forEach(function (t, i) {
-        var one = t.s.indexOf(' ') < 0;
+        var one = t.s.indexOf(' ') < 0, k1 = kwOf(t.s);
         if (KW_TEXT.test(t.s)) noWork.push({ x: t.x, y: t.y, w: /REMAIN/i.test(t.s) && /NO WORK|SCOPE|N\.I\.C/i.test(t.s) ? 4 : 2 });
-        else if (one && KW_STRONG.test(t.s)) noWork.push({ x: t.x, y: t.y, w: 2 });
-        else if (one && KW_WEAK.test(t.s) && items.some(function (u, j) { return j !== i && u.s.indexOf(' ') < 0 && (KW_STRONG.test(u.s) || (KW_WEAK.test(u.s) && u.s.toUpperCase() !== t.s.toUpperCase())) && hyp(u.x - t.x, u.y - t.y) <= 120; })) noWork.push({ x: t.x, y: t.y, w: 1 });
-        if ((one && KW_MATCH_W.test(t.s)) || (!one && KW_MATCH_T.test(t.s))) match.push({ x: t.x, y: t.y });
+        else if (one && KW_STRONG.test(k1)) noWork.push({ x: t.x, y: t.y, w: 2 });
+        else if (one && KW_WEAK.test(k1) && items.some(function (u, j) { var k2 = kwOf(u.s); return j !== i && u.s.indexOf(' ') < 0 && (KW_STRONG.test(k2) || (KW_WEAK.test(k2) && k2 !== k1)) && hyp(u.x - t.x, u.y - t.y) <= 120; })) noWork.push({ x: t.x, y: t.y, w: 1 });
+        if ((one && KW_MATCH_W.test(k1)) || (!one && KW_MATCH_T.test(t.s))) match.push({ x: t.x, y: t.y });
       });
       return { noWork: noWork, match: match };
     }
@@ -1075,7 +1078,8 @@
           if (chains.some(function (o, oi) { return o !== ch && !isMatch[oi] && distTo(o, s.x, s.y) < dm; })) return;
           var sd = chainSide(ch, s.x, s.y, 60 * ptft); if (sd) vote[sd > 0 ? 0 : 1] += s.w;
         });
-        var win = vote[0] >= 4 && vote[0] >= 2 * vote[1] ? 1 : vote[1] >= 4 && vote[1] >= 2 * vote[0] ? -1 : 0;
+        var need = ch.n >= 8 ? 3 : 4;   // a row of dashes is a drawn boundary; a lone dashed stroke needs the full note
+        var win = vote[0] >= need && vote[0] >= 2 * vote[1] ? 1 : vote[1] >= need && vote[1] >= 2 * vote[0] ? -1 : 0;
         ch.vote = vote;
         if (win) zones.push({ ch: ch, side: win, votes: vote });
       });
@@ -1700,6 +1704,6 @@
 
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
   function measureRisers(data) { data.mode = 'risers'; return measure(data); }
-  window.NWGeo = { extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
+  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
     isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, _worker: workerMain };   // _worker: for offline tests
 })();
