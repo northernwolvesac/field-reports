@@ -8,12 +8,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=368"></script>
-<script src="nw-drive.js?v=368"></script>
-<script src="nw-drive-browser.js?v=368"></script>
-<script src="auth.js?v=368"></script>
-<script src="cloud-save.js?v=368"></script>
-<script src="schedule-utils.js?v=368"></script>
+<script src="supabase-config.js?v=397"></script>
+<script src="nw-drive.js?v=397"></script>
+<script src="nw-drive-browser.js?v=397"></script>
+<script src="auth.js?v=397"></script>
+<script src="cloud-save.js?v=397"></script>
+<script src="schedule-utils.js?v=397"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Projects — Northern Wolves AC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2023,9 +2023,24 @@ requireAuth().catch(function(){});
         '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escHtml(meta) + '</div></div>' + sel +
         (s.drive_url ? '<a href="' + escHtml(s.drive_url) + '" target="_blank" style="font-size:12px;font-weight:700;color:#0696D7;text-decoration:none">Open ↗</a>' : '') +
         (tech ? '' : '<a href="' + K.page + 'project=' + encodeURIComponent(projectId) + '&id=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">' + (kind === 'warranty' ? 'Open / Send' : 'Send') + '</a>' +
-          '<a href="' + K.page + 'project=' + encodeURIComponent(projectId) + '&from=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">' + K.again + '</a>') +
+          (kind === 'warranty' ? '' : '<a href="' + K.page + 'project=' + encodeURIComponent(projectId) + '&id=' + s.id + '&edit=1" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">Edit</a>') +
+          '<a href="' + K.page + 'project=' + encodeURIComponent(projectId) + '&from=' + s.id + '" style="font-size:12px;font-weight:700;color:#111318;text-decoration:none">' + K.again + '</a>' +
+          '<a href="#" data-sub-del="' + s.id + '" data-drive="' + escHtml(s.drive_id || '') + '" data-no="' + escHtml(no + ' — ' + s.title) + '" style="font-size:12px;font-weight:700;color:#dc2626;text-decoration:none">Delete</a>') +
         '</div>';
     }).join('');
+    // Delete: the row, its Drive PDF and the project_files entry (Fatima: a wrong submittal had no way out of the log)
+    list.querySelectorAll('[data-sub-del]').forEach(function(el) {
+      el.addEventListener('click', async function(e) {
+        e.preventDefault();
+        if (!confirm('Delete ' + el.getAttribute('data-no') + '?\nThe PDF is removed from Google Drive as well. This cannot be undone.')) return;
+        el.textContent = 'Deleting…';
+        var driveId = el.getAttribute('data-drive');
+        if (driveId) { try { await NWDrive.deleteFile(driveId); } catch (e2) { console.warn('[submittals] drive delete', e2); } try { await supabaseClient.from('project_files').delete().eq('drive_id', driveId); } catch (e3) {} }
+        var d = await supabaseClient.from('submittals').delete().eq('id', el.getAttribute('data-sub-del'));
+        if (d.error) { showToast('Could not delete: ' + d.error.message); el.textContent = 'Delete'; return; }
+        showToast('Deleted'); loadDocLog(projectId, kind);
+      });
+    });
     list.querySelectorAll('[data-sub-status]').forEach(function(el) {
       el.addEventListener('change', async function() {
         var u = await supabaseClient.from('submittals').update({ status: el.value, updated_at: new Date().toISOString() }).eq('id', el.getAttribute('data-sub-status'));
@@ -2446,6 +2461,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=368"></script>
+<script src="sw-register.js?v=397"></script>
 </body>
 </html>

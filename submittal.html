@@ -12,13 +12,13 @@
 <title>Submittal — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=363"></script>
-<script src="auth.js?v=363"></script>
-<script src="nw-drive.js?v=363"></script>
-<script src="nw-email.js?v=363"></script>
+<script src="supabase-config.js?v=397"></script>
+<script src="auth.js?v=397"></script>
+<script src="nw-drive.js?v=397"></script>
+<script src="nw-email.js?v=397"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
-<script src="pdf-utils.js?v=363"></script>
+<script src="pdf-utils.js?v=397"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 110px; }
   .sb-wrap { max-width: 860px; margin: 0 auto; padding: 0 14px; }
@@ -185,7 +185,10 @@ requireAuth().catch(function(){});
   var params = new URLSearchParams(location.search);
   var projectId = params.get('project');
   var editId = params.get('id');          // open a saved submittal (view / send again)
+  var editMode = !!(editId && params.get('edit'));   // &edit=1: change the saved one in place (same number, same Drive file replaced)
+  var viewOnly = !!(editId && !editMode);
   var fromId = params.get('from');        // resubmit: copy a submittal as its next revision
+  var lastCoverPages = 0;                 // pages of the cover letter in the last built package (stored in data.cover_pages)
 
   // One page, two kinds of transmittal: submittal.html?kind=iom = O&M / IOM manual (same sequence, IOM & WARRANTY folder)
   var KINDS = {
@@ -277,7 +280,13 @@ requireAuth().catch(function(){});
       $('fAction').value = 'Resubmittal'; $('fDate').value = today();
       $('pageTitle').textContent = 'Resubmit ' + pad(src.number);
     }
-    if (editId && src) {
+    if (editMode && src) {
+      saved = src; dirty = false;
+      $('pageTitle').textContent = 'Edit ' + KD.prefix + '-' + pad(src.number) + (src.revision ? ' R' + src.revision : '');
+      $('btnSave').textContent = '💾 Save changes';
+      await loadSavedPackage(src);
+    }
+    if (viewOnly && src) {
       saved = src; dirty = false;
       $('pageTitle').textContent = KD.noun + ' ' + pad(src.number) + (src.revision ? ' Rev ' + src.revision : '');
       $('attCard').querySelector('h3').textContent = KD.noun + ' PDF';
@@ -295,6 +304,31 @@ requireAuth().catch(function(){});
   }
 
   function block(msg) { $('blocked').textContent = msg; $('blocked').style.display = ''; $('projLine').textContent = ''; }
+
+  // Edit: the saved package comes back from Drive without its cover letter (the cover is rebuilt from the form) as one attachment;
+  // the vendor PDFs are not stored on their own
+  async function loadSavedPackage(src) {
+    if (!src.drive_id) return;
+    busy(true, 'Loading the saved package…');
+    try {
+      var fd = await NWDrive.request({ action: 'file_data', fileId: src.drive_id });
+      var bin = atob(fd.data || ''), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var pkg = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true }), n = pkg.getPageCount();
+      var skip = src.data && src.data.cover_pages;
+      if (!skip) { try { skip = (await PDFLib.PDFDocument.load(await coverPdf())).getPageCount(); } catch (e) { skip = 1; } }
+      skip = Math.min(skip, n - 1);
+      var idx = []; for (var k = skip; k < n; k++) idx.push(k);
+      if (idx.length) {
+        var rest = await PDFLib.PDFDocument.create();
+        (await rest.copyPages(pkg, idx)).forEach(function(p) { rest.addPage(p); });
+        var rb = new Blob([await rest.save()], { type: 'application/pdf' });
+        attachments.push({ file: rb, name: 'Attachments of ' + KD.prefix + '-' + pad(src.number) + (src.revision ? ' R' + src.revision : '') + ' (saved package).pdf', size: rb.size, pages: idx.length });
+        renderAtt();
+      }
+    } catch (e) { console.warn('[submittal] saved package', e); toast('Could not load the saved package: ' + (e.message || e)); }
+    busy(false);
+  }
 
   function fillFrom(r) {
     $('fNumber').value = pad(r.number); $('fRevision').value = r.revision || 0;
@@ -349,7 +383,7 @@ requireAuth().catch(function(){});
 
   function bind() {
     var drop = $('drop'), fileIn = $('fileIn');
-    if (!editId) {
+    if (!viewOnly) {
       drop.addEventListener('click', function() { fileIn.click(); });
       drop.addEventListener('dragover', function(e) { e.preventDefault(); drop.classList.add('over'); });
       drop.addEventListener('dragleave', function() { drop.classList.remove('over'); });
@@ -507,6 +541,7 @@ requireAuth().catch(function(){});
   async function buildPackage() {
     var out = await PDFLib.PDFDocument.create();
     var cover = await PDFLib.PDFDocument.load(await coverPdf());
+    lastCoverPages = cover.getPageCount();
     (await out.copyPages(cover, cover.getPageIndices())).forEach(function(p) { out.addPage(p); });
     for (var i = 0; i < attachments.length; i++) {
       busy(true, 'Adding ' + attachments[i].name + '…');
@@ -518,7 +553,7 @@ requireAuth().catch(function(){});
   }
 
   async function download() {
-    if (editId && saved) { window.open(saved.drive_url || ('https://drive.google.com/file/d/' + saved.drive_id + '/view'), '_blank'); return; }
+    if (viewOnly && saved) { window.open(saved.drive_url || ('https://drive.google.com/file/d/' + saved.drive_id + '/view'), '_blank'); return; }
     if (!validate()) return;
     busy(true, 'Building PDF…');
     var blob = await buildPackage();
@@ -551,7 +586,8 @@ requireAuth().catch(function(){});
     var up = await NWDrive.request({ action: 'upload_file', projectName: project.project_name, projectId: projectId, fileName: name,
       fileData: await NWDrive.toBase64(blob), mimeType: 'application/pdf', category: KD.category, folder: folder });
     var df = up.file;
-    var row = Object.assign(rowData(), { drive_id: df.id, drive_url: df.viewUrl || df.url, file_name: name, drive_folder: folder, updated_at: new Date().toISOString() });
+    var row = Object.assign(rowData(), { drive_id: df.id, drive_url: df.viewUrl || df.url, file_name: name, drive_folder: folder, updated_at: new Date().toISOString(),
+      data: Object.assign({}, saved && saved.data, { cover_pages: lastCoverPages || 1 }) });
     var res;
     if (saved && saved.id) res = await supabaseClient.from('submittals').update(row).eq('id', saved.id).select().single();
     else res = await supabaseClient.from('submittals').insert(Object.assign(row, { kind: KIND, status: 'saved', created_by: userId, created_by_name: profile.full_name || null })).select().single();
@@ -584,7 +620,7 @@ requireAuth().catch(function(){});
   }
 
   function openSend() {
-    if (!editId && !validate()) return;
+    if (!viewOnly && !validate()) return;
     var no = subNo(), title = val('fTitle');
     $('mTo').value = val('fToEmail');
     $('mCc').value = '';
@@ -601,7 +637,7 @@ requireAuth().catch(function(){});
     var to = val('mTo');
     if (!/@/.test(to)) { toast('Enter the recipient email'); $('mTo').focus(); return; }
     $('sendModal').classList.remove('show');
-    if (!saved || (dirty && !editId)) { if (!(await save())) return; }
+    if (!saved || (dirty && !viewOnly)) { if (!(await save())) return; }
     busy(true, 'Sending…');
     var r = await NWDrive.request({ action: 'send_email', to: to, cc: val('mCc'), subject: val('mSubject'), body: $('mBody').value, fileIds: [saved.drive_id],
       html: window.NWEmail ? NWEmail.build({ reportType: KD.noun, title: KD.noun + ' ' + subNo(), subtitle: val('fProject'), bodyText: $('mBody').value, senderName: val('fFromName') }).html : undefined,
@@ -615,6 +651,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=363"></script>
+<script src="sw-register.js?v=397"></script>
 </body>
 </html>
