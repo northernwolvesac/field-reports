@@ -314,7 +314,8 @@
             (gl < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft) ? 'mostly width-guessed' :
             (aiFt >= 20 && r.geo.total_ft > 3 * aiFt + 40) ? 'over 3x the AI reading' :
             (aiFt >= 20 && r.geo.total_ft * GEO_FITTINGS < aiFt / 4) ? 'under a quarter of the AI reading' :
-            (gl >= 6 && r.geo.labels_hit != null && r.geo.labels_hit < 0.6 * gl && aiFt > r.geo.total_ft * GEO_FITTINGS) ? 'only ' + r.geo.labels_hit + ' of ' + gl + ' size labels on measured duct' : '';
+            // (either way: Esquire's roof M-104B measured 71 ft that reached 4 of 28 labels; the AI read 45)
+            (gl >= 6 && r.geo.labels_hit != null && r.geo.labels_hit < 0.6 * gl && (aiFt > r.geo.total_ft * GEO_FITTINGS || aiFt >= 20)) ? 'only ' + r.geo.labels_hit + ' of ' + gl + ' size labels on measured duct' : '';
           var weakGeo = !!weakWhy;
           if (weakGeo && !coarseDup) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: gl, why: weakWhy });
           if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
