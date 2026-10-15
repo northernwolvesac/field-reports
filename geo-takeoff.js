@@ -226,7 +226,8 @@
   //  glyph boxes (small painted paths) → letters → words (chained along one baseline) → each word rendered from the page,
   //  everything outside its letter boxes whitened, upright, Tesseract single-line read at 0° and 180°. Only label-like words are kept.
   var M_SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/;
-  var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/i;
+  // a round runout labelled with the diffuser it feeds ("6"ø D-2", Warby) is a duct label too
+  var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
   var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
@@ -496,7 +497,7 @@
     // 24x12, 24"x12", 36X12Ø (flat oval), 12X6 SA BRANCH, 10x6 (TYP.), 8x6 UP
     var SIZE_RE = /^\s*(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/;
     // 8"ø, 14"ø S/A, 6"ø O/A (round with a service suffix)
-    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/i;
+    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
     var SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/g;
     function frac(s) { if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
     function hyp(a, b) { return Math.sqrt(a * a + b * b); }
