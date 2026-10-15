@@ -242,8 +242,12 @@
   }
   function normOcr(s) {
     return slashSize(String(s || '').replace(/[“”″]/g, '"').replace(/[‘’]/g, "'").replace(/[×*]/g, 'x').replace(/(\d)\s*[xX]\s*(\d)/g, '$1x$2')
+      .replace(/(\d)\s*'\s*[øØ](?![A-Za-z0-9])/g, '$1"Ø')   // 6'ø: the inch mark read as an apostrophe
       .replace(/(\d)\s*"\s*[øØoO0@Q9pg](?![A-Za-z0-9])/g, '$1"Ø').replace(/(\d)\s*[øØ⌀∅](?![A-Za-z0-9])/g, '$1"Ø')
-      .replace(/(\d{1,2})\s*"+\s*[^\s"\dA-Za-z]{1,2}$/g, '$1"Ø').replace(/\s+/g, ' ').trim());
+      .replace(/(\d{1,2})\s*"+\s*[^\s"\dA-Za-z]{1,2}$/g, '$1"Ø').replace(/\s+/g, ' ').trim())
+      // a runout labelled with its diffuser ("6"ø D-2", "10/6 D-3"): the word is cut at the hyphen, the tag stub goes — not on square
+      // sizes, which with a tag are the grille / diffuser itself ("24x24 CD")
+      .replace(/^(\d{1,2})(x(\d{1,2})|"Ø)\s+[A-Z]{1,2}(?:-[A-Z0-9]{0,2})?$/, function (m, a, rest, b) { return b && a === b ? m : a + rest; });
   }
   // glyph boxes → words; boxes are [x0,y0,x1,y1] in PDF user space
   function clusterWords(glyphs, opts) {
