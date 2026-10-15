@@ -35,7 +35,7 @@
       }
       return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
     }
-    var segs = [], rects = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only)
+    var segs = [], rects = [], rectSeg = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only)
     var glyphs = [], pathPts = [];   // small painted paths = glyph outlines of stroked/outlined text (for OCR)
     var styles = {}, styleList = [];
     function styleKey() {
@@ -111,6 +111,17 @@
       if (stroke && path.length) {
         var si = styleKey();
         for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) segs.push(g.concat([si])); }
+      }
+      // a long, slender stroked box is a straight duct section drawn as a rectangle (Parkinson's / MKDA: every run is one 're'), not a
+      // symbol: its two long sides are the walls. Squares and stubby boxes (diffusers, grilles, VAV boxes, equipment) stay symbols.
+      if (stroke && rects.length >= 4 && !pendingClip) {
+        var sr = null, Lq = function (g) { return Math.hypot(g[2] - g[0], g[3] - g[1]); };
+        for (var r4 = 0; r4 + 3 < rects.length; r4 += 4) {
+          var q4 = rects.slice(r4, r4 + 4), L0 = Lq(q4[0]), L1 = Lq(q4[1]), lng = Math.max(L0, L1), shr = Math.min(L0, L1);
+          if (!(lng >= 40 && shr >= 3 && lng >= 3 * shr)) continue;
+          if (sr === null) sr = styleKey();
+          (L0 >= L1 ? [q4[0], q4[2]] : [q4[1], q4[3]]).forEach(function (g4) { var c4 = clipSeg(g4, st.clip); if (c4) { rectSeg.push(segs.length); segs.push(c4.concat([sr])); } });
+        }
       }
       if (pendingClip && (path.length || rects.length)) {    // W n: the path just built becomes (part of) the clip region
         var pts = []; path.concat(rects).forEach(function (g) { pts.push([g[0], g[1]], [g[2], g[3]]); });
@@ -208,7 +219,7 @@
     text.forEach(function (t, i) { t.block = boxes[root(i)]; delete t._l; });
     var flat = new Float64Array(segs.length * 5);
     segs.forEach(function (s, i) { flat.set(s, i * 5); });
-    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs };
+    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg };
   }
 
   // ─── 1b. OCR for sheets whose text is outlined / stroked (AutoCAD SHX fonts export as tiny paths, not text) ───
@@ -491,7 +502,8 @@
         labs.push({ txt: t.str, w: w, h: h, round: !!r, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
       });
       if (labs.length < 3) return { error: textScales.length ? 'fewer than 3 duct size labels' : 'no drawing scale found on the sheet', ptft: textScales.length ? textScales[0] * 72 : undefined };
-      var n = D.segs.length / 5;
+      var n = D.segs.length / 5, isRectSide = {};
+      (D.rectSeg || []).forEach(function (k) { isRectSide[k] = 1; });
       // segments by style (skip gray background, white, dashed) — the dash threshold and the dash trains depend on the scale
       function prep(ptft) {
         var bySty = {}, dashSty = {};
@@ -505,7 +517,8 @@
           if (Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) continue;
           var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3];
           if (hyp(x2 - x1, y2 - y1) <= 1.0) continue;
-          (bySty[st.key] = bySty[st.key] || []).push([x1, y1, x2, y2]);
+          var sg = [x1, y1, x2, y2]; if (isRectSide[i]) sg.r = 1;
+          (bySty[st.key] = bySty[st.key] || []).push(sg);
         }
         // dash trains: a duct drawn as a row of 1-ft dashes (360 Lexington's heavy 1.68-pt mains — 375 dashes of 18 pt) becomes one
         // segment per row so labels, pairs and single-line chaining see a line, not 30 stubs
@@ -545,8 +558,12 @@
           // the peak must stand out: a style whose labels fit equally well at any allowance matched by chance (gray background, table rules)
           var rival = 0; for (var k2 = 0; k2 < NB; k2++) if (Math.abs(k2 - bk) >= 4) rival = Math.max(rival, Object.keys(perD[k2]).length);
           var contrast = Math.max(0, bh - rival), bkIn = bk - 8;   // allowance in inches, -8 .. +8
-          var pen = Math.min(1, labs.length * 40 / Math.max(tot, 1));
-          stats.push([sized, tot, key, ftD[bk], bh, bkIn, contrast * pen]);
+          var pen = Math.min(1, labs.length * 40 / Math.max(tot, 1)), eff = contrast * pen;
+          // a style that holds most of the sheet's size labels inside its pairs at the label's own width is the duct style whatever its pair
+          // length (Esquire M-102A: every duct section is a rectangle with a lined inside — 47 of 50 labels inside, but 4,300 ft of pairs and
+          // the lining pairs as a rival allowance)
+          if (bh >= Math.max(6, 0.5 * labs.length) && Math.abs(bkIn) <= 2) eff = Math.max(eff, Math.max(3, 0.1 * labs.length) * bh / labs.length * 1.5);
+          stats.push([sized, tot, key, ftD[bk], bh, bkIn, eff]);
         });
         stats.forEach(function (q) { top = Math.max(top, q[0]); topEff = Math.max(topEff, q[6]); });
         return { stats: stats, top: top, topHit: topEff };
@@ -595,7 +612,7 @@
       // no style has convincing label evidence and the one that is left is background-sized (Parkinson's: 4,700 ft of "pairs" for 49 labels): no number
       if (topHit < thr && !D.forceStyle) {
         var keepTot = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0);
-        if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length };
+        if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
       }
       if (D.forceStyle) keep = [D.forceStyle];   // offline experiments
       var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { var ns = norm(s); if (proven.indexOf(k) < 0) ns.extra = true; S.push(ns); }); });
@@ -627,6 +644,23 @@
         }
         var solid = {}; pcs.forEach(function (p, i) { if (!p.stub || onLabel(p, labs, ptft)) solid[find(i)] = true; });
         pcs = pcs.filter(function (p, i) { if (!p.stub || solid[find(i)]) return true; stubFt += p.len_ft; return false; });
+      })();
+      var rectIsoFt = 0;
+      if (pcs.some(function (p) { return p.rect; })) (function () {
+        var E = pcs.map(function (p) { return ends(p, ptft); });
+        pcs = pcs.filter(function (p, i) {
+          if (!p.rect || onLabel(p, labs, ptft)) return true;
+          var gap = Math.max(1, p.w_in / 12 * 1.2) * ptft;
+          for (var j = 0; j < pcs.length; j++) {
+            if (j === i) continue;
+            var q = pcs[j], dmin = Infinity;
+            if (Math.abs(p.cx - q.cx) > (p.len_ft + q.len_ft) * ptft / 2 + 2 * gap || Math.abs(p.cy - q.cy) > (p.len_ft + q.len_ft) * ptft / 2 + 2 * gap) continue;
+            E[i].forEach(function (u) { E[j].forEach(function (v) { dmin = Math.min(dmin, hyp(u[0] - v[0], u[1] - v[1])); }); dmin = Math.min(dmin, ptSeg(u[0], u[1], [E[j][0][0], E[j][0][1], E[j][1][0], E[j][1][1]])); });
+            E[j].forEach(function (v) { dmin = Math.min(dmin, ptSeg(v[0], v[1], [E[i][0][0], E[i][0][1], E[i][1][0], E[i][1][1]])); });
+            if (dmin <= gap) return true;
+          }
+          rectIsoFt += p.len_ft; return false;
+        });
       })();
       pcs.forEach(function (p) { var l = onLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.via = 'label'; } });
       propagate(pcs, ptft);
@@ -712,10 +746,18 @@
         h = h === null ? Math.max(4, Math.round(w * 0.6 / 2) * 2) : Math.min(w, +h);
         p.size = w + 'x' + h; p.via = 'width';
       });
+      // with few size labels on the sheet a pair that no label reaches (not on it, not along its run, not within 25 ft) is a wall, a gridline
+      // beside a wall or a cabinet far more often than a duct (Belmont A1C 70 ft, El Califa's roof 320 ft, Skinny Louie) — not counted
+      var widthDropFt = 0;
+      if (labs.length < 15 && !D.keepWidth) pcs = pcs.filter(function (p) { if (p.via !== 'width') return true; widthDropFt += p.len_ft; return false; });
+      // a pair of a secondary line weight is duct only through a label: sized by width alone it was schedule-table rows (Monmouth: five
+      // stacked 44 ft "10x6" = 220 ft), walls or shafts 28-48" wide (Sage 92 ft, Esquire 91 ft)
+      if (!D.keepWidth) pcs = pcs.filter(function (p) { if (!(p.extra && p.via === 'width')) return true; widthDropFt += p.len_ft; return false; });
       // thin dark lines = leaders
       var minKeepW = Infinity; keep.forEach(function (k) { minKeepW = Math.min(minKeepW, +k.split('|')[1]); });
       var leaders = [];
       for (i = 0; i < n; i++) {
+        if (isRectSide[i]) continue;
         var o2 = i * 5, st2 = D.styles[D.segs[o2 + 4]];
         if (st2.dash || Math.max.apply(null, st2.col) > 0.3 || !(st2.w <= Math.min(1.0, minKeepW * 0.8))) continue;
         var a1 = D.segs[o2], b1 = D.segs[o2 + 1], a2 = D.segs[o2 + 2], b2 = D.segs[o2 + 3];
@@ -745,10 +787,13 @@
         if (p.kind === 'single') sf += p.len_ft; else if (p.via === 'width') wf += p.len_ft;
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
+      // labels the measured duct reaches (within 4 ft of a piece): a sheet whose labels mostly sit on nothing was measured only in part
+      var segsAll = []; all.forEach(function (p) { if (p.kind === 'single') (p.xy || []).forEach(function (s) { segsAll.push([s[0], s[1], s[2], s[3], 0]); }); else { var e = ends(p, ptft); segsAll.push([e[0][0], e[0][1], e[1][0], e[1][1], p.w_in / 24 * ptft]); } });
+      var labHit = labs.filter(function (l) { return segsAll.some(function (s) { return Math.abs(l.cx - (s[0] + s[2]) / 2) <= Math.abs(s[2] - s[0]) / 2 + 6 * ptft && Math.abs(l.cy - (s[1] + s[3]) / 2) <= Math.abs(s[3] - s[1]) / 2 + 6 * ptft && ptSeg(l.cx, l.cy, s) <= s[4] + 4 * ptft; }); }).length;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length };
-      return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10,
-        styles: keep, labels: labs.length, pieces: all.length,
+      return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
@@ -756,7 +801,7 @@
     function norm(s) {
       var x1 = s[0], y1 = s[1], x2 = s[2], y2 = s[3], dx = x2 - x1, dy = y2 - y1, L = hyp(dx, dy), ux = dx / L, uy = dy / L;
       if (ux < -1e-9 || (Math.abs(ux) < 1e-9 && uy < 0)) { ux = -ux; uy = -uy; var t = x1; x1 = x2; x2 = t; t = y1; y1 = y2; y2 = t; }
-      return [x1, y1, x2, y2, ux, uy, L, Math.atan2(uy, ux)];
+      var out = [x1, y1, x2, y2, ux, uy, L, Math.atan2(uy, ux)]; if (s.r) out.r = 1; return out;
     }
     function findPairs(S, ptft, labs) {
       var ptin = ptft / 12, wmin = 5.5 * ptin, wmax = 74 * ptin, buckets = {};
@@ -796,7 +841,7 @@
         if (!free(c[1], lo, hi) || !free(c[2], l2, h2)) return;
         used[c[1]].push([lo, hi]); used[c[2]].push([l2, h2]);
         var nx = -a[5], ny = a[4];
-        pieces.push({ kind: 'double', extra: !!(a.extra && b.extra), w_in: c[0] / ptin, len_ft: (hi - lo) / ptft, ux: a[4], uy: a[5],
+        pieces.push({ kind: 'double', rect: !!(a.r && b.r), extra: !!(a.extra && b.extra), w_in: c[0] / ptin, len_ft: (hi - lo) / ptft, ux: a[4], uy: a[5],
           cx: a[0] + a[4] * (lo + hi) / 2 + nx * d / 2, cy: a[1] + a[5] * (lo + hi) / 2 + ny * d / 2, size: null });
       });
       return { pieces: pieces, used: used };
@@ -1156,8 +1201,10 @@
         labs.push({ txt: txt, d: v, svc: sv ? sv[1] : null, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, dir: t.dir || [1, 0], bbox: [t.x0, t.y0, t.x1, t.y1], block: t.block || [t.x0, t.y0, t.x1, t.y1] });
       });
       if (labs.length < 2) return { error: 'fewer than 2 pipe size labels', ptft: ptft };
-      var n = D.segs.length / 5, segs = [], leaders = [];
+      var n = D.segs.length / 5, segs = [], leaders = [], rectSide = {};
+      (D.rectSeg || []).forEach(function (k) { rectSide[k] = 1; });   // duct-section boxes: walls for ducts only, never pipe
       for (var i = 0; i < n; i++) {
+        if (rectSide[i]) continue;
         var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col;
         var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3], L = hyp(x2 - x1, y2 - y1);
         if (Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) continue;       // gray background
@@ -1314,9 +1361,11 @@
         return r[i].v + (r[i + 1].v - r[i].v) * (a - r[i].a) / (r[i + 1].a - r[i].a);
       }
       // pipe lines: dark, solid; drawn along the elevation axis
-      var n = D.segs.length / 5, segs = [], cross = [];
+      var n = D.segs.length / 5, segs = [], cross = [], rectSide = {};
+      (D.rectSeg || []).forEach(function (k) { rectSide[k] = 1; });
       function xyAt(a, pp) { return ax ? [pp, a] : [a, pp]; }
       for (var i = 0; i < n; i++) {
+        if (rectSide[i]) continue;
         var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col;
         if (st.dash || Math.max.apply(null, c) > 0.3 || st.w < 0.3) continue;
         var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3];

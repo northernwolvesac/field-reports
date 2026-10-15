@@ -307,10 +307,16 @@
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
           // the AI's reading of the same sheet is the cross-check: a measurement more than 3x it (+40 ft) (the wrong line style paired up: OGCP 5200 gave
           // 6,193 ft against the AI's 1,285; Seafarers: 825 ft against 50) or under a quarter of it (labels missing) is not used
-          var weakGeo = r.geo && r.geo.total_ft > 0 && (((r.geo.labels || 0) < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft) ||
-            ((r.geo.labels || 0) < 20 && aiFt > 2 * r.geo.total_ft * GEO_FITTINGS) ||
-            (aiFt >= 20 && (r.geo.total_ft > 3 * aiFt + 40 || r.geo.total_ft * GEO_FITTINGS < aiFt / 4)));
-          if (weakGeo && !coarseDup) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: r.geo.labels || 0 });
+          // …and when most of the sheet's size labels sit on no measured duct, the lines found are only part of the work (Seafarers M104: 11 of 43
+          // labels reached, 62 ft against the AI's 183; BOSS M-101 7 of 14). "AI over 2x with < 20 labels" is gone — it threw away good
+          // geometry (Warby, A1C, El Califa) more often than it caught a miss. Benchmark of 22 Procore jobs: mean error 16.9% → 12.6%.
+          var gl = r.geo ? (r.geo.labels || 0) : 0, weakWhy = !(r.geo && r.geo.total_ft > 0) ? '' :
+            (gl < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft) ? 'mostly width-guessed' :
+            (aiFt >= 20 && r.geo.total_ft > 3 * aiFt + 40) ? 'over 3x the AI reading' :
+            (aiFt >= 20 && r.geo.total_ft * GEO_FITTINGS < aiFt / 4) ? 'under a quarter of the AI reading' :
+            (gl >= 6 && r.geo.labels_hit != null && r.geo.labels_hit < 0.6 * gl && aiFt > r.geo.total_ft * GEO_FITTINGS) ? 'only ' + r.geo.labels_hit + ' of ' + gl + ' size labels on measured duct' : '';
+          var weakGeo = !!weakWhy;
+          if (weakGeo && !coarseDup) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: gl, why: weakWhy });
           if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
             geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
@@ -463,7 +469,7 @@
         { is_firm: false, flag: 'roof drops are not on the plan — 2 × 14 ft per unit budgeted; confirm the height and size' });
     });
     C.geoCheck.forEach(function (g) {
-      if (g.weak) { flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry (' + g.weak + ' ft, ' + g.labels + ' labels, mostly width-guessed) not trusted — AI reading ' + Math.round(g.ai) + ' ft used' }); return; }
+      if (g.weak) { flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry (' + g.weak + ' ft, ' + g.labels + ' labels, ' + (g.why || 'mostly width-guessed') + ') not trusted — AI reading ' + Math.round(g.ai) + ' ft used' }); return; }
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
