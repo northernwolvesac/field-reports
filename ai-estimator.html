@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=388"></script>
-<script src="auth.js?v=388"></script>
-<script src="est-totals.js?v=388"></script>
-<script src="est-engine.js?v=388"></script>
-<script src="geo-takeoff.js?v=388"></script>
+<script src="supabase-config.js?v=389"></script>
+<script src="auth.js?v=389"></script>
+<script src="est-totals.js?v=389"></script>
+<script src="est-engine.js?v=389"></script>
+<script src="geo-takeoff.js?v=389"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -241,7 +241,7 @@ var AE = (function() {
     if (r.scope_notes && r.scope_notes.length) bits.push(r.scope_notes.length + ' notes');
     if (p.status === 'skipped' && r.triage) bits.push(r.triage.superseded ? 'superseded by ' + esc(r.triage.superseded) : 'not mechanical (' + esc(r.triage.discipline || '?') + ')');
     if (r.total) bits.push(money(r.total));
-    if (r.geo && r.geo.total_ft) bits.push('📐 ' + Math.round(r.geo.total_ft) + ' ft measured');
+    if (r.geo && r.geo.total_ft) bits.push('📐 ' + Math.round(r.geo.total_ft) + ' ft measured' + (r.geo.zone_ft ? ' (' + Math.round(r.geo.zone_ft) + ' ft outside the work area left out)' : '') + (r.geo.match_ft ? ' (' + Math.round(r.geo.match_ft) + ' ft past the match line left out)' : ''));
     if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
     if (r.geo_pipe && r.geo_pipe.total_ft) bits.push('📐 ' + Math.round(r.geo_pipe.total_ft) + ' ft pipe measured');
     if (r.geo_pipe && r.geo_pipe.error) bits.push('📐 ' + r.geo_pipe.error);
@@ -485,7 +485,7 @@ var AE = (function() {
         if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, unsized_ft: g.unsized_ft, levels: g.levels, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, unsized_ft: g.unsized_ft, levels: g.levels, ocr: ocrInfo || undefined, at: new Date().toISOString() };
         // refrigerant / water piping drawn on the HVAC plan itself: measured too when the AI saw pipe runs on this sheet, and kept only when the
         // two agree within a factor of 3-4 (duct lines and walls look like pipes to the line follower)
         if (!riser && !pipes && !g.error) {
@@ -917,6 +917,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=388"></script>
+<script src="sw-register.js?v=389"></script>
 </body>
 </html>

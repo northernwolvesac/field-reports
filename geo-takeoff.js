@@ -36,6 +36,7 @@
       return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
     }
     var segs = [], rects = [], rectSeg = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only)
+    var bnd = [];   // scope-boundary candidates: thick filled dashes / thick dashed strokes [x1,y1,x2,y2, thickness]
     var glyphs = [], pathPts = [];   // small painted paths = glyph outlines of stroked/outlined text (for OCR)
     var styles = {}, styleList = [];
     function styleKey() {
@@ -72,7 +73,7 @@
       keepSegs.forEach(function (x) { path.push(x); });
       subIdx = path.length;
     }
-    function thinQuad() {
+    function thinQuad(maxT) {
       var all = path.concat(rects);                    // a thin rectangle's sides were moved to rects by endSub
       if (all.length < 2 || all.length > 10) return null;
       var L = function (g) { return Math.hypot(g[2] - g[0], g[3] - g[1]); };
@@ -86,7 +87,7 @@
           if (a < -2 || a > L(e1) + 2) along = false;                                          // points beyond the long edge: not a bar
         });
       });
-      if (!along || tmax < 0.3 || tmax > 4.5) return null;
+      if (!along || tmax < 0.3 || tmax > (maxT || 4.5)) return null;
       var o = tmax / 2 * sgn;
       return { seg: [e1[0] + nx * o, e1[1] + ny * o, e1[2] + nx * o, e1[3] + ny * o], t: Math.round(tmax * 10) / 10 };
     }
@@ -98,8 +99,14 @@
         if (quad) {
           var qk = 'fill|' + quad.t + '|';
           if (!(qk in styles)) { styles[qk] = styleList.length; styleList.push({ key: qk, col: [0, 0, 0], w: quad.t, dash: false }); }
-          var qg = clipSeg(quad.seg, st.clip); if (qg) segs.push(qg.concat([styles[qk]]));
+          var qg = clipSeg(quad.seg, st.clip); if (qg) { segs.push(qg.concat([styles[qk]])); if (quad.t >= 1.4) bnd.push(qg.concat([quad.t])); }
         }
+      }
+      // heavy filled dashes (Esquire / Mojo Stumer: the "area of work" boundary is a row of 7-pt gray dashes) are no duct, but they
+      // bound the sheet's scope — kept apart for measure()
+      if (!quad && (paint === true || paint === 'both') && Math.min(st.fill[0], st.fill[1], st.fill[2]) < 0.75) {
+        var wide = thinQuad(14);
+        if (wide && wide.t > 4.5 && wide.t <= 9) { var wg = clipSeg(wide.seg, st.clip); if (wg) bnd.push(wg.concat([wide.t])); }
       }
       if (quad) { pathPts = []; pendingClip = false; path = []; rects = []; cur = null; start = null; subIdx = 0; return; }
       if (paint !== false && pathPts.length && pathPts.length <= 400) {
@@ -109,8 +116,8 @@
       }
       pathPts = [];
       if (stroke && path.length) {
-        var si = styleKey();
-        for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) segs.push(g.concat([si])); }
+        var si = styleKey(), heavyDash = st.dash && styleList[si].w >= 1.4 && Math.max.apply(null, st.col) < 0.8;
+        for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) { segs.push(g.concat([si])); if (heavyDash) bnd.push(g.concat([styleList[si].w])); } }
       }
       // a long, slender stroked box is a straight duct section drawn as a rectangle (Parkinson's / MKDA: every run is one 're'), not a
       // symbol: its two long sides are the walls. Squares and stubby boxes (diffusers, grilles, VAV boxes, equipment) stay symbols.
@@ -219,7 +226,7 @@
     text.forEach(function (t, i) { t.block = boxes[root(i)]; delete t._l; });
     var flat = new Float64Array(segs.length * 5);
     segs.forEach(function (s, i) { flat.set(s, i * 5); });
-    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg };
+    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg, bnd: bnd };
   }
 
   // ─── 1b. OCR for sheets whose text is outlined / stroked (AutoCAD SHX fonts export as tiny paths, not text) ───
@@ -231,6 +238,7 @@
   var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
   var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
+  var KW_OCR = /^(EXISTING|EXIST\.?|REMAINS?|PERFORMED|SCOPE|OUT|NOT|N\.?I\.?C\.?|MATCH|MATCHLINE|DRAWING)$/i;
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
   function hasScale(s) { return M_SCALE_RE.test(s || ''); }
@@ -493,6 +501,10 @@
       allText.push(r.txt);
       if (isSizeLabel(r.txt) || (isPipeLabel(r.txt) && r.conf >= 30))
         items.push({ str: r.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, conf: Math.round(r.conf) });
+      // scope words keep their place too: "EXISTING TO REMAIN / NO WORK PERFORMED / OUT OF SCOPE" marks the far side of the area-of-work
+      // boundary, "MATCH LINE" / "DRAWING 'A'" the sheet's edge against its neighbour (measure() uses them with the heavy dashed lines)
+      else if (KW_OCR.test(r.txt))
+        items.push({ str: r.txt.toUpperCase(), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
     });
     return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' ') };
   }
@@ -806,6 +818,27 @@
       var dashPieces = dashedRuns(dashSty, labs, ptft, D.text, S, fp.used, singles);
       singles = singles.concat(dashPieces);
       var all = pcs.concat(singles), sizes = {}, total = 0, sf = 0, wf = 0;
+      // ─── scope: duct on the far side of the area-of-work boundary ("EXISTING TO REMAIN / NO WORK PERFORMED" — Esquire's 1st floor carried
+      // 436 ft of it) and the strip beyond a match line (drawn on both halves of a floor) are not in the takeoff ───
+      var ZN = D.noZones ? null : scopeZones(D, ptft), zoneFt = 0, matchFt = 0, zoneSkipped = false;
+      function pieceCenter(p) {
+        if (p.kind !== 'single') return [p.cx, p.cy];
+        var sx = 0, sy = 0, k = 0; (p.xy || []).forEach(function (g) { sx += g[0] + g[2]; sy += g[1] + g[3]; k += 2; });
+        return k ? [sx / k, sy / k] : [0, 0];
+      }
+      if (ZN && ZN.zones.length) {
+        var allFt = all.reduce(function (a, p) { return a + p.len_ft; }, 0), cen = all.map(pieceCenter);
+        // a "zone" holding most of the sheet's duct has its note on the wrong side (or the chain is no boundary) — that one is not trusted
+        ZN.zones.forEach(function (z) { var f = 0; all.forEach(function (p, i) { if (ZN.inZone(z, cen[i][0], cen[i][1])) f += p.len_ft; }); if (f > 0.5 * allFt) { z.off = true; zoneSkipped = true; } });
+        all = all.filter(function (p, i) { if (ZN.noWork(cen[i][0], cen[i][1])) { zoneFt += p.len_ft; return false; } return true; });
+      }
+      if (ZN) ZN.matches.forEach(function (ch) {
+        var side = [0, 0];
+        all.forEach(function (p) { var c = pieceCenter(p), sd = chainSide(ch, c[0], c[1], 150 * ptft); if (sd) side[sd > 0 ? 0 : 1] += p.len_ft; });
+        var drop = side[0] > 0 && side[0] <= 0.3 * side[1] ? 1 : side[1] > 0 && side[1] <= 0.3 * side[0] ? -1 : 0;
+        if (!drop) return;
+        all = all.filter(function (p) { var c = pieceCenter(p); if (chainSide(ch, c[0], c[1], 150 * ptft) === drop) { matchFt += p.len_ft; return false; } return true; });
+      });
       all.forEach(function (p) {
         sizes[p.size] = (sizes[p.size] || 0) + p.len_ft; total += p.len_ft;
         if (p.kind === 'single') sf += p.len_ft; else if (p.via === 'width') wf += p.len_ft;
@@ -813,11 +846,12 @@
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
       // labels the measured duct reaches (within 4 ft of a piece): a sheet whose labels mostly sit on nothing was measured only in part
       var segsAll = []; all.forEach(function (p) { if (p.kind === 'single') (p.xy || []).forEach(function (s) { segsAll.push([s[0], s[1], s[2], s[3], 0]); }); else { var e = ends(p, ptft); segsAll.push([e[0][0], e[0][1], e[1][0], e[1][1], p.w_in / 24 * ptft]); } });
-      var labHit = labs.filter(function (l) { return segsAll.some(function (s) { return Math.abs(l.cx - (s[0] + s[2]) / 2) <= Math.abs(s[2] - s[0]) / 2 + 6 * ptft && Math.abs(l.cy - (s[1] + s[3]) / 2) <= Math.abs(s[3] - s[1]) / 2 + 6 * ptft && ptSeg(l.cx, l.cy, s) <= s[4] + 4 * ptft; }); }).length;
+      var labsIn = ZN && ZN.zones.length && !zoneSkipped ? labs.filter(function (l) { return !ZN.noWork(l.cx, l.cy); }) : labs;   // zone labels sit on dropped duct
+      var labHit = labsIn.filter(function (l) { return segsAll.some(function (s) { return Math.abs(l.cx - (s[0] + s[2]) / 2) <= Math.abs(s[2] - s[0]) / 2 + 6 * ptft && Math.abs(l.cy - (s[1] + s[3]) / 2) <= Math.abs(s[3] - s[1]) / 2 + 6 * ptft && ptSeg(l.cx, l.cy, s) <= s[4] + 4 * ptft; }); }).length;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
-        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
@@ -932,6 +966,133 @@
           }
         });
       }
+    }
+    // ─── scope boundary: the heavy dashed "area of work" line (a row of filled dashes, or a thick dashed stroke) chained head to tail ───
+    function boundaryChains(D) {
+      var B = (D.bnd || []).map(function (b) { var L = hyp(b[2] - b[0], b[3] - b[1]); return { x1: b[0], y1: b[1], x2: b[2], y2: b[3], t: b[4], L: L, ux: (b[2] - b[0]) / (L || 1), uy: (b[3] - b[1]) / (L || 1) }; }).filter(function (b) { return b.L >= 3; });
+      if (B.length < 1) return [];
+      function endDist(a, b) {
+        var E = [[a.x1, a.y1], [a.x2, a.y2]], F = [[b.x1, b.y1], [b.x2, b.y2]], d = Infinity;
+        for (var i = 0; i < 2; i++) for (var j = 0; j < 2; j++) d = Math.min(d, hyp(E[i][0] - F[j][0], E[i][1] - F[j][1]));
+        return d;
+      }
+      function gapOf(a, b) { return Math.min(60, Math.max(24, 2.5 * Math.min(a.L, b.L))); }
+      var comp = B.map(function (_, i) { return i; });
+      function find(i) { while (comp[i] !== i) { comp[i] = comp[comp[i]]; i = comp[i]; } return i; }
+      var cell = 120, grid = {};
+      B.forEach(function (b, i) { var k = Math.floor((b.x1 + b.x2) / 2 / cell) + ',' + Math.floor((b.y1 + b.y2) / 2 / cell); (grid[k] = grid[k] || []).push(i); });
+      B.forEach(function (a, i) {
+        var gx = Math.floor((a.x1 + a.x2) / 2 / cell), gy = Math.floor((a.y1 + a.y2) / 2 / cell);
+        for (var dx = -1; dx <= 1; dx++) for (var dy = -1; dy <= 1; dy++) (grid[(gx + dx) + ',' + (gy + dy)] || []).forEach(function (j) {
+          if (j <= i) return; var b = B[j];
+          if (Math.abs(a.t - b.t) > Math.max(1, 0.3 * Math.max(a.t, b.t))) return;   // one pen per boundary
+          if (endDist(a, b) <= gapOf(a, b)) comp[find(i)] = find(j);
+        });
+      });
+      var groups = {}; B.forEach(function (b, i) { (groups[find(i)] = groups[find(i)] || []).push(i); });
+      var chains = [];
+      Object.keys(groups).forEach(function (g) {
+        var ids = groups[g], len = ids.reduce(function (a, i) { return a + B[i].L; }, 0);
+        if (len < 200 || (ids.length < 6 && !ids.some(function (i) { return B[i].L >= 200; }))) return;
+        // one path head to tail: from an end dash (one neighbour) walk to the nearest unvisited dash each time, turning it to follow;
+        // dashes off the path (a doubled stretch, a spur) take the direction of the nearest path dash — left / right stay consistent
+        var nb = {}; ids.forEach(function (i) { nb[i] = ids.filter(function (j) { return j !== i && endDist(B[i], B[j]) <= gapOf(B[i], B[j]); }); });
+        var start = ids.slice().sort(function (a, b) { return nb[a].length - nb[b].length || B[b].L - B[a].L; })[0];
+        function orient(b, flip) { return flip ? { x1: b.x2, y1: b.y2, x2: b.x1, y2: b.y1, ux: -b.ux, uy: -b.uy, L: b.L, t: b.t } : { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, ux: b.ux, uy: b.uy, L: b.L, t: b.t }; }
+        var seen = {}, bars = [], curI = start, first = B[start];
+        // the start dash points away from its only neighbour (or along the longest axis for a loop)
+        var sn = nb[start][0], flip0 = sn !== undefined && hyp(B[sn].x1 - first.x1, B[sn].y1 - first.y1) < hyp(B[sn].x1 - first.x2, B[sn].y1 - first.y2) && hyp(B[sn].x2 - first.x1, B[sn].y2 - first.y1) < hyp(B[sn].x2 - first.x2, B[sn].y2 - first.y2);
+        var cur = orient(first, flip0); bars.push(cur); seen[start] = 1;
+        for (;;) {
+          var bestJ = -1, bestD = Infinity, bestFlip = false;
+          nb[curI].forEach(function (j) {
+            if (seen[j]) return;
+            var d1 = hyp(cur.x2 - B[j].x1, cur.y2 - B[j].y1), d2 = hyp(cur.x2 - B[j].x2, cur.y2 - B[j].y2), d = Math.min(d1, d2);
+            if (d < bestD) { bestD = d; bestJ = j; bestFlip = d2 < d1; }
+          });
+          if (bestJ < 0) break;
+          cur = orient(B[bestJ], bestFlip); bars.push(cur); seen[bestJ] = 1; curI = bestJ;
+        }
+        ids.forEach(function (i) {
+          if (seen[i]) return;
+          var b = B[i], near = null, nd = Infinity;
+          bars.forEach(function (pb) { var d = ptSeg((b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2, [pb.x1, pb.y1, pb.x2, pb.y2]); if (d < nd) { nd = d; near = pb; } });
+          bars.push(orient(b, near ? (b.ux * near.ux + b.uy * near.uy) < 0 : false));
+        });
+        // the path itself: dash midpoints in walking order (a dash's own centreline is tilted by its skewed outline — the polyline through
+        // the midpoints is the boundary's true course)
+        var pts = []; for (var pi = 0; pi < bars.length - (ids.length - Object.keys(seen).length); pi++) pts.push([(bars[pi].x1 + bars[pi].x2) / 2, (bars[pi].y1 + bars[pi].y2) / 2]);
+        if (pts.length === 1) pts = [[bars[0].x1, bars[0].y1], [bars[0].x2, bars[0].y2]];
+        else { var thin = [pts[0]]; pts.forEach(function (q) { var l = thin[thin.length - 1]; if (hyp(q[0] - l[0], q[1] - l[1]) >= 8) thin.push(q); }); if (thin.length >= 2) pts = thin; }   // a corner's doubled dash makes no step
+        chains.push({ bars: bars, pts: pts, len: len, t: B[ids[0]].t, n: ids.length });
+      });
+      return chains;
+    }
+    // which side of a chain a point lies on: +1 left of travel, -1 right, 0 when it is too far or past the chain's ends
+    function chainSide(ch, px, py, maxD) {
+      var P = ch.pts, bd = Infinity, bi = -1;
+      for (var i = 0; i + 1 < P.length; i++) { var d = ptSeg(px, py, [P[i][0], P[i][1], P[i + 1][0], P[i + 1][1]]); if (d < bd) { bd = d; bi = i; } }
+      if (bi < 0 || bd > maxD) return 0;
+      var x1 = P[bi][0], y1 = P[bi][1], dx = P[bi + 1][0] - x1, dy = P[bi + 1][1] - y1, L = hyp(dx, dy) || 1;
+      var t = ((px - x1) * dx + (py - y1) * dy) / (L * L);
+      if ((bi === 0 && t < -0.5) || (bi === P.length - 2 && t > 1.5)) return 0;
+      // the course over a few dashes either way, not one dash's jitter
+      var a = P[Math.max(0, bi - 1)], b = P[Math.min(P.length - 1, bi + 2)], ex = b[0] - a[0], ey = b[1] - a[1];
+      if (hyp(ex, ey) < 4) { ex = dx; ey = dy; a = P[bi]; }
+      var c = ex * (py - a[1]) - ey * (px - a[0]);
+      return c > 0 ? 1 : -1;
+    }
+    var KW_STRONG = /^(REMAINS?|PERFORMED|N\.?I\.?C\.?)$/i, KW_WEAK = /^(EXISTING|EXIST\.?|SCOPE|OUT|NOT)$/i;
+    var KW_TEXT = /\bTO REMAIN\b|\bNO WORK\b|\bNOT IN (SCOPE|CONTRACT)\b|\bOUT OF SCOPE\b|\bN\.I\.C\b/i;
+    var KW_MATCH_W = /^(MATCH|MATCHLINE|DRAWING)$/i, KW_MATCH_T = /MATCH\s*-?\s*LINE|SEE (DWG|DRAWING|SHEET)/i;
+    // the notes that name a no-work zone or a match line, with their place on the sheet (OCR words or text-layer strings)
+    function zoneSeeds(D) {
+      var items = (D.text || []).map(function (t) { return { s: String(t.str || '').trim(), x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2, ocr: !!t.ocr }; });
+      var noWork = [], match = [];
+      items.forEach(function (t, i) {
+        var one = t.s.indexOf(' ') < 0;
+        if (KW_TEXT.test(t.s)) noWork.push({ x: t.x, y: t.y, w: /REMAIN/i.test(t.s) && /NO WORK|SCOPE|N\.I\.C/i.test(t.s) ? 4 : 2 });
+        else if (one && KW_STRONG.test(t.s)) noWork.push({ x: t.x, y: t.y, w: 2 });
+        else if (one && KW_WEAK.test(t.s) && items.some(function (u, j) { return j !== i && u.s.indexOf(' ') < 0 && (KW_STRONG.test(u.s) || (KW_WEAK.test(u.s) && u.s.toUpperCase() !== t.s.toUpperCase())) && hyp(u.x - t.x, u.y - t.y) <= 120; })) noWork.push({ x: t.x, y: t.y, w: 1 });
+        if ((one && KW_MATCH_W.test(t.s)) || (!one && KW_MATCH_T.test(t.s))) match.push({ x: t.x, y: t.y });
+      });
+      return { noWork: noWork, match: match };
+    }
+    // no-work zones: a boundary chain with the notes' votes on one side; match lines: a chain with MATCH / DRAWING words beside it
+    function scopeZones(D, ptft) {
+      var chains = boundaryChains(D); if (!chains.length) return null;
+      var seeds = zoneSeeds(D), zones = [], matches = [];
+      function distTo(ch, x, y) { var d = Infinity; ch.bars.forEach(function (b) { d = Math.min(d, ptSeg(x, y, [b.x1, b.y1, b.x2, b.y2])); }); return d; }
+      // a match line is straight and long (a chain that bends is a scope boundary or a wall)
+      var isMatch = chains.map(function (ch) { var P = ch.pts, span = hyp(P[P.length - 1][0] - P[0][0], P[P.length - 1][1] - P[0][1]), walk = 0; for (var k = 1; k < P.length; k++) walk += hyp(P[k][0] - P[k - 1][0], P[k][1] - P[k - 1][1]); return span >= 40 * ptft && span >= 0.8 * walk && seeds.match.some(function (s) { return distTo(ch, s.x, s.y) <= 15 * ptft; }); });
+      chains.forEach(function (ch, ci) {
+        // a match line is never a scope boundary (the no-work note of the next zone can sit a few feet from it)
+        if (isMatch[ci]) { matches.push(ch); return; }
+        var vote = [0, 0];
+        // a note votes on the boundary nearest to it only
+        seeds.noWork.forEach(function (s) {
+          var dm = distTo(ch, s.x, s.y); if (dm > 60 * ptft) return;
+          if (chains.some(function (o, oi) { return o !== ch && !isMatch[oi] && distTo(o, s.x, s.y) < dm; })) return;
+          var sd = chainSide(ch, s.x, s.y, 60 * ptft); if (sd) vote[sd > 0 ? 0 : 1] += s.w;
+        });
+        var win = vote[0] >= 4 && vote[0] >= 2 * vote[1] ? 1 : vote[1] >= 4 && vote[1] >= 2 * vote[0] ? -1 : 0;
+        ch.vote = vote;
+        if (win) zones.push({ ch: ch, side: win, votes: vote });
+      });
+      if (D.debugZones) D.debugZones.push({ seeds: seeds, chains: chains.map(function (ch) { var f = ch.bars[0], l = ch.bars[ch.bars.length - 1]; return { n: ch.n, vote: ch.vote, len: Math.round(ch.len), t: ch.t, first: [f.x1, f.y1, f.x2, f.y2].map(Math.round), last: [l.x1, l.y1, l.x2, l.y2].map(Math.round), bars: ch.bars.map(function (b) { return [b.x1, b.y1, b.x2, b.y2].map(Math.round); }), pts: ch.pts.map(function (q) { return [Math.round(q[0]), Math.round(q[1])]; }) }; }), zones: zones.map(function (z) { return { side: z.side, votes: z.votes, n: z.ch.n }; }) });
+      if (!zones.length && !matches.length) return null;
+      // the boundary nearest to a point is the one that places it (a short spur's half-plane must not reach across the work area)
+      var bnds = chains.filter(function (ch, ci) { return !isMatch[ci]; });
+      function nearestZone(x, y) {
+        var best = null, bd = 60 * ptft;
+        bnds.forEach(function (ch) { var d = distTo(ch, x, y); if (d < bd) { bd = d; best = ch; } });
+        if (!best) return null;
+        for (var i = 0; i < zones.length; i++) if (zones[i].ch === best) return zones[i];
+        return null;
+      }
+      return { zones: zones, matches: matches, chains: chains.length,
+        inZone: function (z, x, y) { return nearestZone(x, y) === z && chainSide(z.ch, x, y, 60 * ptft) === z.side; },
+        noWork: function (x, y) { var z = nearestZone(x, y); return !!z && !z.off && chainSide(z.ch, x, y, 60 * ptft) === z.side; } };
     }
     function ptSeg(px, py, s) {
       var x1 = s[0], y1 = s[1], x2 = s[2], y2 = s[3], L2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
@@ -1144,6 +1305,8 @@
       }
       var pieces = [], seen = {};
       labs.forEach(function (l) {
+        // a duct drawn as one line is a small one; a wide label beside it names a damper / the existing main (Esquire: "96x18 FD" gave 84 ft of 96x18)
+        if (!l.round && Math.max(l.w, l.h) > 30) return;
         var best = null, bd = 1e9;
         leaderEnds(l, leaders).forEach(function (pt) {
           freeIdx.forEach(function (i) { var dd = ptSeg(pt[0], pt[1], S[i]); if (dd <= 4 && dd < bd) { best = i; bd = dd; } });
