@@ -238,7 +238,7 @@
   var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
   var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
-  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DWG)$/i;
+  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_PHRASE = /NO WORK|TO REMAIN|OUT OF SCOPE|NOT IN (SCOPE|CONTRACT)|N\.?I\.?C/i;   // the reader hands back a cell as one or two words
   function kwWord(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }   // "REMAIN," / "DRAWING'B'" → the word
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
@@ -504,8 +504,8 @@
         items.push({ str: r.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, conf: Math.round(r.conf) });
       // scope words keep their place too: "EXISTING TO REMAIN / NO WORK PERFORMED / OUT OF SCOPE" marks the far side of the area-of-work
       // boundary, "MATCH LINE" / "DRAWING 'A'" the sheet's edge against its neighbour (measure() uses them with the heavy dashed lines)
-      else if (KW_OCR.test(kwWord(r.txt)))
-        items.push({ str: kwWord(r.txt), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
+      else if (KW_PHRASE.test(r.txt) || KW_OCR.test(kwWord(r.txt)))
+        items.push({ str: KW_PHRASE.test(r.txt) ? 'NOWORK' : kwWord(r.txt), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
     });
     var wordList = []; Object.keys(results).forEach(function (i) { var r = results[i], w = words[+i]; if (r.txt) wordList.push([r.txt, Math.round((w.box[0] + w.box[2]) / 2), Math.round((w.box[1] + w.box[3]) / 2)]); });
     return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' '), wordList: wordList };
@@ -537,7 +537,7 @@
         // OCR glues a neighbouring digit on ("12x8" + the 6 of "(650)" = "12x86", Esquire: 12x62, 18x71, 8x94) — a duct that deep and that
         // narrow is a misread, and it would be priced as an 86" duct
         if (t.ocr && h >= 36 && h > 2.5 * w) return;
-        labs.push({ txt: t.str, w: w, h: h, round: !!r, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
+        labs.push({ txt: t.str, w: w, h: h, round: !!r, ocr: !!t.ocr, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
       });
       if (labs.length < 3) return { error: textScales.length ? 'fewer than 3 duct size labels' : 'no drawing scale found on the sheet', ptft: textScales.length ? textScales[0] * 72 : undefined };
       var n = D.segs.length / 5, isRectSide = {};
@@ -648,6 +648,34 @@
         if (keep.every(dark)) stats.forEach(function (q) { if (keep.indexOf(q[2]) < 0 && dark(q[2]) && +q[2].split('|')[1] >= 0.5 && q[1] >= 8) keep.push(q[2]); });
       }
       // no style has convincing label evidence and the one that is left is background-sized (Parkinson's: 4,700 ft of "pairs" for 49 labels): no number
+      // a single-line drawing (Parkinson's: every duct one 1.68-pt line, the size beside it with a short leader; BOSS; Vesey) has no
+      // wall pairs to vote with — the line style most labels point at (leader end on it, or the label right beside it) is the duct style
+      var singleSty = null, keepTot0 = topHit < thr ? stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0) : 0;
+      if (topHit < thr && !D.forceStyle && keepTot0 > 50 * Math.max(labs.length, 20)) (function () {
+        var lead = [];
+        for (var i = 0; i < n; i++) {
+          var o = i * 5, st = D.styles[D.segs[o + 4]]; if (st.dash || Math.max.apply(null, st.col) > 0.3 || st.w > 1.0) continue;
+          var L = hyp(D.segs[o + 2] - D.segs[o], D.segs[o + 3] - D.segs[o + 1]); if (L >= 3 && L <= 400) lead.push([D.segs[o], D.segs[o + 1], D.segs[o + 2], D.segs[o + 3]]);
+        }
+        var ends = labs.map(function (l) { return leaderEnds(l, lead, l.ocr ? 25 : 5).filter(function (q) { return hyp(q[0] - l.cx, q[1] - l.cy) > 6; }).slice(0, 3); });   // an OCR label is one word of its note: the leader leaves the note
+        var best = null, bestN = 0, cand = [];
+        Object.keys(bySty).forEach(function (key) {
+          var w = +key.split('|')[1]; if (w < 1.0 || /^fill\|/.test(key)) return;
+          var segs = bySty[key], tot = 0; segs.forEach(function (g) { tot += hyp(g[2] - g[0], g[3] - g[1]); });
+          if (tot < 30 * ptft || tot / segs.length < 6) return;   // stroked text is thousands of 2-pt strokes, never a duct style
+          var cnt = 0;
+          labs.forEach(function (l, j) {
+            var hit = ends[j].some(function (q) { return segs.some(function (g) { return hyp(g[2] - g[0], g[3] - g[1]) >= 4 && ptSeg(q[0], q[1], g) <= 4; }); });
+            if (!hit) hit = segs.some(function (g) { var L = hyp(g[2] - g[0], g[3] - g[1]); if (L < 0.5 * ptft) return false; var ux = (g[2] - g[0]) / L, uy = (g[3] - g[1]) / L, dx = l.cx - g[0], dy = l.cy - g[1], al = dx * ux + dy * uy, pe = Math.abs(-dx * uy + dy * ux); return al >= -ptft && al <= L + ptft && pe <= 1.5 * ptft; });
+            if (hit) cnt++;
+          });
+          cand.push([key, cnt, Math.round(tot / ptft)]);
+          if (cnt > bestN) { bestN = cnt; best = key; }
+        });
+        if (D.debugZones) D.debugZones.push({ singleCand: cand.sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6) });
+        if (best && bestN >= Math.max(4, 0.25 * labs.length)) singleSty = best;
+      })();
+      if (singleSty) { keep = [singleSty]; topHit = thr; scaleFrom = scaleFrom + '+single'; }
       if (topHit < thr && !D.forceStyle) {
         var keepTot = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0);
         if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
@@ -816,7 +844,7 @@
       var pairLabelFt = pcs.reduce(function (a, p) { return a + p.len_ft; }, 0);
       var barPieces = barSegs.length >= 10 ? barRuns(barSegs, labs, ptft, pairLabelFt) : [];
       if (barPieces.length) { S2 = S2.filter(function (x, i) { if (x.q) used2[i] = null; return !x.q; }); used2 = used2.filter(function (u) { return u !== null; }); }
-      var singles = singleLines(S2, used2, labs, ptft, leaders).concat(barPieces);
+      var singles = singleLines(S2, used2, labs, ptft, leaders, D).concat(barPieces);
       var dashPieces = dashedRuns(dashSty, labs, ptft, D.text, S, fp.used, singles);
       singles = singles.concat(dashPieces);
       var all = pcs.concat(singles), sizes = {}, total = 0, sf = 0, wf = 0;
@@ -853,7 +881,7 @@
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
-        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
@@ -1044,10 +1072,10 @@
       var c = ex * (py - a[1]) - ey * (px - a[0]);
       return c > 0 ? 1 : -1;
     }
-    var KW_STRONG = /^(REMAIN\w*|PERFORM\w*|NIC)$/i, KW_WEAK = /^(EXIST\w*|SCOPE|OUT|NOT)$/i;
+    var KW_STRONG = /^(REMAIN\w*|PERFORM\w*|NIC|NOWORK)$/i, KW_WEAK = /^(EXIST\w*|SCOPE|OUT|NOT)$/i;
     function kwOf(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }
     var KW_TEXT = /\bTO REMAIN\b|\bNO WORK\b|\bNOT IN (SCOPE|CONTRACT)\b|\bOUT OF SCOPE\b|\bN\.I\.C\b/i;
-    var KW_MATCH_W = /^(MATCH\w*|DRAWING|DWG)$/i, KW_MATCH_T = /MATCH\s*-?\s*LINE|SEE (DWG|DRAWING|SHEET)/i;
+    var KW_MATCH_W = /^(MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_MATCH_T = /MATCH\s*-?\s*LINE|SEE (DWG|DRAWING|SHEET)/i;
     // the notes that name a no-work zone or a match line, with their place on the sheet (OCR words or text-layer strings)
     function zoneSeeds(D) {
       var items = (D.text || []).map(function (t) { return { s: String(t.str || '').trim(), x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2, ocr: !!t.ocr }; });
@@ -1103,8 +1131,9 @@
       var t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / L2));
       return hyp(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
     }
-    function leaderEnds(l, leaders) {
-      var x0 = l.bbox[0] - 5, y0 = l.bbox[1] - 5, x1 = l.bbox[2] + 5, y1 = l.bbox[3] + 5, outs = [];
+    function leaderEnds(l, leaders, pad) {
+      pad = pad !== undefined ? pad : 5;
+      var x0 = l.bbox[0] - pad, y0 = l.bbox[1] - pad, x1 = l.bbox[2] + pad, y1 = l.bbox[3] + pad, outs = [];
       function inside(x, y) { return x >= x0 && x <= x1 && y >= y0 && y <= y1; }
       leaders.forEach(function (a) {
         [[a[0], a[1], a[2], a[3]], [a[2], a[3], a[0], a[1]]].forEach(function (e) {
@@ -1294,7 +1323,7 @@
       });
       return pieces;
     }
-    function singleLines(S, used, labs, ptft, leaders) {
+    function singleLines(S, used, labs, ptft, leaders, D) {
       // a trunk line that the pair pass nibbled at (16" stubs every 6 ft on 360 Lexington's 20x6 mains) is still a single-line duct:
       // segments stay available while less than half their length is inside pairs, and only the untouched part is counted
       function usedLen(i) { return (used[i] || []).reduce(function (a, iv) { return a + Math.max(0, Math.min(S[i][6], iv[1]) - Math.max(0, iv[0])); }, 0); }
@@ -1323,7 +1352,7 @@
             if (perp < bd) { best = i; bd = perp; }
           });
         }
-        if (best === null || seen[best]) return;
+        if (best === null || seen[best]) { if (D.debugSingles) D.debugSingles.push([l.txt, best === null ? 'no line' : 'taken']); return; }
         var chain = {}, stack = [best], cnt = 1; chain[best] = 1;
         while (stack.length && cnt <= 60) {
           var k = stack.pop();
@@ -1335,12 +1364,12 @@
         var ids = Object.keys(chain).map(Number);
         ids.forEach(function (j) { seen[j] = 1; });
         var L = ids.reduce(function (a, j) { return a + freeLen(j); }, 0) / ptft;
-        if (L < 3) return;
+        if (L < 3) { if (D.debugSingles) D.debugSingles.push([l.txt, 'short ' + L.toFixed(1)]); return; }
         // a diffuser symbol (box + diagonals, 2 ft across) next to a "6"Ø" label is a tangle, not a run: far more line than its extent
         var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
         ids.forEach(function (j) { var s = S[j]; bx0 = Math.min(bx0, s[0], s[2]); bx1 = Math.max(bx1, s[0], s[2]); by0 = Math.min(by0, s[1], s[3]); by1 = Math.max(by1, s[1], s[3]); });
         var ext = Math.max(bx1 - bx0, by1 - by0) / ptft;
-        if (ext <= 6 && L > 2.5 * Math.max(ext, 0.5)) return;
+        if (ext <= 6 && L > 2.5 * Math.max(ext, 0.5)) { if (D.debugSingles) D.debugSingles.push([l.txt, 'tangle ' + L.toFixed(1)]); return; }
         // a duct WALL whose partner wall is fragmented into several pairs must not come back as a single line: paired segments running
         // parallel within 30" on either side are summed, and half the main's length covered means it is a wall (Sage)
         var main = ids.reduce(function (a, j) { return S[j][6] > S[a][6] ? j : a; }, ids[0]), mm = S[main], side = [0, 0];
@@ -1352,7 +1381,8 @@
           var ov = Math.min(mm[6], Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2));
           if (ov > 0) side[dSigned < 0 ? 0 : 1] += ov;
         }
-        if (Math.max(side[0], side[1]) > 0.5 * mm[6]) return;
+        if (Math.max(side[0], side[1]) > 0.5 * mm[6]) { if (D.debugSingles) D.debugSingles.push([l.txt, 'wall ' + L.toFixed(1)]); return; }
+        if (D.debugSingles) D.debugSingles.push([l.txt, 'ok ' + L.toFixed(1)]);
         pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), ids: ids, xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
       });
       // unlabelled branches: free segments touching a labelled single run are runouts of that run (BOSS: 10"ø mains with

@@ -315,7 +315,9 @@
             (aiFt >= 20 && r.geo.total_ft > 3 * aiFt + 40) ? 'over 3x the AI reading' :
             (aiFt >= 20 && r.geo.total_ft * GEO_FITTINGS < aiFt / 4) ? 'under a quarter of the AI reading' :
             // (only when the AI reads more: applied both ways it cost 645 Madison 9 points for 2 points on Esquire)
-            (gl >= 6 && r.geo.labels_hit != null && r.geo.labels_hit < 0.6 * gl && aiFt > r.geo.total_ft * GEO_FITTINGS) ? 'only ' + r.geo.labels_hit + ' of ' + gl + ' size labels on measured duct' : '';
+            (gl >= 6 && r.geo.labels_hit != null && r.geo.labels_hit < 0.6 * gl && aiFt > r.geo.total_ft * GEO_FITTINGS) ? 'only ' + r.geo.labels_hit + ' of ' + gl + ' size labels on measured duct' :
+            // a single-line drawing measured from the labelled runs alone misses the unlabelled branches (Parkinson's 312 ft, AI 355, Procore 578)
+            (r.geo.single_style && aiFt > r.geo.total_ft * GEO_FITTINGS) ? 'single-line drawing, AI reads more' : '';
           var weakGeo = !!weakWhy;
           if (weakGeo && !coarseDup) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: gl, why: weakWhy });
           if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
