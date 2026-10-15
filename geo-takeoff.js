@@ -238,7 +238,7 @@
   var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
   var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
-  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_PHRASE = /NO WORK|OUT OF SCOPE|NO\w* IN (SCOPE|CONTRACT)|N\.?I\.?C/i;   // the reader hands back a cell as one or two words ("NO IN SCOPE" = NOT IN SCOPE)
+  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_PHRASE = /NO WORK|OUT OF SCOPE|NO\w* IN (SCOPE|CONTRACT)|N\.?I\.?C\b/i;   // the reader hands back a cell as one or two words ("NO IN SCOPE" = NOT IN SCOPE)
   function kwWord(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }   // "REMAIN," / "DRAWING'B'" → the word
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
@@ -1427,7 +1427,7 @@
       var ptft = +best * 72, labs = [];
       D.text.forEach(function (t) {
         var txt = t.str; if (/['’]/.test(txt) || txt.length > 34) return;
-        if (/[Øø∅]|DIA/i.test(txt) && !PSVC.test(txt) && txt.indexOf('/') < 0) return;      // 8"Ø is a round duct, not an 8-inch pipe
+        if (/[Øø∅]|\bDIA\b/i.test(txt) && !PSVC.test(txt) && txt.indexOf('/') < 0) return;      // 8"Ø is a round duct, not an 8-inch pipe
         var mm = PSIZE.exec(txt); if (!mm) return;
         var rest = (txt.slice(0, mm.index) + txt.slice(mm.index + mm[0].length)).trim();
         if (rest && !PSVC.test(rest) && !/^(PROVIDE|NEW|TO|\s)*$/.test(rest)) return;
