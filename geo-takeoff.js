@@ -238,7 +238,7 @@
   var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
   var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
-  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_PHRASE = /NO WORK|TO REMAIN|OUT OF SCOPE|NOT IN (SCOPE|CONTRACT)|N\.?I\.?C/i;   // the reader hands back a cell as one or two words
+  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_PHRASE = /NO WORK|OUT OF SCOPE|NO\w* IN (SCOPE|CONTRACT)|N\.?I\.?C/i;   // the reader hands back a cell as one or two words ("NO IN SCOPE" = NOT IN SCOPE)
   function kwWord(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }   // "REMAIN," / "DRAWING'B'" → the word
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
@@ -504,8 +504,8 @@
         items.push({ str: r.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, conf: Math.round(r.conf) });
       // scope words keep their place too: "EXISTING TO REMAIN / NO WORK PERFORMED / OUT OF SCOPE" marks the far side of the area-of-work
       // boundary, "MATCH LINE" / "DRAWING 'A'" the sheet's edge against its neighbour (measure() uses them with the heavy dashed lines)
-      else if (KW_PHRASE.test(r.txt) || KW_OCR.test(kwWord(r.txt)))
-        items.push({ str: KW_PHRASE.test(r.txt) ? 'NOWORK' : kwWord(r.txt), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
+      else if (KW_PHRASE.test(r.txt) || /TO REMAIN/i.test(r.txt) || KW_OCR.test(kwWord(r.txt)))
+        items.push({ str: KW_PHRASE.test(r.txt) ? 'NOWORK' : /TO REMAIN/i.test(r.txt) ? 'REMAIN' : kwWord(r.txt), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
     });
     var wordList = []; Object.keys(results).forEach(function (i) { var r = results[i], w = words[+i]; if (r.txt) wordList.push([r.txt, Math.round((w.box[0] + w.box[2]) / 2), Math.round((w.box[1] + w.box[3]) / 2)]); });
     return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' '), wordList: wordList };
@@ -1072,7 +1072,7 @@
       var c = ex * (py - a[1]) - ey * (px - a[0]);
       return c > 0 ? 1 : -1;
     }
-    var KW_STRONG = /^(REMAIN\w*|PERFORM\w*|NIC|NOWORK)$/i, KW_WEAK = /^(EXIST\w*|SCOPE|OUT|NOT)$/i;
+    var KW_STRONG = /^(PERFORM\w*|NIC|NOWORK)$/i, KW_WEAK = /^(EXIST\w*|REMAIN\w*|SCOPE|OUT|NOT)$/i;
     function kwOf(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }
     var KW_TEXT = /\bTO REMAIN\b|\bNO WORK\b|\bNOT IN (SCOPE|CONTRACT)\b|\bOUT OF SCOPE\b|\bN\.I\.C\b/i;
     var KW_MATCH_W = /^(MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_MATCH_T = /MATCH\s*-?\s*LINE|SEE (DWG|DRAWING|SHEET)/i;
@@ -1082,7 +1082,7 @@
       var noWork = [], match = [];
       items.forEach(function (t, i) {
         var one = t.s.indexOf(' ') < 0, k1 = kwOf(t.s);
-        if (KW_TEXT.test(t.s)) noWork.push({ x: t.x, y: t.y, w: /REMAIN/i.test(t.s) && /NO WORK|SCOPE|N\.I\.C/i.test(t.s) ? 4 : 2 });
+        if (KW_TEXT.test(t.s)) noWork.push({ x: t.x, y: t.y, w: (/NO WORK|SCOPE|N\.I\.C/i.test(t.s) ? 2 : 0) + (/REMAIN/i.test(t.s) ? 1 : 0) + (/EXIST/i.test(t.s) ? 1 : 0) });
         else if (one && KW_STRONG.test(k1)) noWork.push({ x: t.x, y: t.y, w: 2 });
         else if (one && KW_WEAK.test(k1) && items.some(function (u, j) { var k2 = kwOf(u.s); return j !== i && u.s.indexOf(' ') < 0 && (KW_STRONG.test(k2) || (KW_WEAK.test(k2) && k2 !== k1)) && hyp(u.x - t.x, u.y - t.y) <= 120; })) noWork.push({ x: t.x, y: t.y, w: 1 });
         if ((one && KW_MATCH_W.test(k1)) || (!one && KW_MATCH_T.test(t.s))) match.push({ x: t.x, y: t.y });
