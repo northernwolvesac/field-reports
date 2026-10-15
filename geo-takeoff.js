@@ -224,6 +224,9 @@
       boxes[r] = [Math.min(bx[0], t.x0), Math.min(bx[1], t.y0), Math.max(bx[2], t.x1), Math.max(bx[3], t.y1)];
     });
     text.forEach(function (t, i) { t.block = boxes[root(i)]; delete t._l; });
+    // nothing beyond the page box counts (Whaam: a 45-ft "10x10" run sat left of the sheet's edge, in the clipped-off margin)
+    var pv = page.view || null;
+    if (pv) { var pb = [pv[0], pv[1], pv[2], pv[3]]; segs = segs.map(function (g) { var c = clipSeg(g, pb); return c ? c.concat([g[4]]) : null; }).filter(Boolean); }
     var flat = new Float64Array(segs.length * 5);
     segs.forEach(function (s, i) { flat.set(s, i * 5); });
     return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg, bnd: bnd };
@@ -1369,7 +1372,8 @@
         var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
         ids.forEach(function (j) { var s = S[j]; bx0 = Math.min(bx0, s[0], s[2]); bx1 = Math.max(bx1, s[0], s[2]); by0 = Math.min(by0, s[1], s[3]); by1 = Math.max(by1, s[1], s[3]); });
         var ext = Math.max(bx1 - bx0, by1 - by0) / ptft;
-        if (ext <= 6 && L > 2.5 * Math.max(ext, 0.5)) { if (D.debugSingles) D.debugSingles.push([l.txt, 'tangle ' + L.toFixed(1)]); return; }
+        // (Whaam: 148 ft of line inside a 4 x 6 ft symbol)
+        if (ext <= 8 && L > 2.5 * Math.max(ext, 0.5)) { if (D.debugSingles) D.debugSingles.push([l.txt, 'tangle ' + L.toFixed(1)]); return; }
         // a duct WALL whose partner wall is fragmented into several pairs must not come back as a single line: paired segments running
         // parallel within 30" on either side are summed, and half the main's length covered means it is a wall (Sage)
         var main = ids.reduce(function (a, j) { return S[j][6] > S[a][6] ? j : a; }, ids[0]), mm = S[main], side = [0, 0];
@@ -1388,7 +1392,7 @@
       // unlabelled branches: free segments touching a labelled single run are runouts of that run (BOSS: 10"ø mains with
       // unlabelled stubs to every diffuser) — they take the run's size; growth stops at 40 segments per run
       pieces.forEach(function (pc) {
-        var stack = pc.ids.slice(), added = 0;
+        var stack = pc.ids.slice(), added = 0, len0 = pc.len_ft, xy0 = pc.xy.slice();
         while (stack.length && added < 40) {
           var k = stack.pop();
           freeIdx.forEach(function (j) {
@@ -1399,6 +1403,12 @@
             pc.len_ft += freeLen(j) / ptft; pc.xy.push(S[j].slice(0, 4)); pc.branch = (pc.branch || 0) + freeLen(j) / ptft;
           });
         }
+        // the branches grew into a hatch (Whaam: a slot diffuser's 148 ft of stripes beside a 5-ft "12x8" run) — a tangle, or far more
+        // branch than labelled run: the growth is undone
+        var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+        pc.xy.forEach(function (g) { bx0 = Math.min(bx0, g[0], g[2]); bx1 = Math.max(bx1, g[0], g[2]); by0 = Math.min(by0, g[1], g[3]); by1 = Math.max(by1, g[1], g[3]); });
+        var ext = Math.max(bx1 - bx0, by1 - by0) / ptft;
+        if (pc.len_ft > len0 && ((ext <= 8 && pc.len_ft > 2.5 * Math.max(ext, 0.5)) || pc.len_ft - len0 > 3 * Math.max(len0, 3))) { pc.len_ft = len0; pc.xy = xy0; pc.branch = 0; }
       });
       pieces.forEach(function (pc) { delete pc.ids; });
       return pieces;
