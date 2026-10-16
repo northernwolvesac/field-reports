@@ -1617,7 +1617,10 @@
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
       // a few labels cannot size hundreds of feet: that is a size spreading over walls or equipment, not a pipe run
       if (labs.length < 12 && total > 150 * labs.length) return { error: 'only ' + labs.length + ' pipe labels for ' + Math.round(total) + ' ft of lines — geometry not trusted', ptft: ptft, labels: labs.length };
-      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }),
+      // one line standing for the supply AND the return pipe ("1-1/4" CHWS/R", legend "CONDENSER WATER SUPPLY AND RETURN" on one symbol):
+      // the length is counted once per line here; the engine flags it so the estimator doubles it when the pair is priced per pipe
+      var sr = /\bS\s*[\/&]\s*R\b|SUPPLY\s*(AND|&|\/|\+)\s*RETURN|\b(CHW|CW|HW|HHW|CHWS|CWS|HWS|GLY\w*)\s*[\/&]\s*R\b/i.test(D.fullText);
+      return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }), sr: sr || undefined,
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry
