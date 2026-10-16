@@ -45,8 +45,15 @@ tagged items on this sheet, and use the drawing to decide what each tag is.
 
 Rules:
 - Schedules: capture EVERY row (tag, type, manufacturer/model, capacity, weight, electrical, notes). Weight in lb if shown.
-- Plans: count air devices by type and size (diffusers/grilles/registers, linear diffusers with feet, VAV boxes, fan-powered
-  boxes, fire/smoke & motorized dampers, cable-operated dampers, louvers). Equipment shown on the plan with its tag.
+- Plans — AIR DEVICES, count them like an estimator pricing them: one row per device family (its tag letter / code, e.g. "C",
+  "CD-1", "SA", "RG") with the TOTAL qty on this sheet. Count every drawn symbol once; a tag written "TYP. 5" / "TYPICAL OF 5"
+  stands for 5 devices; a device tag placed once next to a group of identical symbols covers the whole group. Use the DEVICE TAGS
+  count (exact, from the text layer, TYP multipliers applied) as the quantity of each tagged family — only add symbols that carry
+  no tag at all. Give each row: type (diffuser/grille/register/linear/vav/fpb/fsd/motorized_damper/cod/louver), tag family, size
+  (neck or face), cfm when printed, qty, and for LINEAR / slot diffusers also the linear_ft read at the sheet scale (sum of the
+  slot lengths; the qty is the number of sections). Existing, relocated or "(E)" devices and the legend's sample symbols are not
+  counted (put them in notes). Also VAV / fan-powered boxes, fire/smoke & motorized dampers, cable-operated dampers, louvers.
+  Equipment shown on the plan with its tag.
 - Ductwork: estimate linear feet per duct size using the sheet scale (read it from the title block / view label).
   Group by shape+size (e.g. "24x12", "12 round"). Note lining/insulation if stated. Existing-to-remain ducts are NOT new scope.
 - Piping: linear feet per service and size (CWS/CWR, HWS/HWR, CHWS/CHWR, refrigerant, condensate, gas…), material if stated.
@@ -67,8 +74,8 @@ Answer with the record_findings tool, one object in this shape:
  "floor": "1|2|roof|cellar|multiple|null", "scale": "1/8\\" = 1'-0\\"",
  "equipment": [{"tag":"AC-1-1","type":"water-cooled packaged unit","manufacturer":"","model":"","capacity":"","weight_lb":0,
                 "qty":1,"location":"","electrical":"","furnished_by":"contractor|owner|null","notes":""}],
- "air_devices": [{"type":"diffuser|grille|register|linear|vav|fpb|fsd|motorized_damper|cod|louver|other","tag":"","size":"",
-                  "qty":0,"linear_ft":0,"notes":""}],
+ "air_devices": [{"type":"diffuser|grille|register|linear|vav|fpb|fsd|motorized_damper|cod|louver|other","tag":"C","size":"24x24 in",
+                  "cfm":150,"qty":0,"linear_ft":0,"basis":"tags|symbols|schedule","notes":""}],
  "duct_runs": [{"shape":"rect|round|oval","size":"24x12","lf":0,"lined":false,"insulated":false,"notes":""}],
  "pipe_runs": [{"service":"CWS/CWR","size":"2\\"","lf":0,"material":"","insulated":true,"notes":""}],
  "demo": [{"item":"","qty":0,"notes":""}],
@@ -244,6 +251,8 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
       if (kind === "sheet") {
         if (body.tag_counts && Object.keys(body.tag_counts).length)
           prompt += "\n\nTAG COUNTS (exact, from the text layer of this sheet): " + JSON.stringify(body.tag_counts);
+        if (body.device_tags && Object.keys(body.device_tags).length)
+          prompt += "\n\nDEVICE TAGS (exact, from the text layer of this sheet; device code → number of devices, TYP. multipliers already applied): " + JSON.stringify(body.device_tags);
         if (body.text_hint) prompt += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
       }
       content.push({ type: "text", text: prompt });
