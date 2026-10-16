@@ -97,3 +97,10 @@ Bulletin 3 vs SD R2 screenshots sent; Ruslan confirmed: the 36 G ceiling diffuse
 delivered, factory will not take them back); all mains stay, price only the add starting at the new taps.
 10/06 priced per Ruslan ($90/LF LD, 5.5 MH/LD, foreman 30/15/15 hr, TAB, shop dwgs): 29th $37,917.50, 30th $19,545,
 31st $22,090, total $79,552.50 (`build_co.py`). No note on the G credit. CO number to be assigned.
+
+## 5. Spec notes
+- Pipe trim insulation (M-101, spec 2.04, checked 10/09): D - where piping is insulated, insulate all connections,
+  vents, drains, flanges, fittings, valves, tanks, pump casings etc.; E - anything needing service or inspection
+  (strainers, valves, devices) gets removable / reusable insulation; H.4 - fittings, flanges and valves with
+  pre-molded / pre-cut fitting covers. Insulate only after leak and pressure tests (F). CW piping 1-1/2" glass fiber
+  with factory vapor barrier jacket (H.2); condensate and make-up 1"; HW 1-1/2" / 2". M-401 table per 2020 NYCECC.
