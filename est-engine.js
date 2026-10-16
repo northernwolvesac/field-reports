@@ -314,7 +314,7 @@
           Object.keys(dtags).forEach(function (t) { if (t !== '(cfm only)') tagN += Number(dtags[t] || 0); });
           (r.air_devices || []).forEach(function (a) {
             if (/cfm only/i.test(a.tag || '')) { aiCfm += Number(a.qty || 0); return; }
-            if (/diffuser|grille|register|linear|louver|other/.test(String(a.type || 'other').toLowerCase())) aiN += Number(a.qty || 0);
+            if (/diffuser|grille|register|linear|louver/.test(String(a.type || '').toLowerCase())) aiN += Number(a.qty || 0);   // TD transfer ducts / dampers (type other) carry no cfm tag
           });
           devCheck.push({ sheet: sh, ai: aiN, tags: tagN, cfmOnly: cfmOnly || aiCfm, hasTags: !!(p.tag_counts && p.tag_counts.devices) });
         }
