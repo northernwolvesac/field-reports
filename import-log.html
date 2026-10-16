@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Import submittal log — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=415"></script>
+<script src="auth.js?v=415"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 40px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 14px; font-size: 14px; color: #111318; }
+  .card p { margin: 0 0 10px; color: #4b5563; font-size: 13px; line-height: 1.5; }
+  .btn { padding: 10px 16px; font-size: 14px; font-weight: 700; border-radius: 10px; cursor: pointer; border: 1px solid #111318; background: #111318; color: #fff; }
+  .btn[disabled] { opacity: .5; cursor: default; }
+  pre { background: #f3f4f6; border-radius: 8px; padding: 10px; font-size: 12px; white-space: pre-wrap; max-height: 360px; overflow: auto; }
+  #blocked { display: none; color: #b91c1c; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="top"><a class="back" href="projects.html">‹</a><div class="ttl"><b>Import submittal log</b><span>Loads tracking-log rows (JSON prepared from the office Excel log) into the projects' Submittals tabs</span></div></div>
+<div class="wrap">
+  <div class="card">
+    <div id="blocked">This tool is for the office (admin / manager / PM roles).</div>
+    <div id="form">
+      <p>Pick the <b>tracking_rows.json</b> file. Rows that already exist (same project, number and revision) are skipped, so running the same file twice adds nothing. Existing app rows listed under <i>updates</i> get their submitted / returned dates, status and vendor filled in; nothing is deleted.</p>
+      <input type="file" id="file" accept=".json,application/json">
+      <div id="preview" style="margin:10px 0;font-size:13px;color:#4b5563"></div>
+      <button class="btn" id="run" disabled>Import</button>
+    </div>
+    <pre id="log" style="display:none"></pre>
+  </div>
+</div>
+<script>
+requireAuth().catch(function(){});
+(function() {
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var $ = function(id) { return document.getElementById(id); };
+  var R = null;
+  function log(t) { var el = $('log'); el.style.display = ''; el.textContent += t + '\n'; }
+  async function init() {
+    var profile = null; try { profile = await getAuthProfile(); } catch (e) {}
+    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { $('blocked').style.display = ''; $('form').style.display = 'none'; return; }
+  }
+  $('file').addEventListener('change', async function() {
+    var f = this.files[0]; if (!f) return;
+    try { R = JSON.parse(await f.text()); } catch (e) { $('preview').textContent = 'Not a JSON file: ' + e.message; return; }
+    if (!R || !Array.isArray(R.inserts) || !Array.isArray(R.updates)) { $('preview').textContent = 'The file has no inserts / updates lists.'; R = null; return; }
+    var projects = {}; R.inserts.forEach(function(r) { projects[r.project_id] = (projects[r.project_id] || 0) + 1; });
+    $('preview').textContent = R.inserts.length + ' new log rows across ' + Object.keys(projects).length + ' projects · ' + R.updates.length + ' existing rows to fill in';
+    $('run').disabled = false;
+  });
+  $('run').addEventListener('click', async function() {
+    if (!R) return;
+    $('run').disabled = true; $('log').textContent = '';
+    var out = { inserted: 0, skipped: 0, updated: 0, errors: [] };
+    try {
+      var keys = {}, pids = Object.keys(R.inserts.reduce(function(a, r) { a[r.project_id] = 1; return a; }, {}));
+      for (var p = 0; p < pids.length; p++) {
+        var ex = await supabaseClient.from('submittals').select('number,revision').eq('project_id', pids[p]).eq('kind', 'submittal');
+        if (ex.error) throw new Error(ex.error.message);
+        (ex.data || []).forEach(function(r) { keys[pids[p] + '/' + r.number + '/' + r.revision] = 1; });
+      }
+      var todo = R.inserts.filter(function(r) { return !keys[r.project_id + '/' + r.number + '/' + r.revision]; });
+      out.skipped = R.inserts.length - todo.length;
+      log('Inserting ' + todo.length + ' rows (' + out.skipped + ' already there)…');
+      for (var i = 0; i < todo.length; i += 40) {
+        var res = await supabaseClient.from('submittals').insert(todo.slice(i, i + 40));
+        if (res.error) { out.errors.push('insert @' + i + ': ' + res.error.message); break; }
+        out.inserted += Math.min(40, todo.length - i);
+      }
+      log('Updating ' + R.updates.length + ' existing rows…');
+      for (var k = 0; k < R.updates.length; k++) {
+        var u = R.updates[k];
+        var cur = await supabaseClient.from('submittals').select('data').eq('id', u.id).single();
+        if (cur.error) { out.errors.push('read ' + u.id + ': ' + cur.error.message); continue; }
+        var patch = Object.assign({}, u.patch, { updated_at: new Date().toISOString() });
+        delete patch.data_merge;
+        patch.data = Object.assign({}, (cur.data && cur.data.data) || {}, u.patch.data_merge || {});
+        var up = await supabaseClient.from('submittals').update(patch).eq('id', u.id);
+        if (up.error) out.errors.push('update ' + u.id + ': ' + up.error.message); else out.updated++;
+      }
+    } catch (e) { out.errors.push(e.message || String(e)); }
+    log('Done: inserted ' + out.inserted + ', skipped ' + out.skipped + ', updated ' + out.updated + (out.errors.length ? '\nErrors:\n' + out.errors.join('\n') : ''));
+  });
+  init();
+})();
+</script>
+<script src="sw-register.js?v=415"></script>
+</body>
+</html>

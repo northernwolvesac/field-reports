@@ -8,12 +8,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=414"></script>
-<script src="nw-drive.js?v=414"></script>
-<script src="nw-drive-browser.js?v=414"></script>
-<script src="auth.js?v=414"></script>
-<script src="cloud-save.js?v=414"></script>
-<script src="schedule-utils.js?v=414"></script>
+<script src="supabase-config.js?v=415"></script>
+<script src="nw-drive.js?v=415"></script>
+<script src="nw-drive-browser.js?v=415"></script>
+<script src="auth.js?v=415"></script>
+<script src="cloud-save.js?v=415"></script>
+<script src="schedule-utils.js?v=415"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Projects — Northern Wolves AC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -686,6 +686,8 @@
           .sub-revs { width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }
           .sub-revs td { padding:4px 6px 4px 0; vertical-align:middle; white-space:nowrap; }
           .sub-revs td.sub-acts { white-space:normal; }
+          .sub-acts div { display:flex; flex-wrap:wrap; gap:2px 10px; align-items:center; }
+          .sub-acts .sub-link { margin-right:0; }
           .sub-revs input, .sub-revs select, .sub-proc input, .sub-proc select { font-size:12px; padding:3px 5px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; color:#111318; }
           .sub-revs input[type=date] { width:118px; }
           .sub-proc { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; padding-top:8px; border-top:1px dashed #e5e7eb; font-size:12px; color:#64748b; }
@@ -2151,7 +2153,7 @@ requireAuth().catch(function(){});
         var sub = tech ? subShort(s.sent_at) : '<input type="date" data-sub-sent="' + s.id + '" value="' + subDay(s.sent_at) + '">';
         var ret = tech ? subShort(d.returned) : '<input type="date" data-sub-ret="' + s.id + '" value="' + escHtml(d.returned || '') + '">';
         var stamps = (d.eng || d.arch) ? '<span style="color:#94a3b8"> eng ' + escHtml(d.eng || '—') + ' · arch ' + escHtml(d.arch || '—') + '</span>' : '';
-        return '<tr><td style="font-weight:700;color:#111318">' + lab + '</td><td><span style="color:#94a3b8">submitted</span> ' + sub + '</td><td><span style="color:#94a3b8">returned</span> ' + ret + '</td><td>' + statusSel(s) + stamps + '</td><td class="sub-acts">' + links(s, no + (s.revision ? ' R' + s.revision : '')) + '</td></tr>';
+        return '<tr><td style="font-weight:700;color:#111318">' + lab + '</td><td><span style="color:#94a3b8">submitted</span> ' + sub + '</td><td><span style="color:#94a3b8">returned</span> ' + ret + '</td><td>' + statusSel(s) + stamps + '</td><td class="sub-acts"><div>' + links(s, no + (s.revision ? ' R' + s.revision : '')) + '</div></td></tr>';
       }).join('');
       var proc = d0.proc || {}, procHtml;
       if (tech) {
@@ -2652,6 +2654,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=414"></script>
+<script src="sw-register.js?v=415"></script>
 </body>
 </html>
