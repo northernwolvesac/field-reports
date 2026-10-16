@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=399"></script>
-<script src="auth.js?v=399"></script>
-<script src="est-totals.js?v=399"></script>
-<script src="est-engine.js?v=399"></script>
-<script src="geo-takeoff.js?v=401"></script>
+<script src="supabase-config.js?v=402"></script>
+<script src="auth.js?v=402"></script>
+<script src="est-totals.js?v=402"></script>
+<script src="est-engine.js?v=402"></script>
+<script src="geo-takeoff.js?v=402"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -473,7 +473,7 @@ var AE = (function() {
           var nLab = data.text.filter(function (t) { return pipes ? NWGeo.isPipeLabel(t.str) : NWGeo.isSizeLabel(t.str); }).length;
           if (nLab < (pipes ? 6 : 15) && (data.glyphs || []).length > 150) {
             var cached = !all && p.result && p.result.ocr_labels;
-            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: pipes ? 2 : 3, reader: aiReader,
+            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: 2, shortNear: pipes ? 0 : 40, reader: aiReader,
               onProgress: function (d, n) { measuring = 'Reading labels (OCR) on ' + (p.sheet_no || 'sheet ' + p.page_no) + ': ' + d + ' / ' + n + ' words…'; render(); } });
             ocrItems = ocr.items;
             data.text = data.text.concat(ocr.items);
@@ -918,6 +918,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=399"></script>
+<script src="sw-register.js?v=402"></script>
 </body>
 </html>

@@ -356,6 +356,11 @@
     opts = opts || {};
     var t0 = Date.now(), words = clusterWords(D.glyphs || [], { maxLetters: opts.maxLetters || 10, minLetters: opts.minLetters || 2 });
     var wordsAll = words.length; words = dropParagraphs(words, opts.paraRadius, opts.paraMax);
+    if (opts.shortNear) words = words.filter(function (w) {
+      if (w.n > 2) return true;
+      var cx = (w.box[0] + w.box[2]) / 2, cy = (w.box[1] + w.box[3]) / 2;
+      return words.some(function (o) { return o !== w && o.n >= 3 && o.orient === w.orient && Math.hypot((o.box[0] + o.box[2]) / 2 - cx, (o.box[1] + o.box[3]) / 2 - cy) <= opts.shortNear; });
+    });
     if (!words.length) return { items: [], words: 0, wordsAll: wordsAll, secs: 0, text: '' };
     // Tesseract is only started when it is needed: opts.reader (Claude vision on the composed crops) replaces it, and is the fallback's primary
     var worker = null;
