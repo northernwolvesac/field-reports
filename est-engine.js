@@ -228,6 +228,24 @@
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [];
+    // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
+    // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
+    var schedDev = {};
+    function slotLenFt(txt) {
+      txt = String(txt || '');
+      var m = /(\d+)\s*'\s*-?\s*(\d+)?\s*"?/.exec(txt); if (m && /'/.test(m[0])) return (+m[1]) + (m[2] ? +m[2] / 12 : 0);
+      var ins = []; var re = /(\d{2,3})\s*(?:in\b|")/gi, q; while ((q = re.exec(txt))) ins.push(+q[1]);
+      ins = ins.filter(function (v) { return v >= 24; }); if (ins.length) return Math.max.apply(null, ins) / 12;
+      var ft = /(\d+(?:\.\d+)?)\s*(?:ft|feet|lf)\b/i.exec(txt); return ft ? +ft[1] : 0;
+    }
+    pages.forEach(function (p) {
+      var r = p.result || {}, t = r.sheet_type || p.sheet_type;
+      if (t !== 'schedule' && t !== 'legend') return;
+      (r.air_devices || []).forEach(function (a) {
+        if (!a.tag || !a.type || /vav|fpb/i.test(a.type)) return;
+        expandTags(a.tag).forEach(function (tg) { var k = norm(tg); if (!k || k.length > 6) return; schedDev[k] = { type: String(a.type).toLowerCase(), len: slotLenFt((a.size || '') + ' ' + (a.notes || '')) }; });
+      });
+    });
     // an overall plan at a small scale that repeats what the enlarged plans show (Sky Zone: M1.0 at 3/32" vs M2.0 at 3/16") must not be measured twice
     var enlargedPtft = 0, enlargedLabels = 0, ductDrops = false, coarseSet = {}, ductGeoPlans = 0;
     sheets.forEach(function (p) { var r = p.result, t = r.sheet_type || p.sheet_type || ''; if (t === 'enlarged' && r.geo && r.geo.total_ft > 0) { enlargedPtft = Math.max(enlargedPtft, r.geo.ptft || 0); enlargedLabels = Math.max(enlargedLabels, r.geo.labels || 0); } });
@@ -291,10 +309,15 @@
       var enlargedGeoSheet = !takeoffSheet && type === 'enlarged' && useEnlargedGeo && r.geo && r.geo.total_ft > 0;
       if (!isDemo && (takeoffSheet || enlargedGeoSheet)) {
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
-          var k = (a.type || 'other') + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
-          var d = devices[k] = devices[k] || { type: a.type || 'other', tag: a.tag || '', size: a.size || '', notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
+          var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
+          if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
+            if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
+            if (atype === 'linear' && !alf && sd.len) alf = Number(a.qty || 0) * sd.len;
+          }
+          var k = atype + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
+          var d = devices[k] = devices[k] || { type: atype, tag: a.tag || '', size: a.size || (sd && sd.type === 'linear' && sd.len ? sd.len + ' ft slot' : ''), notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
           var fl = String(r.floor || sh), f = d.per[fl] = d.per[fl] || {}, ft = f[type] = f[type] || { q: 0, lf: 0 };
-          ft.q += Number(a.qty || 0); ft.lf += Number(a.linear_ft || 0); d.sheets.push(sh);
+          ft.q += Number(a.qty || 0); ft.lf += alf; d.sheets.push(sh);
           d.qty = 0; d.lf = 0;
           Object.keys(d.per).forEach(function (fk) {
             var best = Object.values(d.per[fk]).sort(function (x, y) { return y.q - x.q; })[0];
