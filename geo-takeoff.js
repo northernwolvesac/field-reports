@@ -716,7 +716,7 @@
         if (D.debugZones) D.debugZones.push({ singleCand: cand.sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6) });
         if (best && bestN >= Math.max(4, 0.25 * labs.length)) singleSty = best;
       })();
-      if (singleSty) { keep = [singleSty]; topHit = thr; scaleFrom = scaleFrom + '+single'; }
+      if (singleSty) { keep = [singleSty]; proven = [singleSty]; topHit = thr; scaleFrom = scaleFrom + '+single'; }   // its own pairs (the lined trunks) are proven duct too, not 'extra'
       if (topHit < thr && !D.forceStyle) {
         var keepTot = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0);
         if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
