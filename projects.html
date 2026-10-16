@@ -8,12 +8,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=397"></script>
-<script src="nw-drive.js?v=397"></script>
-<script src="nw-drive-browser.js?v=397"></script>
-<script src="auth.js?v=397"></script>
-<script src="cloud-save.js?v=397"></script>
-<script src="schedule-utils.js?v=397"></script>
+<script src="supabase-config.js?v=414"></script>
+<script src="nw-drive.js?v=414"></script>
+<script src="nw-drive-browser.js?v=414"></script>
+<script src="auth.js?v=414"></script>
+<script src="cloud-save.js?v=414"></script>
+<script src="schedule-utils.js?v=414"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Projects — Northern Wolves AC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -657,9 +657,44 @@
           </a>
         </div>
         <div id="submittalLog" style="display:none;">
-          <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Submittal log</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+            <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;">Submittal log</div>
+            <div id="submittalSummary" style="font-size:12px;color:#64748b;flex:1;"></div>
+            <button type="button" id="btnSubQuick" onclick="toggleSubQuick()" style="font-size:12px;font-weight:700;color:#111318;background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:5px 10px;cursor:pointer">+ Log entry (no PDF)</button>
+          </div>
+          <div id="subQuick" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+            <div style="font-size:12px;color:#64748b;margin-bottom:6px;">Track an item that was submitted outside the app (or is still to be submitted): no cover letter, no PDF — just the log line.</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+              <input id="sqTitle" placeholder="Item (e.g. Air outlets) *" class="sq-in" style="grid-column:span 2">
+              <input id="sqSpec" placeholder="Spec section" class="sq-in">
+              <input id="sqVendor" placeholder="Vendor" class="sq-in">
+              <input id="sqMfr" placeholder="Manufacturer" class="sq-in">
+              <input id="sqDate" type="date" title="Submitted" class="sq-in">
+              <select id="sqStatus" class="sq-in"></select>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button type="button" onclick="addSubQuick()" style="font-size:12px;font-weight:700;color:#fff;background:#111318;border:0;border-radius:8px;padding:6px 14px;cursor:pointer">Add to log</button>
+              <button type="button" onclick="toggleSubQuick(false)" style="font-size:12px;font-weight:700;color:#111318;background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:6px 12px;cursor:pointer">Cancel</button>
+            </div>
+          </div>
           <div id="submittalLogList"></div>
         </div>
+        <style>
+          .sq-in { font-size:13px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#111318; min-width:0; }
+          .sub-item { border:1px solid #e5e7eb; border-radius:10px; margin-bottom:8px; background:#fff; padding:10px 12px; }
+          .sub-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+          .sub-revs { width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }
+          .sub-revs td { padding:4px 6px 4px 0; vertical-align:middle; white-space:nowrap; }
+          .sub-revs td.sub-acts { white-space:normal; }
+          .sub-revs input, .sub-revs select, .sub-proc input, .sub-proc select { font-size:12px; padding:3px 5px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; color:#111318; }
+          .sub-revs input[type=date] { width:118px; }
+          .sub-proc { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; padding-top:8px; border-top:1px dashed #e5e7eb; font-size:12px; color:#64748b; }
+          .sub-proc label { display:flex; align-items:center; gap:4px; }
+          .sub-link { font-size:12px; font-weight:700; color:#111318; text-decoration:none; margin-right:8px; }
+          .sub-link.blue { color:#0696D7; } .sub-link.red { color:#dc2626; }
+          .sub-badge { font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:1px 7px; margin-left:6px; vertical-align:middle; }
+          @media (max-width: 640px) { .sub-revs td { white-space:normal; } .sub-revs input[type=date] { width:108px; } }
+        </style>
         <div id="submittalsEmpty" style="text-align:center;padding:20px;color:var(--nw-muted);font-size:13px;">
           No submittals yet.<br>Tap <strong>Create new submittal</strong> to make the first one.
         </div>
@@ -1928,8 +1963,8 @@ requireAuth().catch(function(){});
   var _activeRFIFilter = 'all';
 
   // Submittal log (submittals table): number, revision, status; the PDFs live in Drive / Submittals
-  var SUBMITTAL_STATUS = [['saved', 'Saved'], ['sent', 'Sent'], ['approved', 'Approved'], ['approved-as-noted', 'Approved as noted'], ['revise-resubmit', 'Revise & resubmit'], ['rejected', 'Rejected']];
-  var SUBMITTAL_COLOR = { saved: '#6b7280', sent: '#0696D7', approved: '#15803d', 'approved-as-noted': '#65a30d', 'revise-resubmit': '#d97706', rejected: '#dc2626' };
+  var SUBMITTAL_STATUS = [['saved', 'Not submitted'], ['sent', 'Sent'], ['pending', 'Pending review'], ['approved', 'Approved'], ['approved-as-noted', 'Approved as noted'], ['revise-resubmit', 'Revise & resubmit'], ['rejected', 'Rejected'], ['for-record', 'For record'], ['examined', 'Examined']];
+  var SUBMITTAL_COLOR = { saved: '#6b7280', sent: '#0696D7', pending: '#0284c7', approved: '#15803d', 'approved-as-noted': '#65a30d', 'revise-resubmit': '#d97706', rejected: '#dc2626', 'for-record': '#7c3aed', examined: '#0f766e' };
   var DOC_KINDS = {
     submittal: { list: 'submittalLogList', wrap: 'submittalLog', empty: 'submittalsEmpty', prefix: 'SUB', page: 'submittal.html?', again: 'Resubmit' },
     iom:       { list: 'iomLogList',       wrap: 'iomLog',       empty: 'iomEmpty',        prefix: 'IOM', page: 'submittal.html?kind=iom&', again: 'Resubmit' },
@@ -2006,9 +2041,10 @@ requireAuth().catch(function(){});
     var tech = await techCheck();
     if (currentProjectId !== projectId) return;
     var rows = r.data || [];
-    wrap.style.display = rows.length ? '' : 'none';
+    wrap.style.display = rows.length || (kind === 'submittal' && !tech) ? '' : 'none';
     empty.style.display = rows.length ? 'none' : '';
     if (tech && kind === 'submittal') empty.innerHTML = 'No submittals yet.';
+    if (kind === 'submittal') { renderSubmittalLog(projectId, rows, tech, list); return; }
     var pad = function(n) { return n < 100 ? ('00' + n).slice(-3) : String(n); };
     list.innerHTML = rows.map(function(s) {
       var no = K.prefix + '-' + pad(s.number) + (s.revision ? ' R' + s.revision : '');
@@ -2049,6 +2085,161 @@ requireAuth().catch(function(){});
       });
     });
   }
+
+  // ── Submittal tracking log (replaces Fatima's Excel "TRACKING LOG"): one block per item with its revisions — submitted / returned /
+  //    status per revision, editable inline — and the equipment-procurement line (PO, released, lead time, received, delivered).
+  //    Log-only rows (no PDF) come from the Excel import or the "+ Log entry" form; the extra fields live in submittals.data.
+  var SUB_PROC_STATUS = [['', '— status —'], ['pending', 'Pending'], ['approved', 'Approved'], ['approved-as-noted', 'Approved as noted'], ['released', 'Released'], ['received', 'Received'], ['delivered', 'Delivered']];
+  var SUB_PROC_FIELDS = [['po', 'PO #', 'text', 90], ['released', 'Released', 'date', 0], ['lead_time', 'Lead time', 'text', 90], ['received', 'Received', 'date', 0], ['ship_to', 'Ship to', 'text', 90], ['delivered', 'Delivered', 'text', 70], ['note', 'Note', 'text', 160]];
+  function subPad(n) { return n < 100 ? ('00' + n).slice(-3) : String(n); }
+  function subDay(v) {   // timestamptz or YYYY-MM-DD -> date-input value (local day)
+    if (!v) return '';
+    var t = String(v); if (t.length === 10) return t;
+    var d = new Date(t); if (isNaN(d.getTime())) return t.slice(0, 10);
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function subShort(v) { var d = subDay(v), m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(d); return m ? (+m[2]) + '/' + (+m[3]) + '/' + m[1].slice(2) : (d || '—'); }
+  function subStatusLabel(st) { return (SUBMITTAL_STATUS.filter(function(x) { return x[0] === st; })[0] || [st, st])[1]; }
+  async function subPatch(id, patch, dataMerge) {
+    try {
+      if (dataMerge) {
+        var cur = await supabaseClient.from('submittals').select('data').eq('id', id).single();
+        patch.data = Object.assign({}, (cur.data && cur.data.data) || {}, dataMerge);
+      }
+      patch.updated_at = new Date().toISOString();
+      var u = await supabaseClient.from('submittals').update(patch).eq('id', id);
+      if (u.error) { showToast('Could not save: ' + u.error.message); return false; }
+      return true;
+    } catch (e) { showToast('Could not save: ' + (e.message || e)); return false; }
+  }
+  function renderSubmittalLog(projectId, rows, tech, list) {
+    var K = DOC_KINDS.submittal, groups = {}, order = [];
+    rows.forEach(function(s) { if (!groups[s.number]) { groups[s.number] = []; order.push(s.number); } groups[s.number].push(s); });
+    order.sort(function(a, b) { return a - b; });
+    groups = order.map(function(n) { return groups[n].sort(function(a, b) { return a.revision - b.revision; }); });
+    // summary line: the latest revision of each item
+    var cnt = {};
+    groups.forEach(function(g) { var st = g[g.length - 1].status || 'saved'; cnt[st] = (cnt[st] || 0) + 1; });
+    var sum = document.getElementById('submittalSummary');
+    if (sum) sum.textContent = groups.length ? groups.length + ' item' + (groups.length === 1 ? '' : 's') + ' · ' + Object.keys(cnt).map(function(k) { return cnt[k] + ' ' + subStatusLabel(k).toLowerCase(); }).join(' · ') : '';
+    var qb = document.getElementById('btnSubQuick'); if (qb) qb.style.display = tech ? 'none' : '';
+    var statusSel = function(s) {
+      var st = s.status || 'saved', col = SUBMITTAL_COLOR[st] || '#6b7280';
+      if (tech) return '<span style="font-size:11px;font-weight:700;color:' + col + '">' + escHtml(subStatusLabel(st)) + '</span>';
+      return '<select data-sub-status="' + s.id + '" style="font-weight:700;color:' + col + '">' + SUBMITTAL_STATUS.map(function(x) { return '<option value="' + x[0] + '"' + (x[0] === st ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>';
+    };
+    var links = function(s, no) {
+      var h = s.drive_url ? '<a class="sub-link blue" href="' + escHtml(s.drive_url) + '" target="_blank">Open ↗</a>' : '';
+      if (tech) return h;
+      var base = K.page + 'project=' + encodeURIComponent(projectId);
+      if (s.drive_id) h += '<a class="sub-link" href="' + base + '&id=' + s.id + '">Send</a>';
+      h += '<a class="sub-link" href="' + base + '&id=' + s.id + '&edit=1">' + (s.drive_id ? 'Edit' : 'Edit / add PDF') + '</a>' +
+           '<a class="sub-link" href="' + base + '&from=' + s.id + '">Resubmit</a>' +
+           '<a class="sub-link" href="#" data-sub-rev="' + s.id + '" title="Add the next revision as a log line only (no PDF)">+ Rev (log)</a>' +
+           '<a class="sub-link red" href="#" data-sub-del="' + s.id + '" data-drive="' + escHtml(s.drive_id || '') + '" data-no="' + escHtml(no + ' — ' + s.title) + '">Delete</a>';
+      return h;
+    };
+    list.innerHTML = groups.map(function(g) {
+      var first = g[0], last = g[g.length - 1], d0 = first.data || {}, dl = last.data || {}, no = K.prefix + '-' + subPad(first.number);
+      var meta = [first.spec_section ? 'Spec ' + first.spec_section : '', (dl.vendor || d0.vendor) ? 'Vendor: ' + (dl.vendor || d0.vendor) : '', (last.manufacturer || first.manufacturer) ? 'Mfr: ' + (last.manufacturer || first.manufacturer) : '',
+                  d0.sheets && d0.sheets.length ? 'Sheets: ' + d0.sheets.join(', ') : '', last.to_company || '', last.sent_to ? 'sent to ' + last.sent_to : ''].filter(Boolean).join(' · ');
+      var notes = g.map(function(s) { return s.notes; }).filter(Boolean).filter(function(v, i, a) { return a.indexOf(v) === i; }).join(' · ');
+      var badge = d0.category === 'shop-drawing' ? '<span class="sub-badge" style="color:#1d4ed8;background:#dbeafe">Shop drawings</span>' : '';
+      var stL = last.status || 'saved';
+      var revs = g.map(function(s) {
+        var d = s.data || {}, lab = 'R' + s.revision + (d.rev_label ? ' · ' + escHtml(d.rev_label) : '');
+        var sub = tech ? subShort(s.sent_at) : '<input type="date" data-sub-sent="' + s.id + '" value="' + subDay(s.sent_at) + '">';
+        var ret = tech ? subShort(d.returned) : '<input type="date" data-sub-ret="' + s.id + '" value="' + escHtml(d.returned || '') + '">';
+        var stamps = (d.eng || d.arch) ? '<span style="color:#94a3b8"> eng ' + escHtml(d.eng || '—') + ' · arch ' + escHtml(d.arch || '—') + '</span>' : '';
+        return '<tr><td style="font-weight:700;color:#111318">' + lab + '</td><td><span style="color:#94a3b8">submitted</span> ' + sub + '</td><td><span style="color:#94a3b8">returned</span> ' + ret + '</td><td>' + statusSel(s) + stamps + '</td><td class="sub-acts">' + links(s, no + (s.revision ? ' R' + s.revision : '')) + '</td></tr>';
+      }).join('');
+      var proc = d0.proc || {}, procHtml;
+      if (tech) {
+        var bits = (proc.status ? [subStatusLabel(proc.status)] : []).concat(SUB_PROC_FIELDS.map(function(f) { return proc[f[0]] ? f[1] + ': ' + (f[2] === 'date' ? subShort(proc[f[0]]) : proc[f[0]]) : ''; }).filter(Boolean));
+        procHtml = bits.length ? '<div class="sub-proc"><b style="color:#111318">Procurement</b> ' + escHtml(bits.join(' · ')) + '</div>' : '';
+      } else {
+        procHtml = '<div class="sub-proc" data-sub-proc="' + first.id + '"><b style="color:#111318">Procurement</b>' +
+          '<select data-pf="status">' + SUB_PROC_STATUS.map(function(x) { return '<option value="' + x[0] + '"' + (x[0] === (proc.status || '') ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>' +
+          SUB_PROC_FIELDS.map(function(f) { return '<label>' + f[1] + ' <input type="' + f[2] + '" data-pf="' + f[0] + '" value="' + escHtml(f[2] === 'date' ? subDay(proc[f[0]]) : (proc[f[0]] || '')) + '"' + (f[3] ? ' style="width:' + f[3] + 'px"' : '') + '></label>'; }).join('') + '</div>';
+      }
+      return '<div class="sub-item"><div class="sub-head"><div style="flex:1;min-width:200px"><div style="font-weight:700;font-size:14px;color:#111318">' + escHtml(no) + ' — ' + escHtml(last.title) + badge + '</div>' +
+        (meta ? '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escHtml(meta) + '</div>' : '') + (notes ? '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escHtml(notes) + '</div>' : '') + '</div>' +
+        '<span style="font-size:11px;font-weight:800;color:' + (SUBMITTAL_COLOR[stL] || '#6b7280') + ';text-transform:uppercase">' + escHtml(subStatusLabel(stL)) + (g.length > 1 ? ' · R' + last.revision : '') + '</span></div>' +
+        '<table class="sub-revs">' + revs + '</table>' + procHtml + '</div>';
+    }).join('');
+    if (tech) return;
+    list.querySelectorAll('[data-sub-del]').forEach(function(el) {
+      el.addEventListener('click', async function(e) {
+        e.preventDefault();
+        if (!confirm('Delete ' + el.getAttribute('data-no') + '?' + (el.getAttribute('data-drive') ? '\nThe PDF is removed from Google Drive as well.' : '') + ' This cannot be undone.')) return;
+        el.textContent = 'Deleting…';
+        var driveId = el.getAttribute('data-drive');
+        if (driveId) { try { await NWDrive.deleteFile(driveId); } catch (e2) { console.warn('[submittals] drive delete', e2); } try { await supabaseClient.from('project_files').delete().eq('drive_id', driveId); } catch (e3) {} }
+        var d = await supabaseClient.from('submittals').delete().eq('id', el.getAttribute('data-sub-del'));
+        if (d.error) { showToast('Could not delete: ' + d.error.message); el.textContent = 'Delete'; return; }
+        showToast('Deleted'); loadDocLog(projectId, 'submittal');
+      });
+    });
+    list.querySelectorAll('[data-sub-status]').forEach(function(el) {
+      el.addEventListener('change', async function() {
+        if (await subPatch(el.getAttribute('data-sub-status'), { status: el.value })) { el.style.color = SUBMITTAL_COLOR[el.value] || '#6b7280'; showToast('Status updated'); loadDocLog(projectId, 'submittal'); }
+      });
+    });
+    list.querySelectorAll('[data-sub-sent]').forEach(function(el) {
+      el.addEventListener('change', async function() { if (await subPatch(el.getAttribute('data-sub-sent'), { sent_at: el.value ? el.value + 'T12:00:00-04:00' : null })) showToast('Submitted date saved'); });
+    });
+    list.querySelectorAll('[data-sub-ret]').forEach(function(el) {
+      el.addEventListener('change', async function() { if (await subPatch(el.getAttribute('data-sub-ret'), {}, { returned: el.value || null })) showToast('Returned date saved'); });
+    });
+    list.querySelectorAll('[data-sub-proc]').forEach(function(box) {
+      var t = null;
+      box.addEventListener('change', function() {
+        clearTimeout(t);
+        t = setTimeout(async function() {
+          var proc = {};
+          box.querySelectorAll('[data-pf]').forEach(function(inp) { if (inp.value) proc[inp.getAttribute('data-pf')] = inp.value; });
+          if (await subPatch(box.getAttribute('data-sub-proc'), {}, { proc: proc })) showToast('Procurement saved');
+        }, 300);
+      });
+    });
+    list.querySelectorAll('[data-sub-rev]').forEach(function(el) {
+      el.addEventListener('click', async function(e) {
+        e.preventDefault();
+        var src = rows.filter(function(s) { return s.id === el.getAttribute('data-sub-rev'); })[0]; if (!src) return;
+        var revs = rows.filter(function(s) { return s.number === src.number; }).map(function(s) { return s.revision; });
+        var today = subDay(new Date().toISOString());
+        var prof = null; try { prof = await getAuthProfile(); } catch (e1) {}
+        var d = src.data || {};
+        var ins = await supabaseClient.from('submittals').insert({ project_id: projectId, kind: 'submittal', number: src.number, revision: Math.max.apply(null, revs) + 1, title: src.title, spec_section: src.spec_section, manufacturer: src.manufacturer,
+          submittal_type: src.submittal_type, action_requested: 'Resubmittal', to_company: src.to_company, to_attention: src.to_attention, to_email: src.to_email, status: 'pending', sent_at: today + 'T12:00:00-04:00',
+          data: { source: 'log', vendor: d.vendor || null, category: d.category || null, discipline: d.discipline || null, sheets: d.sheets || null }, created_by: prof ? prof.id : null, created_by_name: prof ? prof.full_name : null });
+        if (ins.error) { showToast('Could not add: ' + ins.error.message); return; }
+        showToast('Revision added'); loadDocLog(projectId, 'submittal');
+      });
+    });
+  }
+  window.toggleSubQuick = function(show) {
+    var f = document.getElementById('subQuick'); if (!f) return;
+    if (show === undefined) show = f.style.display === 'none';
+    f.style.display = show ? '' : 'none';
+    var sel = document.getElementById('sqStatus');
+    if (show && !sel.options.length) { sel.innerHTML = SUBMITTAL_STATUS.map(function(x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join(''); sel.value = 'pending'; }
+    if (show) document.getElementById('sqTitle').focus();
+  };
+  window.addSubQuick = async function() {
+    if (!currentProjectId) return;
+    var title = document.getElementById('sqTitle').value.trim(); if (!title) { showToast('Enter the item'); return; }
+    var all = await supabaseClient.from('submittals').select('number').eq('project_id', currentProjectId).eq('kind', 'submittal').order('number', { ascending: false }).limit(1);
+    var prof = null; try { prof = await getAuthProfile(); } catch (e1) {}
+    var date = document.getElementById('sqDate').value, st = document.getElementById('sqStatus').value;
+    var ins = await supabaseClient.from('submittals').insert({ project_id: currentProjectId, kind: 'submittal', number: (all.data && all.data[0] ? all.data[0].number : 0) + 1, revision: 0, title: title,
+      spec_section: document.getElementById('sqSpec').value.trim() || null, manufacturer: document.getElementById('sqMfr').value.trim() || null, action_requested: 'For approval',
+      status: st === 'saved' || date ? st : (st === 'pending' ? 'saved' : st), sent_at: date ? date + 'T12:00:00-04:00' : null,
+      data: { source: 'log', vendor: document.getElementById('sqVendor').value.trim() || null }, created_by: prof ? prof.id : null, created_by_name: prof ? prof.full_name : null });
+    if (ins.error) { showToast('Could not add: ' + ins.error.message); return; }
+    ['sqTitle', 'sqSpec', 'sqVendor', 'sqMfr', 'sqDate'].forEach(function(id) { document.getElementById(id).value = ''; });
+    showToast('Added to the log'); loadDocLog(currentProjectId, 'submittal');
+  };
 
   async function loadRFIs(projectId) {
     if (typeof getProjectRFIs !== 'function') return;
@@ -2461,6 +2652,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=397"></script>
+<script src="sw-register.js?v=414"></script>
 </body>
 </html>
