@@ -413,7 +413,7 @@
       await new Promise(function (r) { setTimeout(r, 0); });
     }
     // 2. compose ~30 crops per sheet (rows), read once; then the same sheet with every crop turned 180°
-    var GAP = 24, SW = 2400, results = {}, done = 0, GX = GAP, X0 = GAP;
+    var GAP = 24, SW = 2400, results = {}, done = 0, GX = GAP, X0 = GAP, pass2 = null;
     function score(r) { return r.conf + (isSizeLabel(r.txt) ? 150 : isPipeLabel(r.txt) ? 60 : /^[A-Z]{3,}$/.test(r.txt) && /[AEIOU]/.test(r.txt) ? 20 : 0); }
     function layout(batch, framed) {   // reader mode: a framed cell with its number on top
       var cells = [], x = X0, y = GAP, rowH = 0;
@@ -430,24 +430,27 @@
       // vision reader: one numbered sheet per batch, upright crops; the model transcribes each number (and turns upside-down crops itself).
       // Four sheets are read at a time (one after another took 40-90 s per drawing); a batch whose read fails goes to Tesseract.
       var failed = [], nextB = 0, stop = false;
+      // one numbered sheet of crops → the reader's transcriptions, keyed by crop index
+      async function readSheet(batch) {
+        var L = layout(batch, true), sheetR = document.createElement('canvas'); sheetR.width = SW; sheetR.height = L.sheetH;
+        var scR = sheetR.getContext('2d'); scR.fillStyle = '#fff'; scR.fillRect(0, 0, SW, L.sheetH);
+        L.cells.forEach(function (cell, idx) {
+          scR.strokeStyle = '#8a8a8a'; scR.lineWidth = 2; scR.strokeRect(cell.x, cell.y, cell.w, cell.h);
+          scR.fillStyle = '#d00'; scR.font = 'bold 26px sans-serif'; scR.textBaseline = 'top'; scR.fillText(String(idx + 1), cell.x + 6, cell.y + 5);
+          scR.drawImage(batch[idx].c, cell.x + 6, cell.y + 36);
+        });
+        var reads = await opts.reader(sheetR, L.cells.length);
+        sheetR.width = sheetR.height = 0;
+        var out = [];
+        (reads || []).forEach(function (rd) { var cl = L.cells[(rd.n | 0) - 1]; if (!cl) return; var t = normOcr(rd.text || ''); if (t) out.push([cl.i, t]); });
+        return out;
+      }
       var lane = async function () {
         while (nextB < batches.length) {
           var bi = nextB++, batch = batches[bi];
           if (stop) { failed.push(bi); continue; }
           try {
-            var L = layout(batch, true), sheetR = document.createElement('canvas'); sheetR.width = SW; sheetR.height = L.sheetH;
-            var scR = sheetR.getContext('2d'); scR.fillStyle = '#fff'; scR.fillRect(0, 0, SW, L.sheetH);
-            L.cells.forEach(function (cell, idx) {
-              scR.strokeStyle = '#8a8a8a'; scR.lineWidth = 2; scR.strokeRect(cell.x, cell.y, cell.w, cell.h);
-              scR.fillStyle = '#d00'; scR.font = 'bold 26px sans-serif'; scR.textBaseline = 'top'; scR.fillText(String(idx + 1), cell.x + 6, cell.y + 5);
-              scR.drawImage(batch[idx].c, cell.x + 6, cell.y + 36);
-            });
-            var reads = await opts.reader(sheetR, L.cells.length);
-            sheetR.width = sheetR.height = 0;
-            (reads || []).forEach(function (rd) {
-              var cl = L.cells[(rd.n | 0) - 1]; if (!cl) return;
-              var t = normOcr(rd.text || ''); if (t) results[cl.i] = { txt: t, conf: 90, flip: 0 };
-            });
+            (await readSheet(batch)).forEach(function (r) { results[r[0]] = { txt: r[1], conf: 90, flip: 0 }; });
             done += batch.length; if (opts.onProgress) opts.onProgress(done, crops.length);
           } catch (err) {
             if (!stop) console.warn('[NWGeo] vision reader failed, using Tesseract:', err && err.message);
@@ -456,6 +459,31 @@
         }
       };
       await Promise.all([lane(), lane(), lane(), lane()]);
+      // second pass: the reader skips or garbles a few cells on every run (a scanned set measured twice differs by 5-10 % in its label
+      // set) — the cells it left empty, and the ones it read as a number that is no size / pipe label ("12x86", "1 2x8"), go back once
+      // on fresh sheets; a second reading replaces the first only when it is the better kind (size > pipe > keyword > other)
+      if (!stop && !opts.noSecondPass) {
+        function kind(t) { return !t ? 0 : isSizeLabel(t) ? 4 : isPipeLabel(t) ? 3 : (KW_PHRASE.test(t) || KW_OCR.test(kwWord(t)) || UPDN_RE.test(t)) ? 2 : 1; }
+        var redo = crops.filter(function (cr) { var r = results[cr.i]; return !r || (kind(r.txt) === 1 && /\d/.test(r.txt)); });
+        if (redo.length) {
+          var batches2 = []; for (var s2 = 0; s2 < redo.length; s2 += 30) batches2.push(redo.slice(s2, s2 + 30));
+          var nextB2 = 0, gained = 0, filled = 0;
+          if (opts.onProgress) opts.onProgress(done, crops.length, 'second pass ' + redo.length);
+          var lane2 = async function () {
+            while (nextB2 < batches2.length) {
+              var batch = batches2[nextB2++];
+              try {
+                (await readSheet(batch)).forEach(function (r) {
+                  var prev = results[r[0]], k1 = prev ? kind(prev.txt) : 0, k2 = kind(r[1]);
+                  if (k2 > k1) { results[r[0]] = { txt: r[1], conf: 90, flip: 0, pass: 2 }; if (k2 >= 2) gained++; else filled++; }
+                });
+              } catch (err) { console.warn('[NWGeo] second reader pass failed:', err && err.message); return; }
+            }
+          };
+          await Promise.all([lane2(), lane2(), lane2(), lane2()]);
+          pass2 = { cells: redo.length, gained: gained, filled: filled };
+        }
+      }
       todo = failed.sort(function (a, b) { return a - b; });
       if (todo.length) opts.reader = null;
     }
@@ -529,7 +557,7 @@
       });
     });
     var wordList = []; Object.keys(results).forEach(function (i) { var r = results[i], w = words[+i]; if (r.txt) wordList.push([r.txt, Math.round((w.box[0] + w.box[2]) / 2), Math.round((w.box[1] + w.box[3]) / 2)]); });
-    return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' '), wordList: wordList };
+    return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' '), wordList: wordList, pass2: pass2 };
   }
 
   // ─── 2. geometry (runs inside a Web Worker) ───
