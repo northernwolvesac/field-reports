@@ -52,8 +52,10 @@ Rules:
   no tag at all. Give each row: type (diffuser/grille/register/linear/vav/fpb/fsd/motorized_damper/cod/louver), tag family, size
   (neck or face), cfm when printed, qty, and for LINEAR / slot diffusers also the linear_ft read at the sheet scale (sum of the
   slot lengths; the qty is the number of sections). Existing, relocated or "(E)" devices and the legend's sample symbols are not
-  counted (put them in notes). Also VAV / fan-powered boxes, fire/smoke & motorized dampers, cable-operated dampers, louvers.
-  Equipment shown on the plan with its tag.
+  counted (put them in notes). A bare cfm value in brackets beside a symbol ("(105)", DEVICE TAGS "(cfm only)") marks ONE device of
+  that symbol's legend type — count those too. "TD" transfer ducts / transfer grilles are NOT air outlets (type other). A tag on a
+  dashed slot run ("D (200) TYP. 5") is a LINEAR slot diffuser: type linear, qty = sections, linear_ft = total slot length.
+  Also VAV / fan-powered boxes, fire/smoke & motorized dampers, cable-operated dampers, louvers. Equipment shown on the plan with its tag.
 - Ductwork: estimate linear feet per duct size using the sheet scale (read it from the title block / view label).
   Group by shape+size (e.g. "24x12", "12 round"). Note lining/insulation if stated. Existing-to-remain ducts are NOT new scope.
 - Piping: linear feet per service and size (CWS/CWR, HWS/HWR, CHWS/CHWR, refrigerant, condensate, gas…), material if stated.

@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=411"></script>
-<script src="auth.js?v=411"></script>
-<script src="est-totals.js?v=411"></script>
-<script src="est-engine.js?v=411"></script>
-<script src="geo-takeoff.js?v=411"></script>
+<script src="supabase-config.js?v=412"></script>
+<script src="auth.js?v=412"></script>
+<script src="est-totals.js?v=412"></script>
+<script src="est-engine.js?v=412"></script>
+<script src="geo-takeoff.js?v=412"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -299,7 +299,11 @@ var AE = (function() {
     while ((m = rr.exec(text))) { var k2 = m[1] + '"Ø'; sizes[k2] = (sizes[k2] || 0) + 1; }
     // air-device tags: a short code with the cfm in brackets — "C (150)", "D (200) TYP. 5" (= 5 devices), "SA (410)", "CD-1 (200)"
     var devices = {}, dre = /\b([A-Z]{1,3})\s*-?\s*(\d{0,2})\s*\(\s*(\d{2,4})\s*(?:CFM)?\s*\)\s*(?:TYP(?:\.|ICAL)?\s*(?:OF\s*)?(\d{1,2}))?/g;
-    while ((m = dre.exec(text))) { if (/^(TYP|MIN|MAX|NO|QTY|REF|SEE|CFM|GPM|LBS|KW|HP|MBH|BTU|EL|EF|RTU|AC|ACU|CU|FCU|AHU|VAV|FPB|DOAS|ERV|HRV)$/.test(m[1])) continue; var fam = m[1] + (m[2] ? '-' + m[2] : ''); devices[fam] = (devices[fam] || 0) + (m[4] ? +m[4] : 1); }
+    var coded = 0;
+    while ((m = dre.exec(text))) { if (/^(TYP|MIN|MAX|NO|QTY|REF|SEE|CFM|GPM|LBS|KW|HP|MBH|BTU|EL|EF|RTU|AC|ACU|CU|FCU|AHU|VAV|FPB|DOAS|ERV|HRV)$/.test(m[1])) continue; var fam = m[1] + (m[2] ? '-' + m[2] : ''); devices[fam] = (devices[fam] || 0) + (m[4] ? +m[4] : 1); coded++; }
+    // bare cfm bubbles "(105)" with no code in front (CENTRALE: one per diffuser, the model name sits in the legend)
+    var bare = (text.match(/\(\s*\d{2,4}\s*(?:CFM)?\s*\)/g) || []).length - coded;
+    if (bare > 0) devices['(cfm only)'] = bare;
     return { tags: tags, sizes: sizes, devices: devices };
   }
   function guessSheet(text) {
@@ -924,6 +928,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=411"></script>
+<script src="sw-register.js?v=412"></script>
 </body>
 </html>
