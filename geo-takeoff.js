@@ -1133,8 +1133,8 @@
       var noWork = [], match = [];
       items.forEach(function (t, i) {
         var one = t.s.indexOf(' ') < 0, k1 = kwOf(t.s);
-        if (KW_TEXT.test(t.s)) noWork.push({ x: t.x, y: t.y, w: (/NO WORK|SCOPE|N\.I\.C/i.test(t.s) ? 2 : 0) + (/REMAIN/i.test(t.s) ? 1 : 0) + (/EXIST/i.test(t.s) ? 1 : 0) });
-        else if (one && KW_STRONG.test(k1)) noWork.push({ x: t.x, y: t.y, w: 2 });
+        if (KW_TEXT.test(t.s)) noWork.push({ x: t.x, y: t.y, w: (/NO WORK|SCOPE|N\.I\.C/i.test(t.s) ? 2 : 0) + (/REMAIN/i.test(t.s) ? 1 : 0) + (/EXIST/i.test(t.s) ? 1 : 0), st: /NO WORK|SCOPE|N\.I\.C/i.test(t.s) });
+        else if (one && KW_STRONG.test(k1)) noWork.push({ x: t.x, y: t.y, w: 2, st: true });
         else if (one && KW_WEAK.test(k1) && items.some(function (u, j) { var k2 = kwOf(u.s); return j !== i && u.s.indexOf(' ') < 0 && (KW_STRONG.test(k2) || (KW_WEAK.test(k2) && k2 !== k1)) && hyp(u.x - t.x, u.y - t.y) <= 120; })) noWork.push({ x: t.x, y: t.y, w: 1 });
         if ((one && KW_MATCH_W.test(k1)) || (!one && KW_MATCH_T.test(t.s))) match.push({ x: t.x, y: t.y });
       });
@@ -1150,15 +1150,17 @@
       chains.forEach(function (ch, ci) {
         // a match line is never a scope boundary (the no-work note of the next zone can sit a few feet from it)
         if (isMatch[ci]) { matches.push(ch); return; }
-        var vote = [0, 0];
+        var vote = [0, 0], strong = [0, 0];
         // a note votes on the boundary nearest to it only
         seeds.noWork.forEach(function (s) {
           var dm = distTo(ch, s.x, s.y); if (dm > 60 * ptft) return;
           if (chains.some(function (o, oi) { return o !== ch && !isMatch[oi] && distTo(o, s.x, s.y) < dm; })) return;
-          var sd = chainSide(ch, s.x, s.y, 60 * ptft); if (sd) vote[sd > 0 ? 0 : 1] += s.w;
+          var sd = chainSide(ch, s.x, s.y, 60 * ptft); if (sd) { vote[sd > 0 ? 0 : 1] += s.w; if (s.st) strong[sd > 0 ? 0 : 1]++; }
         });
         var need = ch.n >= 8 ? 3 : 4;   // a row of dashes is a drawn boundary; a lone dashed stroke needs the full note
-        var win = vote[0] >= need && vote[0] >= 2 * vote[1] ? 1 : vote[1] >= need && vote[1] >= 2 * vote[0] ? -1 : 0;
+        // …and at least one real no-work note: "EXISTING ... TO REMAIN" equipment notes beside a thick wall chain carved 35 ft out of H8T's
+        // work area (the notes describe units in the room, not an area)
+        var win = vote[0] >= need && vote[0] >= 2 * vote[1] && strong[0] ? 1 : vote[1] >= need && vote[1] >= 2 * vote[0] && strong[1] ? -1 : 0;
         ch.vote = vote;
         if (win) zones.push({ ch: ch, side: win, votes: vote });
       });
