@@ -483,7 +483,7 @@
         { is_firm: false, flag: 'roof drops are not on the plan — 2 × 14 ft per unit budgeted; confirm the height and size' });
     });
     if (C.ductRisers && C.ductRisers.n)
-      flags.push({ category: 'ductwork', item: 'Duct risers (UP / DN)', flag: C.ductRisers.n + ' UP / DN size label' + (C.ductRisers.n === 1 ? '' : 's') + ' on the plans = ' + Math.round(C.ductRisers.ft) + ' ft of vertical duct added at 12 ft per floor (' + C.ductRisers.sheets.join(', ') + ') — check the floor height' });
+      flags.push({ category: 'ductwork', item: 'Duct risers (UP / DN)', flag: C.ductRisers.n + ' UP / DN size label' + (C.ductRisers.n === 1 ? '' : 's') + ' on the plans = ' + Math.round(C.ductRisers.ft) + ' ft of vertical duct added (UP or DN alone = half a 12-ft floor, UP/DN = a full floor) (' + C.ductRisers.sheets.join(', ') + ') — check the floor height' });
     C.geoCheck.forEach(function (g) {
       if (g.weak) { flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry (' + g.weak + ' ft, ' + g.labels + ' labels, ' + (g.why || 'mostly width-guessed') + ') not trusted — AI reading ' + Math.round(g.ai) + ' ft used' }); return; }
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
