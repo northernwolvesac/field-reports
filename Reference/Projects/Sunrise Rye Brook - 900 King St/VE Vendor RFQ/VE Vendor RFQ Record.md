@@ -18,3 +18,20 @@
 - Then per Ruslan "make small VAVs 1 ph": VAV electric coils up to 5 kW at 208 V / 1 ph (23 boxes), above 5 kW at
   208 V / 3 ph (VAV-1 8 kW, VAV-2 13 kW, VAV-3 11 kW). Cabinet and unit heaters stay 208 V / 3 ph. Voltage column
   added per box in the PDF and xlsx ("Notes / volts").
+
+## Responses
+### Klima NY proposal 028132 rev 00, bid date 10/12/2026 (received 10/16) - $1,699,000 lump sum
+File: `responses/Klima NY 028132-00 2026-10-12.pdf`. Based on plan date 06/05/2026. Breakout only for townhouse
+residential splits (40 x 5-ton HP + gas furnace + A-coil) $315,000.
+- VE items included: 30 VAV (electric reheat + SCR + standalone controller, VAV-8/14/31/32 cooling only) = matches 1A+1B;
+  10 electric cabinet heaters 208/3, 5 kW (CH-9 10 kW) vs 5.3 kW scheduled; 9 electric unit heaters 208/1 (we asked
+  208/3), 3 kW x5 / 5 kW x4 = 35 kW, but tag list is wrong (UH-6 in both groups, UH-8 missing; should be 3 kW:
+  1,4,5,6,9 and 5 kW: 2,3,7,8). No per-box kW / voltage confirmation for the VAVs. No credit section (no hydronic
+  equipment in their scope at all) and no ALT-1 (FSD) / ALT-2 (TX-A) pricing.
+- IL apartment splits (GMP: Daikin ducted AC-1..AC-5 with single-zone HP-1..HP-5, 126 systems in quote 3112): Klima
+  carries LG Multi-V S R-32 instead, but only 5 systems - one per size (outdoor 2x2 ton, 2x3 ton, 1x4 ton; indoor
+  18/24/28/36/42 MBH ducted = AC-1..AC-5) - not the ~126 required, and in the base, not as an alternate. No Daikin
+  price. Needs requote with full quantities by tag, Daikin base + LG alternate (or the reverse) priced separately.
+- Other: DOAS-1..7 by CaptiveAire ASHP with electric supplemental heat (adds kW, not in GMP Trane basis); RTUs JCI
+  gas heat with hot gas reheat; PTAC qty 158 (3112: 157). Not in this proposal: exhaust fans, air curtains,
+  DX-FCUs, AC-1 elevator lobby split, MDF/IDF splits, DH-1 (pool by others).
