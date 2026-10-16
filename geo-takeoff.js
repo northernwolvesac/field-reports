@@ -513,6 +513,16 @@
         items.push({ str: KW_PHRASE.test(r.txt) ? 'NOWORK' : /TO REMAIN/i.test(r.txt) ? 'REMAIN' : KW_OCR.test(kwWord(r.txt)) ? kwWord(r.txt) : ud[1].toUpperCase(), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true, pipe: !!(ud && PIPE_CTX.test(r.txt)) || undefined, cell: ud && r.txt.length > ud[1].length ? r.txt.slice(0, 40) : undefined });
       }
     });
+    items.forEach(function (it) {
+      if (!it.kw || it.pipe || !/^(UP|DN|DOWN)$/.test(it.str)) return;
+      var cx = (it.x0 + it.x1) / 2, cy = (it.y0 + it.y1) / 2;
+      Object.keys(results).some(function (j) {
+        var r2 = results[j], w2 = words[+j]; if (!r2.txt || w2.box === it.block || isSizeLabel(r2.txt)) return false;
+        var d = Math.hypot((w2.box[0] + w2.box[2]) / 2 - cx, (w2.box[1] + w2.box[3]) / 2 - cy);
+        if (d <= 45 && PIPE_CTX.test(r2.txt)) { it.pipe = true; it.near = r2.txt.slice(0, 20); return true; }
+        return false;
+      });
+    });
     var wordList = []; Object.keys(results).forEach(function (i) { var r = results[i], w = words[+i]; if (r.txt) wordList.push([r.txt, Math.round((w.box[0] + w.box[2]) / 2), Math.round((w.box[1] + w.box[3]) / 2)]); });
     return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' '), wordList: wordList };
   }
