@@ -32,6 +32,11 @@ residential splits (40 x 5-ton HP + gas furnace + A-coil) $315,000.
   carries LG Multi-V S R-32 instead, but only 5 systems - one per size (outdoor 2x2 ton, 2x3 ton, 1x4 ton; indoor
   18/24/28/36/42 MBH ducted = AC-1..AC-5) - not the ~126 required, and in the base, not as an alternate. No Daikin
   price. Needs requote with full quantities by tag, Daikin base + LG alternate (or the reverse) priced separately.
-- Other: DOAS-1..7 by CaptiveAire ASHP with electric supplemental heat (adds kW, not in GMP Trane basis); RTUs JCI
+- DOAS-1..7: both GMP basis and Klima are air-source heat pumps with energy recovery (not a brand issue). Clarify:
+  (a) Klima lists electric supplemental heat with no kW - GMP schedule is heat pump only (wheel 53 F -> HP 84.6 F),
+  MCA 49.6 A / DOAS-5 88.7 A at 460 V; need kW and revised MCA/MOCP for the EE; (b) DOAS-5 quoted 25 nominal tons vs
+  scheduled 329 MBH (~27.4 tons) - confirm performance; (c) confirm enthalpy wheel (not plate core), weights / curbs
+  vs scheduled 4,143 lb (DOAS-5 5,538 lb).
+- Other: RTUs JCI
   gas heat with hot gas reheat; PTAC qty 158 (3112: 157). Not in this proposal: exhaust fans, air curtains,
   DX-FCUs, AC-1 elevator lobby split, MDF/IDF splits, DH-1 (pool by others).
