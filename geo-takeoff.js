@@ -243,6 +243,7 @@
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
   var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG|UP|DN|DOWN)$/i, KW_PHRASE = /NO WORK|OUT OF SCOPE|NO\w* IN (SCOPE|CONTRACT)|N\.?I\.?C\b/i;   // the reader hands back a cell as one or two words ("NO IN SCOPE" = NOT IN SCOPE)
   function kwWord(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }   // "REMAIN," / "DRAWING'B'" → the word
+  var UPDN_RE = /(?:^|[^A-Z0-9])(UP|DN|DOWN)(?:$|[^A-Z0-9])/i, PIPE_CTX = /(?:^|[^A-Z0-9])(FOS|FOR|REF|RL|RS|RG|PIPE|PIPING|CD|CW|HW|HHW|CHW|HWS|HWR|CWS|CWR|DRAIN|COND\w*|GAS|VENT|RISER\s*\d)(?:$|[^A-Z0-9])|["”Øø⌀∅]|\d\s*\/\s*\d/i;   // UP/DN word in a cell; pipe context around it
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
   function hasScale(s) { return M_SCALE_RE.test(s || ''); }
@@ -507,8 +508,10 @@
         items.push({ str: r.txt, x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, conf: Math.round(r.conf) });
       // scope words keep their place too: "EXISTING TO REMAIN / NO WORK PERFORMED / OUT OF SCOPE" marks the far side of the area-of-work
       // boundary, "MATCH LINE" / "DRAWING 'A'" the sheet's edge against its neighbour (measure() uses them with the heavy dashed lines)
-      else if (KW_PHRASE.test(r.txt) || /TO REMAIN/i.test(r.txt) || KW_OCR.test(kwWord(r.txt)))
-        items.push({ str: KW_PHRASE.test(r.txt) ? 'NOWORK' : /TO REMAIN/i.test(r.txt) ? 'REMAIN' : kwWord(r.txt), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true });
+      else if (KW_PHRASE.test(r.txt) || /TO REMAIN/i.test(r.txt) || KW_OCR.test(kwWord(r.txt)) || UPDN_RE.test(r.txt)) {
+        var ud = UPDN_RE.exec(r.txt);
+        items.push({ str: KW_PHRASE.test(r.txt) ? 'NOWORK' : /TO REMAIN/i.test(r.txt) ? 'REMAIN' : KW_OCR.test(kwWord(r.txt)) ? kwWord(r.txt) : ud[1].toUpperCase(), x0: w.box[0], y0: w.box[1], x1: w.box[2], y1: w.box[3], dir: w.orient === 'v' ? [0, 1] : [1, 0], block: w.box.slice(), ocr: true, kw: true, pipe: !!(ud && PIPE_CTX.test(r.txt)) || undefined, cell: ud && r.txt.length > ud[1].length ? r.txt.slice(0, 40) : undefined });
+      }
     });
     var wordList = []; Object.keys(results).forEach(function (i) { var r = results[i], w = words[+i]; if (r.txt) wordList.push([r.txt, Math.round((w.box[0] + w.box[2]) / 2), Math.round((w.box[1] + w.box[3]) / 2)]); });
     return { items: items, words: words.length, wordsAll: wordsAll, ocred: crops.length, secs: Math.round((Date.now() - t0) / 1000), text: allText.join(' '), wordList: wordList };
@@ -544,14 +547,18 @@
       });
       // risers: a size label marked UP / DN (in the text, or an UP / DN word read beside it) is a vertical run to the next floor —
       // RISER_FT each (Russ 2026-10-15: floor height 12 ft; Seafarers 18 Vesey: most of the job is "12X8 DN" drops no plan line shows)
-      var RISER_FT = D.riserFt || 12, updn = (D.text || []).filter(function (t) { return t.kw && /^(UP|DN|DOWN)$/i.test(t.str); });
+      var RISER_FT = D.riserFt || 12, updn = (D.text || []).filter(function (t) { return t.kw && !t.pipe && /^(UP|DN|DOWN)$/i.test(t.str); });
       var riserSizes = {}, riserN = 0;
       labs.forEach(function (l) {
         var hit = /\b(UP|DN|DOWN)\b/i.test(l.txt) || updn.some(function (u) {
           var ux = (u.x0 + u.x1) / 2, uy = (u.y0 + u.y1) / 2, vert = (l.bbox[3] - l.bbox[1]) > (l.bbox[2] - l.bbox[0]);
           var inRow = vert ? (ux >= l.bbox[0] - 8 && ux <= l.bbox[2] + 8) : (uy >= l.bbox[1] - 8 && uy <= l.bbox[3] + 8);   // same line of text
           var gap = vert ? Math.max(l.bbox[1] - uy, uy - l.bbox[3]) : Math.max(l.bbox[0] - ux, ux - l.bbox[2]);
-          return inRow && gap <= 70;
+          if (inRow && gap <= 70) return true;
+          var tl = vert ? l.bbox[2] - l.bbox[0] : l.bbox[3] - l.bbox[1], tu = vert ? u.x1 - u.x0 : u.y1 - u.y0;   // text heights
+          var off = vert ? Math.abs(ux - (l.bbox[0] + l.bbox[2]) / 2) : Math.abs(uy - (l.bbox[1] + l.bbox[3]) / 2);
+          var ovl = vert ? Math.min(l.bbox[3], u.y1) - Math.max(l.bbox[1], u.y0) : Math.min(l.bbox[2], u.x1) - Math.max(l.bbox[0], u.x0);
+          return off <= Math.max(12, 1.8 * Math.max(tl, tu)) && ovl >= -10;   // the next line of the same block
         });
         if (!hit) return;
         l.riser = true; riserN++; var k = sizeOf(l); riserSizes[k] = (riserSizes[k] || 0) + RISER_FT;
