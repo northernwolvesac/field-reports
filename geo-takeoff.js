@@ -722,7 +722,7 @@
         if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
       }
       if (D.forceStyle) keep = [D.forceStyle];   // offline experiments
-      var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { var ns = norm(s); if (proven.indexOf(k) < 0) ns.extra = true; S.push(ns); }); });
+      var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { var ns = norm(s); if (proven.indexOf(k) < 0) ns.extra = true; ns.sk = k; S.push(ns); }); });
       var fp = findPairs(S, ptft, labs), pcs = fp.pieces;
       // sizing order: the label written on / beside the piece → carried along the connected run → the nearest label within
       // 8 ft (same width) → carried again → width + usual depth. A label 25 ft away used to win over the run itself, so a
@@ -863,14 +863,21 @@
       // thin dark lines = leaders
       // (walls of the label-proven styles are never leaders; a thin black weight that only joined the set for being black — April Tax's
       // 0.84 pt, which draws the leaders to the 2.16-pt VAV feeds — still is)
-      var minKeepW = Infinity; keep.forEach(function (k) { minKeepW = Math.min(minKeepW, +k.split('|')[1]); });
+      // a kept weight whose pairs hold size labels is a wall pen (Sage's 0.54 pt: 15 labels inside) — thinner strokes only are leaders; a weight
+      // that joined with next to no label evidence (April Tax's 0.84 pt: 1 label, 1 of 11 ft) may be the leader pen and does not raise the bar
+      var minKeepW = Infinity;
+      keep.forEach(function (k) {
+        var q = null; stats.forEach(function (x) { if (x[2] === k) q = x; });
+        if (proven.indexOf(k) < 0 && q && q[4] <= 2 && q[0] < 0.25 * q[1]) return;
+        minKeepW = Math.min(minKeepW, +k.split('|')[1]);
+      });
       var leaders = [];
       for (i = 0; i < n; i++) {
         if (isRectSide[i]) continue;
         var o2 = i * 5, st2 = D.styles[D.segs[o2 + 4]];
         if (st2.dash || Math.max.apply(null, st2.col) > 0.3 || !(st2.w <= Math.min(1.0, minKeepW * 0.8))) continue;
         var a1 = D.segs[o2], b1 = D.segs[o2 + 1], a2 = D.segs[o2 + 2], b2 = D.segs[o2 + 3];
-        if (hyp(a2 - a1, b2 - b1) > 3) leaders.push([a1, b1, a2, b2]);
+        if (hyp(a2 - a1, b2 - b1) > 3) leaders.push([a1, b1, a2, b2, st2.key]);
       }
       // single-line ducts (round runs drawn as one thick line — BOSS Belmont) may sit in a style that has no wall pairs: chain them
       // from every dark solid style of comparable weight, walls of the paired styles still excluded
@@ -881,7 +888,7 @@
         var w = +key.split('|')[1], darkK = /^0(\.0+)?,0(\.0+)?,0(\.0+)?\|/.test(key);
         if (w < Math.max(darkK ? (D.singleMinW || 1.0) : 1.5, minW * 0.6)) return;   // black 1.0-1.5 pt lines too (April Tax: VAV feeds and runouts are 1.08-pt single lines)
         var isBar = /^fill\|/.test(key);
-        bySty[key].forEach(function (sg) { var ns = norm(sg); ns.q = isBar; S2.push(ns); used2.push([]); });
+        bySty[key].forEach(function (sg) { var ns = norm(sg); ns.q = isBar; ns.sk = key; S2.push(ns); used2.push([]); });
       });
       var barSegs = [];
       Object.keys(bySty).forEach(function (key) { if (!/^fill\|/.test(key)) return; bySty[key].forEach(function (sg) { var ns = norm(sg); if (ns[6] >= 0.4 * ptft) barSegs.push(ns); }); });
@@ -1194,7 +1201,7 @@
             if (!nxt) break;
             px = nxt[0]; py = nxt[1];
           }
-          outs.push([px, py]);
+          outs.push([px, py, a[4]]);
         });
       });
       return outs;
@@ -1381,25 +1388,10 @@
         return Math.min(ptSeg(t[0], t[1], s), ptSeg(t[2], t[3], s), ptSeg(s[0], s[1], t), ptSeg(s[2], s[3], t)) < tol;
       }
       var pieces = [], seen = {};
-      labs.forEach(function (l) {
-        // a duct drawn as one line is a small one; a wide label beside it names a damper / the existing main (Esquire: "96x18 FD" gave 84 ft of 96x18)
-        if (!l.round && Math.max(l.w, l.h) > 30) return;
-        var best = null, bd = 1e9;
-        leaderEnds(l, leaders).forEach(function (pt) {
-          freeIdx.forEach(function (i) { var dd = ptSeg(pt[0], pt[1], S[i]); if (dd <= 4 && dd < bd) { best = i; bd = dd; } });
-        });
-        if (best === null) {
-          freeIdx.forEach(function (i) {
-            var s = S[i], dx = l.cx - (s[0] + s[2]) / 2, dy = l.cy - (s[1] + s[3]) / 2;
-            var along = Math.abs(dx * s[4] + dy * s[5]), perp = Math.abs(-dx * s[5] + dy * s[4]);
-            if (along > s[6] / 2 + ptft || perp > (usedLen(i) > 0 ? 1.0 : 2) * ptft) return;   // a nibbled trunk needs the label right on it
-            if (perp < bd) { best = i; bd = perp; }
-          });
-        }
-        if (best === null || seen[best]) {
-          if (D.debugSingles) { var nd = 1e9, nl = 0, le = leaderEnds(l, leaders); freeIdx.forEach(function (i) { var dd = ptSeg(l.cx, l.cy, S[i]); if (dd < nd) { nd = dd; nl = S[i][6]; } }); D.debugSingles.push([l.txt, best === null ? 'no line' : 'taken', Math.round(l.cx), Math.round(l.cy), 'leads', le.length, le.map(function (q) { return Math.round(q[0]) + ',' + Math.round(q[1]); }).join(' '), 'nearFree', Math.round(nd), Math.round(nl)]); }
-          return;
-        }
+      // one label, one chain: the line its leader ends on is tried first, the line it sits beside second — a leader that lands on a
+      // diffuser symbol, a wall or a 1-ft tick must not cost the label the duct right next to it (Warby, Sage)
+      function attempt(l, best) {
+        if (seen[best]) return 'taken';
         var chain = {}, stack = [best], cnt = 1; chain[best] = 1;
         while (stack.length && cnt <= 60) {
           var k = stack.pop();
@@ -1411,13 +1403,13 @@
         var ids = Object.keys(chain).map(Number);
         ids.forEach(function (j) { seen[j] = 1; });
         var L = ids.reduce(function (a, j) { return a + freeLen(j); }, 0) / ptft;
-        if (L < 3) { if (D.debugSingles) D.debugSingles.push([l.txt, 'short ' + L.toFixed(1)]); return; }
+        if (L < 3) return 'short ' + L.toFixed(1);
         // a diffuser symbol (box + diagonals, 2 ft across) next to a "6"Ø" label is a tangle, not a run: far more line than its extent
         var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
         ids.forEach(function (j) { var s = S[j]; bx0 = Math.min(bx0, s[0], s[2]); bx1 = Math.max(bx1, s[0], s[2]); by0 = Math.min(by0, s[1], s[3]); by1 = Math.max(by1, s[1], s[3]); });
         var ext = Math.max(bx1 - bx0, by1 - by0) / ptft;
         // (Whaam: 148 ft of line inside a 4 x 6 ft symbol)
-        if (ext <= 8 && L > 2.5 * Math.max(ext, 0.5)) { if (D.debugSingles) D.debugSingles.push([l.txt, 'tangle ' + L.toFixed(1)]); return; }
+        if (ext <= 8 && L > 2.5 * Math.max(ext, 0.5)) return 'tangle ' + L.toFixed(1);
         // a duct WALL whose partner wall is fragmented into several pairs must not come back as a single line: paired segments running
         // parallel within 30" on either side are summed, and half the main's length covered means it is a wall (Sage)
         var main = ids.reduce(function (a, j) { return S[j][6] > S[a][6] ? j : a; }, ids[0]), mm = S[main], side = [0, 0];
@@ -1429,9 +1421,33 @@
           var ov = Math.min(mm[6], Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2));
           if (ov > 0) side[dSigned < 0 ? 0 : 1] += ov;
         }
-        if (Math.max(side[0], side[1]) > 0.5 * mm[6]) { if (D.debugSingles) D.debugSingles.push([l.txt, 'wall ' + L.toFixed(1)]); return; }
-        if (D.debugSingles) D.debugSingles.push([l.txt, 'ok ' + L.toFixed(1)]);
+        if (Math.max(side[0], side[1]) > 0.5 * mm[6]) return 'wall ' + L.toFixed(1);
         pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), ids: ids, xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
+        return 'ok ' + L.toFixed(1);
+      }
+      labs.forEach(function (l) {
+        // a duct drawn as one line is a small one; a wide label beside it names a damper / the existing main (Esquire: "96x18 FD" gave 84 ft of 96x18)
+        if (!l.round && Math.max(l.w, l.h) > 30) return;
+        var cands = [], bl = null, bd = 1e9, le = leaderEnds(l, leaders);
+        le.forEach(function (pt) {
+          freeIdx.forEach(function (i) { if (pt[2] && S[i].sk === pt[2]) return; var dd = ptSeg(pt[0], pt[1], S[i]); if (dd <= 4 && dd < bd) { bl = i; bd = dd; } });
+        });
+        if (bl !== null) cands.push(bl);
+        var bp = null, bpd = 1e9;
+        freeIdx.forEach(function (i) {
+          var s = S[i], dx = l.cx - (s[0] + s[2]) / 2, dy = l.cy - (s[1] + s[3]) / 2;
+          var along = Math.abs(dx * s[4] + dy * s[5]), perp = Math.abs(-dx * s[5] + dy * s[4]);
+          if (along > s[6] / 2 + ptft || perp > (usedLen(i) > 0 ? 1.0 : 2) * ptft) return;   // a nibbled trunk needs the label right on it
+          if (perp < bpd) { bp = i; bpd = perp; }
+        });
+        if (bp !== null && bp !== bl) cands.push(bp);
+        if (!cands.length) {
+          if (D.debugSingles) { var nd = 1e9, nl = 0; freeIdx.forEach(function (i) { var dd = ptSeg(l.cx, l.cy, S[i]); if (dd < nd) { nd = dd; nl = S[i][6]; } }); D.debugSingles.push([l.txt, 'no line', Math.round(l.cx), Math.round(l.cy), 'leads', le.length, le.map(function (q) { return Math.round(q[0]) + ',' + Math.round(q[1]); }).join(' '), 'nearFree', Math.round(nd), Math.round(nl)]); }
+          return;
+        }
+        var why = null;
+        for (var ci = 0; ci < cands.length; ci++) { why = attempt(l, cands[ci]); if (why.indexOf('ok') === 0) break; }
+        if (D.debugSingles) D.debugSingles.push([l.txt, why]);
       });
       // unlabelled branches: free segments touching a labelled single run are runouts of that run (BOSS: 10"ø mains with
       // unlabelled stubs to every diffuser) — they take the run's size; growth stops at 40 segments per run
