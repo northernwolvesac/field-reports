@@ -736,7 +736,7 @@
         if (!p.stub) return true;
         var box = pcs.some(function (q) { return q !== p && q.stub && Math.abs(q.cx - p.cx) <= 3 && Math.abs(q.cy - p.cy) <= 3 &&
           Math.abs(q.ux * p.ux + q.uy * p.uy) < 0.3 && Math.abs(q.w_in - p.w_in) <= Math.max(2, p.w_in * 0.15); });
-        if (box) stubFt += p.len_ft;
+        if (box) { stubFt += p.len_ft; if (D.debugStubs) D.debugStubs.push(['box', Math.round(p.len_ft * 10) / 10, Math.round(p.w_in), Math.round(p.cx), Math.round(p.cy), p.ux, p.uy]); }
         return !box;
       });
       (function () {
@@ -750,7 +750,7 @@
           if (dmin <= gap) comp[find(i)] = find(j);
         }
         var solid = {}; pcs.forEach(function (p, i) { if (!p.stub || onLabel(p, labs, ptft)) solid[find(i)] = true; });
-        pcs = pcs.filter(function (p, i) { if (!p.stub || solid[find(i)]) return true; stubFt += p.len_ft; return false; });
+        pcs = pcs.filter(function (p, i) { if (!p.stub || solid[find(i)]) return true; stubFt += p.len_ft; if (D.debugStubs) D.debugStubs.push(['lone', Math.round(p.len_ft * 10) / 10, Math.round(p.w_in), Math.round(p.cx), Math.round(p.cy), p.ux, p.uy]); return false; });
       })();
       var rectIsoFt = 0;
       if (pcs.some(function (p) { return p.rect; })) (function () {
@@ -861,6 +861,8 @@
       // stacked 44 ft "10x6" = 220 ft), walls or shafts 28-48" wide (Sage 92 ft, Esquire 91 ft)
       if (!D.keepWidth) pcs = pcs.filter(function (p) { if (!(p.extra && p.via === 'width')) return true; widthDropFt += p.len_ft; return false; });
       // thin dark lines = leaders
+      // (walls of the label-proven styles are never leaders; a thin black weight that only joined the set for being black — April Tax's
+      // 0.84 pt, which draws the leaders to the 2.16-pt VAV feeds — still is)
       var minKeepW = Infinity; keep.forEach(function (k) { minKeepW = Math.min(minKeepW, +k.split('|')[1]); });
       var leaders = [];
       for (i = 0; i < n; i++) {
@@ -876,7 +878,8 @@
       // extra styles must be heavy lines (≥ 1.5 pt — thick polylines / filled bars); thin flex and leader styles never qualify
       Object.keys(bySty).forEach(function (key) {
         if (keep.indexOf(key) >= 0 || bySty[key].length < 40) return;
-        var w = +key.split('|')[1]; if (w < Math.max(1.5, minW * 0.6)) return;
+        var w = +key.split('|')[1], darkK = /^0(\.0+)?,0(\.0+)?,0(\.0+)?\|/.test(key);
+        if (w < Math.max(darkK ? (D.singleMinW || 1.0) : 1.5, minW * 0.6)) return;   // black 1.0-1.5 pt lines too (April Tax: VAV feeds and runouts are 1.08-pt single lines)
         var isBar = /^fill\|/.test(key);
         bySty[key].forEach(function (sg) { var ns = norm(sg); ns.q = isBar; S2.push(ns); used2.push([]); });
       });
@@ -1393,7 +1396,10 @@
             if (perp < bd) { best = i; bd = perp; }
           });
         }
-        if (best === null || seen[best]) { if (D.debugSingles) D.debugSingles.push([l.txt, best === null ? 'no line' : 'taken']); return; }
+        if (best === null || seen[best]) {
+          if (D.debugSingles) { var nd = 1e9, nl = 0, le = leaderEnds(l, leaders); freeIdx.forEach(function (i) { var dd = ptSeg(l.cx, l.cy, S[i]); if (dd < nd) { nd = dd; nl = S[i][6]; } }); D.debugSingles.push([l.txt, best === null ? 'no line' : 'taken', Math.round(l.cx), Math.round(l.cy), 'leads', le.length, le.map(function (q) { return Math.round(q[0]) + ',' + Math.round(q[1]); }).join(' '), 'nearFree', Math.round(nd), Math.round(nl)]); }
+          return;
+        }
         var chain = {}, stack = [best], cnt = 1; chain[best] = 1;
         while (stack.length && cnt <= 60) {
           var k = stack.pop();
