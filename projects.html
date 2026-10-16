@@ -1000,21 +1000,29 @@ requireAuth().catch(function(){});
     };
   }
 
-  async function syncProjectToCloud(project) {
-    try {
-      if (typeof supabaseClient === 'undefined') return;
-      var row = toCloudProject(project);
-      var result = await saveProject(row);
-      if (result.error) {
-        console.error('[projects] Cloud sync error:', result.error.message || result.error);
-      } else {
-        console.log('[projects] Synced to cloud:', project.name);
-      }
-      // Also create Google Drive folder
-      driveCreateProject(project.name, project.id);
-    } catch(e) {
-      console.error('[projects] Cloud sync exception:', e);
-    }
+  // Project form field -> projects column (customer and notes share the notes column). An edit sends only the
+  // columns of the fields the user changed; other columns (gc_name, percent_complete, workload, pm_email ...) are never sent.
+  var FORM_COLUMNS = {
+    name: 'project_name', customer: 'notes', address: 'address', city: 'city', state: 'state', zip: 'zip',
+    projectType: 'description', status: 'status', pmName: 'pm_name', shortCode: 'short_code', notes: 'notes'
+  };
+
+  function toCloudPatch(data, fields) {
+    var row = toCloudProject(data), patch = {};
+    fields.forEach(function(f) { patch[FORM_COLUMNS[f]] = row[FORM_COLUMNS[f]]; });
+    return patch;
+  }
+
+  // Copy the cloud row's form fields onto the cached project (the cache is what the list, detail and Edit form show)
+  function applyCloudRow(lp, row) {
+    var cp = fromCloudProject(row);
+    Object.keys(FORM_COLUMNS).forEach(function(f) { lp[f] = cp[f]; });
+    return lp;
+  }
+
+  function cloudErrorText(error) {
+    if (error && error.code === '23505' && /short_code/.test(error.message || '')) return 'that short code is already used by another project';
+    return (error && (error.message || String(error))) || 'unknown error';
   }
 
   async function deleteProjectFromCloud(projectId) {
@@ -1059,16 +1067,7 @@ requireAuth().catch(function(){});
       for (var i = 0; i < localProjects.length; i++) {
         var lp = localProjects[i];
         if (cloudIds[lp.id]) {
-          var cp = fromCloudProject(cloudIds[lp.id]);
-          lp.name = cp.name;
-          lp.customer = cp.customer;
-          lp.address = cp.address;
-          lp.city = cp.city;
-          lp.state = cp.state;
-          lp.zip = cp.zip;
-          lp.status = cp.status;
-          lp.notes = cp.notes;
-          lp.projectType = cp.projectType;
+          applyCloudRow(lp, cloudIds[lp.id]);
           changed = true;
         }
       }
@@ -1151,8 +1150,9 @@ requireAuth().catch(function(){});
 
   // ─── CRUD ───
 
-  function createProject(data) {
-    var projects = getProjects();
+  // New project: insert the row first, so a rejected insert (e.g. a short code already in use) is reported instead of
+  // the project dropping out of the list at the next cloud refresh; then cache it and create its Drive folder
+  async function createProject(data) {
     var project = {
       id: genId(),
       name: data.name,
@@ -1163,39 +1163,45 @@ requireAuth().catch(function(){});
       zip: data.zip || '',
       projectType: data.projectType || 'commercial',
       status: data.status || 'active',
+      pmName: data.pmName || '',
+      shortCode: data.shortCode || '',
       notes: data.notes || '',
       createdAt: new Date().toISOString(),
       documents: []
     };
+    if (typeof supabaseClient !== 'undefined') {
+      var r = await saveProject(toCloudProject(project));
+      if (r.error) return { error: r.error };
+    }
+    var projects = getProjects();
     projects.unshift(project);
     saveProjects(projects);
-    syncProjectToCloud(project);
-    return project;
+    driveCreateProject(project.name, project.id);
+    return { project: project };
   }
 
-  function updateProject(id, data) {
+  // Edit: UPDATE only the columns of the changed fields (never an upsert of the whole cached copy, which wrote stale or
+  // missing values such as an empty PM / short code), then refresh the cached copy from the saved row.
+  // No Drive create_project on edit: it makes a new empty folder when the job folder is not linked to the project id.
+  async function updateProject(id, data, fields) {
+    var row = null;
+    if (typeof supabaseClient !== 'undefined') {
+      var r = await supabaseClient.from('projects').update(toCloudPatch(data, fields)).eq('id', id).select();
+      if (r.error) return { error: r.error };
+      if (!r.data || !r.data.length) return { error: { message: 'project not found, or no permission to edit it' } };
+      row = r.data[0];
+    }
     var projects = getProjects();
-    var updated = null;
     for (var i = 0; i < projects.length; i++) {
       if (projects[i].id === id) {
-        projects[i].name = data.name;
-        projects[i].customer = data.customer || '';
-        projects[i].address = data.address || '';
-        projects[i].city = data.city || '';
-        projects[i].state = data.state || '';
-        projects[i].zip = data.zip || '';
-        projects[i].projectType = data.projectType || 'commercial';
-        projects[i].status = data.status || 'active';
-        projects[i].notes = data.notes || '';
-        updated = projects[i];
+        if (row) applyCloudRow(projects[i], row);
+        else fields.forEach(function(f) { projects[i][f] = data[f]; });
         break;
       }
     }
     saveProjects(projects);
-    if (updated) {
-      syncProjectToCloud(updated);
-      driveRenameProject(id, data.name);
-    }
+    if (fields.indexOf('name') >= 0) driveRenameProject(id, data.name);
+    return {};
   }
 
   function deleteProject(id) {
@@ -1542,88 +1548,98 @@ requireAuth().catch(function(){});
 
   // ─── Modal helpers ───
 
+  var MODAL_FIELDS = {
+    name: 'fldName', customer: 'fldCustomer', address: 'fldAddress', city: 'fldCity', state: 'fldState', zip: 'fldZip',
+    projectType: 'fldType', status: 'fldStatus', pmName: 'fldPM', shortCode: 'fldShortCode', notes: 'fldNotes'
+  };
+  var modalLoaded = null;   // Edit: the form values as loaded; Save writes only the fields that differ from these
+  var modalSeq = 0;
+
+  function fillModal(p, fields) {
+    var defaults = { projectType: 'commercial', status: 'active' };
+    (fields || Object.keys(MODAL_FIELDS)).forEach(function(f) {
+      document.getElementById(MODAL_FIELDS[f]).value = p[f] || defaults[f] || '';
+    });
+  }
+
+  function readModal() {
+    var data = {};
+    Object.keys(MODAL_FIELDS).forEach(function(f) { data[f] = document.getElementById(MODAL_FIELDS[f]).value.trim(); });
+    data.state = data.state.toUpperCase();
+    data.shortCode = data.shortCode.toUpperCase();
+    return data;
+  }
+
   function openModal(projectId) {
     editingProjectId = projectId || null;
-    var modal = document.getElementById('projectModal');
-    var title = document.getElementById('modalTitle');
+    var seq = ++modalSeq;
+    document.getElementById('modalTitle').textContent = projectId ? 'Edit Project' : 'New Project';
+    fillModal(projectId ? (getProjectById(projectId) || {}) : {});
+    modalLoaded = projectId ? readModal() : null;
+    document.getElementById('projectModal').style.display = 'flex';
+    if (projectId) refreshModalFromCloud(projectId, seq);
+  }
 
-    if (projectId) {
-      title.textContent = 'Edit Project';
-      var p = getProjectById(projectId);
-      if (p) {
-        document.getElementById('fldName').value = p.name || '';
-        document.getElementById('fldCustomer').value = p.customer || '';
-        document.getElementById('fldAddress').value = p.address || '';
-        document.getElementById('fldCity').value = p.city || '';
-        document.getElementById('fldState').value = p.state || '';
-        document.getElementById('fldZip').value = p.zip || '';
-        document.getElementById('fldType').value = p.projectType || 'commercial';
-        document.getElementById('fldStatus').value = p.status || 'active';
-        document.getElementById('fldPM').value = p.pmName || '';
-        document.getElementById('fldShortCode').value = p.shortCode || '';
-        document.getElementById('fldNotes').value = p.notes || '';
-      }
-    } else {
-      title.textContent = 'New Project';
-      document.getElementById('fldName').value = '';
-      document.getElementById('fldCustomer').value = '';
-      document.getElementById('fldAddress').value = '';
-      document.getElementById('fldCity').value = '';
-      document.getElementById('fldState').value = '';
-      document.getElementById('fldZip').value = '';
-      document.getElementById('fldType').value = 'commercial';
-      document.getElementById('fldStatus').value = 'active';
-      document.getElementById('fldPM').value = '';
-      document.getElementById('fldShortCode').value = '';
-      document.getElementById('fldNotes').value = '';
+  // The cached copy can be stale (seen: PM and short code empty while Supabase had them). Refill every field the user
+  // has not touched yet from the current Supabase row, and refresh the cache with it.
+  async function refreshModalFromCloud(projectId, seq) {
+    if (typeof supabaseClient === 'undefined') return;
+    try {
+      var r = await supabaseClient.from('projects').select('*').eq('id', projectId).maybeSingle();
+      if (seq !== modalSeq || !modalLoaded) return;   // modal closed or reopened meanwhile
+      if (r.error || !r.data) { console.warn('[projects] Edit form: cloud row not loaded, showing the cached copy', r.error || ''); return; }
+      var projects = getProjects();
+      projects.forEach(function(p) { if (p.id === projectId) applyCloudRow(p, r.data); });
+      saveProjects(projects);
+      var now = readModal();
+      var untouched = Object.keys(MODAL_FIELDS).filter(function(f) { return now[f] === modalLoaded[f]; });
+      fillModal(fromCloudProject(r.data), untouched);
+      var fresh = readModal();
+      untouched.forEach(function(f) { modalLoaded[f] = fresh[f]; });
+    } catch(e) {
+      console.warn('[projects] Edit form: cloud row not loaded, showing the cached copy', e);
     }
-    modal.style.display = 'flex';
   }
 
   function closeModal() {
     document.getElementById('projectModal').style.display = 'none';
     editingProjectId = null;
+    modalLoaded = null;
   }
 
-  function saveFromModal() {
-    var name = document.getElementById('fldName').value.trim();
-    if (!name) {
+  async function saveFromModal() {
+    var data = readModal();
+    if (!data.name) {
       showToast('Project name is required');
       document.getElementById('fldName').focus();
       return;
     }
-    var data = {
-      name: name,
-      customer: document.getElementById('fldCustomer').value.trim(),
-      address: document.getElementById('fldAddress').value.trim(),
-      city: document.getElementById('fldCity').value.trim(),
-      state: document.getElementById('fldState').value.trim().toUpperCase(),
-      zip: document.getElementById('fldZip').value.trim(),
-      projectType: document.getElementById('fldType').value,
-      status: document.getElementById('fldStatus').value,
-      pmName: document.getElementById('fldPM').value.trim(),
-      shortCode: document.getElementById('fldShortCode').value.trim().toUpperCase(),
-      notes: document.getElementById('fldNotes').value.trim()
-    };
+    var btn = document.getElementById('btnSaveProject');
+    var editingId = editingProjectId;
 
-    if (editingProjectId) {
-      updateProject(editingProjectId, data);
+    if (editingId) {
+      var fields = Object.keys(MODAL_FIELDS).filter(function(f) { return data[f] !== modalLoaded[f]; });
+      if (!fields.length) { closeModal(); showToast('No changes'); return; }
+      btn.disabled = true;
+      var r = await updateProject(editingId, data, fields);
+      btn.disabled = false;
+      if (r.error) { showToast('Not saved: ' + cloudErrorText(r.error)); return; }
       showToast('Project updated');
-      // Re-render detail if we're viewing it
-      if (currentProjectId === editingProjectId) {
-        renderProjectDetail(currentProjectId);
-      }
-    } else {
-      var created = createProject(data);
-      showToast('Project created — next: upload drawings, then create the Prime Contract');
       closeModal();
       renderProjectsList();
-      if (created) setTimeout(function() { renderProjectDetail(created.id); openDetailTab('prime'); }, 150);
+      // Re-render detail if we're viewing it
+      if (currentProjectId === editingId) renderProjectDetail(currentProjectId);
       return;
     }
 
+    btn.disabled = true;
+    var c = await createProject(data);
+    btn.disabled = false;
+    if (c.error) { showToast('Not saved: ' + cloudErrorText(c.error)); return; }
+    showToast('Project created — next: upload drawings, then create the Prime Contract');
     closeModal();
     renderProjectsList();
+    setTimeout(function() { renderProjectDetail(c.project.id); openDetailTab('prime'); }, 150);
   }
 
   // ─── Back to list ───
