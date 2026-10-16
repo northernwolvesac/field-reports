@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=413"></script>
-<script src="auth.js?v=413"></script>
-<script src="est-totals.js?v=413"></script>
-<script src="est-engine.js?v=413"></script>
-<script src="geo-takeoff.js?v=413"></script>
+<script src="supabase-config.js?v=416"></script>
+<script src="auth.js?v=416"></script>
+<script src="est-totals.js?v=416"></script>
+<script src="est-engine.js?v=416"></script>
+<script src="geo-takeoff.js?v=416"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -493,7 +493,7 @@ var AE = (function() {
         if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
         // refrigerant / water piping drawn on the HVAC plan itself: measured too when the AI saw pipe runs on this sheet, and kept only when the
         // two agree within a factor of 3-4 (duct lines and walls look like pipes to the line follower)
         if (!riser && !pipes && !g.error) {
@@ -538,7 +538,7 @@ var AE = (function() {
     } else {
       var one = await pageBytes(p), txt = p.tag_counts || {}, bytes = one, zoom = 0;
       if (!txt.devices && f.kind !== 'specs') {   // pages uploaded before device tags were counted: count them from this page's text now
-        try { var pdfT = await pdfjsLib.getDocument({ data: one.slice(0) }).promise, tcT = await (await pdfT.getPage(1)).getTextContent(); txt = Object.assign({}, txt, textStats(tcT.items.map(function(it) { return it.str; }).join(' '))); await pdfT.destroy(); } catch (eT) {}
+        try { var pdfT = await pdfjsLib.getDocument({ data: one.slice(0) }).promise, tcT = await (await pdfT.getPage(1)).getTextContent(); txt = Object.assign({}, txt, textStats(tcT.items.map(function(it) { return it.str; }).join(' '))); await pdfT.destroy(); p.tag_counts = txt; supabaseClient.from('ai_est_pages').update({ tag_counts: txt }).eq('id', p.id).then(function() {}); } catch (eT) {}
       }
       if (f.kind !== 'specs') { var z = await pdfJob({ op: 'zoom', buf: one.slice(0) }); bytes = z.bytes; zoom = z.tiles; }
       body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(bytes), zoom_tiles: zoom, tag_counts: txt.tags || {}, device_tags: txt.devices || {},
@@ -928,6 +928,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=413"></script>
+<script src="sw-register.js?v=416"></script>
 </body>
 </html>

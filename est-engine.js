@@ -227,7 +227,7 @@
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [];
+    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
     var schedDev = {};
@@ -308,11 +308,32 @@
         skipped.push(sh + ' (' + (type || 'sheet') + ')');
       var enlargedGeoSheet = !takeoffSheet && type === 'enlarged' && useEnlargedGeo && r.geo && r.geo.total_ft > 0;
       if (!isDemo && (takeoffSheet || enlargedGeoSheet)) {
+        // air-device census of this sheet: what the reader counted vs the device tags in the PDF text layer ("C (150)", "D (200) TYP. 3")
+        if (takeoffSheet && (r.air_devices || []).length) {
+          var dtags = (p.tag_counts && p.tag_counts.devices) || {}, tagN = 0, cfmOnly = Number(dtags['(cfm only)'] || 0), aiN = 0, aiCfm = 0;
+          Object.keys(dtags).forEach(function (t) { if (t !== '(cfm only)') tagN += Number(dtags[t] || 0); });
+          (r.air_devices || []).forEach(function (a) {
+            if (/cfm only/i.test(a.tag || '')) { aiCfm += Number(a.qty || 0); return; }
+            if (/diffuser|grille|register|linear|louver|other/.test(String(a.type || 'other').toLowerCase())) aiN += Number(a.qty || 0);
+          });
+          devCheck.push({ sheet: sh, ai: aiN, tags: tagN, cfmOnly: cfmOnly || aiCfm, hasTags: !!(p.tag_counts && p.tag_counts.devices) });
+        }
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
+          if (/cfm only/i.test(a.tag || '')) return;   // bare cfm bubbles are an upper bound (they also sit on duct runs), reported as a check, never priced
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
             if (atype === 'linear' && !alf && sd.len) alf = Number(a.qty || 0) * sd.len;
+          }
+          // slot runs measured on the sheet (geo.linear, per tag family: April's "D (200) TYP. 5" rows of dashes) beat the reader's guess
+          // and the schedule's slot length; the family's feet are credited once per sheet
+          var famM = /^([A-Z]{1,3})/i.exec(String(a.tag || '').trim()), fam = famM ? famM[1].toUpperCase() : '';
+          if (atype === 'linear' && fam && r.geo && r.geo.linear && r.geo.linear[fam] && r.geo.linear[fam].ft > 0) {
+            var lk = sh + '|' + fam;
+            alf = linGeoUsed[lk] ? 0 : r.geo.linear[fam].ft; linGeoUsed[lk] = 1;
+            var lg = linGeoSheets[sh] = linGeoSheets[sh] || { ft: 0, runs: 0, sections: 0, fams: [] };
+            if (alf) { lg.ft += alf; lg.runs += r.geo.linear[fam].n || 0; lg.fams.push(fam); }
+            lg.sections += Number(a.qty || 0);
           }
           var k = atype + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
           var d = devices[k] = devices[k] || { type: atype, tag: a.tag || '', size: a.size || (sd && sd.type === 'linear' && sd.len ? sd.len + ' ft slot' : ''), notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
@@ -408,7 +429,7 @@
       (r.scope_notes || []).forEach(function (n) { if (n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
-    return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
+    return { devCheck: devCheck, linGeoSheets: linGeoSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
@@ -584,6 +605,16 @@
       else if (d.type === 'vav') { if (!manual && !/\bvdi?\b|volume damper|remote operat/i.test((d.tag || '') + ' ' + (d.notes || ''))) ao.vavd += d.qty; }
       else if ((d.type === 'fsd' || d.type === 'motorized_damper') && !manual) ao.vavd += d.qty;
       else if (d.type === 'fpb') ao.fpb += d.qty;
+    });
+    Object.keys(C.linGeoSheets || {}).forEach(function (sh) {
+      var lg = C.linGeoSheets[sh];
+      if (lg.ft) flags.push({ category: 'air devices', item: 'Linear diffusers — ' + sh, flag: Math.round(lg.ft) + ' ft of slot diffuser measured on ' + sh + ' (' + lg.runs + ' runs drawn, tag family ' + lg.fams.join('/') + ')' + (lg.sections ? '; the tags add up to ' + lg.sections + ' sections — price by the measured feet, check the active/inactive split in the schedule' : '') });
+    });
+    (C.devCheck || []).forEach(function (c) {
+      if (c.hasTags && c.tags >= 5 && (c.ai < 0.75 * c.tags || c.ai > 1.3 * c.tags))
+        flags.push({ category: 'air devices', item: 'Air-device count check — ' + c.sheet, flag: 'the reader counted ' + c.ai + ' air devices on ' + c.sheet + ', the PDF text carries ' + c.tags + ' device tags (TYP. multipliers applied) — verify the outlet count on this sheet' });
+      else if (c.cfmOnly >= 5 && c.ai < 0.6 * c.cfmOnly)
+        flags.push({ category: 'air devices', item: 'Air-device count check — ' + c.sheet, flag: c.ai + ' air devices counted on ' + c.sheet + '; the sheet shows ' + c.cfmOnly + ' bare cfm tags (no device code) — some are airflow notes on duct runs, some are outlets the reader may have missed; verify the count' });
     });
     // VAV / CAV / fan-powered boxes that the reader listed as equipment instead of air devices
     var devTags = {}; Object.keys(C.devices).forEach(function (k) { if (C.devices[k].tag) devTags[norm(C.devices[k].tag)] = 1; });

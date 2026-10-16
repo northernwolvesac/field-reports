@@ -35,7 +35,7 @@
       }
       return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
     }
-    var segs = [], rects = [], rectSeg = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only)
+    var segs = [], rects = [], rectSeg = [], symSegs = [], curves = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only); symSegs = stroked rectangle sides + curve chords (symbol census only)
     var bnd = [];   // scope-boundary candidates: thick filled dashes / thick dashed strokes [x1,y1,x2,y2, thickness]
     var glyphs = [], pathPts = [];   // small painted paths = glyph outlines of stroked/outlined text (for OCR)
     var styles = {}, styleList = [];
@@ -115,6 +115,8 @@
         if (!whiteFill && gw <= 22 && gh <= 22 && (gw >= 0.4 || gh >= 0.4)) glyphs.push([gb[0], gb[1], gb[2], gb[3]]);
       }
       pathPts = [];
+      if (stroke && (rects.length || curves.length)) { var ss = styleKey(); rects.forEach(function (g) { symSegs.push(g.concat([ss])); }); curves.forEach(function (g) { symSegs.push(g.concat([ss])); }); }
+      curves = [];
       if (stroke && path.length) {
         var si = styleKey(), heavyDash = st.dash && styleList[si].w >= 1.4 && Math.max.apply(null, st.col) < 0.8;
         for (var i = 0; i < path.length; i++) { var g = clipSeg(path[i], st.clip); if (g) { segs.push(g.concat([si])); if (heavyDash) bnd.push(g.concat([styleList[si].w])); } }
@@ -167,8 +169,8 @@
             var op = ops[o];
             if (op === OPS.moveTo) { endSub(false); cur = tp(st.ctm, co[j], co[j + 1]); start = cur; pathPts.push(cur); j += 2; }
             else if (op === OPS.lineTo) { var p = tp(st.ctm, co[j], co[j + 1]); if (cur) path.push([cur[0], cur[1], p[0], p[1]]); cur = p; pathPts.push(p); j += 2; }
-            else if (op === OPS.curveTo) { pathPts.push(tp(st.ctm, co[j], co[j + 1]), tp(st.ctm, co[j + 2], co[j + 3])); cur = tp(st.ctm, co[j + 4], co[j + 5]); pathPts.push(cur); j += 6; }
-            else if (op === OPS.curveTo2 || op === OPS.curveTo3) { pathPts.push(tp(st.ctm, co[j], co[j + 1])); cur = tp(st.ctm, co[j + 2], co[j + 3]); pathPts.push(cur); j += 4; }
+            else if (op === OPS.curveTo) { pathPts.push(tp(st.ctm, co[j], co[j + 1]), tp(st.ctm, co[j + 2], co[j + 3])); var ce = tp(st.ctm, co[j + 4], co[j + 5]); if (cur) curves.push([cur[0], cur[1], ce[0], ce[1]]); cur = ce; pathPts.push(cur); j += 6; }
+            else if (op === OPS.curveTo2 || op === OPS.curveTo3) { pathPts.push(tp(st.ctm, co[j], co[j + 1])); var ce2 = tp(st.ctm, co[j + 2], co[j + 3]); if (cur) curves.push([cur[0], cur[1], ce2[0], ce2[1]]); cur = ce2; pathPts.push(cur); j += 4; }
             else if (op === OPS.closePath) { endSub(true); cur = start; }     // closing edges are not reported as lines (same as the reference)
             else if (op === OPS.rectangle) {
               // rectangles on MEP plans are diffusers, grilles, equipment — not duct walls (validated on 3 bids);
@@ -229,7 +231,7 @@
     if (pv) { var pb = [pv[0], pv[1], pv[2], pv[3]]; segs = segs.map(function (g) { var c = clipSeg(g, pb); return c ? c.concat([g[4]]) : null; }).filter(Boolean); }
     var flat = new Float64Array(segs.length * 5);
     segs.forEach(function (s, i) { flat.set(s, i * 5); });
-    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg, bnd: bnd };
+    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg, bnd: bnd, symSegs: symSegs };
   }
 
   // ─── 1b. OCR for sheets whose text is outlined / stroked (AutoCAD SHX fonts export as tiny paths, not text) ───
@@ -960,7 +962,7 @@
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
-        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, linear: linearBands(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
@@ -1206,6 +1208,79 @@
       return { zones: zones, matches: matches, chains: chains.length,
         inZone: function (z, x, y) { return nearestZone(x, y) === z && chainSide(z.ch, x, y, 60 * ptft) === z.side; },
         noWork: function (x, y) { var z = nearestZone(x, y); return !!z && !z.off && chainSide(z.ch, x, y, 60 * ptft) === z.side; } };
+    }
+
+    // ─── linear (slot) diffusers: April Tax draws each slot run as a tight row of tiny filled dashes (a 1.6-pt band of 4-pt dashes in the
+    //     hairline style) with one "D (200) TYP. 5" tag for the n identical runs. Bands = rows of short dark segments of one thickness with
+    //     small gaps, ≥ 2 ft long. A band with a device tag within 4 ft fixes a signature (style + thickness) for that tag family, and every
+    //     band of that signature on the sheet counts for the family (TYP. n: only one of the n runs carries the tag). The engine turns a
+    //     family the schedule / reader calls linear into linear feet. Returns { fam: { n, ft, tagged } } or null ───
+    function linearBands(D, ptft) {
+      var n = D.segs.length / 5, segs = [];
+      for (var i = 0; i < n; i++) {
+        var o = i * 5, st = D.styles[D.segs[o + 4]];
+        if (Math.max.apply(null, st.col) > 0.3 || st.w > 1.0 || st.dash) continue;
+        var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3], L = hyp(x2 - x1, y2 - y1);
+        if (L > 1.0 * ptft || L < 0.3) continue;
+        segs.push({ x0: Math.min(x1, x2), x1: Math.max(x1, x2), y0: Math.min(y1, y2), y1: Math.max(y1, y2), k: st.key });
+      }
+      if (segs.length < 20) return null;
+      var tags = [];
+      (D.text || []).forEach(function (t) {
+        var m = /^([A-Z]{1,3})\s*-?\s*\d{0,2}\s*\(\s*\d{2,4}\s*(?:CFM)?\s*\)/i.exec(t.str || ''); if (!m) return;
+        if (/^(TYP|MIN|MAX|NO|QTY|REF|SEE|CFM|VAV|FPB|AHU|RTU|ACU|FCU|ERV|DOAS|EF|RF|SF)$/i.test(m[1])) return;
+        tags.push({ fam: m[1].toUpperCase(), cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2 });
+      });
+      if (!tags.length) return null;
+      var bands = [];
+      [0, 1].forEach(function (vert) {
+        var bins = {};
+        segs.forEach(function (sg) {
+          var thick = vert ? sg.x1 - sg.x0 : sg.y1 - sg.y0; if (thick > 3.5) return;
+          var mid = vert ? (sg.x0 + sg.x1) / 2 : (sg.y0 + sg.y1) / 2;
+          var key = sg.k + '|' + Math.round(mid / 1.5);
+          (bins[key] = bins[key] || []).push(sg);
+        });
+        Object.keys(bins).forEach(function (key) {
+          var arr = bins[key]; if (arr.length < 8) return;
+          arr.sort(function (a, b) { return vert ? a.y0 - b.y0 : a.x0 - b.x0; });
+          var cur = null;
+          function flush() {
+            if (!cur) return;
+            var len = (cur.e - cur.s) / ptft;
+            if (cur.n >= 8 && len >= 2 && len <= 60) bands.push({ vert: vert, s: cur.s, e: cur.e, pos: cur.pos / cur.n, t: Math.round(cur.t * 2) / 2, k: key.split('|')[0], n: cur.n, ft: len });
+            cur = null;
+          }
+          arr.forEach(function (sg) {
+            var a = vert ? sg.y0 : sg.x0, b = vert ? sg.y1 : sg.x1, mid = vert ? (sg.x0 + sg.x1) / 2 : (sg.y0 + sg.y1) / 2, th = vert ? sg.x1 - sg.x0 : sg.y1 - sg.y0;
+            if (cur && a - cur.e <= 3) { cur.e = Math.max(cur.e, b); cur.n++; cur.pos += mid; cur.t = Math.max(cur.t, th); }
+            else { flush(); cur = { s: a, e: b, n: 1, pos: mid, t: th }; }
+          });
+          flush();
+        });
+      });
+      if (!bands.length) return null;
+      var sig = {};
+      bands.forEach(function (b) {
+        var best = null, bd = 4 * ptft;
+        tags.forEach(function (g) {
+          var along = b.vert ? g.cy : g.cx, perp = b.vert ? g.cx : g.cy;
+          var d = hyp(Math.max(0, b.s - along, along - b.e), Math.abs(perp - b.pos));
+          if (d < bd) { bd = d; best = g; }
+        });
+        b.sig = b.k + '|' + b.t;
+        if (best) { b.fam = best.fam; var v = sig[b.sig] = sig[b.sig] || {}; v[best.fam] = (v[best.fam] || 0) + 1; }
+      });
+      var out = {};
+      bands.forEach(function (b) {
+        var v = sig[b.sig]; if (!v) return;
+        var fam = b.fam || Object.keys(v).sort(function (a, c) { return v[c] - v[a]; })[0];
+        var o = out[fam] = out[fam] || { n: 0, ft: 0, tagged: 0, xy: D.wantPieces ? [] : undefined };
+        o.n++; o.ft += b.ft; if (b.fam) o.tagged++;
+        if (o.xy) o.xy.push(b.vert ? [b.pos, b.s, b.pos, b.e] : [b.s, b.pos, b.e, b.pos]);
+      });
+      Object.keys(out).forEach(function (f) { out[f].ft = Math.round(out[f].ft * 10) / 10; });
+      return Object.keys(out).length ? out : null;
     }
     function ptSeg(px, py, s) {
       var x1 = s[0], y1 = s[1], x2 = s[2], y2 = s[3], L2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
