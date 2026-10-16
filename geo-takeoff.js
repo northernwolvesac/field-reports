@@ -547,7 +547,12 @@
       var RISER_FT = D.riserFt || 12, updn = (D.text || []).filter(function (t) { return t.kw && /^(UP|DN|DOWN)$/i.test(t.str); });
       var riserSizes = {}, riserN = 0;
       labs.forEach(function (l) {
-        var hit = /\b(UP|DN|DOWN)\b/i.test(l.txt) || updn.some(function (u) { var ux = (u.x0 + u.x1) / 2, uy = (u.y0 + u.y1) / 2; return ux >= l.bbox[0] - 30 && ux <= l.bbox[2] + 30 && uy >= l.bbox[1] - 30 && uy <= l.bbox[3] + 30; });
+        var hit = /\b(UP|DN|DOWN)\b/i.test(l.txt) || updn.some(function (u) {
+          var ux = (u.x0 + u.x1) / 2, uy = (u.y0 + u.y1) / 2, vert = (l.bbox[3] - l.bbox[1]) > (l.bbox[2] - l.bbox[0]);
+          var inRow = vert ? (ux >= l.bbox[0] - 8 && ux <= l.bbox[2] + 8) : (uy >= l.bbox[1] - 8 && uy <= l.bbox[3] + 8);   // same line of text
+          var gap = vert ? Math.max(l.bbox[1] - uy, uy - l.bbox[3]) : Math.max(l.bbox[0] - ux, ux - l.bbox[2]);
+          return inRow && gap <= 70;
+        });
         if (!hit) return;
         l.riser = true; riserN++; var k = sizeOf(l); riserSizes[k] = (riserSizes[k] || 0) + RISER_FT;
       });
@@ -638,7 +643,7 @@
         if (D.debugScales) D.debugScales.push.apply(D.debugScales, tried);
         if (bestC.hit >= thr && bestC.hit >= 2 * Math.max(1, SC ? SC.topHit : 0)) { ptft = bestC.ptft; P = bestC.P; SC = bestC.SC; scaleFrom = 'labels'; }
       }
-      if (!ptft || !SC) return { error: 'no drawing scale found on the sheet' };
+      if (!ptft || !SC) return { error: 'no drawing scale found on the sheet', riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserN * RISER_FT, riser_n: riserN };
       var bySty = P.bySty, dashSty = P.dashSty, stats = SC.stats, top = SC.top, topHit = SC.topHit;
       // the duct walls are the style whose pairs have a size label INSIDE them at exactly the label's width (OGCP 5200: the thin 0.24-pt background
       // lines paired up everywhere and "matched" 4,800 ft of loose labels — 6.3x too much; the real 1.44-pt walls hold 43 of the 80 labels)
@@ -690,7 +695,7 @@
       if (singleSty) { keep = [singleSty]; topHit = thr; scaleFrom = scaleFrom + '+single'; }
       if (topHit < thr && !D.forceStyle) {
         var keepTot = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0);
-        if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
+        if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserN * RISER_FT, riser_n: riserN, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
       }
       if (D.forceStyle) keep = [D.forceStyle];   // offline experiments
       var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { var ns = norm(s); if (proven.indexOf(k) < 0) ns.extra = true; S.push(ns); }); });
@@ -891,7 +896,7 @@
       var labsIn = ZN && ZN.zones.length && !zoneSkipped ? labs.filter(function (l) { return !ZN.noWork(l.cx, l.cy); }) : labs;   // zone labels sit on dropped duct
       var labHit = labsIn.filter(function (l) { return segsAll.some(function (s) { return Math.abs(l.cx - (s[0] + s[2]) / 2) <= Math.abs(s[2] - s[0]) / 2 + 6 * ptft && Math.abs(l.cy - (s[1] + s[3]) / 2) <= Math.abs(s[3] - s[1]) / 2 + 6 * ptft && ptSeg(l.cx, l.cy, s) <= s[4] + 4 * ptft; }); }).length;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
-        return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length };
+        return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserN * RISER_FT, riser_n: riserN };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
         styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserN * RISER_FT, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
