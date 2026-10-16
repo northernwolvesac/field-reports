@@ -227,7 +227,7 @@
   function collect(pages) {
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {};
+    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] };
     // an overall plan at a small scale that repeats what the enlarged plans show (Sky Zone: M1.0 at 3/32" vs M2.0 at 3/16") must not be measured twice
     var enlargedPtft = 0, enlargedLabels = 0, ductDrops = false, coarseSet = {}, ductGeoPlans = 0;
     sheets.forEach(function (p) { var r = p.result, t = r.sheet_type || p.sheet_type || ''; if (t === 'enlarged' && r.geo && r.geo.total_ft > 0) { enlargedPtft = Math.max(enlargedPtft, r.geo.ptft || 0); enlargedLabels = Math.max(enlargedLabels, r.geo.labels || 0); } });
@@ -331,6 +331,17 @@
               o.lf += r.geo.sizes[sz] * GEO_FITTINGS; o.sheets.push(sh); o.geo = true;
             });
           }
+          // vertical duct: every UP / DN size label on the plan is a run to the next floor (12 ft each) — on top of the plan lengths,
+          // whichever source gave them (neither the lines nor the AI's reading show a drop)
+          if (takeoffSheet && !coarseDup && r.geo && r.geo.riser_sizes) {
+            Object.keys(r.geo.riser_sizes).forEach(function (sz) {
+              var z = sizeOf(sz); if (!z) return;
+              var shape = /Ø/.test(sz) ? 'round' : 'rect', k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
+              var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [] };
+              o.lf += r.geo.riser_sizes[sz]; o.riser_ft = (o.riser_ft || 0) + r.geo.riser_sizes[sz]; o.sheets.push(sh);
+            });
+            ductRisers.n += r.geo.riser_n || 0; ductRisers.ft += r.geo.riser_ft || 0; ductRisers.sheets.push(sh + ' (' + (r.geo.riser_n || 0) + ')');
+          }
           if (takeoffSheet && !coarseDup && (weakGeo || !(r.geo && r.geo.total_ft > 0))) (r.duct_runs || []).forEach(function (x) {
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
@@ -374,7 +385,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── build the breakdown ──────────────────────────────────────────────
@@ -471,6 +482,8 @@
         rd.basis + ' · 2 drops × 14 ft per unit, size from ' + (cfm ? cfm + ' CFM at 1,000 fpm' : 'a 24x12 default'),
         { is_firm: false, flag: 'roof drops are not on the plan — 2 × 14 ft per unit budgeted; confirm the height and size' });
     });
+    if (C.ductRisers && C.ductRisers.n)
+      flags.push({ category: 'ductwork', item: 'Duct risers (UP / DN)', flag: C.ductRisers.n + ' UP / DN size label' + (C.ductRisers.n === 1 ? '' : 's') + ' on the plans = ' + Math.round(C.ductRisers.ft) + ' ft of vertical duct added at 12 ft per floor (' + C.ductRisers.sheets.join(', ') + ') — check the floor height' });
     C.geoCheck.forEach(function (g) {
       if (g.weak) { flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry (' + g.weak + ' ft, ' + g.labels + ' labels, ' + (g.why || 'mostly width-guessed') + ') not trusted — AI reading ' + Math.round(g.ai) + ' ft used' }); return; }
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)

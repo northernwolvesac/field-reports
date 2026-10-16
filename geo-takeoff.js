@@ -241,7 +241,7 @@
   var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
   var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
-  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG)$/i, KW_PHRASE = /NO WORK|OUT OF SCOPE|NO\w* IN (SCOPE|CONTRACT)|N\.?I\.?C\b/i;   // the reader hands back a cell as one or two words ("NO IN SCOPE" = NOT IN SCOPE)
+  var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG|UP|DN|DOWN)$/i, KW_PHRASE = /NO WORK|OUT OF SCOPE|NO\w* IN (SCOPE|CONTRACT)|N\.?I\.?C\b/i;   // the reader hands back a cell as one or two words ("NO IN SCOPE" = NOT IN SCOPE)
   function kwWord(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }   // "REMAIN," / "DRAWING'B'" → the word
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
@@ -260,7 +260,7 @@
       .replace(/(\d{1,2})\s*"+\s*[^\s"\dA-Za-z]{1,2}$/g, '$1"Ø').replace(/\s+/g, ' ').trim())
       // a runout labelled with its diffuser ("6"ø D-2", "10/6 D-3"): the word is cut at the hyphen, the tag stub goes — not on square
       // sizes, which with a tag are the grille / diffuser itself ("24x24 CD")
-      .replace(/^(\d{1,2})(x(\d{1,2})|"Ø)\s+[A-Z]{1,2}(?:-[A-Z0-9]{0,2})?$/, function (m, a, rest, b) { return b && a === b ? m : a + rest; });
+      .replace(/^(\d{1,2})(x(\d{1,2})|"Ø)\s+[A-Z]{1,2}(?:-[A-Z0-9]{0,2})?$/, function (m, a, rest, b) { return /\b(UP|DN)$/i.test(m) || (b && a === b) ? m : a + rest; });   // "12x8 DN" is a riser label
   }
   // glyph boxes → words; boxes are [x0,y0,x1,y1] in PDF user space
   function clusterWords(glyphs, opts) {
@@ -519,7 +519,7 @@
     // 24x12, 24"x12", 36X12Ø (flat oval), 12X6 SA BRANCH, 10x6 (TYP.), 8x6 UP
     var SIZE_RE = /^\s*(?:(?:T\.?D\.?|[SREO]\.?\/?A\.?)\s+)?(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/;
     // 8"ø, 14"ø S/A, 6"ø O/A (round with a service suffix)
-    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
+    var ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2}|UP|DN|DOWN|UP\s*\/\s*DN)?\s*$/i;
     var SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/g;
     function frac(s) { if (s.indexOf('/') >= 0) { var p = s.split('/'); return +p[0] / +p[1]; } return +s; }
     function hyp(a, b) { return Math.sqrt(a * a + b * b); }
@@ -542,7 +542,16 @@
         if (t.ocr && h >= 36 && h > 2.5 * w) return;
         labs.push({ txt: t.str, w: w, h: h, round: !!r, ocr: !!t.ocr, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
       });
-      if (labs.length < 3) return { error: textScales.length ? 'fewer than 3 duct size labels' : 'no drawing scale found on the sheet', ptft: textScales.length ? textScales[0] * 72 : undefined };
+      // risers: a size label marked UP / DN (in the text, or an UP / DN word read beside it) is a vertical run to the next floor —
+      // RISER_FT each (Russ 2026-10-15: floor height 12 ft; Seafarers 18 Vesey: most of the job is "12X8 DN" drops no plan line shows)
+      var RISER_FT = D.riserFt || 12, updn = (D.text || []).filter(function (t) { return t.kw && /^(UP|DN|DOWN)$/i.test(t.str); });
+      var riserSizes = {}, riserN = 0;
+      labs.forEach(function (l) {
+        var hit = /\b(UP|DN|DOWN)\b/i.test(l.txt) || updn.some(function (u) { var ux = (u.x0 + u.x1) / 2, uy = (u.y0 + u.y1) / 2; return ux >= l.bbox[0] - 30 && ux <= l.bbox[2] + 30 && uy >= l.bbox[1] - 30 && uy <= l.bbox[3] + 30; });
+        if (!hit) return;
+        l.riser = true; riserN++; var k = sizeOf(l); riserSizes[k] = (riserSizes[k] || 0) + RISER_FT;
+      });
+      if (labs.length < 3) return { error: textScales.length ? 'fewer than 3 duct size labels' : 'no drawing scale found on the sheet', ptft: textScales.length ? textScales[0] * 72 : undefined, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserN * RISER_FT, riser_n: riserN };
       var n = D.segs.length / 5, isRectSide = {};
       (D.rectSeg || []).forEach(function (k) { isRectSide[k] = 1; });
       // segments by style (skip gray background, white, dashed) — the dash threshold and the dash trains depend on the scale
@@ -884,7 +893,7 @@
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
-        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserN * RISER_FT, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
