@@ -916,7 +916,7 @@
         var w = +key.split('|')[1], darkK = /^0(\.0+)?,0(\.0+)?,0(\.0+)?\|/.test(key);
         if (w < Math.max(darkK ? (D.singleMinW || 1.0) : 1.5, minW * 0.6)) return;   // black 1.0-1.5 pt lines too (April Tax: VAV feeds and runouts are 1.08-pt single lines)
         var isBar = /^fill\|/.test(key);
-        bySty[key].forEach(function (sg) { var ns = norm(sg); ns.q = isBar; ns.sk = key; S2.push(ns); used2.push([]); });
+        bySty[key].forEach(function (sg) { var ns = norm(sg); ns.q = isBar; ns.sk = key; ns.thin = !isBar && w < 1.5; S2.push(ns); used2.push([]); });
       });
       var barSegs = [];
       Object.keys(bySty).forEach(function (key) { if (!/^fill\|/.test(key)) return; bySty[key].forEach(function (sg) { var ns = norm(sg); if (ns[6] >= 0.4 * ptft) barSegs.push(ns); }); });
@@ -1452,6 +1452,15 @@
           if (ov > 0) side[dSigned < 0 ? 0 : 1] += ov;
         }
         if (Math.max(side[0], side[1]) > 0.5 * mm[6]) return 'wall ' + L.toFixed(1);
+        // the thin (1.0-1.5 pt) black weights are admitted for short VAV feeds and runouts (April Tax); one size label cannot vouch for
+        // hundreds of feet of such line running on through the plan's black line-work (Vesey: one "14x10" became 343 ft of wall, one
+        // "4x10" 294 ft) — a thin-weight chain keeps its labels along it (100 ft per label of that size); duct-weight chains are not capped
+        var thinL = ids.reduce(function (a, j) { return a + (S[j].thin ? freeLen(j) : 0); }, 0) / ptft;
+        if (thinL > 0.5 * L) {
+          var nLab = 0;
+          labs.forEach(function (l2) { if (l2.w !== l.w || l2.h !== l.h) return; for (var q = 0; q < ids.length; q++) if (ptSeg(l2.cx, l2.cy, S[ids[q]]) <= 2.5 * ptft) { nLab++; return; } });
+          if (L > (D.singleFtPerLabel || 100) * Math.max(1, nLab)) return 'long ' + L.toFixed(1) + '/' + nLab;
+        }
         pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), ids: ids, xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
         return 'ok ' + L.toFixed(1);
       }
