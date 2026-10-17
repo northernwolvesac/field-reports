@@ -313,13 +313,13 @@
           var dtags = (p.tag_counts && p.tag_counts.devices) || {}, tagN = 0, cfmOnly = Number(dtags['(cfm only)'] || 0), aiN = 0, aiCfm = 0;
           Object.keys(dtags).forEach(function (t) { if (t !== '(cfm only)') tagN += Number(dtags[t] || 0); });
           (r.air_devices || []).forEach(function (a) {
-            if (/cfm only/i.test(a.tag || '')) { aiCfm += Number(a.qty || 0); return; }
+            if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) { aiCfm += Number(a.qty || 0); return; }   // a bare '(cfm only)' row; 'blue square-X diffuser (cfm only)' is a real symbol row
             if (/diffuser|grille|register|linear|louver/.test(String(a.type || '').toLowerCase())) aiN += Number(a.qty || 0);   // TD transfer ducts / dampers (type other) carry no cfm tag
           });
           devCheck.push({ sheet: sh, ai: aiN, tags: tagN, cfmOnly: cfmOnly || aiCfm, hasTags: !!(p.tag_counts && p.tag_counts.devices) });
         }
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
-          if (/cfm only/i.test(a.tag || '')) return;   // bare cfm bubbles are an upper bound (they also sit on duct runs), reported as a check, never priced
+          if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) return;   // a bare '(cfm only)' row is an upper bound, reported as a check, never priced; symbol rows named '… (cfm only)' are counted
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
