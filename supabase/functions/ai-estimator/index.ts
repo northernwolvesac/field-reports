@@ -263,9 +263,7 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
         if (body.device_tags && Object.keys(body.device_tags).length)
           prompt += "\n\nDEVICE TAGS (exact, from the text layer of this sheet; device code → number of devices, TYP. multipliers already applied): " + JSON.stringify(body.device_tags);
         if (body.symbol_census && body.symbol_census.by_colour)
-          prompt += "
-
-COLOURED SYMBOLS beside the bare cfm bubbles (exact, counted from the vector layer; each symbol once): " + JSON.stringify(body.symbol_census.by_colour) +
+          prompt += "\n\nCOLOURED SYMBOLS beside the bare cfm bubbles (exact, counted from the vector layer; each symbol once): " + JSON.stringify(body.symbol_census.by_colour) +
             " — bubbles with no symbol: " + body.symbol_census.no_symbol + ". USE THESE NUMBERS as the quantities of the bare-cfm device rows: one row per colour (put the colour in the tag), qty = that colour's count; your job is to say what each colour is (supply diffuser / return grille / exhaust register / round diffuser / linear) from the legend and the symbol shape. Do not count the bubbles yourself.";
         if (body.text_hint) prompt += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
       }
