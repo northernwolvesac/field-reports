@@ -12,9 +12,10 @@
 <title>Field Orders — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=419"></script>
-<script src="auth.js?v=419"></script>
-<script src="schedule-utils.js?v=419"></script>
+<script src="supabase-config.js?v=420"></script>
+<script src="auth.js?v=420"></script>
+<script src="schedule-utils.js?v=420"></script>
+<script src="hvac-catalog.js?v=420"></script>
 <style>
   body { padding-bottom: 24px; }
   .fo-wrap { max-width: 1100px; margin: 0 auto; }
@@ -152,6 +153,20 @@
   .modal-card textarea { min-height: 90px; resize: vertical; font-family: inherit; }
   .modal-card .row { display: flex; gap: 10px; }
   .modal-card .row > .field { flex: 1; }
+  .fo-tools { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .fo-tools button { font-size:13px; font-weight:700; padding:7px 12px; border-radius:8px; border:1px solid #d1d5db; background:#fff; color:#111318; cursor:pointer; }
+  .fo-panel { border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb; padding:10px 12px; margin-top:8px; }
+  .fo-panel h4 { margin:0 0 8px; font-size:13px; color:#111318; }
+  .fo-chips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+  .fo-chip { font-size:13px; padding:6px 10px; border-radius:999px; border:1px solid #d1d5db; background:#fff; color:#111318; cursor:pointer; }
+  .fo-chip.on { background:#111318; color:#fff; border-color:#111318; }
+  .fo-list { max-height:260px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+  .fo-row { padding:8px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; cursor:pointer; } .fo-row:last-child { border-bottom:0; } .fo-row small { color:#64748b; display:block; }
+  .fo-row:active { background:#f1f5f9; }
+  .fo-q { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; margin-bottom:8px; font-size:14px; color:#111318; }
+  .fo-ans { display:flex; gap:8px; margin-top:8px; } .fo-ans input { flex:1; font-size:14px; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; }
+  .fo-final { background:#fff; border:1px solid #bbf7d0; border-radius:10px; padding:10px 12px; font-size:14px; white-space:pre-wrap; }
+  .fo-muted { font-size:12px; color:#64748b; }
   .modal-card .field-hint {
     font-size: 11px; color: var(--nw-muted); margin-top: 4px;
   }
@@ -305,7 +320,32 @@
     <div class="field">
       <label>What do you need? *</label>
       <textarea id="mItems" placeholder="e.g.&#10;- 2 boxes of 1/2&quot; copper pipe&#10;- 4 elbows, 90°&#10;- 10 ft flex duct&#10;- 1 York thermostat"></textarea>
-      <div class="field-hint">Be specific — list each item with quantity if possible</div>
+      <div class="field-hint">List each item with quantity. Before it goes out, the AI helper checks the list against the HVAC catalog and asks what is not clear (copper type, size, hard / soft, insulation …).</div>
+      <div class="fo-tools">
+        <button type="button" id="btnCatalog">📚 Catalog</button>
+        <button type="button" id="btnAiCheck">✨ Check with AI</button>
+      </div>
+      <div class="fo-panel" id="catPanel" style="display:none">
+        <h4>HVAC materials catalog</h4>
+        <input type="text" id="catSearch" placeholder="Search: copper, elbow, flex duct, armaflex, tapcon…" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
+        <div class="fo-chips" id="catCats"></div>
+        <div class="fo-list" id="catList"></div>
+        <div id="catPick" style="display:none;margin-top:10px">
+          <div id="catPickName" style="font-weight:700;font-size:14px;color:#111318"></div>
+          <div class="fo-muted" id="catPickHint"></div>
+          <div class="fo-chips" id="catSizes"></div>
+          <div class="fo-chips" id="catOpts"></div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <input type="number" id="catQty" inputmode="decimal" placeholder="qty" style="width:90px;font-size:14px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
+            <span id="catUnit" class="fo-muted"></span>
+            <button type="button" class="btn-save" id="catAdd" style="margin-left:auto;padding:8px 14px">＋ Add to request</button>
+          </div>
+        </div>
+      </div>
+      <div class="fo-panel" id="aiPanel" style="display:none">
+        <h4>✨ AI helper</h4>
+        <div id="aiBody"></div>
+      </div>
     </div>
 
     <div class="field">
@@ -528,6 +568,10 @@ requireAuth().catch(function(){});
     document.getElementById('btnNew').addEventListener('click', openNewOrder);
     document.getElementById('btnCancel').addEventListener('click', closeNewOrder);
     document.getElementById('btnSubmit').addEventListener('click', submitOrder);
+    document.getElementById('btnCatalog').addEventListener('click', toggleCatalog);
+    document.getElementById('btnAiCheck').addEventListener('click', function() { runAiCheck(false); });
+    document.getElementById('catSearch').addEventListener('input', function() { renderCatList(); });
+    document.getElementById('catAdd').addEventListener('click', addCatLine);
     document.getElementById('orderModal').addEventListener('click', function(e) {
       if (e.target === this) closeNewOrder();
     });
@@ -692,6 +736,7 @@ requireAuth().catch(function(){});
     document.getElementById('orderModal').classList.add('open');
   }
   function closeNewOrder() {
+    aiReset(); catSel = null; document.getElementById('catPanel').style.display = 'none';
     document.getElementById('orderModal').classList.remove('open');
     pendingPhotoFiles = [];
   }
@@ -738,6 +783,122 @@ requireAuth().catch(function(){});
     return urls;
   }
 
+  // ─── HVAC catalog picker ────────────────────────────────────────────────
+  var catSel = null, catCat = null;
+  function toggleCatalog() {
+    var p = document.getElementById('catPanel'); var show = p.style.display === 'none';
+    p.style.display = show ? '' : 'none';
+    if (show) { renderCatCats(); renderCatList(); document.getElementById('catSearch').focus(); }
+  }
+  function renderCatCats() {
+    var C = window.NWHVACCatalog; if (!C) return;
+    document.getElementById('catCats').innerHTML = C.categories.map(function(c) { return '<span class="fo-chip' + (catCat === c.id ? ' on' : '') + '" data-cat="' + c.id + '">' + c.name + '</span>'; }).join('');
+    document.querySelectorAll('#catCats .fo-chip').forEach(function(el) { el.addEventListener('click', function() { catCat = catCat === el.getAttribute('data-cat') ? null : el.getAttribute('data-cat'); document.getElementById('catSearch').value = ''; renderCatCats(); renderCatList(); }); });
+  }
+  function renderCatList() {
+    var C = window.NWHVACCatalog, list = document.getElementById('catList'); if (!C) { list.innerHTML = '<div class="fo-row">Catalog not loaded</div>'; return; }
+    var q = document.getElementById('catSearch').value.trim(), rows = [];
+    if (q) rows = C.search(q);
+    else if (catCat) { var c = C.categories.find(function(x) { return x.id === catCat; }); rows = (c ? c.items : []).map(function(i) { return { cat: c, item: i }; }); }
+    else rows = C.categories.slice(0, 6).map(function(c) { return c.items.slice(0, 2).map(function(i) { return { cat: c, item: i }; }); }).reduce(function(a, b) { return a.concat(b); }, []);
+    list.innerHTML = rows.length ? rows.map(function(r, i) { return '<div class="fo-row" data-i="' + i + '">' + r.item.name + '<small>' + r.cat.name + ' · ' + r.item.sizes.slice(0, 6).join(', ') + (r.item.sizes.length > 6 ? '…' : '') + '</small></div>'; }).join('') : '<div class="fo-row">Nothing found — type what you need and the AI helper will sort it out</div>';
+    list.querySelectorAll('.fo-row[data-i]').forEach(function(el) { el.addEventListener('click', function() { pickCatItem(rows[+el.getAttribute('data-i')]); }); });
+  }
+  function pickCatItem(r) {
+    catSel = { cat: r.cat, item: r.item, size: null, opts: [] };
+    document.getElementById('catPick').style.display = '';
+    document.getElementById('catPickName').textContent = r.item.name;
+    document.getElementById('catPickHint').textContent = r.cat.clarify[0] || '';
+    document.getElementById('catUnit').textContent = r.item.unit + (r.item.pack ? ' · ' + r.item.pack : '');
+    document.getElementById('catQty').value = '';
+    document.getElementById('catSizes').innerHTML = r.item.sizes.map(function(z) { return '<span class="fo-chip" data-size="' + z.replace(/"/g, '&quot;') + '">' + z + '</span>'; }).join('');
+    document.getElementById('catOpts').innerHTML = (r.item.opts || []).map(function(o) { return '<span class="fo-chip" data-opt="' + o.replace(/"/g, '&quot;') + '">' + o + '</span>'; }).join('');
+    document.querySelectorAll('#catSizes .fo-chip').forEach(function(el) { el.addEventListener('click', function() { catSel.size = el.getAttribute('data-size'); document.querySelectorAll('#catSizes .fo-chip').forEach(function(x) { x.classList.toggle('on', x === el); }); }); });
+    document.querySelectorAll('#catOpts .fo-chip').forEach(function(el) { el.addEventListener('click', function() { var o = el.getAttribute('data-opt'), k = catSel.opts.indexOf(o); if (k >= 0) catSel.opts.splice(k, 1); else catSel.opts.push(o); el.classList.toggle('on', k < 0); }); });
+    document.getElementById('catPick').scrollIntoView({ block: 'nearest' });
+  }
+  function addCatLine() {
+    if (!catSel) return;
+    var qty = document.getElementById('catQty').value.trim();
+    var line = '- ' + (qty ? qty + ' ' + catSel.item.unit + ' — ' : '') + catSel.item.name + (catSel.size ? ' — ' + catSel.size : '') + (catSel.opts.length ? ' (' + catSel.opts.join(', ') + ')' : '');
+    var ta = document.getElementById('mItems'); ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' : '') + line;
+    document.getElementById('catPick').style.display = 'none'; catSel = null;
+    showToast('Added to the request', 'success');
+  }
+
+  // ─── AI clarification: the request is checked against the catalog before it goes out ───
+  var AI_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyeU93xaAefJ034p8Ix2USh2uuKbeiL-4mIVqhLM9CVMsVpFkLRCZzDzPiADHraKjQ/exec';
+  var aiTurns = [], aiRequestText = '', aiFinal = null, aiBusy = false, aiRounds = 0, aiSubmitAfter = false;
+  function aiReset() { aiTurns = []; aiRequestText = ''; aiFinal = null; aiRounds = 0; aiSubmitAfter = false; document.getElementById('aiPanel').style.display = 'none'; document.getElementById('aiBody').innerHTML = ''; }
+  async function aiToken() { try { var s = await supabaseClient.auth.getSession(); return s.data && s.data.session ? s.data.session.access_token : null; } catch (e) { return null; } }
+  function aiPrompt() {
+    var C = window.NWHVACCatalog, cat = C ? C.text(aiRequestText + ' ' + aiTurns.map(function(t) { return t.text; }).join(' ')) : '';
+    var convo = aiTurns.map(function(t) { return (t.role === 'user' ? 'Technician: ' : 'Helper: ') + t.text; }).join('\n');
+    return 'You are the parts desk of Northern Wolves Air Conditioning (HVAC contractor, NYC). A field technician typed a material request. ' +
+      'Your job: make every line specific enough to order from a supply house — material / type, exact size, length or quantity with its unit, pack (sticks, coils, boxes), and anything the catalog questions ask. ' +
+      'Use the catalog below. Ask only what is really ambiguous, at most 3 short questions per round, each with 2-5 tappable options (the technician can also type). Never ask about things the technician already said. ' +
+      'Keep the technician\'s own words for anything not in the catalog. Round ' + (aiRounds + 1) + ' of 3 — on round 3 finish with your best reading and mark unknowns "(verify)".\n\n' +
+      'Reply with ONE JSON object only, no prose:\n' +
+      '{"status":"ask","questions":[{"line":"the request line it is about","q":"question","options":["A","B"]}]}\n' +
+      'or {"status":"ok","lines":["100 ft — Copper pipe Type L, hard — 1\" (5 × 20 ft sticks)","…"],"note":"one short note for the office if needed"}\n\n' +
+      '=== CATALOG ===\n' + cat + '\n=== REQUEST ===\n' + aiRequestText + (convo ? '\n=== ANSWERS ===\n' + convo : '');
+  }
+  async function aiCall() {
+    var res = await fetch(AI_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'generate_summary', prompt: aiPrompt(), token: await aiToken() }) });
+    var text = await res.text(), out; try { out = JSON.parse(text); } catch (e) { throw new Error('AI returned an invalid response'); }
+    if (!out.success) throw new Error(out.error || 'AI request failed');
+    var m = /\{[\s\S]*\}/.exec(out.summary || ''); if (!m) throw new Error('AI gave no answer');
+    return JSON.parse(m[0]);
+  }
+  async function runAiCheck(submitAfter) {
+    if (aiBusy) return;
+    var items = document.getElementById('mItems').value.trim();
+    if (!items) { showToast('Type what you need first', 'error'); return; }
+    if (items !== aiRequestText) { aiTurns = []; aiFinal = null; aiRounds = 0; aiRequestText = items; }
+    aiSubmitAfter = !!submitAfter;
+    var panel = document.getElementById('aiPanel'), body = document.getElementById('aiBody');
+    panel.style.display = ''; body.innerHTML = '<div class="fo-muted">Checking the request against the catalog…</div>'; panel.scrollIntoView({ block: 'nearest' });
+    aiBusy = true; var btn = document.getElementById('btnSubmit'); btn.disabled = true;
+    try {
+      var r = await aiCall(); aiRounds++;
+      if (r.status === 'ask' && aiRounds < 3 && (r.questions || []).length) renderAiQuestions(r.questions);
+      else renderAiFinal(r);
+    } catch (e) {
+      body.innerHTML = '<div class="fo-q">The AI helper is not available right now (' + escHtml(e.message || e) + ').</div><div class="fo-ans"><button type="button" class="btn-save" id="aiSendAsIs">Send the request as written</button></div>';
+      document.getElementById('aiSendAsIs').addEventListener('click', function() { aiFinal = { lines: null, note: '', src: aiRequestText }; submitOrder(); });
+    }
+    aiBusy = false; btn.disabled = false;
+  }
+  function renderAiQuestions(qs) {
+    var body = document.getElementById('aiBody');
+    body.innerHTML = qs.map(function(q, i) {
+      return '<div class="fo-q" data-q="' + i + '">' + (q.line ? '<div class="fo-muted">' + escHtml(q.line) + '</div>' : '') + escHtml(q.q) +
+        '<div class="fo-chips">' + (q.options || []).map(function(o) { return '<span class="fo-chip" data-opt="' + escHtml(o) + '">' + escHtml(o) + '</span>'; }).join('') + '</div>' +
+        '<div class="fo-ans"><input type="text" placeholder="or type the answer" data-ans="' + i + '"></div></div>';
+    }).join('') + '<div class="fo-ans"><button type="button" class="btn-save" id="aiAnswer">Answer</button><button type="button" class="btn-cancel" id="aiSkip">Skip, send as written</button></div>';
+    body.querySelectorAll('.fo-chip').forEach(function(el) { el.addEventListener('click', function() { var box = el.closest('.fo-q'); box.querySelectorAll('.fo-chip').forEach(function(x) { x.classList.toggle('on', x === el); }); box.querySelector('input').value = el.getAttribute('data-opt'); }); });
+    document.getElementById('aiAnswer').addEventListener('click', function() {
+      var answers = [];
+      body.querySelectorAll('.fo-q').forEach(function(box) { var q = box.textContent.split('\n')[0]; var a = box.querySelector('input').value.trim(); answers.push('Q: ' + qs[+box.getAttribute('data-q')].q + ' — A: ' + (a || 'no answer')); });
+      aiTurns.push({ role: 'assistant', text: qs.map(function(q) { return q.q; }).join(' | ') });
+      aiTurns.push({ role: 'user', text: answers.join('\n') });
+      runAiCheck(aiSubmitAfter);
+    });
+    document.getElementById('aiSkip').addEventListener('click', function() { aiFinal = { lines: null, note: '', src: aiRequestText }; if (aiSubmitAfter) submitOrder(); else document.getElementById('aiPanel').style.display = 'none'; });
+  }
+  function renderAiFinal(r) {
+    var body = document.getElementById('aiBody'), lines = (r.lines || []).map(String);
+    aiFinal = { lines: lines.length ? lines : null, note: r.note || '' };
+    body.innerHTML = '<div class="fo-muted">Order as it will go to the office:</div><div class="fo-final">' + escHtml(lines.length ? lines.map(function(l) { return (/^[-•]/.test(l) ? '' : '- ') + l; }).join('\n') : aiRequestText) + '</div>' +
+      (r.note ? '<div class="fo-muted" style="margin-top:6px">Note: ' + escHtml(r.note) + '</div>' : '') +
+      '<div class="fo-ans"><button type="button" class="btn-save" id="aiUse">' + (aiSubmitAfter ? 'Submit this order' : 'Use this list') + '</button><button type="button" class="btn-cancel" id="aiEdit">Edit the text</button></div>';
+    document.getElementById('aiUse').addEventListener('click', function() {
+      if (aiFinal.lines) document.getElementById('mItems').value = aiFinal.lines.map(function(l) { return (/^[-•]/.test(l) ? '' : '- ') + l; }).join('\n');
+      aiFinal.src = document.getElementById('mItems').value.trim();
+      if (aiSubmitAfter) submitOrder(); else { document.getElementById('aiPanel').style.display = 'none'; showToast('List updated', 'success'); }
+    });
+    document.getElementById('aiEdit').addEventListener('click', function() { aiFinal = null; document.getElementById('aiPanel').style.display = 'none'; document.getElementById('mItems').focus(); });
+  }
   async function submitOrder() {
     var pid = document.getElementById('mProject').value;
     var items = document.getElementById('mItems').value.trim();
@@ -745,6 +906,8 @@ requireAuth().catch(function(){});
       showToast('Project and items are required', 'error');
       return;
     }
+    // first pass: the AI helper checks the list; it calls submitOrder again once the technician confirmed (aiFinal.src = the text it approved)
+    if (window.NWHVACCatalog && !(aiFinal && aiFinal.src === items)) { runAiCheck(true); return; }
     var btn = document.getElementById('btnSubmit');
     btn.disabled = true; btn.textContent = 'Submitting…';
 
@@ -757,7 +920,7 @@ requireAuth().catch(function(){});
       requested_by: currentUserId,
       requested_by_name: currentUserName,
       items: items,
-      notes: document.getElementById('mNotes').value.trim() || null,
+      notes: [document.getElementById('mNotes').value.trim(), (aiFinal && aiFinal.lines && aiRequestText && aiRequestText !== items) ? 'Original request: ' + aiRequestText : '', aiFinal && aiFinal.note ? 'AI note: ' + aiFinal.note : ''].filter(Boolean).join('\n') || null,
       priority: document.getElementById('mPriority').value || 'normal',
       needed_by_date: document.getElementById('mNeededBy').value || null,
       delivery_address: deliveryAddr,
@@ -942,6 +1105,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=419"></script>
+<script src="sw-register.js?v=420"></script>
 </body>
 </html>
