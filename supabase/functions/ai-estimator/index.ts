@@ -55,7 +55,9 @@ Rules:
   counted (put them in notes). SHEETS WITH BARE CFM BUBBLES: when outlets carry only a cfm value in brackets ("(150)") and no device
   code, EVERY bubble marks one air device drawn right beside it — classify each bubble by that symbol: a square with an X (often
   coloured) = ceiling supply diffuser; a filled rectangle / bar at the end of a duct drop = register or grille; a circle = round diffuser;
-  a slot line = linear. Return one row per symbol type (tag = the symbol name, e.g. "square-X diffuser", "duct-end register") with qty =
+  a slot line = linear. If the symbols are colour-coded (blue / yellow / pink fills), keep each colour as its own row and put the colour in
+  the tag ("blue square-X diffuser", "yellow bar register") — colours usually separate supply from return / exhaust. Return one row per symbol
+  type and colour (tag = the symbol name) with qty =
   the number of such bubbles; the rows should add up to the DEVICE TAGS "(cfm only)" total minus bubbles that sit on a duct run or on
   equipment with no symbol. Never type "other" for an air outlet and never return a row tagged "(cfm only)". "TD" transfer ducts /
   transfer grilles are NOT air outlets (type other). A tag on a
