@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=429"></script>
-<script src="auth.js?v=429"></script>
-<script src="est-totals.js?v=429"></script>
-<script src="est-engine.js?v=430"></script>
-<script src="geo-takeoff.js?v=429"></script>
+<script src="supabase-config.js?v=431"></script>
+<script src="auth.js?v=431"></script>
+<script src="est-totals.js?v=431"></script>
+<script src="est-engine.js?v=431"></script>
+<script src="geo-takeoff.js?v=431"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -243,6 +243,7 @@ var AE = (function() {
     if (r.total) bits.push(money(r.total));
     if (r.geo && r.geo.total_ft) bits.push('📐 ' + Math.round(r.geo.total_ft) + ' ft measured' + (r.geo.zone_ft ? ' (' + Math.round(r.geo.zone_ft) + ' ft outside the work area left out)' : '') + (r.geo.match_ft ? ' (' + Math.round(r.geo.match_ft) + ' ft past the match line left out)' : ''));
     if (r.geo && r.geo.linear) bits.push('📐 slot runs: ' + Object.keys(r.geo.linear).map(function(f) { return f + ' × ' + r.geo.linear[f].n + ' = ' + Math.round(r.geo.linear[f].ft) + ' ft'; }).join(', '));
+    if (r.geo && r.geo.slots && r.geo.slots.n) bits.push('📐 slot diffusers drawn: ' + r.geo.slots.n + ' = ' + Math.round(r.geo.slots.ft) + ' ft (' + Object.keys(r.geo.slots.lens).map(function(l) { return r.geo.slots.lens[l] + ' × ' + l + ' ft'; }).join(', ') + ')');
     if (r.geo && r.geo.riser_n) bits.push('⬆ ' + r.geo.riser_n + ' UP/DN riser' + (r.geo.riser_n === 1 ? '' : 's') + ' = ' + Math.round(r.geo.riser_ft) + ' ft');
     if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
     if (r.geo_pipe && r.geo_pipe.total_ft) bits.push('📐 ' + Math.round(r.geo_pipe.total_ft) + ' ft pipe measured');
@@ -494,7 +495,7 @@ var AE = (function() {
         if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
         // refrigerant / water piping drawn on the HVAC plan itself: measured too when the AI saw pipe runs on this sheet, and kept only when the
         // two agree within a factor of 3-4 (duct lines and walls look like pipes to the line follower)
         if (!riser && !pipes && !g.error) {
@@ -933,6 +934,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=429"></script>
+<script src="sw-register.js?v=431"></script>
 </body>
 </html>

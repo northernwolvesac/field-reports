@@ -52,7 +52,7 @@ Rules:
   no tag at all. Give each row: type (diffuser/grille/register/linear/vav/fpb/fsd/motorized_damper/cod/louver), tag family, size
   (neck or face), cfm when printed, qty, and for LINEAR / slot diffusers also the linear_ft read at the sheet scale (sum of the
   slot lengths; the qty is the number of sections). Existing, relocated or "(E)" devices and the legend's sample symbols are not
-  counted (put them in notes). SHEETS WITH BARE CFM BUBBLES: when outlets carry only a cfm value in brackets ("(150)") and no device
+  counted (put them in notes). Sprinkler heads (SP), thermostats (T), smoke detectors (SD), fire extinguishers (FE/FEC), gypsum/GB, exit signs and other non-HVAC tags are NOT air devices — never list them. SHEETS WITH BARE CFM BUBBLES: when outlets carry only a cfm value in brackets ("(150)") and no device
   code, EVERY bubble marks one air device drawn right beside it — classify each bubble by that symbol: a square with an X (often
   coloured) = ceiling supply diffuser; a filled rectangle / bar at the end of a duct drop = register or grille; a circle = round diffuser;
   a slot line = linear. If the symbols are colour-coded (blue / yellow / pink fills), keep each colour as its own row and put the colour in

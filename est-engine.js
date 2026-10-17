@@ -225,9 +225,14 @@
   function sheetLabels(groups) { return Object.keys(groups).map(function (k) { var v = groups[k]; return v.length > 1 ? k + ' (' + v.join(' + ') + ')' : v[0]; }); }
 
   function collect(pages) {
+    // tags that are never air devices however the reader typed them (BOSS: 60 sprinkler heads "SP" came back as grilles)
+    function notAirDevice(a) {
+      var t = String(a.tag || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''), nt = String(a.notes || '') + ' ' + String(a.size || '');
+      return /^(SP|SPR|FE|FEC|FA|FACP|T|TS|TSTAT|SD|GB|CO2|EX|EXIT|OS|PS|WAP)$/.test(t) || /sprinkler|thermostat|smoke detector|fire extinguisher|gypsum|exit sign|not (an )?hvac/i.test(nt);
+    }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
+    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
     var schedDev = {};
@@ -314,13 +319,16 @@
           Object.keys(dtags).forEach(function (t) { if (t !== '(cfm only)') tagN += Number(dtags[t] || 0); });
           (r.air_devices || []).forEach(function (a) {
             if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) { aiCfm += Number(a.qty || 0); return; }   // a bare '(cfm only)' row; 'blue square-X diffuser (cfm only)' is a real symbol row
+            if (notAirDevice(a)) return;
             if (/diffuser|grille|register|linear|louver/.test(String(a.type || '').toLowerCase())) aiN += Number(a.qty || 0);   // TD transfer ducts / dampers (type other) carry no cfm tag
           });
           devCheck.push({ sheet: sh, ai: aiN, tags: tagN, cfmOnly: cfmOnly || aiCfm, hasTags: !!(p.tag_counts && p.tag_counts.devices) });
         }
+        var linSecs = 0; if (takeoffSheet) (r.air_devices || []).forEach(function (a) { var t0 = String(a.type || '').toLowerCase(), sd0 = schedDev[norm(a.tag)]; if (!notAirDevice(a) && (t0 === 'linear' || (sd0 && sd0.type === 'linear'))) linSecs += Number(a.qty || 0); });
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
           if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) return;   // a bare '(cfm only)' row is an upper bound, reported as a check, never priced; symbol rows named '… (cfm only)' are counted
-          if (/no symbol|unmarked|no device symbol|bubble only/i.test(String(a.tag || '') + ' ' + String(a.notes || ''))) return;   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
+          if (/no symbol|unmarked|no device symbol|bubble only/i.test(String(a.tag || '') + ' ' + String(a.notes || ''))) return;
+          if (notAirDevice(a)) return;                                             // sprinkler heads, thermostats, GB … are not outlets   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
@@ -335,6 +343,14 @@
             var lg = linGeoSheets[sh] = linGeoSheets[sh] || { ft: 0, runs: 0, sections: 0, fams: [] };
             if (alf) { lg.ft += alf; lg.runs += r.geo.linear[fam].n || 0; lg.fams.push(fam); }
             lg.sections += Number(a.qty || 0);
+          }
+          // slot diffusers drawn as thin X-ed rectangles (BOSS): the sheet's drawn glyphs beat qty x schedule length; credited once per sheet
+          if (atype === 'linear' && r.geo && r.geo.slots && r.geo.slots.n >= 3 && !(fam && r.geo.linear && r.geo.linear[fam] && r.geo.linear[fam].ft > 0)) {
+            var sk = sh + '|slots', coverAll = r.geo.slots.n >= 0.7 * linSecs;
+            var sg = slotSheets[sh] = slotSheets[sh] || { ft: r.geo.slots.ft, n: r.geo.slots.n, lens: r.geo.slots.lens, sections: 0, fams: [], coverAll: coverAll };
+            if (!slotUsed[sk]) { alf = r.geo.slots.ft; slotUsed[sk] = 1; }
+            else if (coverAll) alf = 0;                       // the glyphs already cover every linear family on this sheet
+            sg.sections += Number(a.qty || 0); if (sg.fams.indexOf(fam || a.tag) < 0) sg.fams.push(fam || a.tag);
           }
           var k = atype + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
           var d = devices[k] = devices[k] || { type: atype, tag: a.tag || '', size: a.size || (sd && sd.type === 'linear' && sd.len ? sd.len + ' ft slot' : ''), notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
@@ -430,7 +446,7 @@
       (r.scope_notes || []).forEach(function (n) { if (n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
-    return { devCheck: devCheck, linGeoSheets: linGeoSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
+    return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
@@ -610,6 +626,10 @@
     Object.keys(C.linGeoSheets || {}).forEach(function (sh) {
       var lg = C.linGeoSheets[sh];
       if (lg.ft) flags.push({ category: 'air devices', item: 'Linear diffusers — ' + sh, flag: Math.round(lg.ft) + ' ft of slot diffuser measured on ' + sh + ' (' + lg.runs + ' runs drawn, tag family ' + lg.fams.join('/') + ')' + (lg.sections ? '; the tags add up to ' + lg.sections + ' sections — price by the measured feet, check the active/inactive split in the schedule' : '') });
+    });
+    Object.keys(C.slotSheets || {}).forEach(function (sh) {
+      var sg = C.slotSheets[sh];
+      flags.push({ category: 'air devices', item: 'Slot diffusers — ' + sh, flag: Math.round(sg.ft) + ' ft of slot diffuser drawn on ' + sh + ' (' + sg.n + ' glyphs: ' + Object.keys(sg.lens).map(function (l) { return sg.lens[l] + ' × ' + l + ' ft'; }).join(', ') + ')' + (sg.sections ? '; the reader\'s linear tags (' + sg.fams.join('/') + ') add up to ' + sg.sections + ' sections' : '') + (sg.coverAll ? ' — priced by the drawn feet' : ' — the drawn feet cover part of the families; the rest keep qty × schedule length') });
     });
     (C.devCheck || []).forEach(function (c) {
       if (c.hasTags && c.tags >= 5 && (c.ai < 0.75 * c.tags || c.ai > 1.3 * c.tags))
