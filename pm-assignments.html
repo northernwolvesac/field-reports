@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>PM Assignments — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=427"></script>
+<script src="auth.js?v=427"></script>
+<script src="nw-i18n.js?v=427"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 40px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
+  .tools input, .tools select { padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-family: inherit; }
+  .tools input { flex: 1; min-width: 180px; }
+  .tools label { font-size: 13px; color: #4b5563; display: flex; align-items: center; gap: 6px; }
+  .pm { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
+  .pm-h { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+  .pm-h .av { width: 36px; height: 36px; border-radius: 50%; background: #111318; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+  .pm-h b { font-size: 15px; color: #111318; } .pm-h small { display: block; font-size: 12px; color: #6b7280; }
+  .pm-h .cnt { margin-left: auto; font-size: 12px; color: #6b7280; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; background: #fafafa; }
+  tr:last-child td { border-bottom: 0; }
+  td a { color: #111318; text-decoration: none; font-weight: 700; } td a:hover { text-decoration: underline; }
+  .code { font-size: 11px; font-weight: 800; letter-spacing: .04em; color: #0696D7; }
+  .st { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; }
+  .st.active { color: #15803d; background: #dcfce7; } .st.onhold, .st.on-hold { color: #b45309; background: #fef3c7; } .st.completed { color: #6b7280; background: #f1f5f9; }
+  .access { font-size: 11px; color: #7c3aed; background: #ede9fe; border-radius: 999px; padding: 1px 7px; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .empty { text-align: center; padding: 30px; color: #6b7280; }
+  @media (max-width: 640px) { th.hide, td.hide { display: none; } }
+</style>
+</head>
+<body>
+<div class="top"><a class="back" href="index.html">‹</a><div class="ttl"><b>PM Assignments</b><span>Who runs which job — by project manager</span></div></div>
+<div class="wrap">
+  <div class="tools">
+    <input type="text" id="q" placeholder="Search PM, project, code, address…">
+    <select id="pmSel"><option value="">All PMs</option></select>
+    <label><input type="checkbox" id="showDone"> Show completed</label>
+  </div>
+  <div id="list"><div class="empty">Loading…</div></div>
+</div>
+<script>
+requireAuth().catch(function(){});
+(function() {
+  var $ = function(id) { return document.getElementById(id); };
+  var projects = [], profiles = [], groups = [];
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function initials(n) { return String(n || '?').split(/\s+/).map(function(w) { return w[0] || ''; }).join('').slice(0, 2).toUpperCase(); }
+  function norm(n) { return String(n || '').trim().toLowerCase(); }
+  async function load() {
+    var pr = await supabaseClient.from('projects').select('id, project_name, short_code, status, pm_name, pm_email, address, city, state, notes').order('project_name');
+    projects = pr.data || [];
+    var pf = await supabaseClient.from('profiles').select('id, full_name, email, role, project_ids').in('role', ['pm', 'project_manager', 'lead_pm', 'apm', 'pm_limited', 'manager', 'admin']);
+    profiles = pf.data || [];
+    build(); render();
+  }
+  function build() {
+    // one group per PM: projects where pm_name matches (main PM) + limited-access projects from the profile
+    var byName = {};
+    function grp(name, prof) { var k = norm(name); if (!byName[k]) byName[k] = { name: name, email: prof ? prof.email : '', role: prof ? prof.role : '', items: {} }; return byName[k]; }
+    profiles.forEach(function(p) { if (p.full_name && /pm|manager/.test(p.role) && p.role !== 'manager' && p.role !== 'admin') grp(p.full_name, p); });
+    projects.forEach(function(x) {
+      if (!x.pm_name) return;
+      var prof = profiles.find(function(p) { return norm(p.full_name) === norm(x.pm_name); });
+      var g = grp(x.pm_name, prof); g.items[x.id] = { p: x, main: true };
+      if (!g.email && x.pm_email) g.email = x.pm_email;
+    });
+    profiles.forEach(function(p) {
+      (p.project_ids || []).forEach(function(id) {
+        var x = projects.find(function(y) { return y.id === id; }); if (!x) return;
+        var g = grp(p.full_name, p); if (!g.items[id]) g.items[id] = { p: x, main: false };
+      });
+    });
+    groups = Object.values(byName).map(function(g) { g.list = Object.values(g.items); return g; }).sort(function(a, b) { return a.name.localeCompare(b.name); });
+    var sel = $('pmSel'); sel.innerHTML = '<option value="">All PMs</option>' + groups.map(function(g) { return '<option value="' + esc(norm(g.name)) + '">' + esc(g.name) + '</option>'; }).join('');
+    var unassigned = projects.filter(function(x) { return !x.pm_name && x.status !== 'completed'; });
+    if (unassigned.length) groups.push({ name: 'No PM assigned', email: '', role: '', list: unassigned.map(function(x) { return { p: x, main: true }; }), none: true });
+  }
+  function render() {
+    var q = norm($('q').value), pmv = $('pmSel').value, done = $('showDone').checked;
+    var html = groups.map(function(g) {
+      if (pmv && norm(g.name) !== pmv) return '';
+      var rows = g.list.filter(function(it) {
+        var x = it.p; if (!done && x.status === 'completed') return false;
+        if (!q) return true;
+        return (norm(g.name) + ' ' + norm(x.project_name) + ' ' + norm(x.short_code) + ' ' + norm(x.address) + ' ' + norm(x.city)).indexOf(q) >= 0;
+      }).sort(function(a, b) { return (a.p.status === 'completed') - (b.p.status === 'completed') || a.p.project_name.localeCompare(b.p.project_name); });
+      if (!rows.length) return '';
+      var active = rows.filter(function(it) { return it.p.status !== 'completed'; }).length;
+      return '<div class="pm"><div class="pm-h"><div class="av">' + esc(initials(g.name)) + '</div><div><b>' + esc(g.name) + '</b><small>' + esc(g.email || '') + (g.role === 'pm_limited' ? (g.email ? ' · ' : '') + 'limited access' : '') + '</small></div>' +
+        '<span class="cnt">' + active + ' active' + (rows.length > active ? ' · ' + (rows.length - active) + ' completed' : '') + '</span></div>' +
+        '<table><thead><tr><th>Project</th><th class="hide">Address</th><th>Status</th><th class="hide">Customer</th></tr></thead><tbody>' +
+        rows.map(function(it) {
+          var x = it.p, cust = ((x.notes || '').match(/Customer:\s*(.+)/) || [])[1] || '';
+          return '<tr><td><a href="projects.html?open=' + x.id + '">' + esc(x.project_name) + '</a>' + (x.short_code ? ' <span class="code">' + esc(x.short_code) + '</span>' : '') + (it.main ? '' : ' <span class="access">access only</span>') + '</td>' +
+            '<td class="hide muted">' + esc([x.address, x.city].filter(Boolean).join(', ')) + '</td>' +
+            '<td><span class="st ' + esc(x.status || '') + '">' + esc((x.status || '').replace('onhold', 'on hold')) + '</span></td>' +
+            '<td class="hide muted">' + esc(cust) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }).join('');
+    $('list').innerHTML = html || '<div class="empty">Nothing matches.</div>';
+  }
+  ['q', 'pmSel', 'showDone'].forEach(function(id) { $(id).addEventListener('input', render); $(id).addEventListener('change', render); });
+  load();
+})();
+</script>
+<script src="sw-register.js?v=427"></script>
+</body>
+</html>
