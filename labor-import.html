@@ -6,8 +6,8 @@
 <title>Labor costs — Mason payroll — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=425"></script>
-<script src="auth.js?v=425"></script>
+<script src="supabase-config.js?v=426"></script>
+<script src="auth.js?v=426"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
@@ -59,6 +59,17 @@ requireAuth().catch(function(){});
   var $ = function(id) { return document.getElementById(id); };
   var KIND = { 'Labor Cost:Labor Cost (W-2)': 'w2', 'Labor Cost:Payroll Taxes (Labor W-2)': 'taxes', 'Labor Cost:Labor Cost (1099NEC)': '1099', 'Reimbursable Expenses': 'reimb' };
   var projects = [], mapSaved = {}, parsed = null, fileName = '';
+  // Supabase returns at most 1000 rows per request — page through labor_costs
+  async function fetchAll(cols, filt) {
+    var out = [], from = 0, size = 1000;
+    while (true) {
+      var q = supabaseClient.from('labor_costs').select(cols).order('pay_date').order('id').range(from, from + size - 1);
+      if (filt) q = filt(q);
+      var r = await q; if (r.error) { $('log').style.display = ''; $('log').textContent += '\nread error: ' + r.error.message; break; }
+      out = out.concat(r.data || []); if (!r.data || r.data.length < size) break; from += size;
+    }
+    return out;
+  }
   function money(v) { v = Number(v || 0); return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   var STOP = { the: 1, of: 1, st: 1, street: 1, ave: 1, avenue: 1, inc: 1, llc: 1, fl: 1, floor: 1, suite: 1, ste: 1, ny: 1, nyc: 1, new: 1, york: 1, and: 1, blvd: 1, rd: 1, road: 1, west: 1, east: 1, w: 1, e: 1, unit: 1, llw: 1, work: 1 };
@@ -148,7 +159,7 @@ requireAuth().catch(function(){});
   });
   // project_costs.labor_spent (WIP) = everything Mason paid on the project
   async function refreshProjectCosts() {
-    var all = (await supabaseClient.from('labor_costs').select('project_id, amount, pay_date').not('project_id', 'is', null)).data || [];
+    var all = await fetchAll('id, project_id, amount, pay_date', function(q) { return q.not('project_id', 'is', null); });
     var sum = {}, last = {};
     all.forEach(function(r) { sum[r.project_id] = (sum[r.project_id] || 0) + Number(r.amount || 0); if (!last[r.project_id] || r.pay_date > last[r.project_id]) last[r.project_id] = r.pay_date; });
     var up = Object.keys(sum).map(function(pid) { return { project_id: pid, labor_spent: Math.round(sum[pid] * 100) / 100, as_of: last[pid], source: 'mason', updated_at: new Date().toISOString() }; });
@@ -156,7 +167,7 @@ requireAuth().catch(function(){});
     $('log').textContent += '\n' + up.length + ' projects updated in WIP.';
   }
   async function loadTotals() {
-    var all = (await supabaseClient.from('labor_costs').select('project_id, mason_name, kind, amount, pay_date')).data || [];
+    var all = await fetchAll('id, project_id, mason_name, kind, amount, pay_date');
     var by = {}, tot = { w2: 0, taxes: 0, '1099': 0, reimb: 0, n: 0 }, journals = {};
     all.forEach(function(r) {
       var k = r.project_id || ('?' + r.mason_name), b = by[k] = by[k] || { name: r.mason_name, pid: r.project_id, w2: 0, taxes: 0, '1099': 0, reimb: 0, other: 0, last: '' };
@@ -175,6 +186,6 @@ requireAuth().catch(function(){});
   init();
 })();
 </script>
-<script src="sw-register.js?v=425"></script>
+<script src="sw-register.js?v=426"></script>
 </body>
 </html>
