@@ -12,10 +12,10 @@
 <title>Field Orders — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=421"></script>
-<script src="auth.js?v=421"></script>
-<script src="schedule-utils.js?v=421"></script>
-<script src="hvac-catalog.js?v=421"></script>
+<script src="supabase-config.js?v=422"></script>
+<script src="auth.js?v=422"></script>
+<script src="schedule-utils.js?v=422"></script>
+<script src="hvac-catalog.js?v=422"></script>
 <style>
   body { padding-bottom: 24px; }
   .fo-wrap { max-width: 1100px; margin: 0 auto; }
@@ -838,17 +838,20 @@ requireAuth().catch(function(){});
       'Your job: make every line specific enough to order from a supply house — material / type, exact size, length or quantity with its unit, pack (sticks, coils, boxes), and anything the catalog questions ask. ' +
       'Use the catalog below. Ask only what is really ambiguous, at most 3 short questions per round, each with 2-5 tappable options (the technician can also type). Never ask about things the technician already said. ' +
       'Keep the technician\'s own words for anything not in the catalog. Round ' + (aiRounds + 1) + ' of 3 — on round 3 finish with your best reading and mark unknowns "(verify)".\n\n' +
-      'Reply with ONE JSON object only, no prose:\n' +
+      'Reply with ONE JSON object on ONE single line: no code fences, no markdown, no line breaks, no prose before or after:\n' +
       '{"status":"ask","questions":[{"line":"the request line it is about","q":"question","options":["A","B"]}]}\n' +
       'or {"status":"ok","lines":["100 ft — Copper pipe Type L, hard — 1\" (5 × 20 ft sticks)","…"],"note":"one short note for the office if needed"}\n\n' +
       '=== CATALOG ===\n' + cat + '\n=== REQUEST ===\n' + aiRequestText + (convo ? '\n=== ANSWERS ===\n' + convo : '');
   }
-  async function aiCall() {
-    var res = await fetch(AI_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'generate_summary', prompt: aiPrompt(), token: await aiToken() }) });
+  async function aiCall(retry) {
+    // the proxy returns no summary when the model answers with a fenced / multi-line JSON block — ask again, stricter, once
+    var prompt = aiPrompt() + (retry ? '\n\nREMINDER: answer with the JSON on ONE line only, no ``` fences, no line breaks.' : '');
+    var res = await fetch(AI_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'generate_summary', prompt: prompt, token: await aiToken() }) });
     var text = await res.text(), out; try { out = JSON.parse(text); } catch (e) { throw new Error('AI returned an invalid response'); }
     if (!out.success) throw new Error(out.error || 'AI request failed');
-    var m = /\{[\s\S]*\}/.exec(out.summary || ''); if (!m) throw new Error('AI gave no answer');
-    return JSON.parse(m[0]);
+    var m = /\{[\s\S]*\}/.exec(out.summary || '');
+    if (!m) { if (!retry) return aiCall(true); throw new Error('AI gave no answer'); }
+    try { return JSON.parse(m[0]); } catch (e2) { if (!retry) return aiCall(true); throw new Error('AI answer could not be read'); }
   }
   async function runAiCheck(submitAfter) {
     if (aiBusy) return;
@@ -1105,6 +1108,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=421"></script>
+<script src="sw-register.js?v=422"></script>
 </body>
 </html>
