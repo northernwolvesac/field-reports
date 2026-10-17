@@ -324,7 +324,16 @@
           });
           devCheck.push({ sheet: sh, ai: aiN, tags: tagN, cfmOnly: cfmOnly || aiCfm, hasTags: !!(p.tag_counts && p.tag_counts.devices) });
         }
-        var linSecs = 0; if (takeoffSheet) (r.air_devices || []).forEach(function (a) { var t0 = String(a.type || '').toLowerCase(), sd0 = schedDev[norm(a.tag)]; if (!notAirDevice(a) && (t0 === 'linear' || (sd0 && sd0.type === 'linear'))) linSecs += Number(a.qty || 0); });
+        // slot-glyph pre-pass: which linear family gets the sheet's drawn feet (the first whose schedule length matches a drawn length, else the first linear family)
+        var linSecs = 0, slotCreditTag = '', slotLens = (r.geo && r.geo.slots && r.geo.slots.lens) || null;
+        if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
+          var t0 = String(a.type || '').toLowerCase(), sd0 = schedDev[norm(a.tag)];
+          if (notAirDevice(a) || !(t0 === 'linear' || (sd0 && sd0.type === 'linear'))) return;
+          linSecs += Number(a.qty || 0);
+          var lk0 = sd0 && sd0.len ? String(Math.round(sd0.len * 2) / 2) : '';
+          if (!slotCreditTag || (slotLens && lk0 && slotLens[lk0] && !slotCreditTag.covered)) slotCreditTag = { tag: norm(a.tag), covered: !!(slotLens && lk0 && slotLens[lk0]) };
+        });
+        slotCreditTag = slotCreditTag ? slotCreditTag.tag : '';
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
           if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) return;   // a bare '(cfm only)' row is an upper bound, reported as a check, never priced; symbol rows named '… (cfm only)' are counted
           if (/no symbol|unmarked|no device symbol|bubble only/i.test(String(a.tag || '') + ' ' + String(a.notes || ''))) return;
@@ -346,10 +355,12 @@
           }
           // slot diffusers drawn as thin X-ed rectangles (BOSS): the sheet's drawn glyphs beat qty x schedule length; credited once per sheet
           if (atype === 'linear' && r.geo && r.geo.slots && r.geo.slots.n >= 3 && !(fam && r.geo.linear && r.geo.linear[fam] && r.geo.linear[fam].ft > 0)) {
-            var sk = sh + '|slots', coverAll = r.geo.slots.n >= 0.7 * linSecs;
-            var sg = slotSheets[sh] = slotSheets[sh] || { ft: r.geo.slots.ft, n: r.geo.slots.n, lens: r.geo.slots.lens, sections: 0, fams: [], coverAll: coverAll };
-            if (!slotUsed[sk]) { alf = r.geo.slots.ft; slotUsed[sk] = 1; }
-            else if (coverAll) alf = 0;                       // the glyphs already cover every linear family on this sheet
+            var sk = sh + '|slots', coverAll = r.geo.slots.n >= 0.7 * linSecs, lensK = sd && sd.len ? String(Math.round(sd.len * 2) / 2) : '';
+            var covered = coverAll || !!(lensK && r.geo.slots.lens[lensK]);   // this family's schedule length is one of the drawn lengths → its glyphs are in the census
+            var sg = slotSheets[sh] = slotSheets[sh] || { ft: r.geo.slots.ft, n: r.geo.slots.n, lens: r.geo.slots.lens, sections: 0, fams: [], coverAll: coverAll, kept: [] };
+            if (norm(a.tag) === slotCreditTag && !slotUsed[sk]) { alf = r.geo.slots.ft; slotUsed[sk] = 1; }
+            else if (covered) alf = 0;                        // already inside the drawn feet
+            else if (alf) sg.kept.push((fam || a.tag) + ' ' + Math.round(alf) + ' ft');
             sg.sections += Number(a.qty || 0); if (sg.fams.indexOf(fam || a.tag) < 0) sg.fams.push(fam || a.tag);
           }
           var k = atype + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
@@ -629,7 +640,7 @@
     });
     Object.keys(C.slotSheets || {}).forEach(function (sh) {
       var sg = C.slotSheets[sh];
-      flags.push({ category: 'air devices', item: 'Slot diffusers — ' + sh, flag: Math.round(sg.ft) + ' ft of slot diffuser drawn on ' + sh + ' (' + sg.n + ' glyphs: ' + Object.keys(sg.lens).map(function (l) { return sg.lens[l] + ' × ' + l + ' ft'; }).join(', ') + ')' + (sg.sections ? '; the reader\'s linear tags (' + sg.fams.join('/') + ') add up to ' + sg.sections + ' sections' : '') + (sg.coverAll ? ' — priced by the drawn feet' : ' — the drawn feet cover part of the families; the rest keep qty × schedule length') });
+      flags.push({ category: 'air devices', item: 'Slot diffusers — ' + sh, flag: Math.round(sg.ft) + ' ft of slot diffuser drawn on ' + sh + ' (' + sg.n + ' glyphs: ' + Object.keys(sg.lens).map(function (l) { return sg.lens[l] + ' × ' + l + ' ft'; }).join(', ') + ')' + (sg.sections ? '; the reader\'s linear tags (' + sg.fams.join('/') + ') add up to ' + sg.sections + ' sections' : '') + (sg.kept && sg.kept.length ? ' — not drawn this way, kept at qty × schedule length: ' + sg.kept.join(', ') : ' — priced by the drawn feet') });
     });
     (C.devCheck || []).forEach(function (c) {
       if (c.hasTags && c.tags >= 5 && (c.ai < 0.75 * c.tags || c.ai > 1.3 * c.tags))
