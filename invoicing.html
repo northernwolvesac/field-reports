@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=418"></script>
-<script src="nw-drive.js?v=418"></script>
-<script src="auth.js?v=418"></script>
-<script src="labor-rates.js?v=418"></script>
+<script src="supabase-config.js?v=419"></script>
+<script src="nw-drive.js?v=419"></script>
+<script src="auth.js?v=419"></script>
+<script src="labor-rates.js?v=419"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -304,6 +304,19 @@
   .pc-search { padding:8px 12px; border:1px solid var(--nw-border); border-radius:7px; font-size:13px; min-width:260px; }
   .btn-create { background:#f97316; color:#fff; border:none; padding:9px 16px; border-radius:7px; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 2px 8px rgba(249,115,22,.25); }
   .btn-create:hover { filter:brightness(1.05); }
+  .bt-cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .bt-card { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border:1px solid var(--nw-border); border-radius:10px; cursor:pointer; background:#fff; font-weight:400; }
+  .bt-card:has(input:checked) { border-color:#f97316; box-shadow:0 0 0 2px rgba(249,115,22,.25); background:#fff7ed; }
+  .bt-card input { margin-top:3px; } .bt-card b { display:block; font-size:14px; color:#111318; } .bt-card span { font-size:12px; color:#64748b; }
+  .sinv { font-family:Calibri, 'Segoe UI', Arial, sans-serif; color:#111; max-width:720px; }
+  .sinv-top { display:flex; justify-content:space-between; gap:16px; font-size:13px; line-height:1.45; }
+  .sinv-dates { text-align:right; white-space:nowrap; }
+  .sinv-no { text-align:center; font-weight:800; font-size:20px; text-decoration:underline; margin:16px 0 14px; }
+  .sinv-job td { padding:2px 10px 2px 0; font-size:13px; vertical-align:top; } .sinv-job td:first-child { font-weight:700; width:170px; } .sinv-job td.big { font-weight:700; font-size:15px; }
+  .sinv-amt { margin-top:14px; border-collapse:collapse; } .sinv-amt td { padding:5px 10px 5px 0; font-size:13px; font-weight:700; } .sinv-amt td.d { width:20px; padding-left:50px; } .sinv-amt td.n { text-align:right; min-width:110px; }
+  .sinv-amt tr.due td.d, .sinv-amt tr.due td.n { background:#fff200; } .sinv-amt tr.gap td { padding-top:14px; }
+  .sinv-sign { margin-top:22px; font-size:12px; } .sinv-sign img { display:block; height:42px; margin-bottom:4px; } .sinv-sign .ln { border-top:1.5px solid #111; width:300px; margin-bottom:4px; }
+  .sinv-sub { font-size:12px; color:#64748b; margin-top:10px; }
   .pc-table-wrap { margin:0 16px 16px; background:var(--nw-card); border:1px solid var(--nw-border); border-radius:10px; overflow:auto; }
   .pc-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:0; }
   .pc-table th, .pc-table td { padding:9px 8px; border-bottom:1px solid var(--nw-border); white-space:normal; vertical-align:middle; overflow-wrap:anywhere; }
@@ -430,6 +443,21 @@
       <select id="sProject"></select>
       <div class="field-hint">Choose an active project. Each project can have one prime contract.</div>
     </div>
+    <div class="field">
+      <label>Billing type *</label>
+      <div class="bt-cards">
+        <label class="bt-card"><input type="radio" name="sBillType" value="aia" checked><div><b>AIA Billing</b><span>G702 / G703 payment applications: schedule of values, retainage, architect's certificate.</span></div></label>
+        <label class="bt-card"><input type="radio" name="sBillType" value="simple"><div><b>Simple invoice billing</b><span>One amount per invoice, printed like the BOSS / JRM invoices. No AIA forms, no retainage.</span></div></label>
+      </div>
+    </div>
+    <div id="sSimpleOnly" style="display:none">
+      <div class="row">
+        <div class="field" style="flex:0 0 170px"><label>Invoice numbering prefix</label><input type="text" id="sInvPrefix" placeholder="e.g. BBP"><div class="field-hint">Invoices become BBP-01, BBP-02 …</div></div>
+        <div class="field"><label>Change orders</label>
+          <label style="font-weight:400;display:flex;gap:8px;align-items:flex-start;margin-top:4px;font-size:13px"><input type="checkbox" id="sSeparate" style="margin-top:3px"> <span><b>Sub-prime contracts</b> — the client issues a separate PO for every change order; each PO is billed on its own invoices with its own contract amount, previous invoices and balance (BOSS / JRM).</span></label>
+        </div>
+      </div>
+    </div>
     <div class="row">
       <div class="field" style="flex:0 0 150px"><label>Contract #</label><input type="text" id="sContractNumber" placeholder="e.g. 11010174"></div>
       <div class="field"><label>Title</label><input type="text" id="sTitle" placeholder="e.g. Snowflake-Boston Properties 7 Times Square, 29-31 FLs"></div>
@@ -541,50 +569,30 @@
 <!-- New SIMPLE invoice modal (form_variant = simple: one amount per invoice, no G702/G703) -->
 <div class="modal-overlay" id="simpleModal">
   <div class="modal-card">
-    <h2>New Simple Invoice</h2>
-    <div class="row">
-      <div class="field" style="flex:0 0 90px">
-        <label>Position *</label>
-        <input type="number" id="smNo" min="1" step="1">
-      </div>
-      <div class="field" style="flex:0 0 140px">
-        <label>Invoice # *</label>
-        <input type="text" id="smInv" placeholder="e.g. 01 or BBP-01">
-      </div>
-      <div class="field">
-        <label>Invoice date *</label>
-        <input type="date" id="smDate">
-      </div>
-      <div class="field">
-        <label>Period to *</label>
-        <input type="date" id="smTo">
-      </div>
+    <h2 id="smTitle">New Invoice</h2>
+    <div class="field" id="smBillWrap" style="display:none">
+      <label>Bill against *</label>
+      <select id="smBill"></select>
+      <div class="field-hint">The base contract or one approved change order with the client's PO (sub-prime contract). Previous invoices and the balance are counted within that PO only.</div>
     </div>
     <div class="row">
-      <div class="field">
-        <label>Amount this invoice ($) *</label>
-        <input type="number" id="smAmount" step="0.01" placeholder="96000.00">
-        <div class="field-hint">Negative for a credit. Previous invoices and balance to finish are computed.</div>
-      </div>
-      <div class="field">
-        <label>PO Number</label>
-        <input type="text" id="smPo" placeholder="client's PO for this invoice">
-      </div>
-      <div class="field" style="flex:0 0 150px">
-        <label>Status</label>
-        <select id="smStatus"><option value="draft">Draft</option><option value="submitted">Submitted</option></select>
-      </div>
+      <div class="field"><label>Amount this invoice ($) *</label><input type="number" id="smAmount" step="0.01" inputmode="decimal" placeholder="45000.00"><div class="field-hint" id="smBalanceHint">Negative for a credit.</div></div>
+      <div class="field" style="flex:0 0 150px"><label>Invoice #</label><input type="text" id="smInv"></div>
     </div>
-    <div class="field">
-      <label>Description (printed on the invoice)</label>
-      <input type="text" id="smMemo" placeholder="Contract work / Change Order #015 - Re-insulate existing ductwork">
+    <div class="row">
+      <div class="field"><label>Invoice date *</label><input type="date" id="smDate"></div>
+      <div class="field"><label>Period to *</label><input type="date" id="smTo"></div>
     </div>
-    <div class="field">
-      <label><input type="checkbox" id="smCo"> This invoice bills a change order (adds the amount to the adjusted contract)</label>
+    <div class="row">
+      <div class="field"><label>Client PO number</label><input type="text" id="smPo" placeholder="printed as PO Number"></div>
+      <div class="field" style="flex:0 0 150px"><label>Status</label><select id="smStatus"><option value="draft">Draft</option><option value="submitted">Submitted</option></select></div>
     </div>
+    <div class="field"><label>Description (printed on the invoice)</label><input type="text" id="smMemo" placeholder="Contract work"></div>
+    <div class="field" id="smCoWrap"><label><input type="checkbox" id="smCo"> This invoice bills a change order (adds the amount to the adjusted contract)</label></div>
+    <input type="hidden" id="smNo">
     <div class="modal-actions">
       <button class="btn-cancel" id="smCancel">Cancel</button>
-      <button class="btn-save" id="smCreate">Create</button>
+      <button class="btn-save" id="smCreate">Create invoice</button>
     </div>
   </div>
 </div>
@@ -731,7 +739,10 @@
         <select id="coStatus"><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="void">Void</option></select>
       </div>
     </div>
-    <div class="field"><label>Title *</label><input type="text" id="coTitle" placeholder="CE #COP-SF-03 - DEHUMIDIFIERS"></div>
+    <div class="row">
+      <div class="field"><label>Title *</label><input type="text" id="coTitle" placeholder="CE #COP-SF-03 - DEHUMIDIFIERS"></div>
+      <div class="field" style="flex:0 0 200px"><label>Client PO number</label><input type="text" id="coPo" placeholder="e.g. 40-165095"><div class="field-hint">Sub-prime contracts: this CO is billed on its own invoices</div></div>
+    </div>
     <div class="row">
       <div class="field"><label>Amount * (negative = deduction)</label><input type="number" id="coAmount" step="0.01" placeholder="0.00"></div>
       <div class="field"><label>Change reason</label>
@@ -855,6 +866,8 @@ requireAuth().catch(function(){});
     document.getElementById('naCreate').addEventListener('click', createApplication);
     document.getElementById('smCancel').addEventListener('click', function() { closeModal('simpleModal'); });
     document.getElementById('smCreate').addEventListener('click', createSimpleInvoice);
+    document.getElementById('smBill').addEventListener('change', smBillChanged);
+    document.querySelectorAll('input[name="sBillType"]').forEach(function(r) { r.addEventListener('change', applyBillType); });
     // Line item modal
     document.getElementById('lCancel').addEventListener('click', function() { closeModal('lineModal'); });
     document.getElementById('lSave').addEventListener('click', saveLineItem);
@@ -930,7 +943,10 @@ requireAuth().catch(function(){});
       document.getElementById('sArchName').value     = d.architect_name || '';
       document.getElementById('sArchAddr').value     = d.architect_address || '';
       document.getElementById('sRetainageStored').value = Number((d.retainage_rate_stored || 0) * 100).toFixed(2);
-      document.getElementById('sVariant').value      = d.form_variant || 'owner';
+      document.getElementById('sVariant').value      = d.form_variant === 'simple' ? 'owner' : (d.form_variant || 'owner');
+      document.querySelector('input[name="sBillType"][value="' + (d.form_variant === 'simple' ? 'simple' : 'aia') + '"]').checked = true;
+      document.getElementById('sInvPrefix').value    = d.invoice_prefix || '';
+      document.getElementById('sSeparate').checked   = d.billing_mode === 'separate';
       document.getElementById('sProjectNo').value    = d.project_no || '';
       document.getElementById('sContractNo').value   = d.contract_no || '';
       document.getElementById('sProjectAddr').value  = d.project_address || '';
@@ -961,6 +977,9 @@ requireAuth().catch(function(){});
       document.getElementById('sArchAddr').value     = '';
       document.getElementById('sRetainageStored').value = 0;
       document.getElementById('sVariant').value      = 'owner';
+      document.querySelector('input[name="sBillType"][value="aia"]').checked = true;
+      document.getElementById('sInvPrefix').value    = '';
+      document.getElementById('sSeparate').checked   = false;
       document.getElementById('sProjectNo').value    = '';
       document.getElementById('sContractNo').value   = '';
       document.getElementById('sProjectAddr').value  = '';
@@ -990,11 +1009,20 @@ requireAuth().catch(function(){});
           document.getElementById('sProjectAddr').value = [pj.address, line2].filter(Boolean).join('\n');
           document.getElementById('sProjectNo').value = pj.short_code || '';
           document.getElementById('sContractNumber').value = pj.short_code || '';
+          document.getElementById('sInvPrefix').value = pj.short_code || '';
         }
       }
       document.getElementById('sExecuted').checked = false;
     }
+    applyBillType();
     openModal('setupModal');
+  }
+  // AIA vs Simple: the AIA-only fields (retainage, form variant, architect, contract no.) hide for simple invoice billing
+  function applyBillType() {
+    var simple = (document.querySelector('input[name="sBillType"]:checked') || {}).value === 'simple';
+    ['sRetainage', 'sRetainageStored', 'sVariant', 'sContractNo', 'sArchName', 'sArchAddr'].forEach(function(id) { var f = document.getElementById(id).closest('.field'); if (f) f.style.display = simple ? 'none' : ''; });
+    document.getElementById('sSimpleOnly').style.display = simple ? '' : 'none';
+    if (simple && !document.getElementById('sInvPrefix').value) { var o = document.getElementById('sProject').selectedOptions[0]; var m = o && /^([A-Z0-9&\-]+) · /.exec(o.textContent); if (m) document.getElementById('sInvPrefix').value = m[1]; }
   }
 
   async function saveSetup() {
@@ -1010,7 +1038,9 @@ requireAuth().catch(function(){});
       architect_name:        document.getElementById('sArchName').value.trim() || null,
       architect_address:     document.getElementById('sArchAddr').value.trim() || null,
       retainage_rate_stored: Number(document.getElementById('sRetainageStored').value || 0) / 100,
-      form_variant:          document.getElementById('sVariant').value || 'owner',
+      form_variant:          (document.querySelector('input[name="sBillType"]:checked') || {}).value === 'simple' ? 'simple' : (document.getElementById('sVariant').value || 'owner'),
+      invoice_prefix:        document.getElementById('sInvPrefix').value.trim().replace(/[-\s]+$/, '') || null,
+      billing_mode:          document.getElementById('sSeparate').checked ? 'separate' : 'combined',
       project_no:            document.getElementById('sProjectNo').value.trim() || null,
       contract_no:           document.getElementById('sContractNo').value.trim() || null,
       project_address:       document.getElementById('sProjectAddr').value.trim() || null,
@@ -1030,6 +1060,8 @@ requireAuth().catch(function(){});
       signed_contract_received_date: document.getElementById('sSignedReceived').value || null,
       contract_termination_date:     document.getElementById('sTermination').value || null
     };
+    if (patch.form_variant === 'simple') { patch.retainage_rate = 0; patch.retainage_rate_stored = 0; }
+    else { patch.billing_mode = 'combined'; }
     if (!patch.project_id || !patch.original_contract_sum) {
       showToast('Project and Contract Sum are required', 'error'); return;
     }
@@ -1041,6 +1073,11 @@ requireAuth().catch(function(){});
     } else {
       patch.created_by = currentUserId;
       res = await supabaseClient.from('aia_projects').insert(patch).select().single();
+    }
+    if (res.error && /billing_mode|invoice_prefix/.test(res.error.message || '')) {   // sub-prime-contracts.sql not applied yet
+      delete patch.billing_mode; delete patch.invoice_prefix;
+      res = editingSetupId ? await supabaseClient.from('aia_projects').update(patch).eq('id', editingSetupId) : await supabaseClient.from('aia_projects').insert(patch).select().single();
+      if (!res.error) showToast('Saved without the sub-prime / prefix settings — run sub-prime-contracts.sql in Supabase', 'error');
     }
     btn.disabled = false; btn.textContent = 'Save';
     if (res.error) { showToast('Save failed: ' + res.error.message, 'error'); return; }
@@ -1181,57 +1218,93 @@ requireAuth().catch(function(){});
   function isSimple(setup) { return !!setup && setup.form_variant === 'simple'; }
   var simpleProjectId = null;
 
+  // bill-against options of the open contract: the base contract + (sub-prime contracts) every approved CO with its client PO
+  var simpleSubs = [], simpleSeparate = false;
+  function subKey(id) { return id || 'base'; }
   async function openSimpleModal(aiaProjectId) {
     simpleProjectId = aiaProjectId;
-    var s = await supabaseClient.from('aia_projects').select('*').eq('id', aiaProjectId).maybeSingle();
-    var last = await supabaseClient.from('aia_applications').select('application_no, invoice_no').eq('aia_project_id', aiaProjectId).order('application_no', { ascending: false }).limit(1).maybeSingle();
-    var nextNo = last && last.data ? (last.data.application_no + 1) : 1;
-    var prevInv = last && last.data ? String(last.data.invoice_no || '') : '';
-    // continue the client's numbering pattern: "01" → "02", "BBP-03" → "BBP-04", "0002" → "0003"
-    var m = /^(.*?)(\d+)$/.exec(prevInv), nextInv = m ? m[1] + String(parseInt(m[2], 10) + 1).padStart(m[2].length, '0') : String(nextNo).padStart(2, '0');
+    var s = (await supabaseClient.from('aia_projects').select('*, project:projects(short_code)').eq('id', aiaProjectId).maybeSingle()).data || {};
+    var apps = (await supabaseClient.from('aia_applications').select('*').eq('aia_project_id', aiaProjectId).order('application_no', { ascending: false })).data || [];
+    var cos = (await supabaseClient.from('aia_change_orders').select('*').eq('aia_project_id', aiaProjectId).eq('status', 'approved').order('number', { ascending: true })).data || [];
+    var billed = {};
+    if (apps.length) {
+      var li = (await supabaseClient.from('aia_line_items').select('application_id, this_amount').in('application_id', apps.map(function(a) { return a.id; }))).data || [];
+      var byApp = {}; li.forEach(function(l) { byApp[l.application_id] = (byApp[l.application_id] || 0) + Number(l.this_amount || 0); });
+      apps.forEach(function(a) { var k = subKey(a.bill_co_id); billed[k] = (billed[k] || 0) + (byApp[a.id] || 0); });
+    }
+    var last = apps[0], nextNo = last ? last.application_no + 1 : 1;
+    var prevInv = last ? String(last.invoice_no || '') : '', m = /^(.*?)(\d+)$/.exec(prevInv);
+    var prefix = String(s.invoice_prefix || (s.project && s.project.short_code) || '').replace(/[-\s]+$/, '');
+    var nextInv = m ? m[1] + String(parseInt(m[2], 10) + 1).padStart(m[2].length, '0') : (prefix ? prefix + '-' : '') + String(nextNo).padStart(2, '0');
+    simpleSeparate = s.billing_mode === 'separate';
+    simpleSubs = [{ id: null, label: 'Base contract' + (s.contract_number ? ' — PO ' + s.contract_number : '') + ' · ' + fmtMoney(s.original_contract_sum), po: s.contract_number || s.contract_no || '', amount: Number(s.original_contract_sum || 0), title: 'Contract work', billed: billed.base || 0 }];
+    if (simpleSeparate) cos.forEach(function(c) { simpleSubs.push({ id: c.id, label: 'CO #' + c.number + ' — ' + c.title + (c.po_number ? ' — PO ' + c.po_number : '') + ' · ' + fmtMoney(c.amount), po: c.po_number || '', amount: Number(c.amount || 0), title: c.title, billed: billed[c.id] || 0, co: c }); });
+    document.getElementById('smBill').innerHTML = simpleSubs.map(function(o, i) { return '<option value="' + i + '">' + escHtml(o.label) + '</option>'; }).join('');
+    // default: the base contract while it has a balance, otherwise the first PO that still has one
+    var def = 0; if (simpleSeparate) simpleSubs.some(function(o, i) { if (o.amount - o.billed > 0.005) { def = i; return true; } return false; });
+    document.getElementById('smBill').value = String(def);
+    document.getElementById('smBillWrap').style.display = simpleSeparate ? '' : 'none';
+    document.getElementById('smCoWrap').style.display = simpleSeparate ? 'none' : '';
+    document.getElementById('smTitle').textContent = 'New Invoice ' + nextInv;
     document.getElementById('smNo').value = nextNo;
     document.getElementById('smInv').value = nextInv;
-    var today = new Date(), lastOfPrev = new Date(today.getFullYear(), today.getMonth(), 0);
+    var today = new Date();
     document.getElementById('smDate').value = ymd(today);
-    document.getElementById('smTo').value = ymd(lastOfPrev);
+    document.getElementById('smTo').value = ymd(new Date(today.getFullYear(), today.getMonth() + 1, 0));
     document.getElementById('smAmount').value = '';
-    document.getElementById('smPo').value = (s.data && (s.data.contract_number || s.data.contract_no)) || '';
-    document.getElementById('smMemo').value = 'Contract work';
     document.getElementById('smCo').checked = false;
     document.getElementById('smStatus').value = 'draft';
+    smBillChanged();
     openModal('simpleModal');
+  }
+  function smBillChanged() {
+    var o = simpleSubs[parseInt(document.getElementById('smBill').value, 10) || 0] || simpleSubs[0]; if (!o) return;
+    document.getElementById('smPo').value = o.po || '';
+    document.getElementById('smMemo').value = o.id ? o.title : 'Contract work';
+    var bal = o.amount - o.billed;
+    document.getElementById('smBalanceHint').textContent = (simpleSeparate ? 'This PO: ' : 'Contract: ') + fmtMoney(o.amount) + ' · invoiced ' + fmtMoney(o.billed) + ' · balance ' + fmtMoney(bal) + (bal > 0 ? ' — leave blank for the full balance' : '');
   }
 
   async function createSimpleInvoice() {
     if (!canEdit) return;
     var appNo = parseInt(document.getElementById('smNo').value, 10), inv = document.getElementById('smInv').value.trim();
     var date = document.getElementById('smDate').value, to = document.getElementById('smTo').value;
-    var amt = Number(document.getElementById('smAmount').value), co = document.getElementById('smCo').checked;
+    var sub = simpleSubs[parseInt(document.getElementById('smBill').value, 10) || 0] || simpleSubs[0];
+    var amtRaw = document.getElementById('smAmount').value;
+    var amt = amtRaw === '' ? Math.round((sub.amount - sub.billed) * 100) / 100 : Number(amtRaw);
+    var co = !simpleSeparate && document.getElementById('smCo').checked;
     var memo = document.getElementById('smMemo').value.trim() || 'Contract work', po = document.getElementById('smPo').value.trim();
-    if (!appNo || !inv || !date || !to || !isFinite(amt) || document.getElementById('smAmount').value === '') { showToast('Position, invoice #, dates and amount are required', 'error'); return; }
+    if (!appNo || !inv || !date || !to || !isFinite(amt) || !amt) { showToast('Invoice #, dates and amount are required', 'error'); return; }
     var btn = document.getElementById('smCreate'); btn.disabled = true; btn.textContent = 'Creating…';
     var setupRes = await supabaseClient.from('aia_projects').select('*').eq('id', simpleProjectId).maybeSingle();
-    var prior = await supabaseClient.from('aia_applications').select('*').eq('aia_project_id', simpleProjectId).lt('application_no', appNo).order('application_no', { ascending: false }).limit(1).maybeSingle();
+    // previous invoices: within the same sub-contract (PO) when billing separately, otherwise every earlier invoice
+    var pq = supabaseClient.from('aia_applications').select('*').eq('aia_project_id', simpleProjectId).lt('application_no', appNo).order('application_no', { ascending: false });
+    if (simpleSeparate) pq = sub.id ? pq.eq('bill_co_id', sub.id) : pq.is('bill_co_id', null);
+    var prior = await pq.limit(1).maybeSingle();
     var prevCum = 0, coPrevAdd = 0, coPrevDed = 0;
     if (prior && prior.data) {
+      if (simpleSeparate && sub.id) prior.data.bill_co = sub.co;
       var pl = await supabaseClient.from('aia_line_items').select('*').eq('application_id', prior.data.id);
       var pt = computeTotalsFor(setupRes.data || {}, prior.data, pl.data || []).lines;
       prevCum = pt.L4;
-      coPrevAdd = Number(prior.data.co_prev_additions || 0) + Number(prior.data.co_this_additions || 0);
-      coPrevDed = Number(prior.data.co_prev_deductions || 0) + Number(prior.data.co_this_deductions || 0);
+      if (!simpleSeparate) {
+        coPrevAdd = Number(prior.data.co_prev_additions || 0) + Number(prior.data.co_this_additions || 0);
+        coPrevDed = Number(prior.data.co_prev_deductions || 0) + Number(prior.data.co_this_deductions || 0);
+      }
     }
     var from = to.slice(0, 8) + '01';
     var row = { aia_project_id: simpleProjectId, application_no: appNo, invoice_no: inv, period_from: from, period_to: to, application_date: date,
       previous_certificates: prevCum, co_prev_additions: coPrevAdd, co_prev_deductions: coPrevDed,
       co_this_additions: co && amt > 0 ? amt : 0, co_this_deductions: co && amt < 0 ? amt : 0,
       status: document.getElementById('smStatus').value || 'draft', po_number: po || null, memo: memo, retainage_rate: 0, created_by: currentUserId };
+    if (simpleSeparate) row.bill_co_id = sub.id;
     var ins = await supabaseClient.from('aia_applications').insert(row).select().single();
-    if (ins.error) { btn.disabled = false; btn.textContent = 'Create'; showToast('Create failed: ' + ins.error.message, 'error'); return; }
-    var lines = [];
-    if (prevCum) lines.push({ application_id: ins.data.id, item_no: '1', description: 'Previous invoices', scheduled_value: Number((setupRes.data || {}).original_contract_sum || 0), prev_amount: prevCum, this_amount: 0, stored_amount: 0, is_change_order: false, is_parent: false, sort_order: 1 });
-    lines.push({ application_id: ins.data.id, item_no: String(lines.length + 1), description: memo, scheduled_value: co ? amt : Number((setupRes.data || {}).original_contract_sum || 0), prev_amount: 0, this_amount: amt, stored_amount: 0, is_change_order: !!co, is_parent: false, sort_order: lines.length + 1 });
+    if (ins.error) { btn.disabled = false; btn.textContent = 'Create invoice'; showToast('Create failed: ' + ins.error.message, 'error'); return; }
+    var base = simpleSeparate ? sub.amount : Number((setupRes.data || {}).original_contract_sum || 0), lines = [];
+    if (prevCum) lines.push({ application_id: ins.data.id, item_no: '1', description: 'Previous invoices', scheduled_value: base, prev_amount: prevCum, this_amount: 0, stored_amount: 0, is_change_order: false, sort_order: 1 });
+    lines.push({ application_id: ins.data.id, item_no: String(lines.length + 1), description: memo, scheduled_value: co ? amt : base, prev_amount: 0, this_amount: amt, stored_amount: 0, is_change_order: co, sort_order: lines.length + 1 });
     await supabaseClient.from('aia_line_items').insert(lines);
-    btn.disabled = false; btn.textContent = 'Create';
+    btn.disabled = false; btn.textContent = 'Create invoice';
     closeModal('simpleModal');
     showToast('✅ Invoice ' + inv + ' created', 'success');
     window.location.href = 'invoicing.html?app=' + ins.data.id;
@@ -1240,25 +1313,29 @@ requireAuth().catch(function(){});
   function simpleJobName(setup) { return setup.title || setup.contract_for || (setup.project && setup.project.project_name) || ''; }
   function simpleAddress(setup) { return String(setup.project_address || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean).join(', '); }
 
+  function simplePoLabel(s, a) { return a.po_number || (a.bill_co && a.bill_co.po_number) || s.contract_number || s.contract_no || ''; }
+  function simpleAmountRows(t, s, a) {
+    var L = t.lines, rate = effRate(s, a), po = simplePoLabel(s, a), sub = a.bill_co;
+    var rows = [['ORIGINAL CONTRACT AMOUNT' + (sub && po ? ' PO' + po : '') + ':', L.L1, 'gap']];
+    if (L.L2) rows.push(['CHANGE ORDERS TO DATE:', L.L2, 'gap']);
+    rows.push(['ADJUSTED CONTRACT AMOUNT:', L.L3, 'gap'], ['AMOUNT COMPLETED TO DATE:', L.L4, 'gap']);
+    if (rate) rows.push(['LESS RETAINAGE (' + (rate * 100).toFixed(2) + '%):', L.L5t, 'gap']);
+    rows.push(['LESS PREVIOUS INVOICES:', L.L7, 'gap'], ['AMOUNT DUE THIS INVOICE:', L.L8, 'due'], ['BALANCE TO FINISH, INCL. RETAINAGE', L.L9, '']);
+    return rows;
+  }
   function renderSimpleCard(t, invNo) {
-    var L = t.lines, s = currentSetup, a = currentApp, rate = effRate(s, a);
-    return '<div class="inv-card"><div class="inv-card-h"><h3>Simple Invoice (no AIA forms)</h3>' + (canEdit ? '<button class="btn-secondary pc-edit" id="editSimpleBtn">Edit</button>' : '') + '</div>' +
-      '<div class="inv-settings">' +
-        kvRow('To:', escHtml(s.client_name || '') + (s.client_attn ? ' — Attn: ' + escHtml(s.client_attn) : '')) +
-        kvRow('Job name:', escHtml(simpleJobName(s))) +
-        kvRow('Job location:', escHtml(simpleAddress(s))) +
-        kvRow('PO Number:', escHtml(a.po_number || s.contract_number || s.contract_no || '--')) +
-        kvRow('Job Number:', escHtml(s.job_number || '--')) +
-        kvRow('Contract dated:', mdyShort(s.contract_date) || '--') +
-        kvRow('Description:', escHtml(a.memo || '--')) +
-        kvRow('Original contract amount:', fmtMoney(L.L1)) +
-        (L.L2 ? kvRow('Change orders to date:', fmtMoney(L.L2)) : '') +
-        kvRow('Adjusted contract amount:', fmtMoney(L.L3)) +
-        kvRow('Amount completed to date:', fmtMoney(L.L4)) +
-        (rate ? kvRow('Less retainage (' + (rate * 100).toFixed(2) + '%):', fmtMoney(L.L5t)) : '') +
-        kvRow('Less previous invoices:', fmtMoney(L.L7)) +
-        kvRow('<b>Amount due this invoice:</b>', '<b>' + fmtMoney(L.L8) + '</b>') +
-        kvRow('Balance to finish, incl. retainage:', fmtMoney(L.L9)) +
+    var s = currentSetup, a = currentApp, sub = a.bill_co;
+    var job = [['JOB NAME:', simpleJobName(s), 'big'], ['JOB LOCATION:', simpleAddress(s), 'big'], ['PO Number:', simplePoLabel(s, a), ''], ['JOB Number:', s.job_number || '', ''], ['CONTRACT DATED:', mdyShort(s.contract_date) || '', '']];
+    if (a.memo && a.memo !== 'Contract work') job.push(['DESCRIPTION:', a.memo, '']);
+    return '<div class="inv-card"><div class="inv-card-h"><h3>Invoice' + (sub ? ' — sub-prime contract CO #' + escHtml(sub.number) : '') + '</h3>' + (canEdit ? '<button class="btn-secondary pc-edit" id="editSimpleBtn">Edit</button>' : '') + '</div>' +
+      '<div class="sinv">' +
+        '<div class="sinv-top"><div><b>TO:</b>&nbsp; ' + escHtml(s.client_name || '') + (s.client_attn ? '<br><b>ATTN.:</b>&nbsp; ' + escHtml(s.client_attn) : '') + '<br>' + escHtml(s.client_address || '').replace(/\n/g, '<br>') + '</div>' +
+          '<div class="sinv-dates">' + mdyShort(a.application_date) + '<br>' + mdyShort(a.period_to) + '</div></div>' +
+        '<div class="sinv-no">INVOICE No.: ' + escHtml(invNo) + '</div>' +
+        '<table class="sinv-job">' + job.filter(function(r) { return r[1]; }).map(function(r) { return '<tr><td>' + r[0] + '</td><td class="' + r[2] + '">' + escHtml(r[1]) + '</td></tr>'; }).join('') + '</table>' +
+        '<table class="sinv-amt">' + simpleAmountRows(t, s, a).map(function(r) { return '<tr class="' + r[2] + '"><td>' + escHtml(r[0]) + '</td><td class="d">$</td><td class="n">' + fmtMoney(r[1]).replace(/^\$/, '').replace(/^-\$/, '-') + '</td></tr>'; }).join('') + '</table>' +
+        '<div class="sinv-sign">' + (simpleSig ? '<img src="' + simpleSig + '" alt="">' : '') + '<div class="ln"></div>' + escHtml(s.signer_name || 'Leonid Leonidov') + ' - ' + escHtml(s.signer_title || 'General Manager') + '<br><b>NORTHERN WOLVES, Inc.</b></div>' +
+        (sub ? '<div class="sinv-sub">Bills change order #' + escHtml(sub.number) + ' — ' + escHtml(sub.title) + ' (' + fmtMoney(sub.amount) + ')' + (sub.po_number ? ', client PO ' + escHtml(sub.po_number) : '') + '. Previous invoices and the balance count this PO only.</div>' : '') +
       '</div></div>';
   }
 
@@ -1297,65 +1374,50 @@ requireAuth().catch(function(){});
     if (!window.jspdf || !window.jspdf.jsPDF) { showToast('PDF library not loaded — refresh and retry', 'error'); return; }
     await loadSimpleAssets();
     var jsPDF = window.jspdf.jsPDF, doc = new jsPDF({ unit: 'pt', format: 'letter' });
-    var W = 612, M = 40, R = W - M, y = 0;
-    var ink = [17, 19, 24], navy = [30, 41, 59], blue = [23, 105, 170], mute = [90, 98, 110], line = [203, 213, 225], dark = [45, 55, 72];
-    var s = currentSetup, a = currentApp, t = computeTotals(), L = t.lines, rate = effRate(s, a);
+    var W = 612, M = 30, R = W - M, ink = [0, 0, 0], navy = [31, 78, 121];
+    var s = currentSetup, a = currentApp, t = computeTotals();
     var invNo = a.invoice_no || String(a.application_no), job = simpleJobName(s);
-    function font(st, sz, col) { doc.setFont('helvetica', st); doc.setFontSize(sz); doc.setTextColor.apply(doc, col || ink); }
-    function mdy(iso) { if (!iso) return ''; var d = new Date(iso + 'T00:00:00'); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(); }
-    // header
-    var yy = 30;
-    if (simpleLogo.data) doc.addImage(simpleLogo.data, 'JPEG', M, yy - 4, 120, 120 * simpleLogo.ratio);
-    font('bold', 11, navy); doc.text('NORTHERN WOLVES INC', R, yy + 8, { align: 'right' });
-    font('normal', 8, mute);
-    ['55 9th Street, Unit 55A-2, Brooklyn, NY 11215', 'Office: (347) 463-9248', 'hello@northernwolvesac.com  |  northernwolvesac.com', 'Fully Licensed & Insured  |  Serving NYC Since 2017'].forEach(function(l, i) { doc.text(l, R, yy + 22 + i * 11, { align: 'right' }); });
-    var top = Math.max(yy + 120 * simpleLogo.ratio + 6, yy + 66);
-    doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.7); doc.line(M, top, R, top);
-    y = top + 24;
-    font('bold', 16, navy); doc.text('INVOICE', W / 2, y, { align: 'center' }); y += 18;
-    font('bold', 12, blue); doc.text('INVOICE No.: ' + invNo, W / 2, y, { align: 'center' }); y += 26;
-    // to / dates
-    var cw = (R - M - 14) / 2, x2 = M + cw + 14, y0 = y;
-    function kv(x, lab, val, lw, w) { font('bold', 9, ink); doc.text(lab, x, y); font('normal', 9, ink); var ls = doc.splitTextToSize(val || '—', w - lw); doc.text(ls, x + lw, y); y += Math.max(1, ls.length) * 11.5 + 3; }
-    kv(M, 'TO:', s.client_name || '', 46, cw);
-    if (s.client_attn) kv(M, 'ATTN.:', s.client_attn, 46, cw);
-    String(s.client_address || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean).forEach(function(l) { font('normal', 9, ink); doc.text(l, M + 46, y); y += 11.5; });
-    var yL = y; y = y0;
-    kv(x2, 'Invoice Date:', mdy(a.application_date), 78, cw);
-    kv(x2, 'Period To:', mdy(a.period_to), 78, cw);
-    var yR = y; y = Math.max(yL, yR) + 10;
+    function font(st, sz, col, fam) { doc.setFont(fam || 'helvetica', st); doc.setFontSize(sz); doc.setTextColor.apply(doc, col || ink); }
+    function money(v) { return fmtMoney(v).replace(/^\$/, '').replace(/^-\$/, '-'); }
+    // header: logo left, address block right (navy serif), double rule
+    var lw = 150, lh = simpleLogo.data ? lw * simpleLogo.ratio : 80;
+    if (simpleLogo.data) doc.addImage(simpleLogo.data, 'JPEG', M, 34, lw, lh);
+    font('bold', 15, navy, 'times'); doc.text('55 9th Street, Unit 55A-2,', 330, 76); doc.text('Brooklyn, NY 11215.', 330, 98);
+    font('bold', 10, navy, 'times'); doc.text('(347)463-9248 Office', 330, 115);
+    var top = Math.max(34 + lh + 10, 140);
+    doc.setDrawColor(0); doc.setLineWidth(1.2); doc.line(M, top, R, top); doc.setLineWidth(0.5); doc.line(M, top + 3.5, R, top + 3.5);
+    // to / attn / address with the dates on the right
+    var y = top + 24;
+    font('bold', 10); doc.text('TO:   ' + (s.client_name || ''), M, y);
+    font('normal', 10); doc.text(mdyShort(a.application_date) || '', R, y, { align: 'right' }); y += 15;
+    if (s.client_attn) { font('bold', 10); doc.text('ATTN.:  ', M, y); doc.text(s.client_attn, M + 36, y); }
+    font('normal', 10); doc.text(mdyShort(a.period_to) || '', R, y, { align: 'right' }); y += 15;
+    String(s.client_address || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean).forEach(function(l) { font('normal', 10); doc.text(l, M, y); y += 15; });
+    // INVOICE No.: BBP-06 (underlined)
+    y += 14; font('bold', 16); var lab = 'INVOICE No.: ' + invNo; doc.text(lab, W / 2, y, { align: 'center' });
+    var tw = doc.getTextWidth(lab); doc.setLineWidth(1); doc.line(W / 2 - tw / 2, y + 3, W / 2 + tw / 2, y + 3);
     // job block
-    font('bold', 10.5, blue); doc.text('JOB', M, y); y += 13;
-    kv(M, 'JOB NAME:', job, 100, R - M);
-    kv(M, 'JOB LOCATION:', simpleAddress(s), 100, R - M);
-    kv(M, 'PO Number:', a.po_number || s.contract_number || s.contract_no || '', 100, R - M);
-    if (s.job_number) kv(M, 'JOB Number:', s.job_number, 100, R - M);
-    if (s.contract_date) kv(M, 'CONTRACT DATED:', mdy(s.contract_date), 100, R - M);
-    if (a.memo && a.memo !== 'Contract work') kv(M, 'DESCRIPTION:', a.memo, 100, R - M);
-    y += 8;
-    // amounts
-    font('bold', 10.5, blue); doc.text('AMOUNTS', M, y); y += 8;
-    var rows = [['ORIGINAL CONTRACT AMOUNT', L.L1]];
-    if (L.L2) rows.push(['CHANGE ORDERS TO DATE', L.L2]);
-    rows.push(['ADJUSTED CONTRACT AMOUNT', L.L3], ['AMOUNT COMPLETED TO DATE', L.L4]);
-    if (rate) rows.push(['LESS RETAINAGE (' + (rate * 100).toFixed(2) + '%)', -L.L5t]);
-    rows.push(['LESS PREVIOUS INVOICES', -L.L7]);
-    rows.forEach(function(r, i) {
-      doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.5); doc.line(M, y + 2, R, y + 2);
-      font(i === 0 ? 'bold' : 'normal', 9.5, ink); doc.text(r[0], M + 4, y + 16);
-      doc.text(fmtMoney(r[1]), R - 6, y + 16, { align: 'right' }); y += 20;
+    y += 36; var VX = 270;
+    font('bold', 10); doc.text('JOB NAME:', M, y); font('bold', 12); doc.text(job, VX, y); y += 18;
+    font('bold', 10); doc.text('JOB LOCATION:', M, y); font('bold', 12); doc.text(simpleAddress(s), VX, y); y += 16;
+    var po = simplePoLabel(s, a);
+    [['PO Number:', po], ['JOB Number:', s.job_number || ''], ['CONTRACT DATED:', mdyShort(s.contract_date) || ''], ['DESCRIPTION:', a.memo && a.memo !== 'Contract work' ? a.memo : '']].forEach(function(r) {
+      if (!r[1]) return; font('bold', 10); doc.text(r[0], M, y); font('bold', 9); doc.text(r[1], VX, y); y += 15;
     });
-    doc.setFillColor.apply(doc, dark); doc.rect(M, y + 2, R - M, 22, 'F');
-    font('bold', 10, [255, 255, 255]); doc.text('AMOUNT DUE THIS INVOICE', M + 6, y + 17); doc.text(fmtMoney(L.L8), R - 6, y + 17, { align: 'right' }); y += 30;
-    font('normal', 9.5, ink); doc.text('BALANCE TO FINISH, INCL. RETAINAGE', M + 4, y + 10); doc.text(fmtMoney(L.L9), R - 6, y + 10, { align: 'right' }); y += 34;
+    // amounts: label, "$" column, amount right-aligned in its own column, amount due highlighted
+    y += 14;
+    simpleAmountRows(t, s, a).forEach(function(r) {
+      if (r[2] === 'due') { doc.setFillColor(255, 242, 0); doc.rect(VX - 6, y - 10, 122, 14, 'F'); }
+      font('bold', 10); doc.text(r[0], M, y); doc.text('$', VX, y); doc.text(money(r[1]), VX + 110, y, { align: 'right' });
+      y += r[2] === 'gap' ? 28 : 15;
+    });
     // signature
-    if (simpleSig) { try { doc.addImage(simpleSig, 'PNG', M + 4, y - 6, 120, 38); } catch (e) {} }
-    y += 36; doc.setDrawColor.apply(doc, ink); doc.setLineWidth(0.8); doc.line(M, y, M + 220, y);
-    font('normal', 8.5, ink); doc.text((s.signer_name || 'Leonid Leonidov') + ' - ' + (s.signer_title || 'General Manager'), M, y + 12);
-    font('bold', 8.5, ink); doc.text('NORTHERN WOLVES, Inc.', M, y + 24);
-    // footer
-    doc.setDrawColor.apply(doc, line); doc.setLineWidth(0.5); doc.line(M, 752, R, 752);
-    font('normal', 7.5, mute); doc.text('Northern Wolves Inc  ·  Invoice ' + invNo + '  ·  ' + job, M, 764); doc.text('Page 1', R, 764, { align: 'right' });
+    y += 22;
+    if (simpleSig) { try { doc.addImage(simpleSig, 'PNG', M + 4, y - 4, 190, 44); } catch (e) {} }
+    y += 46; doc.setDrawColor(0); doc.setLineWidth(1.5); doc.line(M, y, M + 300, y);
+    font('normal', 9); doc.text((s.signer_name || 'Leonid Leonidov') + ' - ' + (s.signer_title || 'General Manager'), M, y + 13);
+    font('bold', 9); doc.text('NORTHERN WOLVES, Inc.', M, y + 27);
+    doc.setLineWidth(0.6); doc.line(M, 752, R, 752);
     doc.save(('Invoice ' + invNo + ' - ' + job).replace(/[\\/:*?"<>|]+/g, '-') + '.pdf');
   }
 
@@ -1434,6 +1496,7 @@ requireAuth().catch(function(){});
     }
     currentApp = appRes.data;
     currentSetup = currentApp.setup;
+    if (currentApp.bill_co_id) { var bc = await supabaseClient.from('aia_change_orders').select('*').eq('id', currentApp.bill_co_id).maybeSingle(); currentApp.bill_co = bc.data || null; }
 
     var linesRes = await supabaseClient.from('aia_line_items')
       .select('*').eq('application_id', appId).order('sort_order', { ascending: true });
@@ -1452,7 +1515,7 @@ requireAuth().catch(function(){});
 
     var html = shellHtml +
       '<div class="inv-head">' +
-        '<h2>Invoice (Payment Application) #' + escHtml(invNo) + ' ' + pill(INVOICE_STATUS[currentApp.status] || currentApp.status, 'st-' + currentApp.status) + '</h2>' +
+        '<h2>' + (isSimple(currentSetup) ? 'Invoice ' : 'Invoice (Payment Application) #') + escHtml(invNo) + ' ' + pill(INVOICE_STATUS[currentApp.status] || currentApp.status, 'st-' + currentApp.status) + '</h2>' +
         '<div class="inv-tabs">' +
           '<a href="' + base + '&sub=summary" class="inv-tab' + (invoiceSub === 'summary' ? ' active' : '') + '">Summary</a>' +
           '<a href="' + base + '&sub=detail"  class="inv-tab' + (invoiceSub === 'detail'  ? ' active' : '') + '">Detail</a>' +
@@ -1464,7 +1527,7 @@ requireAuth().catch(function(){});
       '</div>';
 
     if (invoiceSub === 'summary') {
-      if (isSimple(currentSetup)) html += renderSimpleCard(t, invNo);
+      if (isSimple(currentSetup)) { await loadSimpleAssets(); html += renderSimpleCard(t, invNo); }
       html += '<div class="inv-card"><div class="inv-card-h"><h3>General Settings</h3>' +
           (canEdit ? '<button class="btn-secondary pc-edit" id="editHdrBtn">Edit</button>' : '') + '</div>' +
         '<div class="inv-settings">' +
@@ -1476,7 +1539,7 @@ requireAuth().catch(function(){});
           kvRow('Retainage:', (effRate(currentSetup, currentApp) * 100).toFixed(2) + '%' + (currentApp.retainage_rate != null ? ' (this invoice)' : ' (contract default)')) +
           kvRow('Percent Complete:', (pctComplete * 100).toFixed(2) + '%') +
         '</div></div>';
-      html += '<div class="inv-card"><div class="inv-card-h"><h3>Summary Preview</h3></div>' +
+      if (!isSimple(currentSetup)) html += '<div class="inv-card"><div class="inv-card-h"><h3>Summary Preview</h3></div>' +
         '<div class="inv-preview-head">' +
           '<div><div class="k">TO OWNER/CLIENT</div><div>' + escHtml(currentSetup.client_name || '') + '<br>' + escHtml(currentSetup.client_address || '').replace(/\n/g, '<br>') + '</div></div>' +
           '<div><div class="k">PROJECT</div><div>' + escHtml((currentSetup.project && currentSetup.project.project_name) || '') + '<br>' + escHtml(currentSetup.project_address || '').replace(/\n/g, '<br>') + '</div></div>' +
@@ -1845,8 +1908,9 @@ requireAuth().catch(function(){});
     var grandCompleted = totalCompleted + totalCoCompleted;
     var grandStored    = totalStored    + totalCoStored;
 
-    var line1 = Number(setup.original_contract_sum || 0);
-    var coNet = Number(app.co_prev_additions || 0)
+    var sub = app.bill_co_id ? (app.bill_co || null) : null;
+    var line1 = sub ? Number(sub.amount || 0) : Number(setup.original_contract_sum || 0);
+    var coNet = sub ? 0 : Number(app.co_prev_additions || 0)
               + Number(app.co_prev_deductions || 0)
               + Number(app.co_this_additions || 0)
               + Number(app.co_this_deductions || 0);
@@ -2135,6 +2199,8 @@ requireAuth().catch(function(){});
       r.latestApp = latest;
       r.invoiced = computeTotalsFor(setup, latest, linesByApp[latest.id] || []).lines.L6;
     }
+    // sub-prime contracts: every PO has its own running total — the contract's invoiced amount is the sum of all invoices
+    if ((apps || []).some(function(a) { return a.bill_co_id; })) r.invoiced = apps.reduce(function(acc, a) { return acc + computeTotalsFor(setup, a, linesByApp[a.id] || []).lines.L8; }, 0);
     r.revised = r.original + r.approvedCO;
     r.pendingRevised = r.revised + r.pendingCO;
     r.remaining = r.revised - r.payments;
@@ -2290,6 +2356,7 @@ requireAuth().catch(function(){});
     var sov = await supabaseClient.from('aia_sov_items').select('*').eq('aia_project_id', id).order('sort_order', { ascending: true });
     var coFiles = { data: [] };
     if (s.data.project_id) coFiles = await supabaseClient.from('project_files').select('*').eq('project_id', s.data.project_id).eq('category', 'change-orders').order('created_at', { ascending: true });
+    appRows.forEach(function(a) { if (a.bill_co_id) a.bill_co = (cos.data || []).find(function(c) { return c.id === a.bill_co_id; }) || null; });
     var b = { setup: s.data, apps: appRows, linesByApp: groupBy(lines.data || [], 'application_id'),
               cos: cos.data || [], pays: pays.data || [], sov: sov.data || [], coFilesByCo: groupBy(coFiles.data || [], 'change_order_id') };
     b.rollup = contractRollup(b.setup, b.apps, b.linesByApp, b.cos, b.pays);
@@ -2441,7 +2508,7 @@ requireAuth().catch(function(){});
       return '<tr data-co="' + c.id + '">' +
         '<td><a href="#" class="pc-link" data-co-edit="' + c.id + '">' + escHtml(c.number) + '</a></td>' +
         '<td>' + (c.revision || 0) + '</td><td class="pc-title-cell">' + escHtml(c.title) +
-          (c.source_report_number ? ' <span class="field-hint">(field CO ' + escHtml(c.source_report_number) + ')</span>' : '') + '</td>' +
+          (c.source_report_number ? ' <span class="field-hint">(field CO ' + escHtml(c.source_report_number) + ')</span>' : '') + (c.po_number ? ' <span class="field-hint">· client PO ' + escHtml(c.po_number) + '</span>' : '') + '</td>' +
         '<td>' + pill(CO_STATUS[c.status] || c.status, 'st-' + c.status) + '</td>' +
         '<td>' + (c.executed ? 'Yes' : 'No') + '</td>' +
         '<td class="num">' + fmtMoney(c.amount) + '</td>' +
@@ -2486,8 +2553,44 @@ requireAuth().catch(function(){});
   }
 
   // ─── INVOICES ───────────────────────────────────────────────────────
+  function renderSimpleInvoicesTab(b) {
+    var s = b.setup, separate = s.billing_mode === 'separate';
+    var tot = {}; b.apps.forEach(function(a) { tot[a.id] = computeTotalsFor(s, a, b.linesByApp[a.id] || []).lines; });
+    var subs = [{ id: null, name: 'Base contract', po: s.contract_number || s.contract_no || '', amount: Number(s.original_contract_sum || 0) }];
+    if (separate) b.cos.filter(function(c) { return c.status === 'approved'; }).forEach(function(c) { subs.push({ id: c.id, name: 'CO #' + c.number + ' — ' + c.title, po: c.po_number || '', amount: Number(c.amount || 0) }); });
+    var summary = '';
+    if (separate) {
+      var sumRows = subs.map(function(x) {
+        var mine = b.apps.filter(function(a) { return (a.bill_co_id || null) === x.id; }), inv = mine.reduce(function(acc, a) { return acc + tot[a.id].L8; }, 0);
+        return '<tr><td>' + escHtml(x.name) + '</td><td>' + escHtml(x.po || '--') + '</td><td class="num">' + fmtMoney(x.amount) + '</td><td class="num">' + fmtMoney(inv) + '</td><td class="num"><b>' + fmtMoney(x.amount - inv) + '</b></td><td class="ctr">' + mine.length + '</td></tr>';
+      }).join('');
+      var totalAmt = subs.reduce(function(acc, x) { return acc + x.amount; }, 0), totalInv = b.apps.reduce(function(acc, a) { return acc + tot[a.id].L8; }, 0);
+      summary = '<h3 class="pc-sub-h">Sub-prime contracts (client POs)</h3><div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Contract / change order</th><th>Client PO</th><th class="num">Amount</th><th class="num">Invoiced</th><th class="num">Balance</th><th class="ctr">Invoices</th></tr></thead>' +
+        '<tbody>' + sumRows + '</tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num"><b>' + fmtMoney(totalAmt) + '</b></td><td class="num"><b>' + fmtMoney(totalInv) + '</b></td><td class="num"><b>' + fmtMoney(totalAmt - totalInv) + '</b></td><td></td></tr></tfoot></table></div>' +
+        '<div class="pc-note" style="margin:0 16px 12px">A change order becomes a sub-prime contract once it is <b>Approved</b> with its <b>Client PO number</b> (Change Orders tab). Each new invoice picks which PO it bills.</div>';
+    }
+    var rows = b.apps.slice().sort(function(x, y) { return y.application_no - x.application_no; }).map(function(a) {
+      var t = tot[a.id], sub = a.bill_co;
+      return '<tr data-app="' + a.id + '">' +
+        '<td><a href="invoicing.html?app=' + a.id + '" class="pc-link"><b>' + escHtml(a.invoice_no || String(a.application_no)) + '</b></a></td>' +
+        '<td>' + mdy2(a.application_date) + '</td><td>' + mdy2(a.period_to) + '</td>' +
+        (separate ? '<td>' + (sub ? 'CO #' + escHtml(sub.number) : 'Base contract') + '</td>' : '') +
+        '<td>' + escHtml(a.po_number || (sub && sub.po_number) || s.contract_number || '--') + '</td>' +
+        '<td class="pc-title-cell">' + escHtml(a.memo || '') + '</td>' +
+        '<td class="num"><b>' + fmtMoney(t.L8) + '</b></td><td class="num">' + fmtMoney(t.L4) + '</td><td class="num">' + fmtMoney(t.L9) + '</td>' +
+        '<td>' + pill(INVOICE_STATUS[a.status] || a.status, 'st-' + a.status) + '</td>' +
+        '<td><a href="invoicing.html?app=' + a.id + '" class="pc-link">Open / PDF</a></td>' +
+        (canEdit ? '<td class="ctr"><button class="del-btn" data-inv-del="' + a.id + '" title="Delete invoice">✕</button></td>' : '') +
+      '</tr>';
+    }).join('');
+    return '<div class="pc-section-h"><h2>Invoices</h2>' + (canEdit ? '<button class="btn-create" id="invAdd">＋ New Invoice</button>' : '') + '</div>' + summary +
+      '<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Invoice #</th><th>Date</th><th>Period to</th>' + (separate ? '<th>Bills</th>' : '') + '<th>Client PO</th><th>Description</th>' +
+        '<th class="num">Amount this invoice</th><th class="num">Completed to date</th><th class="num">Balance to finish</th><th>Status</th><th></th>' + (canEdit ? '<th></th>' : '') + '</tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="12" class="pc-empty">No invoices yet — press ＋ New Invoice.</td></tr>') + '</tbody></table></div>';
+  }
   function renderInvoicesTab(b) {
     var s = b.setup;
+    if (isSimple(s)) return renderSimpleInvoicesTab(b);
     var rows = b.apps.slice().sort(function(x, y) { return y.application_no - x.application_no; }).map(function(a) {
       var t = computeTotalsFor(s, a, b.linesByApp[a.id] || []).lines;
       var pctC = t.L3 ? (t.L4 / t.L3) : 0;
@@ -2837,6 +2940,7 @@ requireAuth().catch(function(){});
     document.getElementById('coPco').value      = c ? (c.pco_number || '') : nextNo;
     document.getElementById('coRev').value      = c ? (c.revision || 0) : 0;
     document.getElementById('coTitle').value    = c ? c.title : '';
+    document.getElementById('coPo').value       = c ? (c.po_number || '') : '';
     document.getElementById('coStatus').value   = c ? c.status : 'draft';
     document.getElementById('coExecuted').checked = c ? !!c.executed : false;
     document.getElementById('coAmount').value   = c ? c.amount : '';
@@ -2859,6 +2963,7 @@ requireAuth().catch(function(){});
       pco_number: document.getElementById('coPco').value.trim() || null,
       revision: parseInt(document.getElementById('coRev').value, 10) || 0,
       title: document.getElementById('coTitle').value.trim(),
+      po_number: document.getElementById('coPo').value.trim() || null,
       status: document.getElementById('coStatus').value,
       executed: document.getElementById('coExecuted').checked,
       amount: Number(document.getElementById('coAmount').value || 0),
@@ -3365,6 +3470,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=418"></script>
+<script src="sw-register.js?v=419"></script>
 </body>
 </html>
