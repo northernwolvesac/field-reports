@@ -101,7 +101,10 @@ function callClaude(prompt, maxTokens) {
   var code = response.getResponseCode(), text = response.getContentText();
   if (code !== 200) throw new Error('Claude API error (' + code + '): ' + text.substring(0, 300));
   var result = JSON.parse(text);
-  if (result.content && result.content.length > 0) return result.content[0].text;
+  // join every text block (a reply can start with a non-text block, which left summary undefined)
+  var parts = (result.content || []).filter(function (c) { return c && c.type === 'text' && c.text; }).map(function (c) { return c.text; });
+  if (parts.length) return parts.join('
+');
   throw new Error('No content in Claude response');
 }
 
