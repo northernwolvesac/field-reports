@@ -1054,6 +1054,40 @@ requireAuth().catch(function(){});
     }
   }
 
+  // the columns of the projects row that the Edit Project form owns — an edit touches nothing else
+  // (gc_name, percent_complete, workload, tax and contract fields keep their values)
+  function formRow(data) {
+    return {
+      project_name: data.name,
+      address: data.address || '',
+      city: data.city || '',
+      state: data.state || '',
+      zip: data.zip || '',
+      description: data.projectType || 'commercial',
+      status: data.status === 'onhold' ? 'on-hold' : (data.status || 'active'),
+      pm_name: data.pmName || null,
+      short_code: data.shortCode || null,
+      notes: [data.customer ? 'Customer: ' + data.customer : '', data.notes || ''].filter(Boolean).join('\n')
+    };
+  }
+
+  async function updateProjectInCloud(id, data, opts) {
+    try {
+      if (typeof supabaseClient === 'undefined') return { error: null };
+      var row = formRow(data);
+      // the form was filled from the local cache only (the cloud row could not be read): an empty PM / short code
+      // field then means "unknown", not "clear it"
+      if (opts && opts.keepUnknown) { if (!data.pmName) delete row.pm_name; if (!data.shortCode) delete row.short_code; }
+      var r = await supabaseClient.from('projects').update(row).eq('id', id).select('id').single();
+      if (r.error) console.error('[projects] Cloud update error:', r.error.message || r.error);
+      else console.log('[projects] Updated in cloud:', data.name);
+      return r;
+    } catch(e) {
+      console.error('[projects] Cloud update exception:', e);
+      return { error: e };
+    }
+  }
+
   async function deleteProjectFromCloud(projectId) {
     try {
       if (typeof deleteCloudProject === 'function') {
@@ -1106,6 +1140,8 @@ requireAuth().catch(function(){});
           lp.status = cp.status;
           lp.notes = cp.notes;
           lp.projectType = cp.projectType;
+          lp.pmName = cp.pmName;
+          lp.shortCode = cp.shortCode;
           changed = true;
         }
       }
@@ -1210,11 +1246,12 @@ requireAuth().catch(function(){});
     return project;
   }
 
-  function updateProject(id, data) {
+  function updateProject(id, data, opts) {
     var projects = getProjects();
-    var updated = null;
+    var updated = null, oldName = null;
     for (var i = 0; i < projects.length; i++) {
       if (projects[i].id === id) {
+        oldName = projects[i].name;
         projects[i].name = data.name;
         projects[i].customer = data.customer || '';
         projects[i].address = data.address || '';
@@ -1224,14 +1261,16 @@ requireAuth().catch(function(){});
         projects[i].projectType = data.projectType || 'commercial';
         projects[i].status = data.status || 'active';
         projects[i].notes = data.notes || '';
+        if (data.pmName !== undefined) projects[i].pmName = data.pmName || '';
+        if (data.shortCode !== undefined) projects[i].shortCode = data.shortCode || '';
         updated = projects[i];
         break;
       }
     }
     saveProjects(projects);
     if (updated) {
-      syncProjectToCloud(updated);
-      driveRenameProject(id, data.name);
+      updateProjectInCloud(id, data, opts);
+      if (oldName !== null && oldName !== data.name) driveRenameProject(id, data.name);
     }
   }
 
@@ -1579,27 +1618,55 @@ requireAuth().catch(function(){});
 
   // ─── Modal helpers ───
 
+  var modalCloudLoaded = false;   // true once the open Edit Project form shows the current Supabase row
+
+  function fillModalFields(p) {
+    document.getElementById('fldName').value = p.name || '';
+    document.getElementById('fldCustomer').value = p.customer || '';
+    document.getElementById('fldAddress').value = p.address || '';
+    document.getElementById('fldCity').value = p.city || '';
+    document.getElementById('fldState').value = p.state || '';
+    document.getElementById('fldZip').value = p.zip || '';
+    document.getElementById('fldType').value = p.projectType || 'commercial';
+    document.getElementById('fldStatus').value = p.status || 'active';
+    document.getElementById('fldPM').value = p.pmName || '';
+    document.getElementById('fldShortCode').value = p.shortCode || '';
+    document.getElementById('fldNotes').value = p.notes || '';
+  }
+
+  // the local cache can be stale or incomplete (a copy saved before pm_name / short_code existed): read the row from
+  // Supabase, merge it into the cache and refresh the open form
+  async function refreshModalFromCloud(projectId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return;
+      var r = await supabaseClient.from('projects').select('*').eq('id', projectId).single();
+      if (r.error || !r.data || editingProjectId !== projectId) return;
+      var cp = fromCloudProject(r.data), projects = getProjects(), merged = null;
+      for (var i = 0; i < projects.length; i++) {
+        if (projects[i].id !== projectId) continue;
+        ['name', 'customer', 'address', 'city', 'state', 'zip', 'projectType', 'status', 'pmName', 'shortCode', 'notes'].forEach(function(k) { projects[i][k] = cp[k]; });
+        merged = projects[i];
+        break;
+      }
+      if (merged) saveProjects(projects);
+      fillModalFields(merged || cp);
+      modalCloudLoaded = true;
+    } catch(e) {
+      console.error('[projects] Edit form: cloud row not read, form shows the local copy:', e);
+    }
+  }
+
   function openModal(projectId) {
     editingProjectId = projectId || null;
+    modalCloudLoaded = false;
     var modal = document.getElementById('projectModal');
     var title = document.getElementById('modalTitle');
 
     if (projectId) {
       title.textContent = 'Edit Project';
       var p = getProjectById(projectId);
-      if (p) {
-        document.getElementById('fldName').value = p.name || '';
-        document.getElementById('fldCustomer').value = p.customer || '';
-        document.getElementById('fldAddress').value = p.address || '';
-        document.getElementById('fldCity').value = p.city || '';
-        document.getElementById('fldState').value = p.state || '';
-        document.getElementById('fldZip').value = p.zip || '';
-        document.getElementById('fldType').value = p.projectType || 'commercial';
-        document.getElementById('fldStatus').value = p.status || 'active';
-        document.getElementById('fldPM').value = p.pmName || '';
-        document.getElementById('fldShortCode').value = p.shortCode || '';
-        document.getElementById('fldNotes').value = p.notes || '';
-      }
+      if (p) fillModalFields(p);
+      refreshModalFromCloud(projectId);
     } else {
       title.textContent = 'New Project';
       document.getElementById('fldName').value = '';
@@ -1644,7 +1711,7 @@ requireAuth().catch(function(){});
     };
 
     if (editingProjectId) {
-      updateProject(editingProjectId, data);
+      updateProject(editingProjectId, data, { keepUnknown: !modalCloudLoaded });
       showToast('Project updated');
       // Re-render detail if we're viewing it
       if (currentProjectId === editingProjectId) {
