@@ -320,6 +320,7 @@
         }
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
           if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) return;   // a bare '(cfm only)' row is an upper bound, reported as a check, never priced; symbol rows named '… (cfm only)' are counted
+          if (/no symbol|unmarked|no device symbol|bubble only/i.test(String(a.tag || '') + ' ' + String(a.notes || ''))) return;   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
