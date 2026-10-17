@@ -8,12 +8,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=415"></script>
-<script src="nw-drive.js?v=415"></script>
-<script src="nw-drive-browser.js?v=415"></script>
-<script src="auth.js?v=415"></script>
-<script src="cloud-save.js?v=415"></script>
-<script src="schedule-utils.js?v=415"></script>
+<script src="supabase-config.js?v=425"></script>
+<script src="nw-drive.js?v=425"></script>
+<script src="nw-drive-browser.js?v=425"></script>
+<script src="auth.js?v=425"></script>
+<script src="cloud-save.js?v=425"></script>
+<script src="schedule-utils.js?v=425"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Projects — Northern Wolves AC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -771,6 +771,7 @@
       <div style="padding:14px 16px 24px" id="pcForm">
         <div style="font-size:12px;font-weight:600;color:var(--nw-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Project costs · estimate vs spent</div>
         <div id="pcMeta" style="font-size:12px;color:#64748b;margin-bottom:12px"></div>
+        <div id="pcLabor" style="display:none;margin:0 0 14px;padding:10px 12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;color:#111318"></div>
         <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;gap:8px 10px;align-items:center;font-size:13px">
           <div></div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Labor</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Materials</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Subs</div>
           <div style="font-weight:700">Estimated</div>
@@ -2058,6 +2059,22 @@ requireAuth().catch(function(){});
     else meta.textContent = pcRow ? ('Updated ' + new Date(pcRow.updated_at).toLocaleDateString() + (pcRow.as_of ? ' · costs as of ' + pcRow.as_of : '') + (pcRow.source === 'master-xlsx' ? ' · seeded from NWAC Master Records' : '')) : 'No cost data yet — enter the estimate from the bid and what has been spent so far.';
     document.getElementById('pcStatus').textContent = '';
     calcProjectCosts();
+    loadLaborCosts(projectId);
+  }
+  // labor paid through Mason payroll (labor_costs, imported from the payroll journal by labor-import.html): W-2 + taxes + 1099 per month
+  async function loadLaborCosts(projectId) {
+    var box = document.getElementById('pcLabor'); if (!box) return;
+    var r = await supabaseClient.from('labor_costs').select('pay_date, kind, amount').eq('project_id', projectId).order('pay_date');
+    if (currentProjectId !== projectId) return;
+    var rows = r.data || [];
+    if (r.error || !rows.length) { box.style.display = 'none'; return; }
+    var months = {}, tot = 0, kinds = { w2: 0, taxes: 0, '1099': 0, reimb: 0 }, last = '';
+    rows.forEach(function(x) { var m = String(x.pay_date).slice(0, 7), a = Number(x.amount || 0); months[m] = (months[m] || 0) + a; tot += a; kinds[x.kind] = (kinds[x.kind] || 0) + a; if (x.pay_date > last) last = x.pay_date; });
+    var mk = Object.keys(months).sort();
+    box.style.display = '';
+    box.innerHTML = '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>Labor paid through Mason payroll: ' + pcMoney(tot) + '</b><span style="color:#64748b">W-2 ' + pcMoney(kinds.w2) + ' · taxes ' + pcMoney(kinds.taxes) + ' · 1099 ' + pcMoney(kinds['1099']) + (kinds.reimb ? ' · reimb. ' + pcMoney(kinds.reimb) : '') + ' · through ' + last + '</span></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">' + mk.map(function(m) { return '<span style="font-size:12px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:3px 9px">' + m + ' <b>' + pcMoney(months[m]) + '</b></span>'; }).join('') + '</div>' +
+      '<div style="font-size:11px;color:#94a3b8;margin-top:6px">Labor spent above is refreshed from this on every payroll import (<a href="labor-import.html" style="color:#0696D7">Labor costs — Mason payroll</a>).</div>';
   }
   function calcProjectCosts() {
     var est = pcNum('pcLaborEst') + pcNum('pcMatEst') + pcNum('pcSubsEst'), spent = pcNum('pcLaborSpent') + pcNum('pcMatSpent') + pcNum('pcSubsSpent');
@@ -2721,6 +2738,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=415"></script>
+<script src="sw-register.js?v=425"></script>
 </body>
 </html>

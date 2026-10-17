@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Labor costs — Mason payroll — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=425"></script>
+<script src="auth.js?v=425"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 40px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 14px; font-size: 14px; color: #111318; }
+  .card h3 { margin: 0 0 8px; font-size: 15px; } .card p { margin: 0 0 10px; color: #4b5563; font-size: 13px; line-height: 1.5; }
+  .btn { padding: 9px 16px; font-size: 14px; font-weight: 700; border-radius: 10px; cursor: pointer; border: 1px solid #111318; background: #111318; color: #fff; }
+  .btn.light { background: #fff; color: #111318; border-color: #d1d5db; } .btn[disabled] { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; } td.num, th.num { text-align: right; white-space: nowrap; }
+  select.map { width: 100%; max-width: 360px; font-size: 13px; padding: 5px 6px; border: 1px solid #d1d5db; border-radius: 7px; }
+  .tag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 1px 7px; }
+  .tag.ok { color: #15803d; background: #dcfce7; } .tag.new { color: #b45309; background: #fef3c7; } .tag.no { color: #6b7280; background: #f1f5f9; }
+  .muted { color: #6b7280; font-size: 12px; } pre { background: #f3f4f6; border-radius: 8px; padding: 10px; font-size: 12px; white-space: pre-wrap; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0 4px; }
+  .tile { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; } .tile .k { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; } .tile .v { font-size: 16px; font-weight: 800; }
+  #blocked { display: none; color: #b91c1c; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="top"><a class="back" href="index.html">‹</a><div class="ttl"><b>Labor costs — Mason payroll</b><span>Payroll journal by project → project costs (WIP). No employee data.</span></div></div>
+<div class="wrap">
+  <div class="card" id="blocked">Labor costs are managed by the office (admin / manager / lead PM).</div>
+  <div class="card" id="howCard">
+    <h3>Import a Mason payroll journal</h3>
+    <p>Pick the QuickBooks journal CSV Mason sends after each payroll (<i>Northern_Wolves_QBO_Payroll_JEs_….csv</i>: Journal No., Journal Date, Account Name, Debits, Credits, Description, Name). Only the project lines are read — Labor Cost (W-2), Payroll Taxes (Labor W-2), Labor Cost (1099NEC), Reimbursable Expenses — and the project is the <b>Name</b> column. Payrolls already imported are skipped, so the same file can be loaded twice.</p>
+    <input type="file" id="file" accept=".csv,text/csv">
+    <div id="preview" class="muted" style="margin-top:8px"></div>
+  </div>
+  <div class="card" id="mapCard" style="display:none">
+    <h3>Mason project → app project</h3>
+    <p>Confirm each Mason project name once; the choice is remembered. Mark buckets that are not a project (SERVICE CALL …) as <b>Ignore</b>.</p>
+    <table><thead><tr><th>Mason name</th><th class="num">Amount in file</th><th class="num">Payrolls</th><th>App project</th><th></th></tr></thead><tbody id="mapBody"></tbody></table>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="btn" id="run">Import</button><span class="muted" id="runHint"></span></div>
+    <pre id="log" style="display:none;margin-top:10px"></pre>
+  </div>
+  <div class="card" id="totalsCard">
+    <h3>Labor to date (all imported payrolls)</h3>
+    <div class="tiles" id="tiles"></div>
+    <table><thead><tr><th>Project</th><th class="num">W-2 labor</th><th class="num">Payroll taxes</th><th class="num">1099 labor</th><th class="num">Reimb.</th><th class="num">Total</th><th>Last payroll</th></tr></thead><tbody id="totBody"></tbody></table>
+  </div>
+</div>
+<script>
+requireAuth().catch(function(){});
+(function() {
+  var OFFICE = ['admin', 'manager', 'lead_pm'];
+  var $ = function(id) { return document.getElementById(id); };
+  var KIND = { 'Labor Cost:Labor Cost (W-2)': 'w2', 'Labor Cost:Payroll Taxes (Labor W-2)': 'taxes', 'Labor Cost:Labor Cost (1099NEC)': '1099', 'Reimbursable Expenses': 'reimb' };
+  var projects = [], mapSaved = {}, parsed = null, fileName = '';
+  function money(v) { v = Number(v || 0); return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  var STOP = { the: 1, of: 1, st: 1, street: 1, ave: 1, avenue: 1, inc: 1, llc: 1, fl: 1, floor: 1, suite: 1, ste: 1, ny: 1, nyc: 1, new: 1, york: 1, and: 1, blvd: 1, rd: 1, road: 1, west: 1, east: 1, w: 1, e: 1, unit: 1, llw: 1, work: 1 };
+  function toks(s) { return String(s || '').toLowerCase().replace(/(\d+)(st|nd|rd|th)\b/g, '$1').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(function(t) { return t && !STOP[t] && t.length > 1; }); }
+  function suggest(name) {
+    var a = toks(name), best = null, bs = 0;
+    projects.forEach(function(p) {
+      var b = toks(p.project_name + ' ' + (p.address || '') + ' ' + (p.short_code || '')), hit = 0;
+      a.forEach(function(t) { if (b.indexOf(t) >= 0) hit += /^\d/.test(t) ? 1.5 : 1; });
+      var sc = hit / Math.max(1, Math.min(a.length, b.length));
+      if (sc > bs) { bs = sc; best = p; }
+    });
+    return bs >= 0.5 ? best : null;
+  }
+  function parseCsv(text) {
+    var rows = [], row = [], cell = '', q = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(function(r) { return r.length > 1; });
+  }
+  function mdy(s) { var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s || '').trim()); return m ? m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0') : null; }
+  async function init() {
+    var prof = null; try { prof = await getAuthProfile(); } catch (e) {}
+    if (!prof || OFFICE.indexOf(prof.role) < 0) { $('blocked').style.display = ''; $('howCard').style.display = 'none'; $('totalsCard').style.display = 'none'; return; }
+    projects = (await supabaseClient.from('projects').select('id, project_name, short_code, address, city, status').order('project_name')).data || [];
+    (await supabaseClient.from('mason_project_map').select('*')).data?.forEach(function(m) { mapSaved[m.mason_name] = m; });
+    loadTotals();
+  }
+  $('file').addEventListener('change', async function() {
+    var f = this.files[0]; if (!f) return; fileName = f.name;
+    var rows = parseCsv((await f.text()).replace(/^﻿/, ''));
+    var hdr = rows[0].map(function(h) { return h.trim(); }), ix = {}; hdr.forEach(function(h, i) { ix[h] = i; });
+    if (ix['Account Name'] == null || ix['Name'] == null || ix['Journal No.'] == null) { $('preview').textContent = 'This is not the Mason QuickBooks journal (needs Journal No., Journal Date, Account Name, Debits, Credits, Name).'; return; }
+    var lines = [], byName = {};
+    rows.slice(1).forEach(function(r) {
+      var kind = KIND[(r[ix['Account Name']] || '').trim()], name = (r[ix['Name']] || '').trim(), date = mdy(r[ix['Journal Date']]);
+      if (!kind || !name || !date) return;
+      var amt = Number(r[ix['Debits']] || 0) - Number(r[ix['Credits']] || 0);
+      lines.push({ journal_no: (r[ix['Journal No.']] || '').trim(), pay_date: date, mason_name: name, kind: kind, amount: Math.round(amt * 100) / 100 });
+      var b = byName[name] = byName[name] || { amount: 0, journals: {} }; b.amount += amt; b.journals[lines[lines.length - 1].journal_no] = 1;
+    });
+    parsed = { lines: lines, byName: byName };
+    var journals = {}; lines.forEach(function(l) { journals[l.journal_no] = l.pay_date; });
+    var dates = Object.values(journals).sort();
+    $('preview').textContent = lines.length + ' project lines · ' + Object.keys(journals).length + ' payrolls (' + dates[0] + ' → ' + dates[dates.length - 1] + ') · ' + Object.keys(byName).length + ' Mason project names';
+    renderMap();
+  });
+  function renderMap() {
+    var names = Object.keys(parsed.byName).sort(function(a, b) { return parsed.byName[b].amount - parsed.byName[a].amount; });
+    var opts = '<option value="">— choose —</option>' + projects.map(function(p) { return '<option value="' + p.id + '">' + esc((p.short_code ? p.short_code + ' · ' : '') + p.project_name) + '</option>'; }).join('');
+    $('mapBody').innerHTML = names.map(function(n) {
+      var b = parsed.byName[n], saved = mapSaved[n], sug = saved ? null : suggest(n);
+      var val = saved ? (saved.project_id || '') : (sug ? sug.id : ''), ign = saved ? saved.ignore : /service call|shop|office|warranty|misc/i.test(n);
+      var tag = saved ? '<span class="tag ok">saved</span>' : (sug ? '<span class="tag new">suggested</span>' : '<span class="tag no">not found</span>');
+      return '<tr data-name="' + esc(n) + '"><td>' + esc(n) + ' ' + tag + '</td><td class="num">' + money(b.amount) + '</td><td class="num">' + Object.keys(b.journals).length + '</td>' +
+        '<td><select class="map" data-map="' + esc(n) + '">' + opts.replace('value="' + val + '"', 'value="' + val + '" selected') + '</select></td>' +
+        '<td><label class="muted"><input type="checkbox" data-ign="' + esc(n) + '"' + (ign ? ' checked' : '') + '> Ignore</label></td></tr>';
+    }).join('');
+    $('mapCard').style.display = '';
+    $('runHint').textContent = 'Unmapped names are imported without a project and can be mapped later.';
+  }
+  $('run').addEventListener('click', async function() {
+    if (!parsed) return;
+    var btn = $('run'); btn.disabled = true; $('log').style.display = ''; $('log').textContent = '';
+    var map = {}; document.querySelectorAll('select[data-map]').forEach(function(s) { map[s.getAttribute('data-map')] = { project_id: s.value || null, ignore: document.querySelector('input[data-ign="' + s.getAttribute('data-map').replace(/"/g, '\\"') + '"]').checked }; });
+    var mapRows = Object.keys(map).map(function(n) { return { mason_name: n, project_id: map[n].project_id, ignore: map[n].ignore, updated_at: new Date().toISOString() }; });
+    var mr = await supabaseClient.from('mason_project_map').upsert(mapRows, { onConflict: 'mason_name' });
+    if (mr.error) { $('log').textContent = 'Map save failed: ' + mr.error.message; btn.disabled = false; return; }
+    Object.keys(map).forEach(function(n) { mapSaved[n] = map[n]; });
+    var rows = parsed.lines.filter(function(l) { return !map[l.mason_name].ignore; }).map(function(l) { return Object.assign({}, l, { project_id: map[l.mason_name].project_id, source_file: fileName }); });
+    var ok = 0, err = null;
+    for (var i = 0; i < rows.length; i += 200) {
+      var res = await supabaseClient.from('labor_costs').upsert(rows.slice(i, i + 200), { onConflict: 'journal_no,mason_name,kind', ignoreDuplicates: false });
+      if (res.error) { err = res.error.message; break; } ok += Math.min(200, rows.length - i);
+    }
+    $('log').textContent = 'Imported ' + ok + ' of ' + rows.length + ' lines' + (err ? '\nError: ' + err : '') + '\nRefreshing project costs…';
+    await refreshProjectCosts();
+    $('log').textContent += '\nDone.';
+    btn.disabled = false; loadTotals();
+  });
+  // project_costs.labor_spent (WIP) = everything Mason paid on the project
+  async function refreshProjectCosts() {
+    var all = (await supabaseClient.from('labor_costs').select('project_id, amount, pay_date').not('project_id', 'is', null)).data || [];
+    var sum = {}, last = {};
+    all.forEach(function(r) { sum[r.project_id] = (sum[r.project_id] || 0) + Number(r.amount || 0); if (!last[r.project_id] || r.pay_date > last[r.project_id]) last[r.project_id] = r.pay_date; });
+    var up = Object.keys(sum).map(function(pid) { return { project_id: pid, labor_spent: Math.round(sum[pid] * 100) / 100, as_of: last[pid], source: 'mason', updated_at: new Date().toISOString() }; });
+    for (var i = 0; i < up.length; i += 100) { var r = await supabaseClient.from('project_costs').upsert(up.slice(i, i + 100), { onConflict: 'project_id' }); if (r.error) $('log').textContent += '\nproject_costs: ' + r.error.message; }
+    $('log').textContent += '\n' + up.length + ' projects updated in WIP.';
+  }
+  async function loadTotals() {
+    var all = (await supabaseClient.from('labor_costs').select('project_id, mason_name, kind, amount, pay_date')).data || [];
+    var by = {}, tot = { w2: 0, taxes: 0, '1099': 0, reimb: 0, n: 0 }, journals = {};
+    all.forEach(function(r) {
+      var k = r.project_id || ('?' + r.mason_name), b = by[k] = by[k] || { name: r.mason_name, pid: r.project_id, w2: 0, taxes: 0, '1099': 0, reimb: 0, other: 0, last: '' };
+      b[r.kind] = (b[r.kind] || 0) + Number(r.amount || 0); if (r.pay_date > b.last) b.last = r.pay_date;
+      tot[r.kind] = (tot[r.kind] || 0) + Number(r.amount || 0); journals[r.pay_date] = 1;
+    });
+    var pName = {}; projects.forEach(function(p) { pName[p.id] = (p.short_code ? p.short_code + ' · ' : '') + p.project_name; });
+    var list = Object.keys(by).map(function(k) { var b = by[k]; b.total = b.w2 + b.taxes + b['1099'] + b.reimb + b.other; return b; }).sort(function(a, b) { return b.total - a.total; });
+    var grand = tot.w2 + tot.taxes + tot['1099'] + tot.reimb;
+    $('tiles').innerHTML = [['Total labor', money(grand)], ['W-2 labor', money(tot.w2)], ['Payroll taxes', money(tot.taxes)], ['1099 labor', money(tot['1099'])], ['Payrolls', Object.keys(journals).length], ['Projects', list.length]].map(function(t) { return '<div class="tile"><div class="k">' + t[0] + '</div><div class="v">' + t[1] + '</div></div>'; }).join('');
+    $('totBody').innerHTML = list.map(function(b) {
+      return '<tr><td>' + (b.pid ? '<a href="projects.html?open=' + b.pid + '&tab=costs" style="color:#111318">' + esc(pName[b.pid] || b.name) + '</a>' : esc(b.name) + ' <span class="tag no">unmapped</span>') + '</td>' +
+        '<td class="num">' + money(b.w2) + '</td><td class="num">' + money(b.taxes) + '</td><td class="num">' + money(b['1099']) + '</td><td class="num">' + money(b.reimb) + '</td><td class="num"><b>' + money(b.total) + '</b></td><td>' + esc(b.last) + '</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="muted">Nothing imported yet.</td></tr>';
+  }
+  init();
+})();
+</script>
+<script src="sw-register.js?v=425"></script>
+</body>
+</html>
