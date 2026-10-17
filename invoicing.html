@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=419"></script>
-<script src="nw-drive.js?v=419"></script>
-<script src="auth.js?v=419"></script>
-<script src="labor-rates.js?v=419"></script>
+<script src="supabase-config.js?v=424"></script>
+<script src="nw-drive.js?v=424"></script>
+<script src="auth.js?v=424"></script>
+<script src="labor-rates.js?v=424"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -1334,7 +1334,7 @@ requireAuth().catch(function(){});
         '<div class="sinv-no">INVOICE No.: ' + escHtml(invNo) + '</div>' +
         '<table class="sinv-job">' + job.filter(function(r) { return r[1]; }).map(function(r) { return '<tr><td>' + r[0] + '</td><td class="' + r[2] + '">' + escHtml(r[1]) + '</td></tr>'; }).join('') + '</table>' +
         '<table class="sinv-amt">' + simpleAmountRows(t, s, a).map(function(r) { return '<tr class="' + r[2] + '"><td>' + escHtml(r[0]) + '</td><td class="d">$</td><td class="n">' + fmtMoney(r[1]).replace(/^\$/, '').replace(/^-\$/, '-') + '</td></tr>'; }).join('') + '</table>' +
-        '<div class="sinv-sign">' + (simpleSig ? '<img src="' + simpleSig + '" alt="">' : '') + '<div class="ln"></div>' + escHtml(s.signer_name || 'Leonid Leonidov') + ' - ' + escHtml(s.signer_title || 'General Manager') + '<br><b>NORTHERN WOLVES, Inc.</b></div>' +
+        '<div class="sinv-sign"><div class="ln"></div><b>NORTHERN WOLVES, Inc.</b></div>' +
         (sub ? '<div class="sinv-sub">Bills change order #' + escHtml(sub.number) + ' — ' + escHtml(sub.title) + ' (' + fmtMoney(sub.amount) + ')' + (sub.po_number ? ', client PO ' + escHtml(sub.po_number) : '') + '. Previous invoices and the balance count this PO only.</div>' : '') +
       '</div></div>';
   }
@@ -1411,12 +1411,9 @@ requireAuth().catch(function(){});
       font('bold', 10); doc.text(r[0], M, y); doc.text('$', VX, y); doc.text(money(r[1]), VX + 110, y, { align: 'right' });
       y += r[2] === 'gap' ? 28 : 15;
     });
-    // signature
-    y += 22;
-    if (simpleSig) { try { doc.addImage(simpleSig, 'PNG', M + 4, y - 4, 190, 44); } catch (e) {} }
-    y += 46; doc.setDrawColor(0); doc.setLineWidth(1.5); doc.line(M, y, M + 300, y);
-    font('normal', 9); doc.text((s.signer_name || 'Leonid Leonidov') + ' - ' + (s.signer_title || 'General Manager'), M, y + 13);
-    font('bold', 9); doc.text('NORTHERN WOLVES, Inc.', M, y + 27);
+    // company line only (Russ 2026-10-17: no personal signature / name on invoices any more)
+    y += 40; doc.setDrawColor(0); doc.setLineWidth(1.5); doc.line(M, y, M + 300, y);
+    font('bold', 10); doc.text('NORTHERN WOLVES, Inc.', M, y + 15);
     doc.setLineWidth(0.6); doc.line(M, 752, R, 752);
     doc.save(('Invoice ' + invNo + ' - ' + job).replace(/[\\/:*?"<>|]+/g, '-') + '.pdf');
   }
@@ -3470,6 +3467,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=419"></script>
+<script src="sw-register.js?v=424"></script>
 </body>
 </html>
