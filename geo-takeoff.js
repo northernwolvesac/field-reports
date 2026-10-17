@@ -35,7 +35,7 @@
       }
       return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
     }
-    var segs = [], rects = [], rectSeg = [], symSegs = [], curves = [];   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only); symSegs = stroked rectangle sides + curve chords (symbol census only)
+    var segs = [], rects = [], rectSeg = [], symSegs = [], curves = [], fills = [];   // fills = small coloured filled shapes (device symbols): [x0,y0,x1,y1,r,g,b]   // [x1,y1,x2,y2, styleIndex]; rectangle sides kept apart (clip only); symSegs = stroked rectangle sides + curve chords (symbol census only)
     var bnd = [];   // scope-boundary candidates: thick filled dashes / thick dashed strokes [x1,y1,x2,y2, thickness]
     var glyphs = [], pathPts = [];   // small painted paths = glyph outlines of stroked/outlined text (for OCR)
     var styles = {}, styleList = [];
@@ -113,6 +113,15 @@
         var gb = bboxOf(pathPts), gw = gb[2] - gb[0], gh = gb[3] - gb[1];
         var whiteFill = (paint === true || paint === 'both') && Math.min(st.fill[0], st.fill[1], st.fill[2]) > 0.9;     // a label halo, not a glyph
         if (!whiteFill && gw <= 22 && gh <= 22 && (gw >= 0.4 || gh >= 0.4)) glyphs.push([gb[0], gb[1], gb[2], gb[3]]);
+      }
+      // coloured filled shapes up to ~5 ft (CENTRALE: blue square-X supply diffusers, yellow bar registers) — a census for air devices
+      if ((paint === true || paint === 'both') && (pathPts.length || rects.length)) {
+        var fmx = Math.max.apply(null, st.fill), fmn = Math.min.apply(null, st.fill);
+        if (fmx - fmn > 0.2) {
+          var fpts = pathPts.slice(); rects.forEach(function (g) { fpts.push([g[0], g[1]], [g[2], g[3]]); });
+          var fb2 = bboxOf(fpts), fw = fb2[2] - fb2[0], fh = fb2[3] - fb2[1];
+          if (fw >= 2 && fh >= 2 && fw <= 80 && fh <= 80) fills.push([fb2[0], fb2[1], fb2[2], fb2[3], Math.round(st.fill[0] * 255), Math.round(st.fill[1] * 255), Math.round(st.fill[2] * 255)]);
+        }
       }
       pathPts = [];
       if (stroke && (rects.length || curves.length)) { var ss = styleKey(); rects.forEach(function (g) { symSegs.push(g.concat([ss])); }); curves.forEach(function (g) { symSegs.push(g.concat([ss])); }); }
@@ -231,7 +240,7 @@
     if (pv) { var pb = [pv[0], pv[1], pv[2], pv[3]]; segs = segs.map(function (g) { var c = clipSeg(g, pb); return c ? c.concat([g[4]]) : null; }).filter(Boolean); }
     var flat = new Float64Array(segs.length * 5);
     segs.forEach(function (s, i) { flat.set(s, i * 5); });
-    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg, bnd: bnd, symSegs: symSegs };
+    return { segs: flat, styles: styleList, text: text, fullText: tc.items.map(function (t) { return t.str; }).join(' '), glyphs: glyphs, rectSeg: rectSeg, bnd: bnd, symSegs: symSegs, fills: fills };
   }
 
   // ─── 1b. OCR for sheets whose text is outlined / stroked (AutoCAD SHX fonts export as tiny paths, not text) ───
@@ -1919,8 +1928,33 @@
     c.width = c.height = 0; return out;
   }
 
+  // coloured device symbols beside bare cfm bubbles "(150)": the vector layer counts them, the AI reader only names what each colour is
+  // (CENTRALE: blue square-X = supply diffuser, pink = return, yellow = exhaust). Thresholds in points (no scale needed):
+  // a symbol is a coloured fill 2–60 pt wide whose centre lies within 40 pt of the bubble; each symbol is counted once.
+  function symbolCensus(data) {
+    var F = (data.fills || []).map(function (f) { return { cx: (f[0] + f[2]) / 2, cy: (f[1] + f[3]) / 2, w: f[2] - f[0], h: f[3] - f[1], rgb: [f[4], f[5], f[6]] }; })
+      .filter(function (f) { return f.w <= 60 && f.h <= 60; });
+    var bub = (data.text || []).filter(function (t) { return /^\(\s*\d{2,4}\s*(CFM)?\s*\)$/i.test(String(t.str || '').trim()); });
+    if (!bub.length || !F.length) return null;
+    function name(c) {
+      var r = c[0], g = c[1], b = c[2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx - mn < 40) return mx > 200 ? 'white' : mx > 110 ? 'gray' : 'black';
+      if (b >= r && b >= g) return g > 180 && r < 150 ? 'cyan' : (r > 150 ? 'purple' : 'blue');
+      if (g >= r && g >= b) return r > 200 ? 'yellow' : 'green';
+      return g > 150 ? (b > 120 ? 'pink' : 'orange') : (b > 120 ? 'pink' : 'red');
+    }
+    var used = {}, out = {}, noSym = 0;
+    bub.forEach(function (t) {
+      var bx = (t.x0 + t.x1) / 2, by = (t.y0 + t.y1) / 2, best = -1, bd = 40;
+      F.forEach(function (f, i) { var d = Math.hypot(f.cx - bx, f.cy - by); if (d < bd) { bd = d; best = i; } });
+      if (best < 0) { noSym++; return; }
+      if (used[best]) return; used[best] = 1;
+      var k = name(F[best].rgb); out[k] = (out[k] || 0) + 1;
+    });
+    return { bubbles: bub.length, no_symbol: noSym, by_colour: out };
+  }
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
   function measureRisers(data) { data.mode = 'risers'; return measure(data); }
-  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
+  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, symbolCensus: symbolCensus, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
     isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, _worker: workerMain };   // _worker: for offline tests
 })();

@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=417"></script>
-<script src="auth.js?v=417"></script>
-<script src="est-totals.js?v=417"></script>
-<script src="est-engine.js?v=428"></script>
-<script src="geo-takeoff.js?v=417"></script>
+<script src="supabase-config.js?v=429"></script>
+<script src="auth.js?v=429"></script>
+<script src="est-totals.js?v=429"></script>
+<script src="est-engine.js?v=429"></script>
+<script src="geo-takeoff.js?v=429"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -541,8 +541,12 @@ var AE = (function() {
       if (!txt.devices && f.kind !== 'specs') {   // pages uploaded before device tags were counted: count them from this page's text now
         try { var pdfT = await pdfjsLib.getDocument({ data: one.slice(0) }).promise, tcT = await (await pdfT.getPage(1)).getTextContent(); txt = Object.assign({}, txt, textStats(tcT.items.map(function(it) { return it.str; }).join(' '))); await pdfT.destroy(); p.tag_counts = txt; supabaseClient.from('ai_est_pages').update({ tag_counts: txt }).eq('id', p.id).then(function() {}); } catch (eT) {}
       }
+      var census = null;   // coloured symbols beside bare cfm bubbles, counted from the vector layer (CENTRALE-type sheets)
+      if (f.kind !== 'specs' && window.NWGeo && NWGeo.symbolCensus && txt.devices && txt.devices['(cfm only)'] >= 5) {
+        try { var pdfC = await pdfjsLib.getDocument({ data: one.slice(0) }).promise, dC = await NWGeo.extract(await pdfC.getPage(1)); census = NWGeo.symbolCensus(dC); await pdfC.destroy(); } catch (eC) { console.warn('[ai-est] census', eC); }
+      }
       if (f.kind !== 'specs') { var z = await pdfJob({ op: 'zoom', buf: one.slice(0) }); bytes = z.bytes; zoom = z.tiles; }
-      body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(bytes), zoom_tiles: zoom, tag_counts: txt.tags || {}, device_tags: txt.devices || {},
+      body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(bytes), zoom_tiles: zoom, tag_counts: txt.tags || {}, device_tags: txt.devices || {}, symbol_census: census || undefined,
         text_hint: Object.entries(txt.sizes || {}).map(function(e) { return e[0] + '×' + e[1]; }).join(', ') };
     }
     await callFn(body);
@@ -929,6 +933,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=417"></script>
+<script src="sw-register.js?v=429"></script>
 </body>
 </html>
