@@ -11,8 +11,9 @@
 <title>Estimating Rules — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=443"></script>
-<script src="auth.js?v=443"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="supabase-config.js?v=444"></script>
+<script src="auth.js?v=444"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
@@ -20,15 +21,22 @@
   .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
   .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
   .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; color: #111318; }
-  .btn.primary { background: #111318; color: #fff; border-color: #111318; } .btn.danger { color: #b91c1c; border-color: #fca5a5; }
-  .intro { font-size: 13px; color: #4b5563; margin: 14px 0; line-height: 1.5; }
+  .btn.primary { background: #111318; color: #fff; border-color: #111318; } .btn.danger { color: #b91c1c; border-color: #fca5a5; } .btn:disabled { opacity: .5; cursor: default; }
+  .tabs { display: flex; gap: 6px; margin: 14px 0; border-bottom: 1px solid #e5e7eb; }
+  .tab { padding: 9px 14px; font-size: 13px; font-weight: 700; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.on { color: #111318; border-color: #111318; }
+  .pane { display: none; } .pane.on { display: block; }
+  .intro { font-size: 13px; color: #4b5563; margin: 0 0 14px; line-height: 1.5; }
   .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+  .card .hd { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-size: 13px; font-weight: 700; }
+  .card .hd .sp { flex: 1; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: top; }
   th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; background: #fafafa; }
   tr:last-child td { border-bottom: 0; }
   .type { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; background: #e0f2fe; color: #075985; }
   .type.reminder { background: #fef3c7; color: #b45309; } .type.pct_add, .type.add_line { background: #dcfce7; color: #15803d; }
+  .org { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .05em; border-radius: 999px; padding: 2px 8px; background: #f1f5f9; color: #334155; }
   .off { opacity: .5; }
   .muted { color: #6b7280; font-size: 12px; }
   .empty { text-align: center; padding: 30px; color: #6b7280; }
@@ -42,14 +50,45 @@
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .help { font-size: 12px; color: #6b7280; margin-top: 4px; }
   .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .prog { font-size: 12px; color: #0369a1; padding: 8px 14px; }
+  /* chat */
+  .chat { display: flex; flex-direction: column; gap: 12px; }
+  .ask { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid #f1f5f9; }
+  .ask textarea { flex: 1; min-height: 44px; padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; resize: vertical; }
+  .msgs { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow: auto; }
+  .m { max-width: 92%; border-radius: 12px; padding: 10px 13px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .m.q { align-self: flex-end; background: #111318; color: #fff; } .m.a { align-self: flex-start; background: #f3f4f6; color: #111318; }
+  .m.a .src { margin-top: 8px; font-size: 11px; color: #4b5563; border-top: 1px dashed #d1d5db; padding-top: 6px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 12px; }
+  .chips button { border: 1px solid #d1d5db; background: #fff; border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; font-family: inherit; }
   @media (max-width: 640px) { th.hide, td.hide { display: none; } .row2 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<div class="top"><a class="back" href="index.html">‹</a><div class="ttl"><b>Estimating Rules</b><span>Company rules applied to every estimate — minimum charges, reminders, allowances</span></div><button class="btn primary" id="btnNew" hidden>+ New rule</button></div>
+<div class="top"><a class="back" href="index.html">‹</a><div class="ttl"><b>Estimating Rules</b><span>Company rules, the standards library (MCAA · SMACNA · ACCA · codes) and the assistant that answers from it</span></div><button class="btn primary" id="btnNew" hidden>+ New rule</button></div>
 <div class="wrap">
-  <div class="intro">Rules run on the <b>Estimating</b> page whenever an estimate is priced. A rule matches estimate lines by a word in the description (and optionally a category) and then either tops the lines up to a <b>minimum charge</b>, adds an <b>allowance</b> (a percent of the matched material or a fixed amount), or shows a <b>reminder</b> to the estimator. Rules never change the catalog prices themselves.</div>
-  <div class="card"><div id="list"><div class="empty">Loading…</div></div></div>
+  <div class="tabs"><div class="tab on" data-tab="ask">Ask</div><div class="tab" data-tab="rules">Rules</div><div class="tab" data-tab="lib">Library</div></div>
+
+  <div class="pane on" id="pane-ask">
+    <div class="intro">Ask in any language. The assistant searches the library (uploaded manuals, standards, code excerpts, NWAC notes) and answers with the document and page it used. When the library has nothing on the topic it says so and gives general industry guidance, marked as general.</div>
+    <div class="card chat">
+      <div class="chips" id="chips" style="padding-top:12px"></div>
+      <div class="msgs" id="msgs"><div class="empty">No questions yet.</div></div>
+      <div class="ask"><textarea id="q" placeholder="e.g. What is the minimum charge for chemical cleaning? / Какой gauge для 30x12 при 4 in. w.g.?"></textarea><button class="btn primary" id="send">Ask</button></div>
+    </div>
+  </div>
+
+  <div class="pane" id="pane-rules">
+    <div class="intro">Rules run on the <b>Estimating</b> page whenever an estimate is priced. A rule matches estimate lines by a word in the description (and optionally a category) and then either tops the lines up to a <b>minimum charge</b>, adds an <b>allowance</b> (a percent of the matched material or a fixed amount), or shows a <b>reminder</b>. Rules never change catalog prices.</div>
+    <div class="card"><div id="list"><div class="empty">Loading…</div></div></div>
+  </div>
+
+  <div class="pane" id="pane-lib">
+    <div class="intro">Upload the manuals NWAC owns (MCAA Labor Estimating Manual, SMACNA HVAC Duct Construction Standards, ACCA manuals, NYC Mechanical / Fuel Gas Code excerpts, supplier price sheets) or type company notes. Text is extracted per page and indexed for the assistant. Licensed publications stay internal — the files live in a private bucket.</div>
+    <div class="card"><div class="hd">Documents<span class="sp"></span><button class="btn" id="btnNote" hidden>+ Note</button><button class="btn primary" id="btnUpload" hidden>Upload PDF</button><input type="file" id="pdfFile" accept="application/pdf,.pdf" hidden></div>
+      <div class="prog" id="prog" hidden></div>
+      <div id="docs"><div class="empty">Loading…</div></div></div>
+  </div>
 </div>
 
 <div class="modal-bg" id="mb"><div class="modal">
@@ -74,32 +113,54 @@
   <div class="acts"><button class="btn" id="mCancel">Cancel</button><button class="btn danger" id="mDelete" hidden>Delete</button><button class="btn primary" id="mSave">Save</button></div>
 </div></div>
 
+<div class="modal-bg" id="nb"><div class="modal">
+  <h3 id="nTitle">New note</h3>
+  <div class="row2">
+    <div class="f"><label>Title</label><input id="nName" placeholder="NWAC — duct pressure classes"></div>
+    <div class="f"><label>Source</label><select id="nOrg"><option>NWAC</option><option>MCAA</option><option>SMACNA</option><option>ACCA</option><option>NYC code</option><option>supplier</option><option>other</option></select></div>
+  </div>
+  <div class="f"><label>Text</label><textarea id="nText" style="min-height:220px" placeholder="Write the rule, table or excerpt. Headings on their own line become sections."></textarea></div>
+  <div class="acts"><button class="btn" id="nCancel">Cancel</button><button class="btn primary" id="nSave">Save</button></div>
+</div></div>
+
 <script>
 requireAuth().catch(function(){});
 (function() {
   var $ = function(id) { return document.getElementById(id); };
-  var rules = [], canEdit = false, editing = null;
+  var rules = [], docs = [], canEdit = false, canLib = false, editing = null, history = [];
   var TYPES = { min_charge: 'Minimum charge', pct_add: 'Allowance %', add_line: 'Fixed amount', reminder: 'Reminder' };
+  var FN = SUPABASE_URL + '/functions/v1/est-kb-chat';
+  var CHUNK = 1500, OVERLAP = 200;
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function money(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-  function paramsText(r) {
-    var p = r.params || {};
-    if (r.rule_type === 'min_charge') return 'minimum ' + money(p.min_amount);
-    if (r.rule_type === 'pct_add') return (p.pct || 0) + ' % of matched material';
-    if (r.rule_type === 'add_line') return '+ ' + money(p.amount);
-    return '';
-  }
+  function paramsText(r) { var p = r.params || {}; if (r.rule_type === 'min_charge') return 'minimum ' + money(p.min_amount); if (r.rule_type === 'pct_add') return (p.pct || 0) + ' % of matched material'; if (r.rule_type === 'add_line') return '+ ' + money(p.amount); return ''; }
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // ── tabs ──
+  document.querySelectorAll('.tab').forEach(function(t) { t.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(x) { x.classList.toggle('on', x === t); });
+    document.querySelectorAll('.pane').forEach(function(p) { p.classList.toggle('on', p.id === 'pane-' + t.getAttribute('data-tab')); });
+    $('btnNew').hidden = !(canEdit && t.getAttribute('data-tab') === 'rules');
+    try { localStorage.setItem('nw_rules_tab', t.getAttribute('data-tab')); } catch (e) {}
+  }); });
+  try { var saved = localStorage.getItem('nw_rules_tab'); if (saved) { var tb = document.querySelector('.tab[data-tab="' + saved + '"]'); if (tb) tb.click(); } } catch (e) {}
+
   async function load() {
     var me = await supabaseClient.auth.getUser();
     var prof = me.data && me.data.user ? await supabaseClient.from('profiles').select('role').eq('id', me.data.user.id).maybeSingle() : null;
     var role = prof && prof.data ? prof.data.role : '';
     canEdit = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'].indexOf(role) >= 0;
-    $('btnNew').hidden = !canEdit;
+    canLib = canEdit || role === 'estimator';
+    $('btnNew').hidden = !(canEdit && document.querySelector('.tab.on').getAttribute('data-tab') === 'rules');
+    $('btnUpload').hidden = !canLib; $('btnNote').hidden = !canLib;
     var r = await supabaseClient.from('est_rules').select('*').order('sort').order('created_at');
-    if (r.error) { $('list').innerHTML = '<div class="empty">Rules table missing — run est-rules-schema.sql in Supabase.<br><span class="muted">' + esc(r.error.message) + '</span></div>'; return; }
-    rules = r.data || []; render();
+    if (r.error) $('list').innerHTML = '<div class="empty">Rules table missing — run est-rules-schema.sql.<br><span class="muted">' + esc(r.error.message) + '</span></div>';
+    else { rules = r.data || []; renderRules(); }
+    await loadDocs(); await loadRecent(); renderChips();
   }
-  function render() {
+
+  // ── rules ──
+  function renderRules() {
     if (!rules.length) { $('list').innerHTML = '<div class="empty">No rules yet.' + (canEdit ? ' Use <b>+ New rule</b>.' : '') + '</div>'; return; }
     $('list').innerHTML = '<table><thead><tr><th>Rule</th><th>Type</th><th class="hide">Matches</th><th>Effect</th><th class="hide">Note</th><th></th></tr></thead><tbody>' + rules.map(function(r) {
       var m = [r.match_text ? '“' + esc(r.match_text) + '”' : '', r.match_category ? esc(r.match_category.replace('_', ' ')) : ''].filter(Boolean).join(' · ') || 'every line';
@@ -119,7 +180,7 @@ requireAuth().catch(function(){});
     $('rNotes').value = r ? (r.notes || '') : ''; $('rActive').checked = r ? !!r.active : true; $('mDelete').hidden = !r;
     syncType(); $('mb').classList.add('on'); $('rName').focus();
   }
-  async function save() {
+  async function saveRule() {
     var t = $('rType').value, name = $('rName').value.trim();
     if (!name) { alert('Rule name is required'); return; }
     if (!$('rMatch').value.trim() && !$('rCat').value) { alert('Give a word to match or a category'); return; }
@@ -132,7 +193,7 @@ requireAuth().catch(function(){});
     if (r.error) { alert('Save failed: ' + r.error.message); return; }
     $('mb').classList.remove('on'); load();
   }
-  async function del() {
+  async function delRule() {
     if (!editing || !confirm('Delete rule "' + editing.name + '"?')) return;
     var r = await supabaseClient.from('est_rules').delete().eq('id', editing.id);
     if (r.error) { alert('Delete failed: ' + r.error.message); return; }
@@ -140,11 +201,116 @@ requireAuth().catch(function(){});
   }
   $('btnNew').addEventListener('click', function() { openModal(null); });
   $('mCancel').addEventListener('click', function() { $('mb').classList.remove('on'); });
-  $('mSave').addEventListener('click', save); $('mDelete').addEventListener('click', del); $('rType').addEventListener('change', syncType);
+  $('mSave').addEventListener('click', saveRule); $('mDelete').addEventListener('click', delRule); $('rType').addEventListener('change', syncType);
   $('mb').addEventListener('click', function(e) { if (e.target === $('mb')) $('mb').classList.remove('on'); });
+
+  // ── library ──
+  async function loadDocs() {
+    var r = await supabaseClient.from('est_kb_docs').select('*').order('org').order('title');
+    if (r.error) { $('docs').innerHTML = '<div class="empty">Library tables missing — run est-kb-schema.sql.<br><span class="muted">' + esc(r.error.message) + '</span></div>'; return; }
+    docs = r.data || []; renderDocs();
+  }
+  function renderDocs() {
+    if (!docs.length) { $('docs').innerHTML = '<div class="empty">The library is empty. Upload a PDF or add a note.</div>'; return; }
+    $('docs').innerHTML = '<table><thead><tr><th>Document</th><th>Source</th><th class="hide">Pages</th><th>Indexed</th><th class="hide">Added</th><th></th></tr></thead><tbody>' + docs.map(function(d) {
+      return '<tr><td><b>' + esc(d.title) + '</b>' + (d.notes ? '<div class="muted">' + esc(d.notes) + '</div>' : '') + '</td><td><span class="org">' + esc(d.org || '—') + '</span></td><td class="hide">' + (d.pages || '—') + '</td><td>' + d.chunks + ' passages</td><td class="hide muted">' + String(d.created_at).slice(0, 10) + '</td>' +
+        '<td style="text-align:right">' + (d.file_path ? '<button class="btn" data-open="' + esc(d.id) + '">Open</button> ' : '') + (canLib ? '<button class="btn danger" data-del="' + esc(d.id) + '">Delete</button>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+    $('docs').querySelectorAll('[data-del]').forEach(function(b) { b.addEventListener('click', async function() {
+      var d = docs.find(function(x) { return x.id === b.getAttribute('data-del'); }); if (!d || !confirm('Delete "' + d.title + '" and its passages?')) return;
+      if (d.file_path) await supabaseClient.storage.from('est-kb').remove([d.file_path]);
+      var r = await supabaseClient.from('est_kb_docs').delete().eq('id', d.id); if (r.error) { alert(r.error.message); return; } loadDocs();
+    }); });
+    $('docs').querySelectorAll('[data-open]').forEach(function(b) { b.addEventListener('click', async function() {
+      var d = docs.find(function(x) { return x.id === b.getAttribute('data-open'); }); if (!d) return;
+      var s = await supabaseClient.storage.from('est-kb').createSignedUrl(d.file_path, 600); if (s.data && s.data.signedUrl) window.open(s.data.signedUrl, '_blank'); else alert('Could not open the file');
+    }); });
+  }
+  function chunkText(text) {   // ~1,500 chars with 200 overlap, cut at sentence ends when possible
+    var out = [], t = String(text || '').replace(/\s+/g, ' ').trim(); if (!t) return out;
+    var i = 0; while (i < t.length) { var end = Math.min(t.length, i + CHUNK); if (end < t.length) { var cut = t.lastIndexOf('. ', end); if (cut > i + CHUNK * 0.6) end = cut + 1; } out.push(t.slice(i, end).trim()); if (end >= t.length) break; i = Math.max(end - OVERLAP, i + 1); }
+    return out.filter(Boolean);
+  }
+  async function insertChunks(docId, rows) {
+    for (var i = 0; i < rows.length; i += 200) { var r = await supabaseClient.from('est_kb_chunks').insert(rows.slice(i, i + 200)); if (r.error) throw new Error(r.error.message); }
+    await supabaseClient.from('est_kb_docs').update({ chunks: rows.length }).eq('id', docId);
+  }
+  async function uploadPdf(file) {
+    var title = prompt('Document title', file.name.replace(/\.pdf$/i, '')); if (!title) return;
+    var org = prompt('Source (NWAC / MCAA / SMACNA / ACCA / NYC code / supplier / other)', 'SMACNA') || 'other';
+    var prog = $('prog'); prog.hidden = false; prog.textContent = 'Reading ' + file.name + '…';
+    try {
+      var buf = await file.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+      var ins = await supabaseClient.from('est_kb_docs').insert({ title: title, org: org, kind: 'pdf', pages: pdf.numPages, notes: file.name }).select('id').single();
+      if (ins.error) throw new Error(ins.error.message);
+      var docId = ins.data.id, path = docId + '.pdf';
+      var up = await supabaseClient.storage.from('est-kb').upload(path, file, { contentType: 'application/pdf', upsert: true });
+      if (!up.error) await supabaseClient.from('est_kb_docs').update({ file_path: path }).eq('id', docId);
+      var rows = [], n = 0;
+      for (var p = 1; p <= pdf.numPages; p++) {
+        var page = await pdf.getPage(p), tc = await page.getTextContent();
+        var text = tc.items.map(function(it) { return it.str; }).join(' ');
+        chunkText(text).forEach(function(c) { rows.push({ doc_id: docId, page: p, chunk_no: n++, content: c }); });
+        if (p % 10 === 0) prog.textContent = 'Indexing page ' + p + ' of ' + pdf.numPages + '…';
+      }
+      if (!rows.length) prog.textContent = 'No text layer found (scanned PDF?) — the file is stored but cannot be searched.';
+      await insertChunks(docId, rows);
+      prog.textContent = 'Done: ' + pdf.numPages + ' pages, ' + rows.length + ' passages indexed.'; setTimeout(function() { prog.hidden = true; }, 4000);
+      loadDocs();
+    } catch (e) { prog.textContent = 'Upload failed: ' + (e.message || e); }
+  }
+  async function saveNote() {
+    var title = $('nName').value.trim(), text = $('nText').value.trim(); if (!title || !text) { alert('Title and text are required'); return; }
+    var ins = await supabaseClient.from('est_kb_docs').insert({ title: title, org: $('nOrg').value, kind: 'note', pages: null }).select('id').single();
+    if (ins.error) { alert(ins.error.message); return; }
+    // headings = short lines without a period → section names for the passages that follow
+    var rows = [], section = null, n = 0, buf = [];
+    function flush() { if (!buf.length) return; chunkText(buf.join('\n')).forEach(function(c) { rows.push({ doc_id: ins.data.id, page: null, chunk_no: n++, section: section, content: c }); }); buf = []; }
+    text.split(/\n/).forEach(function(line) { var l = line.trim(); if (l && l.length < 80 && !/[.:;,]$/.test(l) && /^[A-ZА-Я0-9]/.test(l) && !/\d\s*(x|×)\s*\d/.test(l) && buf.join('').length > 200) { flush(); section = l; } else buf.push(line); });
+    flush();
+    try { await insertChunks(ins.data.id, rows); } catch (e) { alert('Indexing failed: ' + e.message); }
+    $('nb').classList.remove('on'); $('nName').value = ''; $('nText').value = ''; loadDocs();
+  }
+  $('btnUpload').addEventListener('click', function() { $('pdfFile').value = ''; $('pdfFile').click(); });
+  $('pdfFile').addEventListener('change', function() { var f = this.files && this.files[0]; if (f) uploadPdf(f); });
+  $('btnNote').addEventListener('click', function() { $('nb').classList.add('on'); $('nName').focus(); });
+  $('nCancel').addEventListener('click', function() { $('nb').classList.remove('on'); });
+  $('nSave').addEventListener('click', saveNote);
+  $('nb').addEventListener('click', function(e) { if (e.target === $('nb')) $('nb').classList.remove('on'); });
+
+  // ── ask ──
+  var SUGGEST = ['Chemical cleaning minimum charge?', 'Duct gauge for 30x12 at 4 in. w.g.?', 'Labor hours per ft of 24x12 lined duct?', 'Seal class for medium pressure supply duct?', 'How do we price refrigerant piping per ft?'];
+  function renderChips() { $('chips').innerHTML = SUGGEST.map(function(s) { return '<button type="button">' + esc(s) + '</button>'; }).join(''); $('chips').querySelectorAll('button').forEach(function(b) { b.addEventListener('click', function() { $('q').value = b.textContent; ask(); }); }); }
+  function addMsg(cls, text, sources) {
+    var box = $('msgs'); if (box.querySelector('.empty')) box.innerHTML = '';
+    var d = document.createElement('div'); d.className = 'm ' + cls; d.textContent = text;
+    if (sources && sources.length) { var seen = {}, s = sources.filter(function(x) { var k = x.title + '|' + x.page; if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 6); var sd = document.createElement('div'); sd.className = 'src'; sd.textContent = 'Sources: ' + s.map(function(x) { return x.title + (x.page ? ' p. ' + x.page : '') + (x.org ? ' (' + x.org + ')' : ''); }).join(' · '); d.appendChild(sd); }
+    box.appendChild(d); box.scrollTop = box.scrollHeight; return d;
+  }
+  async function ask() {
+    var q = $('q').value.trim(); if (!q) return;
+    $('q').value = ''; $('send').disabled = true; addMsg('q', q); var wait = addMsg('a', 'Searching the library…');
+    try {
+      var s = await supabaseClient.auth.getSession(); var tok = s.data && s.data.session ? s.data.session.access_token : '';
+      var r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok, apikey: SUPABASE_ANON_KEY }, body: JSON.stringify({ question: q, history: history.slice(-3) }) });
+      var j = await r.json();
+      wait.remove();
+      if (!j.ok) { addMsg('a', 'Error: ' + (j.error || r.status)); }
+      else { addMsg('a', j.answer, j.sources); history.push({ q: q, a: j.answer }); }
+    } catch (e) { wait.remove(); addMsg('a', 'Error: ' + (e.message || e)); }
+    $('send').disabled = false; $('q').focus();
+  }
+  async function loadRecent() {
+    var r = await supabaseClient.from('est_kb_chat_log').select('question, answer, sources, created_at').order('created_at', { ascending: false }).limit(6);
+    if (r.error || !(r.data || []).length) return;
+    r.data.reverse().forEach(function(x) { addMsg('q', x.question); addMsg('a', x.answer || '', x.sources || []); history.push({ q: x.question, a: x.answer || '' }); });
+  }
+  $('send').addEventListener('click', ask);
+  $('q').addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
   load();
 })();
 </script>
-<script src="sw-register.js?v=443"></script>
+<script src="sw-register.js?v=444"></script>
 </body>
 </html>
