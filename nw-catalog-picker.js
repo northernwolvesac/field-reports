@@ -42,7 +42,7 @@
 
   var ITEM_SELECT = 'id,name,description,unit,unit_cost,unit_labor_min,waste_pct,manufacturer,supplier,' +
     'catalog_number,folder_path,folder_id,updated_at,is_custom,item_type,is_untaxed,color,symbol_id,' +
-    'sub_items,nw_category,takeoff_type,notes,cost_code,cost_name';
+    'sub_items,nw_category,takeoff_type,notes,cost_code,cost_name,price_source,price_checked_at,needs_review';
 
   var ITEM_TYPES = ['Part', 'Assembly', 'Labor', 'Travel'];
   var UOMS = [['', 'NONE'], ['ea', 'ea'], ['ft', 'ft'], ['sq ft', 'sq ft'], ['hrs', 'hrs'], ['ls', 'ls'], ['floor', 'floor'], ['day', 'day'], ['lb', 'lb']];
@@ -101,6 +101,57 @@
   function genId() { return Date.now() * 1000 + Math.floor(Math.random() * 1000); }
   function isNumId(id) { return typeof id === 'number' || (/^\d+$/.test(String(id || ''))); }
   function fmtHrs(min) { return (Number(min || 0) / 60).toFixed(2); }
+  // ── price audit helpers (2026-10): provenance badges, stale check, usage map, price log, CSV ──
+  var STALE_DAYS = 183;
+  function staleDate() { var d = new Date(); d.setDate(d.getDate() - STALE_DAYS); return d.toISOString().slice(0, 10); }
+  function isStale(it) { return !it.price_checked_at || String(it.price_checked_at).slice(0, 10) < staleDate(); }
+  var usageMap = null;
+  async function loadUsage() {
+    if (usageMap) return usageMap;
+    usageMap = {};
+    try { var r = await sb().from('est_catalog_usage').select('item_id, n_lines, last_used').limit(5000); (r.data || []).forEach(function (u) { usageMap[String(u.item_id)] = u; }); } catch (e) { /* view missing */ }
+    return usageMap;
+  }
+  function auditPills(it) {
+    var p = [];
+    if (it.needs_review) p.push('<span class="pc-pill" style="background:#fef3c7;color:#b45309" title="Price needs verification">verify</span>');
+    if (!Number(it.unit_cost)) p.push('<span class="pc-pill" style="background:#fee2e2;color:#b91c1c" title="No material price">$0</span>');
+    if (!Number(it.unit_labor_min) && !/^(Labor|Travel)$/.test(it.item_type || '')) p.push('<span class="pc-pill" style="background:#fee2e2;color:#b91c1c" title="No labor time">no labor</span>');
+    if (isStale(it)) p.push('<span class="pc-pill" style="background:#f1f5f9;color:#475569" title="Not checked in the last 6 months">' + (it.price_checked_at ? 'checked ' + String(it.price_checked_at).slice(0, 10) : 'unchecked') + '</span>');
+    else p.push('<span class="pc-pill" style="background:#dcfce7;color:#15803d">checked ' + String(it.price_checked_at).slice(0, 10) + '</span>');
+    if (it.price_source) p.push('<span class="pc-muted" style="font-size:11px" title="Price source">' + esc(it.price_source) + '</span>');
+    var u = usageMap && usageMap[String(it.id)]; if (u) p.push('<span class="pc-muted" style="font-size:11px">used ' + u.n_lines + '×</span>');
+    return p.length ? '<div class="ck" style="margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + p.join('') + '</div>' : '';
+  }
+  async function logPrice(it, row, reason) {
+    var oc = Number(it.unit_cost || 0), nc = Number(row.unit_cost != null ? row.unit_cost : oc), ol = Number(it.unit_labor_min || 0), nl = Number(row.unit_labor_min != null ? row.unit_labor_min : ol);
+    if (oc === nc && ol === nl) return;
+    try { await sb().from('est_catalog_price_log').insert({ item_id: Number(it.id), old_cost: oc, new_cost: nc, old_labor_min: ol, new_labor_min: nl, reason: reason || null }); } catch (e) { /* log is best effort */ }
+  }
+  function csvCell(v) { v = v == null ? '' : String(v); return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  var CSV_COLS = ['id', 'folder_path', 'name', 'unit', 'unit_cost', 'unit_labor_min', 'price_source', 'price_checked_at', 'needs_review', 'manufacturer', 'supplier', 'catalog_number', 'description'];
+  function rowsToCsv(rows) {
+    return [CSV_COLS.join(',')].concat(rows.map(function (r) { return CSV_COLS.map(function (c) { return csvCell(c === 'needs_review' ? (r[c] ? 'yes' : 'no') : r[c]); }).join(','); })).join('\r\n');
+  }
+  function parseCsv(text) {
+    var rows = [], row = [], cell = '', q = false, i, ch;
+    for (i = 0; i < text.length; i++) {
+      ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\r') { /* skip */ }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell.length || row.length) { row.push(cell); rows.push(row); }
+    if (!rows.length) return [];
+    var head = rows[0].map(function (h) { return String(h || '').trim().toLowerCase(); });
+    return rows.slice(1).filter(function (r) { return r.some(function (c) { return String(c).trim(); }); }).map(function (r) { var o = {}; head.forEach(function (h, k) { o[h] = r[k] != null ? String(r[k]).trim() : ''; }); return o; });
+  }
+  function downloadText(name, text) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
   function isSchemaErr(err) { return !!(err && /est_catalog_(items|folders)|42P01|does not exist|schema cache/i.test(err.message || '')); }
   function closest(el, sel) {
     while (el && el.nodeType === 1) { if (el.matches(sel)) return el; el = el.parentNode; }
@@ -369,7 +420,7 @@
       '<b>UC</b> ' + esc(money(it.unit_cost)) + '<span class="sep">·</span>' +
       '<b>ULT</b> ' + fmtHrs(it.unit_labor_min) + ' hrs<span class="sep">·</span>' +
       '<b>CN</b> ' + esc(it.catalog_number || 'n/a') + '<span class="sep">·</span>' +
-      '<b>CC</b> ' + (cc || 'n/a');
+      '<b>CC</b> ' + (cc || 'n/a') + auditPills(it);
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -387,7 +438,7 @@
       node: { kind: 'all' },            // {kind:'all'|'mru'|'folder'|'legacy', folder}
       page: 0, count: 0, rows: [],
       sort: 'common', q: '',
-      filters: { types: [], unit: '', taxable: false, category: '' },
+      filters: { types: [], unit: '', taxable: false, category: '', audit: '' },   // audit: '' | review | zero_cost | zero_labor | stale
       expanded: {}, treeQ: '',
       selected: {}, selectedRows: {},
       legacyCount: null,
@@ -558,6 +609,7 @@
 
     // ── toolbar ─────────────────────────────────────────────────────────
     var SORTS = [['common', 'Common'], ['name', 'Name'], ['unit_cost', 'Unit Cost'], ['updated', 'Recently updated']];
+    var AUDITS = [['', 'Any'], ['review', 'Needs verification'], ['zero_cost', 'No material price ($0)'], ['zero_labor', 'No labor time'], ['stale', 'Not checked in 6 months']];
     $('[data-sort]').addEventListener('click', function (e) {
       var self = this;
       showMenu(self, SORTS.map(function (s) {
@@ -589,6 +641,8 @@
         '<label class="chk" style="margin-top:8px"><input type="checkbox" data-ftx' + (f.taxable ? ' checked' : '') + '> Taxable only</label>' +
         '<div class="pc-label">NWAC category</div><select class="pc-select" data-fc style="height:32px"><option value="">Any</option>' +
         CATEGORIES.map(function (c) { return '<option value="' + c[0] + '"' + (f.category === c[0] ? ' selected' : '') + '>' + esc(c[1]) + '</option>'; }).join('') + '</select>' +
+        '<div class="pc-label">Price audit</div><select class="pc-select" data-fa style="height:32px">' +
+        AUDITS.map(function (a) { return '<option value="' + a[0] + '"' + (f.audit === a[0] ? ' selected' : '') + '>' + esc(a[1]) + '</option>'; }).join('') + '</select>' +
         '<div class="row"><button type="button" class="pc-btn pc-btn-secondary" data-clear>Clear</button><button type="button" class="pc-btn pc-btn-primary" data-apply>Apply</button></div>';
       document.body.appendChild(pop);
       var r = anchor.getBoundingClientRect();
@@ -596,17 +650,18 @@
       function closePop() { if (pop.parentNode) pop.parentNode.removeChild(pop); document.removeEventListener('click', outside, true); }
       function outside(e) { if (!pop.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) closePop(); }
       setTimeout(function () { document.addEventListener('click', outside, true); }, 0);
-      pop.querySelector('[data-clear]').addEventListener('click', function () { st.filters = { types: [], unit: '', taxable: false, category: '' }; closePop(); updateFilterBadge(); st.page = 0; load(); });
+      pop.querySelector('[data-clear]').addEventListener('click', function () { st.filters = { types: [], unit: '', taxable: false, category: '', audit: '' }; closePop(); updateFilterBadge(); st.page = 0; load(); });
       pop.querySelector('[data-apply]').addEventListener('click', function () {
         st.filters.types = Array.prototype.slice.call(pop.querySelectorAll('[data-ft]:checked')).map(function (c) { return c.value; });
         st.filters.unit = pop.querySelector('[data-fu]').value;
         st.filters.taxable = pop.querySelector('[data-ftx]').checked;
         st.filters.category = pop.querySelector('[data-fc]').value;
+        st.filters.audit = pop.querySelector('[data-fa]').value;
         closePop(); updateFilterBadge(); st.page = 0; load();
       });
     }
     function updateFilterBadge() {
-      var n = st.filters.types.length + (st.filters.unit ? 1 : 0) + (st.filters.taxable ? 1 : 0) + (st.filters.category ? 1 : 0);
+      var n = st.filters.types.length + (st.filters.unit ? 1 : 0) + (st.filters.taxable ? 1 : 0) + (st.filters.category ? 1 : 0) + (st.filters.audit ? 1 : 0);
       $('[data-fcount]').textContent = n ? ' (' + n + ')' : '';
     }
 
@@ -661,6 +716,19 @@
       layerIds.forEach(function (i) { if (!seen[String(i)]) { seen[String(i)] = 1; ids.push(i); } });
       return ids;
     }
+    function applyAuditFilter(q) {
+      var a = st.filters.audit;
+      if (a === 'review') return q.eq('needs_review', true);
+      if (a === 'zero_cost') return q.eq('unit_cost', 0);
+      if (a === 'zero_labor') return q.eq('unit_labor_min', 0).not('item_type', 'in', '("Labor","Travel")');
+      if (a === 'stale') return q.or('price_checked_at.is.null,price_checked_at.lt.' + staleDate());
+      return q;
+    }
+    async function auditCounts() {
+      var base = function () { return sb().from('est_catalog_items').select('id', { count: 'exact', head: true }).not('folder_path', 'ilike', 'Archive%'); };
+      var r = await Promise.all([base(), base().eq('needs_review', true), base().eq('unit_cost', 0), base().eq('unit_labor_min', 0).not('item_type', 'in', '("Labor","Travel")'), base().or('price_checked_at.is.null,price_checked_at.lt.' + staleDate())]);
+      return { items: r[0].count || 0, review: r[1].count || 0, zero_cost: r[2].count || 0, zero_labor: r[3].count || 0, stale: r[4].count || 0 };
+    }
     async function queryCatalog() {
       var q = sb().from('est_catalog_items').select(ITEM_SELECT, { count: 'exact' });
       if (st.node.kind === 'mru') {
@@ -678,6 +746,7 @@
       q = applyUnitFilter(q, st.filters.unit);
       if (st.filters.taxable) q = q.eq('is_untaxed', false);
       if (st.filters.category) q = q.eq('nw_category', st.filters.category);
+      q = applyAuditFilter(q);
       if (st.sort === 'common' || st.sort === 'name') {
         // natural order needs every match: fetch them all (1,000 per request, stable by id), sort here, page locally
         if (!natCache) {
@@ -802,6 +871,107 @@
       toast(custom.length + ' deleted', 'success'); load();
       return custom.length;
     }
+    // ── price audit bulk actions (mount admin) ──
+    async function bulkAdjust(anchor) {
+      var rows = selectedRows().filter(function (r) { return !r._readonly && r._src !== 'assemblies'; });
+      if (!rows.length) { toast('Select catalog items first', 'error'); return; }
+      var old = document.querySelector('.ncp-popover'); if (old) old.parentNode.removeChild(old);
+      var pop = document.createElement('div'); pop.className = 'ncp-popover';
+      pop.innerHTML = '<div class="pc-label" style="margin-top:0">Adjust ' + rows.length + ' item' + (rows.length === 1 ? '' : 's') + '</div>' +
+        '<div class="pc-field"><label class="pc-label">Material price change (%)</label><input class="pc-input" type="number" step="0.1" data-pm placeholder="e.g. 8 or -5" style="height:32px"></div>' +
+        '<div class="pc-field"><label class="pc-label">Labor time change (%)</label><input class="pc-input" type="number" step="0.1" data-pl placeholder="0" style="height:32px"></div>' +
+        '<div class="pc-field"><label class="pc-label">Price source / reason</label><input class="pc-input" data-ps placeholder="supplier quote 2026-10" style="height:32px"></div>' +
+        '<label class="chk"><input type="checkbox" data-pc checked> Mark as checked today</label>' +
+        '<div class="row"><button type="button" class="pc-btn pc-btn-secondary" data-cancel>Cancel</button><button type="button" class="pc-btn pc-btn-primary" data-apply>Apply</button></div>';
+      document.body.appendChild(pop);
+      var rc = anchor.getBoundingClientRect(); pop.style.top = (rc.bottom + 4) + 'px'; pop.style.left = Math.max(8, Math.min(rc.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+      function closePop() { if (pop.parentNode) pop.parentNode.removeChild(pop); }
+      pop.querySelector('[data-cancel]').addEventListener('click', closePop);
+      pop.querySelector('[data-apply]').addEventListener('click', async function () {
+        var pm = Number(pop.querySelector('[data-pm]').value || 0) / 100, pl = Number(pop.querySelector('[data-pl]').value || 0) / 100, src = pop.querySelector('[data-ps]').value.trim(), chk = pop.querySelector('[data-pc]').checked;
+        closePop();
+        var today = new Date().toISOString().slice(0, 10), n = 0, err = null;
+        for (var i = 0; i < rows.length; i += 100) {
+          var chunk = rows.slice(i, i + 100);
+          var up = chunk.map(function (it) {
+            var row = { id: Number(it.id), name: it.name, updated_at: new Date().toISOString() };
+            if (pm) row.unit_cost = Math.round(Number(it.unit_cost || 0) * (1 + pm) * 10000) / 10000;
+            if (pl) row.unit_labor_min = Math.round(Number(it.unit_labor_min || 0) * (1 + pl) * 10000) / 10000;
+            if (src) row.price_source = src;
+            if (chk) { row.price_checked_at = today; row.needs_review = false; }
+            return row;
+          });
+          var r = await sb().from('est_catalog_items').upsert(up, { onConflict: 'id' });
+          if (r.error) { err = r.error.message; break; }
+          if (pm || pl) await sb().from('est_catalog_price_log').insert(chunk.map(function (it, k) { return { item_id: Number(it.id), old_cost: Number(it.unit_cost || 0), new_cost: up[k].unit_cost != null ? up[k].unit_cost : Number(it.unit_cost || 0), old_labor_min: Number(it.unit_labor_min || 0), new_labor_min: up[k].unit_labor_min != null ? up[k].unit_labor_min : Number(it.unit_labor_min || 0), reason: 'bulk adjust ' + (pm ? 'material ' + (pm * 100).toFixed(1) + '% ' : '') + (pl ? 'labor ' + (pl * 100).toFixed(1) + '% ' : '') + (src ? '— ' + src : '') }; }));
+          n += chunk.length;
+        }
+        if (err) toast('Adjust failed: ' + err, 'error'); else toast(n + ' item' + (n === 1 ? '' : 's') + ' updated', 'success');
+        st.selected = {}; st.selectedRows = {}; if (opts.onSelectionChange) opts.onSelectionChange([]); natCache = null; load();
+      });
+    }
+    async function bulkReviewed() {
+      var rows = selectedRows().filter(function (r) { return !r._readonly && r._src !== 'assemblies'; });
+      if (!rows.length) { toast('Select catalog items first', 'error'); return; }
+      var today = new Date().toISOString().slice(0, 10), err = null;
+      for (var i = 0; i < rows.length; i += 150) {
+        var r = await sb().from('est_catalog_items').upsert(rows.slice(i, i + 150).map(function (it) { return { id: Number(it.id), name: it.name, price_checked_at: today, needs_review: false, updated_at: new Date().toISOString() }; }), { onConflict: 'id' });
+        if (r.error) { err = r.error.message; break; }
+      }
+      if (err) toast('Failed: ' + err, 'error'); else toast(rows.length + ' marked as checked today', 'success');
+      st.selected = {}; st.selectedRows = {}; if (opts.onSelectionChange) opts.onSelectionChange([]); natCache = null; load();
+    }
+    // CSV of the selection, or of everything the current folder / search / filters match (all pages)
+    async function exportCsv(selectionOnly) {
+      var rows = selectionOnly ? selectedRows() : null;
+      if (!rows || !rows.length) {
+        rows = []; var from = 0, guard = 0;
+        while (guard++ < 10) {
+          var q = sb().from('est_catalog_items').select(ITEM_SELECT);
+          if (st.node.kind === 'folder' && st.node.folder) { var f = st.node.folder; if (f.id == null) q = q.eq('is_custom', true).is('folder_id', null); else if (folderChildren(f.id).length) q = q.in('folder_id', folderTreeIds(f.id)); else q = q.eq('folder_id', f.id); }
+          if (st.q.trim()) q = q.ilike('name', '%' + escapeLike(st.q.trim()) + '%');
+          if (st.filters.types.length) q = q.in('item_type', st.filters.types);
+          q = applyUnitFilter(q, st.filters.unit);
+          if (st.filters.category) q = q.eq('nw_category', st.filters.category);
+          q = applyAuditFilter(q);
+          var rr = await q.order('id').range(from, from + 999);
+          if (rr.error) { toast('Export failed: ' + rr.error.message, 'error'); return; }
+          rows = rows.concat(rr.data || []); if ((rr.data || []).length < 1000) break; from += 1000;
+        }
+      }
+      if (!rows.length) { toast('Nothing to export', 'error'); return; }
+      var name = 'cost-catalog-' + (st.node.kind === 'folder' && st.node.folder ? st.node.folder.name.replace(/[^\w]+/g, '-') : 'all') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+      downloadText(name, rowsToCsv(rows));
+      toast(rows.length + ' rows exported', 'success');
+    }
+    // CSV back in: rows are matched by id; unit_cost / unit_labor_min / price_source / price_checked_at / needs_review / manufacturer / supplier / catalog_number are updated when present
+    async function importCsv(file) {
+      var text = await file.text(); var rows = parseCsv(text);
+      if (!rows.length || !('id' in rows[0])) { toast('CSV needs an id column (export first, edit, import)', 'error'); return; }
+      var ids = rows.map(function (r) { return Number(r.id); }).filter(function (v) { return v > 0; });
+      var cur = {}; for (var i = 0; i < ids.length; i += 500) { var c = await sb().from('est_catalog_items').select('id,name,unit_cost,unit_labor_min').in('id', ids.slice(i, i + 500)); (c.data || []).forEach(function (x) { cur[String(x.id)] = x; }); }
+      var ups = [], logs = [], skipped = 0, today = new Date().toISOString().slice(0, 10);
+      rows.forEach(function (r) {
+        var it = cur[String(Number(r.id))]; if (!it) { skipped++; return; }
+        var row = { id: it.id, name: it.name, updated_at: new Date().toISOString() }, changed = false;
+        if (r.unit_cost !== undefined && r.unit_cost !== '' && !isNaN(Number(r.unit_cost)) && Number(r.unit_cost) !== Number(it.unit_cost)) { row.unit_cost = Number(r.unit_cost); changed = true; }
+        if (r.unit_labor_min !== undefined && r.unit_labor_min !== '' && !isNaN(Number(r.unit_labor_min)) && Number(r.unit_labor_min) !== Number(it.unit_labor_min)) { row.unit_labor_min = Number(r.unit_labor_min); changed = true; }
+        ['price_source', 'manufacturer', 'supplier', 'catalog_number'].forEach(function (k) { if (r[k] !== undefined && r[k] !== '') row[k] = r[k]; });
+        if (r.name && r.name !== it.name) row.name = r.name;
+        if (r.price_checked_at) row.price_checked_at = r.price_checked_at.slice(0, 10); else if (changed) row.price_checked_at = today;
+        if (r.needs_review !== undefined && r.needs_review !== '') row.needs_review = /^(y|yes|true|1)$/i.test(r.needs_review);
+        if (Object.keys(row).length > 3) ups.push(row);
+        if (changed) logs.push({ item_id: it.id, old_cost: Number(it.unit_cost || 0), new_cost: row.unit_cost != null ? row.unit_cost : Number(it.unit_cost || 0), old_labor_min: Number(it.unit_labor_min || 0), new_labor_min: row.unit_labor_min != null ? row.unit_labor_min : Number(it.unit_labor_min || 0), reason: 'CSV import ' + file.name });
+      });
+      if (!ups.length) { toast('No changes found in the CSV' + (skipped ? ' (' + skipped + ' unknown ids)' : ''), 'error'); return; }
+      var ok = await confirmDlg({ title: 'Import ' + ups.length + ' catalog rows', message: ups.length + ' item' + (ups.length === 1 ? '' : 's') + ' will be updated from ' + file.name + (logs.length ? '; ' + logs.length + ' price/labor change' + (logs.length === 1 ? '' : 's') + ' will be logged' : '') + (skipped ? '. ' + skipped + ' rows have unknown ids and are skipped.' : '.'), okLabel: 'Import' });
+      if (!ok) return;
+      var err = null;
+      for (var j = 0; j < ups.length; j += 150) { var u = await sb().from('est_catalog_items').upsert(ups.slice(j, j + 150), { onConflict: 'id' }); if (u.error) { err = u.error.message; break; } }
+      for (var k = 0; k < logs.length && !err; k += 200) { var l = await sb().from('est_catalog_price_log').insert(logs.slice(k, k + 200)); if (l.error) err = l.error.message; }
+      if (err) toast('Import failed: ' + err, 'error'); else toast(ups.length + ' items updated from CSV', 'success');
+      natCache = null; load();
+    }
     function bulkMove(anchor) {
       var rows = selectedRows().filter(function (r) { return !r._readonly && r._src !== 'assemblies'; });
       if (!rows.length) { toast('Select catalog items first', 'error'); return; }
@@ -827,6 +997,7 @@
     // ── init ────────────────────────────────────────────────────────────
     (async function init() {
       await detectCatalog();
+      if (catalogState === 'catalog') loadUsage();
       await loadFolders();
       await countLegacy();
       // initial folder (open({folder}) — id, name or path)
@@ -858,7 +1029,8 @@
     return {
       state: st, reload: load, renderTree: renderTree, selectedRows: selectedRows,
       clearSelection: function () { st.selected = {}; st.selectedRows = {}; renderRowsState(); if (opts.onSelectionChange) opts.onSelectionChange([]); },
-      bulkDelete: bulkDelete, bulkMove: bulkMove,
+      bulkDelete: bulkDelete, bulkMove: bulkMove, bulkAdjust: bulkAdjust, bulkReviewed: bulkReviewed, exportCsv: exportCsv, importCsv: importCsv, auditCounts: auditCounts,
+      setAudit: function (a) { st.filters.audit = a || ''; updateFilterBadge(); st.page = 0; natCache = null; load(); },
       refreshTree: async function () { await loadFolders(true); await countLegacy(); renderTree(); },
       newFolder: function () { newFolder(st.node.kind === 'folder' && st.node.folder && st.node.folder.id != null ? st.node.folder : null); },
       destroy: function () { var p = document.querySelector('.ncp-popover'); if (p) p.parentNode.removeChild(p); host.innerHTML = ''; }
@@ -981,6 +1153,11 @@
             '<select class="pc-select" data-f="labor_unit"><option value="mins"' + (laborUnit === 'mins' ? ' selected' : '') + '>mins - minutes</option><option value="hrs"' + (laborUnit === 'hrs' ? ' selected' : '') + '>hrs - hours</option></select></div></div>' +
         '</div>' +
         '<div class="ncp-grid3">' +
+          '<div class="pc-field"><label class="pc-label">Price source</label><input class="pc-input" data-f="price_source" value="' + esc(it.price_source || '') + '" placeholder="supplier quote 2026-10 / Procore 2025-04"></div>' +
+          '<div class="pc-field"><label class="pc-label">Price checked on</label><input class="pc-input" type="date" data-f="price_checked_at" value="' + esc(String(it.price_checked_at || '').slice(0, 10)) + '"></div>' +
+          '<div class="pc-field"><label class="pc-label">Needs verification</label><select class="pc-select" data-f="needs_review"><option value="no"' + (!it.needs_review ? ' selected' : '') + '>No</option><option value="yes"' + (it.needs_review ? ' selected' : '') + '>Yes</option></select></div>' +
+        '</div>' +
+        '<div class="ncp-grid3">' +
           '<div class="pc-field"><label class="pc-label">Taxable</label><select class="pc-select" data-f="taxable"><option value="Yes"' + (!it.is_untaxed ? ' selected' : '') + '>Yes</option><option value="No"' + (it.is_untaxed ? ' selected' : '') + '>No</option></select><div class="ncp-hint" data-taxhint>Material tax does apply</div></div>' +
           '<div class="pc-field"><label class="pc-label">Color</label><div class="ncp-color"><input type="color" data-f="color_pick" value="' + esc(/^#[0-9a-f]{6}$/i.test(it.color || '') ? it.color : '#0696D7') + '"><input class="pc-input" data-f="color" value="' + esc(it.color || '') + '" placeholder="#0696D7"></div></div>' +
           '<div class="pc-field"><label class="pc-label">Symbol</label><select class="pc-select" data-f="symbol_id"><option value="">Default</option>' +
@@ -1067,8 +1244,13 @@
         notes: Object.keys(notesObj).length ? JSON.stringify(notesObj) : null,
         nw_category: F('nw_category').value,
         takeoff_type: F('takeoff_type').value,
+        price_source: F('price_source') ? (F('price_source').value.trim() || null) : (it.price_source || null),
+        price_checked_at: F('price_checked_at') && F('price_checked_at').value ? F('price_checked_at').value : (it.price_checked_at || null),
+        needs_review: F('needs_review') ? F('needs_review').value === 'yes' : !!it.needs_review,
         updated_at: new Date().toISOString()
       };
+      // a price typed by hand today counts as checked today unless a date was given
+      if (isEdit && !F('price_checked_at').value && (Number(row.unit_cost) !== Number(it.unit_cost || 0) || Number(row.unit_labor_min) !== Number(it.unit_labor_min || 0))) row.price_checked_at = new Date().toISOString().slice(0, 10);
       // Assembly components (Duplicate copies them from the source row; the dialog has no editor for them yet)
       if (!isEdit && it._src !== 'assemblies' && it.sub_items) row.sub_items = it.sub_items;
       saving = true;
@@ -1085,7 +1267,7 @@
           }
           if (!r.error) saved = fromAssembly(r.data);
         } else {
-          if (isEdit) r = await sb().from('est_catalog_items').update(row).eq('id', it.id).select(ITEM_SELECT).single();
+          if (isEdit) { r = await sb().from('est_catalog_items').update(row).eq('id', it.id).select(ITEM_SELECT).single(); if (!r.error) await logPrice(it, row, 'edited in the catalog dialog'); }
           else { row.id = genId(); r = await sb().from('est_catalog_items').insert(row).select(ITEM_SELECT).single(); }
           if (!r.error) saved = r.data;
         }
