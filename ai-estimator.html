@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=454"></script>
-<script src="auth.js?v=454"></script>
-<script src="est-totals.js?v=454"></script>
-<script src="est-engine.js?v=454"></script>
-<script src="geo-takeoff.js?v=454"></script>
+<script src="supabase-config.js?v=455"></script>
+<script src="auth.js?v=455"></script>
+<script src="est-totals.js?v=455"></script>
+<script src="est-engine.js?v=455"></script>
+<script src="geo-takeoff.js?v=455"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -804,7 +804,9 @@ var AE = (function() {
     return doneN + ' of ' + st.total + ' sheets · ' + Math.round(el / 60) + ' min' + (eta ? ' · about ' + Math.max(1, Math.round(eta / 60)) + ' min left' : '') + ' · $' + st.cost.toFixed(2) + (st.retries ? ' · ' + st.retries + ' retr' + (st.retries === 1 ? 'y' : 'ies') : '') + (st.inflight.length ? ' · reading ' + st.inflight.map(function(p) { return p.sheet_no || 'p' + p.page_no; }).join(', ') : '');
   }
   async function runQueue(list) {
-    if (running) return; running = true; window.NW_HOLD_RELOAD = true;
+    if (running) return;
+    if (!list.length) { toast((session.result || {}).run && session.result.run.active ? 'The sheets are being read in another tab' : 'Nothing left to read'); return; }   // never touch another tab's run record
+    running = true; window.NW_HOLD_RELOAD = true;
     runStats = { t0: Date.now(), started_at: new Date().toISOString(), total: list.length, read: 0, failed: 0, retries: 0, cost: 0, inflight: [] }; runFlush(false); render();
     var queue = list.slice(), retry = [];
     async function sleepMs(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
@@ -814,7 +816,7 @@ var AE = (function() {
       var before = Number(p.cost) || 0;
       try { await readPage(p); } catch (e) { p.status = 'error'; p.error = e.message; await supabaseClient.from('ai_est_pages').update({ status: 'error', error: String(e.message || e).slice(0, 500) }).eq('id', p.id); }
       runStats.inflight = runStats.inflight.filter(function(x) { return x !== p; });
-      runStats.cost += Math.max(0, (Number(p.cost) || 0) - before);
+      runStats.cost += p.status === 'done' ? (Number(p.cost) || 0) : Math.max(0, (Number(p.cost) || 0) - before);   // the function sets the page's cost afresh on every read
       if (p.status === 'error' && (Number(p.attempts) || 0) < RUN.maxAttempts && !/budget|too large|sign in|roles only/i.test(p.error || '')) { retry.push(p); runStats.retries++; }
       else if (p.status === 'error') runStats.failed++; else runStats.read++;
       runFlush(false); paintKeep();
@@ -1319,6 +1321,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=454"></script>
+<script src="sw-register.js?v=455"></script>
 </body>
 </html>
