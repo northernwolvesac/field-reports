@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=451"></script>
-<script src="auth.js?v=451"></script>
-<script src="est-totals.js?v=451"></script>
-<script src="est-engine.js?v=451"></script>
-<script src="geo-takeoff.js?v=451"></script>
+<script src="supabase-config.js?v=452"></script>
+<script src="auth.js?v=452"></script>
+<script src="est-totals.js?v=452"></script>
+<script src="est-engine.js?v=452"></script>
+<script src="geo-takeoff.js?v=452"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -842,15 +842,33 @@ var AE = (function() {
     });
   }
   // text items → lines (same baseline, left to right), so headings and clause numbers stay on their own line
+  // spec sheets are set in columns: a row of equal height is split where the gap between items is wide, the pieces are grouped into
+  // columns by their left edge, and the text flows column by column (top to bottom) — never across the sheet
   function pageLines(tc) {
     var rows = [];
-    tc.items.forEach(function(it) { if (!it.str || !it.str.trim()) return; var y = Math.round(it.transform[5]), x = it.transform[4]; var row = rows.find(function(r) { return Math.abs(r.y - y) <= 2; }); if (!row) { row = { y: y, items: [] }; rows.push(row); } row.items.push({ x: x, s: it.str }); });
-    rows.sort(function(a, b) { return b.y - a.y; });
-    return rows.map(function(r) { r.items.sort(function(a, b) { return a.x - b.x; }); var s = ''; r.items.forEach(function(it, i) { s += (i && !/\s$/.test(s) && !/^\s/.test(it.s) ? ' ' : '') + it.s; }); return s.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+    tc.items.forEach(function(it) { if (!it.str || !it.str.trim()) return; var y = Math.round(it.transform[5]), x = it.transform[4]; var row = rows.find(function(r) { return Math.abs(r.y - y) <= 2; }); if (!row) { row = { y: y, items: [] }; rows.push(row); } row.items.push({ x: x, x1: x + (it.width || it.str.length * 4), s: it.str }); });
+    var segs = [];
+    rows.forEach(function(r) {
+      r.items.sort(function(a, b) { return a.x - b.x; });
+      var cur = null;
+      r.items.forEach(function(it) {
+        if (cur && it.x - cur.x1 <= 18) { cur.s += (/\s$/.test(cur.s) || /^\s/.test(it.s) ? '' : ' ') + it.s; cur.x1 = Math.max(cur.x1, it.x1); }
+        else { cur = { x0: it.x, x1: it.x1, y: r.y, s: it.s }; segs.push(cur); }
+      });
+    });
+    // columns = clusters of left edges (a new column starts where the sorted left edges jump by more than 40 pt)
+    var xs = segs.map(function(s) { return s.x0; }).sort(function(a, b) { return a - b; }), cols = [], last = null;
+    xs.forEach(function(x) { if (last === null || x - last > 40) cols.push(x); last = x; });
+    segs.forEach(function(s) { var c = 0; for (var i = 0; i < cols.length; i++) if (cols[i] <= s.x0 + 1) c = i; s.col = c; });
+    segs.sort(function(a, b) { return a.col - b.col || b.y - a.y || a.x0 - b.x0; });
+    return segs.map(function(s) { return s.s.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
   }
   var SEC_RE = /^(?:SECTION|DIVISION)\s+(\d{2}\s?\d{2}\s?\d{2}(?:\.\d{2})?|\d{2})\s*[-–—:.]?\s*(.{0,80})$/i, PART_RE = /^PART\s+([1-3])\b\s*[-–—:.]?\s*(.{0,60})$/i, CLAUSE_RE = /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\s+([A-Z][^.]{2,70})$/, CAPS_RE = /^[A-Z][A-Z0-9 ,&\/\-()']{7,70}$/;
+  var NOTE_RE = /^(\d{1,3})\.\s+(\S.{8,})$/;
   function chunkLines(lines, meta) {
     var out = [], section = meta.section || null, clause = null, buf = [], n = 0;
+    // drawing notes are set in capitals: there an all-caps line is not a heading, the note numbers ("12. CONTRACTOR SHALL …") are the clauses
+    var letters = lines.join('').replace(/[^A-Za-z]/g, ''), allCaps = letters.length > 200 && letters.replace(/[^A-Z]/g, '').length / letters.length > 0.8;
     function flush() { var t = buf.join('\n').trim(); buf = []; if (!t) return;
       var parts = [], s = t; while (s.length > 1500) { var cut = s.lastIndexOf('. ', 1400); if (cut < 600) cut = s.lastIndexOf(' ', 1400); if (cut < 600) cut = 1400; parts.push(s.slice(0, cut + 1).trim()); s = s.slice(Math.max(0, cut - 120)).trim(); } if (s) parts.push(s);
       parts.forEach(function(c) { if (c.length >= 40) out.push({ section: section, clause: clause, chunk_no: n++, content: c }); }); }
@@ -858,7 +876,8 @@ var AE = (function() {
       var m;
       if ((m = SEC_RE.exec(l))) { flush(); section = (m[1] + (m[2] ? ' — ' + m[2].trim() : '')).slice(0, 90); clause = null; return; }
       if ((m = PART_RE.exec(l))) { flush(); clause = ('PART ' + m[1] + (m[2] ? ' ' + m[2].trim() : '')).slice(0, 60); buf.push(l); return; }
-      if ((m = CLAUSE_RE.exec(l)) || (CAPS_RE.test(l) && !/\d\s*(x|×)\s*\d/.test(l) && buf.join('').length > 300)) { flush(); clause = l.slice(0, 70); buf.push(l); return; }
+      if ((m = CLAUSE_RE.exec(l)) || (!allCaps && CAPS_RE.test(l) && !/\d\s*(x|×)\s*\d/.test(l) && buf.join('').length > 300)) { flush(); clause = l.slice(0, 70); buf.push(l); return; }
+      if (allCaps && (m = NOTE_RE.exec(l)) && buf.join('').length > 250) { flush(); clause = 'note ' + m[1]; buf.push(l); return; }
       buf.push(l);
     });
     flush(); return out;
@@ -1160,6 +1179,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick };
 })();
 </script>
-<script src="sw-register.js?v=451"></script>
+<script src="sw-register.js?v=452"></script>
 </body>
 </html>
