@@ -14,14 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=456"></script>
-<script src="auth.js?v=456"></script>
-<script src="est-totals.js?v=456"></script>
+<script src="supabase-config.js?v=457"></script>
+<script src="auth.js?v=457"></script>
+<script src="est-totals.js?v=457"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=456"></script>
-<script src="nw-email.js?v=456"></script>
-<script src="est-engine.js?v=456"></script>
-<script src="geo-takeoff.js?v=456"></script>
+<script src="email-utils.js?v=457"></script>
+<script src="nw-email.js?v=457"></script>
+<script src="est-engine.js?v=457"></script>
+<script src="geo-takeoff.js?v=457"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -238,7 +238,7 @@ var AE = (function() {
       '<button class="btn primary" onclick="AE.price()" ' + (done ? '' : 'disabled') + '>💲 Price it</button>' +
       '<button class="btn" onclick="AE.review()" ' + (done ? '' : 'disabled') + '>🔎 AI scope review</button>' +
       '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button>' +
-      '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { var r = p.result || {}; return r.geo || r.geo_pipe || r.geo_riser; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button></div></div>' +
+      '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { return p.status === 'done'; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust (without measurements: just the plans, to trace or auto-measure there)">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button></div></div>' +
       renderDuctSpec(res) + renderCorrections() +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
       '<div id="revOut">' + renderReview(res) + '</div></div>' + renderSpecQa();
@@ -1096,7 +1096,7 @@ var AE = (function() {
     var eq = eqRowsNow(), rows = eq.rows, need = rows.filter(function(r) { return r.status === 'budget'; }), rfqs = (session.result || {}).rfqs || [];
     var h = '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">3 · Equipment — ' + rows.length + ' unit' + (rows.length === 1 ? '' : 's') + (need.length ? ', <span class="flag">' + need.length + ' without a quote</span>' : '') + '</h3>' +
       '<div class="row"><button class="btn" onclick="AE.requestQuotes()" ' + (need.length ? '' : 'disabled') + ' title="E-mail the schedule rows that have no quote to the rep">✉ Request quotes' + (need.length ? ' (' + need.length + ')' : '') + '</button></div></div>';
-    if (!rows.length) return h + '<div class="muted">No equipment schedule read yet.</div></div>';
+    if (!rows.length) return h + '<div class="muted">No new equipment on the schedules or plans (existing units to remain and owner-furnished units are left out).</div></div>';
     h += '<table class="t" style="margin-top:8px"><tr><th>Tag</th><th>Type · make · model · capacity</th><th class="n">Qty <span class="basis">sched / plans</span></th><th>Pricing</th><th class="n">Unit $</th><th class="n">Line $</th></tr>' +
       rows.map(function(r) {
         var st = EQ_STATUS[r.status] || EQ_STATUS.skip, chip = '<span class="st" style="background:' + st[1] + ';color:' + st[2] + '">' + st[0] + '</span>';
@@ -1293,8 +1293,10 @@ var AE = (function() {
     if (!session.estimate_id) { toast('Create the estimate first'); return; }
     var estId = session.estimate_id;
     var list = pages.filter(function(p) { var r = p.result || {}; return (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || ((isPipePlan(p) || isDuctPlan(p)) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0); });
-    if (!list.length) { toast('Nothing measured yet — press “Measure ducts & pipes” first'); return; }
-    if (!confirm('Copy the drawing set into this estimate\'s Takeoff and lay the measured ducts, pipes and risers on the plans as layers? Earlier auto-marks there are replaced.')) return;
+    // nothing measured (no geometry on the plans): the plans still go to the Takeoff, where the estimator traces or auto-measures
+    var noGeo = !list.length;
+    if (noGeo) { list = pages.filter(function(p) { var f0 = files.find(function(x) { return x.id === p.file_id; }) || {}; return f0.kind !== 'quote' && f0.kind !== 'specs' && f0.storage_path && p.status !== 'error'; }); if (!list.length) { toast('No drawing sheets on this session yet'); return; } }
+    if (!confirm(noGeo ? 'No ducts or pipes could be measured on these plans (the sheet reads show why). Copy the drawing set into this estimate\'s Takeoff anyway, so you can trace or auto-measure there?' : 'Copy the drawing set into this estimate\'s Takeoff and lay the measured ducts, pipes and risers on the plans as layers? Earlier auto-marks there are replaced.')) return;
     bridging = 'Preparing…'; render();
     try {
       await loadNorms();   // engine fallbacks for sizes the catalog does not carry
@@ -1319,6 +1321,16 @@ var AE = (function() {
         dwg[f.id] = ins.data;
       }
       var dIds = Object.keys(dwg).map(function(k) { return dwg[k].id; });
+      if (noGeo) {   // plans only: a scale mark per sheet from the printed scale, no runs, earlier marks and decisions untouched
+        var sc0 = [];
+        list.forEach(function(p0) { var r0 = p0.result || {}, m0 = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]/.exec(String(r0.scale || '')); if (!m0 || !dwg[p0.file_id]) return;
+          var inch = m0[1].indexOf('/') > 0 ? Number(m0[1].split('/')[0]) / Number(m0[1].split('/')[1]) : Number(m0[1]); if (!(inch > 0)) return;
+          sc0.push({ drawing_id: dwg[p0.file_id].id, page_number: p0.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(inch * 72) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: inch * 72, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' }); });
+        if (sc0.length) { await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%'); var insS = await supabaseClient.from('estimate_measurements').insert(sc0); if (insS.error) throw new Error(insS.error.message); }
+        toast('Plans copied (' + list.length + ' sheets, no runs measured) — opening the takeoff');
+        setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
+        bridging = ''; render(); return;
+      }
       await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('label', 'auto');
       await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%');
       // the auto-marks are re-created with new ids: review decisions on the old runs no longer point at anything (device / equipment decisions stay)
@@ -1413,6 +1425,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=456"></script>
+<script src="sw-register.js?v=457"></script>
 </body>
 </html>
