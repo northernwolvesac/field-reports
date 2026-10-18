@@ -249,9 +249,35 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
   if (error || !pg) throw new Error("page not found");
   const { data: ses } = await db.from("ai_est_sessions").select("model").eq("id", pg.session_id).single();
   const model = MODELS[body.model] ? body.model : (ses && MODELS[ses.model] ? ses.model : DEFAULT_MODEL);
-  await db.from("ai_est_pages").update({ status: "running", error: null, model, started_at: new Date().toISOString() }).eq("id", pg.id);
+  // pass 2 / 3 = a repeat read of a sheet the reader counted by eye (no device tags in the text layer): the answer goes to
+  // result.reads[] and the page reconciles the passes; the row's status / result stay as they are
+  const pass = Math.max(1, Math.min(5, Number(body.pass) || 1));
+  if (pass === 1) await db.from("ai_est_pages").update({ status: "running", error: null, model, started_at: new Date().toISOString() }).eq("id", pg.id);
 
   const work = (async () => {
+    if (pass > 1) {
+      let entry: any = { pass, at: new Date().toISOString() };
+      try {
+        const content: any[] = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: body.pdf_base64 } }];
+        (body.tiles || []).slice(0, 12).forEach((t: string) => content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: t } }));
+        let prompt = SHEET_PROMPT;
+        if (body.tag_counts && Object.keys(body.tag_counts).length) prompt += "\n\nTAG COUNTS (exact, from the text layer of this sheet): " + JSON.stringify(body.tag_counts);
+        if (body.device_tags && Object.keys(body.device_tags).length) prompt += "\n\nDEVICE TAGS (exact, from the text layer of this sheet; device code → number of devices, TYP. multipliers already applied): " + JSON.stringify(body.device_tags);
+        if (body.text_hint) prompt += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
+        content.push({ type: "text", text: prompt });
+        const r = await claude(model, content, 8000, SHEET_SCHEMA);
+        let result: any;
+        if (r.data) result = r.data; else try { result = parseJson(r.text); } catch (_e) { result = { parse_error: true }; }
+        entry = { ...entry, cost: r.cost, tokens_in: r.tokens_in, tokens_out: r.tokens_out, sheet_type: result.sheet_type || null, parse_error: !!result.parse_error, truncated: r.stop === "max_tokens",
+          air_devices: result.air_devices || [], equipment: result.equipment || [], duct_runs: result.duct_runs || [], pipe_runs: result.pipe_runs || [] };
+      } catch (e) { entry.error = String((e as any)?.message || e).slice(0, 500); }
+      const { data: cur } = await db.from("ai_est_pages").select("result, cost").eq("id", pg.id).single();
+      const res0: any = (cur as any)?.result || {};
+      const reads = (Array.isArray(res0.reads) ? res0.reads : []).filter((x: any) => x && x.pass !== pass);
+      reads.push(entry);
+      await db.from("ai_est_pages").update({ result: { ...res0, reads }, cost: (Number((cur as any)?.cost) || 0) + (entry.cost || 0) }).eq("id", pg.id);
+      return;
+    }
     try {
       const content: any[] = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: body.pdf_base64 } }];
       (body.tiles || []).slice(0, 12).forEach((t: string) =>
@@ -288,7 +314,7 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
   })();
   // keep working after the response is sent
   (globalThis as any).EdgeRuntime?.waitUntil ? (globalThis as any).EdgeRuntime.waitUntil(work) : await work;
-  return { ok: true, page_id: pg.id, model, queued: true };
+  return { ok: true, page_id: pg.id, model, queued: true, pass };
 }
 
 async function runReview(db: any, body: any) {
