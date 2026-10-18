@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=453"></script>
-<script src="auth.js?v=453"></script>
-<script src="est-totals.js?v=453"></script>
-<script src="est-engine.js?v=453"></script>
-<script src="geo-takeoff.js?v=453"></script>
+<script src="supabase-config.js?v=454"></script>
+<script src="auth.js?v=454"></script>
+<script src="est-totals.js?v=454"></script>
+<script src="est-engine.js?v=454"></script>
+<script src="geo-takeoff.js?v=454"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -188,8 +188,10 @@ var AE = (function() {
   }
   async function reload() {
     var f = await supabaseClient.from('ai_est_files').select('*').eq('session_id', session.id).order('created_at');
-    var p = await supabaseClient.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_title, sheet_type, status, error, cost, tokens_in, tokens_out, tag_counts, result, model, started_at').eq('session_id', session.id).order('page_no');
+    var p = await supabaseClient.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_title, sheet_type, status, error, cost, tokens_in, tokens_out, tag_counts, result, model, started_at, attempts').eq('session_id', session.id).order('page_no');
+    if (p.error && /attempts/.test(p.error.message)) p = await supabaseClient.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_title, sheet_type, status, error, cost, tokens_in, tokens_out, tag_counts, result, model, started_at').eq('session_id', session.id).order('page_no');   // before ai-est-runner.sql
     files = f.data || []; pages = p.data || [];
+    if (!running) await recoverStale();   // sheets a vanished tab left "running"
     pages.forEach(function(pg) { if (pg.result) pg.result = unpack(pg.result); });
     try { var c = await supabaseClient.from('est_ai_corrections').select('kind, item_key, status, corrected, page_id, sheet_no, note, original').eq('session_id', session.id); corrections = c.error ? [] : (c.data || []); } catch (e) { corrections = []; }
     try { var qa = await supabaseClient.from('ai_est_spec_qa').select('*').eq('session_id', session.id).order('created_at', { ascending: false }).limit(30); specQa = qa.error ? [] : (qa.data || []);
@@ -204,7 +206,7 @@ var AE = (function() {
     var html =
       '<div class="card"><div class="row" style="justify-content:space-between">' +
       '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
-      ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + '</div></div>' +
+      ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + (res.run && res.run.finished_at ? ' · last run ' + res.run.read + ' sheet' + (res.run.read === 1 ? '' : 's') + ' in ' + Math.max(1, Math.round(res.run.secs / 60)) + ' min, $' + Number(res.run.cost || 0).toFixed(2) + (res.run.retries ? ', ' + res.run.retries + ' retr' + (res.run.retries === 1 ? 'y' : 'ies') : '') + (res.run.failed ? ', <span class="flag">' + res.run.failed + ' failed</span>' : '') : '') + (res.run && res.run.active && !running && res.run.heartbeat && Date.now() - new Date(res.run.heartbeat).getTime() < 120000 ? ' · <span class="flag">reading in another tab' + (res.run.by ? ' (' + esc(res.run.by) + ')' : '') + '</span>' : '') + '</div></div>' +
       '<div class="row"><label title="Shop drawings and T&amp;B are counted per plan sheet with new work; type a number here to override">SD/T&amp;B sheets<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
       (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a>' : '') + '</div></div></div>' +
 
@@ -218,10 +220,11 @@ var AE = (function() {
       }).join('') + '</table>' : '') + '</div>' +
 
       '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">2 · AI reads every sheet — ' + done + ' / ' + pages.length + ' done</h3>' +
-      '<div class="row"><button class="btn primary" id="readBtn" onclick="AE.readAll()" ' + (!todo || running ? 'disabled' : '') + '>' + (running ? 'Reading…' : '▶ Read ' + todo + ' sheet' + (todo === 1 ? '' : 's')) + '</button>' +
+      '<div class="row"><button class="btn primary" id="readBtn" onclick="AE.readAll()" ' + (!todo || running ? 'disabled' : '') + '>' + (running ? 'Reading…' : (pages.some(function(p) { return p.status === 'error'; }) || (res.run && res.run.active) ? '▶ Resume ' : '▶ Read ') + todo + ' sheet' + (todo === 1 ? '' : 's')) + '</button>' +
       '<button class="btn" onclick="AE.measureDucts(true)" ' + (running || measuring || !pages.some(function(x) { return isDuctPlan(x) || isPipePlan(x) || isRiserSheet(x); }) ? 'disabled' : '') + ' title="Measure new ductwork from the vector lines of the duct plans">' + (measuring ? '📐 Measuring…' : '📐 Measure ducts & pipes') + '</button></div></div>' +
       (measuring ? '<div class="muted" id="geoMsg" style="margin-top:6px">' + esc(measuring) + '</div>' : '') + (diffing ? '<div class="muted" style="margin-top:6px">Δ ' + esc(diffing) + '</div>' : '') +
       '<div class="prog"><div id="rdProg" style="width:' + (pages.length ? Math.round(done / pages.length * 100) : 0) + '%"></div></div>' +
+      (runStats ? '<div class="muted" style="margin-top:6px">▶ ' + esc(runProgress()) + '</div>' : '') +
       (pages.length ? '<table class="t" style="margin-top:10px"><tr><th>#</th><th>Sheet</th><th class="hide-m">Type</th><th>Found</th><th>Status</th><th class="n hide-m">$</th><th></th></tr>' + pages.map(pageRow).join('') + '</table>' : '<div class="muted" style="margin-top:8px">Upload the drawing set first.</div>') + '</div>' +
 
       '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">3 · Estimate</h3><div class="row">' +
@@ -771,23 +774,69 @@ var AE = (function() {
     paintKeep();
   }
   function paintKeep() { var el = $('main'); if (el && session) { var y = window.scrollY; render(); window.scrollTo(0, y); } }
+  // ─── the runner: sheets are claimed one tab at a time (the row flips pending / error → running only once, so a second tab or a
+  // reopened session resumes the rest instead of paying twice), 4 sheets in flight, failed reads retried with backoff (3 attempts),
+  // a sheet left "running" with no answer for 10 minutes is offered again; the run's cost and time live in session.result.run ───
+  var RUN = { workers: 4, maxAttempts: 3, staleMin: 10 }, runStats = null, runFlushT = null;
+  async function claim(p) {
+    var r = await supabaseClient.from('ai_est_pages').update({ status: 'running', error: null, started_at: new Date().toISOString(), attempts: (Number(p.attempts) || 0) + 1 }).eq('id', p.id).in('status', ['pending', 'error']).select('id, attempts');
+    if (r.error) { if (/attempts|column/i.test(r.error.message)) { var r2 = await supabaseClient.from('ai_est_pages').update({ status: 'running', error: null, started_at: new Date().toISOString() }).eq('id', p.id).in('status', ['pending', 'error']).select('id'); if (r2.error || !r2.data || !r2.data.length) return false; p.attempts = (Number(p.attempts) || 0) + 1; p.status = 'running'; return true; } return false; }
+    if (!r.data || !r.data.length) return false;
+    p.attempts = r.data[0].attempts; p.status = 'running'; return true;
+  }
+  // a sheet claimed by a tab that went away: no answer after staleMin → error, so the next run picks it up
+  async function recoverStale() {
+    var cut = Date.now() - RUN.staleMin * 60000, stale = pages.filter(function(p) { return p.status === 'running' && p.started_at && new Date(p.started_at).getTime() < cut; });
+    for (var i = 0; i < stale.length; i++) { var p = stale[i]; await supabaseClient.from('ai_est_pages').update({ status: 'error', error: 'no answer in ' + RUN.staleMin + ' min — the tab that was reading it closed?' }).eq('id', p.id).eq('status', 'running'); p.status = 'error'; p.error = 'no answer in ' + RUN.staleMin + ' min'; }
+    return stale.length;
+  }
+  function runFlush(final) {
+    clearTimeout(runFlushT); if (!runStats) return;
+    var st = runStats, run = { started_at: st.started_at, heartbeat: new Date().toISOString(), active: !final, sheets: st.total, read: st.read, failed: st.failed, retries: st.retries, cost: Math.round(st.cost * 10000) / 10000, secs: Math.round((Date.now() - st.t0) / 1000), by: me && me.name };
+    if (final) run.finished_at = run.heartbeat;
+    session.result = Object.assign({}, session.result || {}, { run: run });
+    supabaseClient.from('ai_est_sessions').update({ result: session.result }).eq('id', session.id).then(function() {});
+    if (!final) runFlushT = setTimeout(function() { runFlush(false); }, 30000);
+  }
+  function runProgress() {
+    var st = runStats; if (!st) return '';
+    var el = (Date.now() - st.t0) / 1000, doneN = st.read + st.failed, rate = doneN ? doneN / el : 0, left = Math.max(0, st.total - doneN), eta = rate ? left / rate : 0;
+    return doneN + ' of ' + st.total + ' sheets · ' + Math.round(el / 60) + ' min' + (eta ? ' · about ' + Math.max(1, Math.round(eta / 60)) + ' min left' : '') + ' · $' + st.cost.toFixed(2) + (st.retries ? ' · ' + st.retries + ' retr' + (st.retries === 1 ? 'y' : 'ies') : '') + (st.inflight.length ? ' · reading ' + st.inflight.map(function(p) { return p.sheet_no || 'p' + p.page_no; }).join(', ') : '');
+  }
   async function runQueue(list) {
-    if (running) return; running = true; window.NW_HOLD_RELOAD = true; render();
-    var i = 0, done = 0;
-    async function worker() {
-      while (i < list.length) {
-        var p = list[i++]; p.status = 'running'; paint();
-        try { await readPage(p); } catch (e) { p.status = 'error'; p.error = e.message; await supabaseClient.from('ai_est_pages').update({ status: 'error', error: e.message }).eq('id', p.id); }
-        done++; paint();
+    if (running) return; running = true; window.NW_HOLD_RELOAD = true;
+    runStats = { t0: Date.now(), started_at: new Date().toISOString(), total: list.length, read: 0, failed: 0, retries: 0, cost: 0, inflight: [] }; runFlush(false); render();
+    var queue = list.slice(), retry = [];
+    async function sleepMs(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+    async function runOne(p) {
+      if (!await claim(p)) { runStats.total--; return; }   // another tab has it (or it is already done)
+      runStats.inflight.push(p); paintKeep();
+      var before = Number(p.cost) || 0;
+      try { await readPage(p); } catch (e) { p.status = 'error'; p.error = e.message; await supabaseClient.from('ai_est_pages').update({ status: 'error', error: String(e.message || e).slice(0, 500) }).eq('id', p.id); }
+      runStats.inflight = runStats.inflight.filter(function(x) { return x !== p; });
+      runStats.cost += Math.max(0, (Number(p.cost) || 0) - before);
+      if (p.status === 'error' && (Number(p.attempts) || 0) < RUN.maxAttempts && !/budget|too large|sign in|roles only/i.test(p.error || '')) { retry.push(p); runStats.retries++; }
+      else if (p.status === 'error') runStats.failed++; else runStats.read++;
+      runFlush(false); paintKeep();
+    }
+    async function worker(round) {
+      while (true) {
+        var p = queue.shift(); if (!p) return;
+        if (round) await sleepMs(Math.min(60000, 15000 * (Number(p.attempts) || 1)));   // backoff before a retry
+        await runOne(p);
       }
     }
-    function paint() { paintKeep(); }
-    await Promise.all([worker(), worker(), worker()]);
-    running = false; window.NW_HOLD_RELOAD = false; await reload(); render();
+    for (var round = 0; round < RUN.maxAttempts && queue.length; round++) {
+      var ws = []; for (var w = 0; w < RUN.workers; w++) ws.push(worker(round));
+      await Promise.all(ws);
+      queue = retry; retry = [];
+    }
+    runStats.failed += queue.length; queue.forEach(function(p) { p.status = 'error'; });
+    running = false; window.NW_HOLD_RELOAD = false; runFlush(true);
+    var st = runStats; await reload(); runStats = null; render();
     measureDucts(false);        // measure the new duct plans from their lines right away
     if (specChunks === 0 && specPages().length) indexSpecs(true);   // the spec sheets become searchable passages (no AI cost)
-    var bad = list.filter(function(p) { return p.status === 'error'; }).length;
-    toast(bad ? bad + ' sheet(s) failed — press ↻ on them' : 'All sheets read ✓');
+    toast((st.failed ? st.failed + ' sheet(s) failed after ' + RUN.maxAttempts + ' attempts — press ↻ on them · ' : 'All sheets read ✓ · ') + st.read + ' read in ' + Math.round((Date.now() - st.t0) / 1000) + ' s, $' + st.cost.toFixed(2));
   }
   // ─── triage: a cheap look (Haiku, ~$0.004) at every drawing sheet before the expensive read — plumbing, electrical, architectural, covers are not read ───
   var SKIP_DISC = /^(plumbing|electrical|fire|architectural|structural|civil|cover)/i;
@@ -1270,6 +1319,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=453"></script>
+<script src="sw-register.js?v=454"></script>
 </body>
 </html>
