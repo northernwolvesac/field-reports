@@ -6,19 +6,19 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=436">
+<link rel="stylesheet" href="procore-ui.css?v=437">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=436"></script>
-<script src="auth.js?v=436"></script>
-<script src="est-totals.js?v=436"></script>
-<script src="procore-ui.js?v=436"></script>
+<script src="supabase-config.js?v=437"></script>
+<script src="auth.js?v=437"></script>
+<script src="est-totals.js?v=437"></script>
+<script src="procore-ui.js?v=437"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=436"></script>
-<script src="est-drawings.js?v=436"></script>
-<script src="nw-catalog-picker.js?v=436"></script>
-<script src="geo-takeoff.js?v=436"></script>
-<script src="est-engine.js?v=436"></script>
+<script src="bid-actions.js?v=437"></script>
+<script src="est-drawings.js?v=437"></script>
+<script src="nw-catalog-picker.js?v=437"></script>
+<script src="geo-takeoff.js?v=437"></script>
+<script src="est-engine.js?v=437"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -2186,8 +2186,11 @@ requireAuth().catch(function(){});
   async function loadReview() {
     rvLoaded = true;
     try {
-      var s = await sb.from('ai_est_sessions').select('id,name,estimate_id,created_at').in('estimate_id', uniq([estimateId, rootId])).order('created_at', { ascending: false }).limit(1);
-      RV.session = (s.data && s.data[0]) || null;
+      // the newest AI session of this estimate that has read sheets (a session opened from the Takeoff menu may still be empty)
+      var s = await sb.from('ai_est_sessions').select('id,name,estimate_id,created_at').in('estimate_id', uniq([estimateId, rootId])).order('created_at', { ascending: false }).limit(10);
+      RV.session = null;
+      for (var si = 0; si < (s.data || []).length && !RV.session; si++) { var pc = await sb.from('ai_est_pages').select('id', { count: 'exact', head: true }).eq('session_id', s.data[si].id).eq('status', 'done'); if (pc.count) RV.session = s.data[si]; }
+      if (!RV.session && s.data && s.data[0]) RV.session = s.data[0];
       if (RV.session) {
         var f = await sb.from('ai_est_files').select('id,file_name,kind,pages').eq('session_id', RV.session.id); RV.files = f.data || [];
         var pg = await sb.from('ai_est_pages').select('id,file_id,page_no,sheet_no,sheet_title,sheet_type,status,result').eq('session_id', RV.session.id).eq('status', 'done').order('page_no');
@@ -2633,6 +2636,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=436"></script>
+<script src="sw-register.js?v=437"></script>
 </body>
 </html>
