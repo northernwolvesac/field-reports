@@ -243,8 +243,7 @@ function repairJson(s: string): any {
   throw new Error("unreadable JSON");
 }
 
-const GLYPH_NOTE = "SYMBOL GLYPHS counted from the vector layer of this sheet (one family per line: count x shape, paper size in inches, diagonal strokes inside, how many have a cfm number or a short tag beside them). Find the legend's air-device symbols among these families by shape and size: a family that matches a legend symbol gives the EXACT quantity of that device on this sheet - use that count instead of counting by eye, and say in the row's basis which family (#n) you used. Families that are tag bubbles, light fixtures, sprinkler heads, thermostats, furniture, column markers or dimension marks are not devices.
-";
+const GLYPH_NOTE = "SYMBOL GLYPHS counted from the vector layer of this sheet (one family per line: count x shape, paper size in inches, diagonal strokes inside, how many have a cfm number or a short tag beside them). Find the legend's air-device symbols among these families by shape and size: a family that matches a legend symbol gives the EXACT quantity of that device on this sheet - use that count instead of counting by eye, and say in the row's basis which family (#n) you used. Families that are tag bubbles, light fixtures, sprinkler heads, thermostats, furniture, column markers or dimension marks are not devices.\n";
 
 // ─── handlers ─────────────────────────────────────────────────────────
 async function runPage(db: any, body: any, kind: "sheet" | "quote") {
