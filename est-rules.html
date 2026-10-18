@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>Estimating Rules — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=443"></script>
+<script src="auth.js?v=443"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 40px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; color: #111318; }
+  .btn.primary { background: #111318; color: #fff; border-color: #111318; } .btn.danger { color: #b91c1c; border-color: #fca5a5; }
+  .intro { font-size: 13px; color: #4b5563; margin: 14px 0; line-height: 1.5; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; background: #fafafa; }
+  tr:last-child td { border-bottom: 0; }
+  .type { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; background: #e0f2fe; color: #075985; }
+  .type.reminder { background: #fef3c7; color: #b45309; } .type.pct_add, .type.add_line { background: #dcfce7; color: #15803d; }
+  .off { opacity: .5; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .empty { text-align: center; padding: 30px; color: #6b7280; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(17,19,24,.45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 14px; }
+  .modal-bg.on { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 560px; padding: 18px; max-height: 92vh; overflow: auto; }
+  .modal h3 { margin: 0 0 12px; font-size: 16px; }
+  .f { margin-bottom: 11px; } .f label { display: block; font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 4px; }
+  .f input, .f select, .f textarea { width: 100%; padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; box-sizing: border-box; }
+  .f textarea { min-height: 64px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .help { font-size: 12px; color: #6b7280; margin-top: 4px; }
+  .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  @media (max-width: 640px) { th.hide, td.hide { display: none; } .row2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="top"><a class="back" href="index.html">‹</a><div class="ttl"><b>Estimating Rules</b><span>Company rules applied to every estimate — minimum charges, reminders, allowances</span></div><button class="btn primary" id="btnNew" hidden>+ New rule</button></div>
+<div class="wrap">
+  <div class="intro">Rules run on the <b>Estimating</b> page whenever an estimate is priced. A rule matches estimate lines by a word in the description (and optionally a category) and then either tops the lines up to a <b>minimum charge</b>, adds an <b>allowance</b> (a percent of the matched material or a fixed amount), or shows a <b>reminder</b> to the estimator. Rules never change the catalog prices themselves.</div>
+  <div class="card"><div id="list"><div class="empty">Loading…</div></div></div>
+</div>
+
+<div class="modal-bg" id="mb"><div class="modal">
+  <h3 id="mTitle">New rule</h3>
+  <div class="f"><label>Rule name</label><input id="rName" placeholder="Chemical cleaning — minimum charge"></div>
+  <div class="row2">
+    <div class="f"><label>Type</label><select id="rType">
+      <option value="min_charge">Minimum charge — top the matched lines up to an amount</option>
+      <option value="pct_add">Allowance — add a percent of the matched lines' material</option>
+      <option value="add_line">Fixed amount — add an amount when a match exists</option>
+      <option value="reminder">Reminder — show a note when a match exists</option>
+    </select></div>
+    <div class="f"><label>Category (optional)</label><select id="rCat"><option value="">Any</option><option value="equipment">Equipment</option><option value="ductwork">Ductwork</option><option value="pipework">Pipework</option><option value="air_outlets">Air outlets</option><option value="disconnects">Disconnects</option><option value="equipment_install">Equipment install</option><option value="services">Services</option></select></div>
+  </div>
+  <div class="f"><label>Matches lines whose description contains</label><input id="rMatch" placeholder="chemical cleaning"><div class="help">Case-insensitive. Leave empty with a category to match every line of that category.</div></div>
+  <div class="row2">
+    <div class="f" id="fAmount"><label id="lAmount">Minimum amount ($)</label><input id="rAmount" type="number" step="0.01" min="0"></div>
+    <div class="f" id="fPct" hidden><label>Percent of matched material (%)</label><input id="rPct" type="number" step="0.1" min="0"></div>
+  </div>
+  <div class="f"><label>Note shown to the estimator</label><textarea id="rNotes" placeholder="Minimum $1,500 per job even with one unit; units over 10 T are double."></textarea></div>
+  <div class="f"><label><input type="checkbox" id="rActive" checked style="width:auto;margin-right:6px"> Active</label></div>
+  <div class="acts"><button class="btn" id="mCancel">Cancel</button><button class="btn danger" id="mDelete" hidden>Delete</button><button class="btn primary" id="mSave">Save</button></div>
+</div></div>
+
+<script>
+requireAuth().catch(function(){});
+(function() {
+  var $ = function(id) { return document.getElementById(id); };
+  var rules = [], canEdit = false, editing = null;
+  var TYPES = { min_charge: 'Minimum charge', pct_add: 'Allowance %', add_line: 'Fixed amount', reminder: 'Reminder' };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function money(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function paramsText(r) {
+    var p = r.params || {};
+    if (r.rule_type === 'min_charge') return 'minimum ' + money(p.min_amount);
+    if (r.rule_type === 'pct_add') return (p.pct || 0) + ' % of matched material';
+    if (r.rule_type === 'add_line') return '+ ' + money(p.amount);
+    return '';
+  }
+  async function load() {
+    var me = await supabaseClient.auth.getUser();
+    var prof = me.data && me.data.user ? await supabaseClient.from('profiles').select('role').eq('id', me.data.user.id).maybeSingle() : null;
+    var role = prof && prof.data ? prof.data.role : '';
+    canEdit = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'].indexOf(role) >= 0;
+    $('btnNew').hidden = !canEdit;
+    var r = await supabaseClient.from('est_rules').select('*').order('sort').order('created_at');
+    if (r.error) { $('list').innerHTML = '<div class="empty">Rules table missing — run est-rules-schema.sql in Supabase.<br><span class="muted">' + esc(r.error.message) + '</span></div>'; return; }
+    rules = r.data || []; render();
+  }
+  function render() {
+    if (!rules.length) { $('list').innerHTML = '<div class="empty">No rules yet.' + (canEdit ? ' Use <b>+ New rule</b>.' : '') + '</div>'; return; }
+    $('list').innerHTML = '<table><thead><tr><th>Rule</th><th>Type</th><th class="hide">Matches</th><th>Effect</th><th class="hide">Note</th><th></th></tr></thead><tbody>' + rules.map(function(r) {
+      var m = [r.match_text ? '“' + esc(r.match_text) + '”' : '', r.match_category ? esc(r.match_category.replace('_', ' ')) : ''].filter(Boolean).join(' · ') || 'every line';
+      return '<tr class="' + (r.active ? '' : 'off') + '"><td><b>' + esc(r.name) + '</b>' + (r.active ? '' : ' <span class="muted">(off)</span>') + '</td><td><span class="type ' + esc(r.rule_type) + '">' + esc(TYPES[r.rule_type] || r.rule_type) + '</span></td>' +
+        '<td class="hide muted">' + m + '</td><td>' + esc(paramsText(r)) + '</td><td class="hide muted">' + esc(r.notes || '') + '</td>' +
+        '<td style="text-align:right">' + (canEdit ? '<button class="btn" data-edit="' + esc(r.id) + '">Edit</button>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+    $('list').querySelectorAll('[data-edit]').forEach(function(b) { b.addEventListener('click', function() { openModal(rules.find(function(x) { return x.id === b.getAttribute('data-edit'); })); }); });
+  }
+  function syncType() { var t = $('rType').value; $('fAmount').hidden = !(t === 'min_charge' || t === 'add_line'); $('fPct').hidden = t !== 'pct_add'; $('lAmount').textContent = t === 'add_line' ? 'Amount to add ($)' : 'Minimum amount ($)'; }
+  function openModal(r) {
+    editing = r || null;
+    $('mTitle').textContent = r ? 'Edit rule' : 'New rule';
+    $('rName').value = r ? r.name : ''; $('rType').value = r ? r.rule_type : 'min_charge'; $('rCat').value = r ? (r.match_category || '') : '';
+    $('rMatch').value = r ? (r.match_text || '') : ''; var p = (r && r.params) || {};
+    $('rAmount').value = p.min_amount != null ? p.min_amount : (p.amount != null ? p.amount : ''); $('rPct').value = p.pct != null ? p.pct : '';
+    $('rNotes').value = r ? (r.notes || '') : ''; $('rActive').checked = r ? !!r.active : true; $('mDelete').hidden = !r;
+    syncType(); $('mb').classList.add('on'); $('rName').focus();
+  }
+  async function save() {
+    var t = $('rType').value, name = $('rName').value.trim();
+    if (!name) { alert('Rule name is required'); return; }
+    if (!$('rMatch').value.trim() && !$('rCat').value) { alert('Give a word to match or a category'); return; }
+    var params = {};
+    if (t === 'min_charge') params.min_amount = Number($('rAmount').value || 0);
+    if (t === 'add_line') params.amount = Number($('rAmount').value || 0);
+    if (t === 'pct_add') params.pct = Number($('rPct').value || 0);
+    var row = { name: name, rule_type: t, match_text: $('rMatch').value.trim() || null, match_category: $('rCat').value || null, params: params, notes: $('rNotes').value.trim() || null, active: $('rActive').checked, updated_at: new Date().toISOString() };
+    var r = editing ? await supabaseClient.from('est_rules').update(row).eq('id', editing.id) : await supabaseClient.from('est_rules').insert(row);
+    if (r.error) { alert('Save failed: ' + r.error.message); return; }
+    $('mb').classList.remove('on'); load();
+  }
+  async function del() {
+    if (!editing || !confirm('Delete rule "' + editing.name + '"?')) return;
+    var r = await supabaseClient.from('est_rules').delete().eq('id', editing.id);
+    if (r.error) { alert('Delete failed: ' + r.error.message); return; }
+    $('mb').classList.remove('on'); load();
+  }
+  $('btnNew').addEventListener('click', function() { openModal(null); });
+  $('mCancel').addEventListener('click', function() { $('mb').classList.remove('on'); });
+  $('mSave').addEventListener('click', save); $('mDelete').addEventListener('click', del); $('rType').addEventListener('change', syncType);
+  $('mb').addEventListener('click', function(e) { if (e.target === $('mb')) $('mb').classList.remove('on'); });
+  load();
+})();
+</script>
+<script src="sw-register.js?v=443"></script>
+</body>
+</html>

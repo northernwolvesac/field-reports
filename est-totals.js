@@ -186,6 +186,34 @@
     return base * p;
   }
 
+  // ── company estimating rules (est_rules, loaded by the page into window.NW_EST_RULES or est.rules) ──
+  // min_charge {min_amount}: matched lines are topped up to the minimum; pct_add {pct}: + % of matched material;
+  // add_line {amount}: + fixed amount when a match exists; reminder: a note for the estimator. Match = description contains
+  // match_text (case-insensitive) AND/OR category = match_category. Optional lines are ignored.
+  function nwEstRules(lines, perLine, rules) {
+    var out = { adjustments: [], flags: [] };
+    (rules || []).forEach(function (rule) {
+      if (!rule || rule.active === false) return;
+      var mt = String(rule.match_text || '').trim().toLowerCase(), mc = String(rule.match_category || '').trim();
+      if (!mt && !mc) return;
+      var hits = [];
+      (lines || []).forEach(function (li, i) {
+        if (!li || li.is_optional || !perLine[i]) return;
+        if (mt && String(li.description || '').toLowerCase().indexOf(mt) < 0) return;
+        if (mc && String(li.category || '') !== mc) return;
+        hits.push(perLine[i]);
+      });
+      if (!hits.length) return;
+      var p = rule.params || {}, first = hits[0];
+      var matchedCost = hits.reduce(function (a, lt) { return a + (lt.costType === 'ML' ? lt.subtotalItemCost : lt.totalCost); }, 0);
+      var base = { rule: rule.name, type: rule.rule_type, costType: first.costType, markupPct: first.markupPct, taxable: first.taxable, notes: rule.notes || '', lines: hits.length, matchedCost: matchedCost };
+      if (rule.rule_type === 'min_charge') { var min = num(p.min_amount); if (min > matchedCost) out.adjustments.push(Object.assign(base, { amount: min - matchedCost, label: 'Minimum ' + min.toFixed(2) + ' (lines ' + matchedCost.toFixed(2) + ')' })); }
+      else if (rule.rule_type === 'pct_add') { var pct = num(p.pct); if (pct > 0 && matchedCost > 0) out.adjustments.push(Object.assign(base, { amount: matchedCost * pct / 100, label: pct + ' % of ' + matchedCost.toFixed(2) })); }
+      else if (rule.rule_type === 'add_line') { var amt = num(p.amount); if (amt > 0) out.adjustments.push(Object.assign(base, { amount: amt, label: 'fixed amount' })); }
+      else if (rule.rule_type === 'reminder') out.flags.push(base);
+    });
+    return out;
+  }
   function nwEstTotals(lines, est) {
     est = est || {};
     var r = nwEstRates(est);
@@ -198,10 +226,12 @@
     var subtotal = 0, count = 0, optionalTotal = 0;
     var breakdown = { sm: 0, pipe: 0, startup: 0, other: 0 };
     var duct = { lb: 0, rect: 0, round: 0, oval: 0, shopCost: 0, lineMaterial: 0, lines: 0 };   // sheet-metal weight (lb) + shop $/lb check
+    var perLine = [];   // per-line totals in line order, for the rules
 
     (lines || []).forEach(function (li) {
       if (!li) return;
       var lt = nwLineTotals(li, est, { rates: r, settings: settings, groupMultiplier: nwGroupMultiplier(est, li.group_name) });
+      perLine[(lines || []).indexOf(li)] = lt;
       if (li.is_optional) { optionalTotal += lt.totalSales; return; }
       count++;
       subtotal += lt.totalSales;
@@ -227,6 +257,17 @@
       if (KNOWN_CREWS[lt.crew]) breakdown[lt.crew] += lt.totalLaborTime;
     });
 
+    // ── company rules: minimum charges / allowances join the buckets of the lines they matched ──
+    var ruleSet = Array.isArray(est.rules) ? est.rules : (typeof window !== 'undefined' && Array.isArray(window.NW_EST_RULES) ? window.NW_EST_RULES : []);
+    var rulesOut = nwEstRules(lines, perLine, ruleSet);
+    rulesOut.adjustments.forEach(function (a) {
+      var sales = a.amount * (1 + num(a.markupPct));
+      a.sales = sales;
+      if (a.costType === 'S') { wetTap += a.amount; wetTapSales += sales; }
+      else if (a.costType === 'O') { services += a.amount; servicesSales += sales; }
+      else { matCost += a.amount; matSales += sales; otherMat += a.amount; if (a.taxable) taxableSales += sales; }
+      subtotal += sales;
+    });
     // equipment + ductwork + pipework material (legacy bucket; the tax base is taxes.materials.taxableSales)
     var materialTotal = equipMat + ductMat + pipeMat;
 
@@ -305,7 +346,7 @@
       // legacy aliases for existing callers
       material: materialTotal, baseCost: subtotal,
       // ── Procore-shaped block ──
-      summary: summary, duct: duct,
+      summary: summary, duct: duct, rules: rulesOut,
       preTax: preTax, preTaxTotal: preTaxTotal,
       taxes: taxes,
       postTax: postTax, postTaxTotal: postTaxTotal,

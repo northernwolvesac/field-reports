@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=440">
+<link rel="stylesheet" href="procore-ui.css?v=443">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=440"></script>
-<script src="auth.js?v=440"></script>
-<script src="est-totals.js?v=440"></script>
-<script src="procore-ui.js?v=440"></script>
-<script src="nw-catalog-picker.js?v=440"></script>
-<script src="nw-duct-weight.js?v=441"></script>
-<script src="nw-proposal.js?v=440"></script>
-<script src="bid-actions.js?v=440"></script>
+<script src="supabase-config.js?v=443"></script>
+<script src="auth.js?v=443"></script>
+<script src="est-totals.js?v=443"></script>
+<script src="procore-ui.js?v=443"></script>
+<script src="nw-catalog-picker.js?v=443"></script>
+<script src="nw-duct-weight.js?v=443"></script>
+<script src="nw-proposal.js?v=443"></script>
+<script src="bid-actions.js?v=443"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -843,6 +843,7 @@ requireAuth().catch(function(){});
         '<a href="assembly-library.html">Cost Catalog</a>' +
         '<a href="vendors.html">Vendor Library</a>' +
         '<a href="est-knowledge.html">Knowledge</a>' +
+        '<a href="est-rules.html">Rules</a>' +
         '<a href="ai-estimator.html">AI Estimator</a>' +
         '<span class="grow" style="flex:1"></span>' +
         '<label>Estimator <select id="crumbEstimator"><option value="">All</option><option value="__me__">Just me</option></select></label>' +
@@ -1071,6 +1072,7 @@ requireAuth().catch(function(){});
     await loadVersions();
     await loadLayers();
     await loadCatalogRows();
+    await loadRules();
 
     renderShell();
     renderWorkspace();
@@ -1128,6 +1130,11 @@ requireAuth().catch(function(){});
       if (!r.error) layers = r.data || [];
     } catch (e) {}
     layers.forEach(function(l) { layerById[l.id] = l; });
+  }
+  // company estimating rules (est_rules) → est-totals reads window.NW_EST_RULES
+  async function loadRules() {
+    if (window.NW_EST_RULES) return;
+    try { var r = await supabaseClient.from('est_rules').select('*').eq('active', true).order('sort'); window.NW_EST_RULES = r.error ? [] : (r.data || []); } catch (e) { window.NW_EST_RULES = []; }
   }
   async function loadCatalogRows() {
     catalogById = {};
@@ -3126,6 +3133,13 @@ requireAuth().catch(function(){});
       html += '<div class="es-side-line" style="margin-top:6px">Sheet metal <b>' + fmtNum(D.lb, 0) + ' lb</b> <span class="pc-muted" style="font-size:11px">(' + kinds + ', ' + D.lines + ' duct lines, ' + ((t.settings && (t.settings.duct_medium_pressure || (t.settings.es_settings || {}).duct_medium_pressure)) ? '4" w.g.' : '2" w.g.') + ' gauge + ' + (window.NWDuct ? NWDuct.FITTING_PCT : 25) + ' % fittings)</span><br>Shop check @ $/lb <b>' + money(D.shopCost) + '</b> <span class="pc-muted" style="font-size:11px">vs ' + money(D.lineMaterial) + ' duct material in the lines (lines include liner / wrap; shop $/lb is bare metal + fab)</span></div>';
     }
 
+    // company rules (est-rules.html): minimum charges / allowances already inside the subtotal above, reminders for the estimator
+    if (t.rules && (t.rules.adjustments.length || t.rules.flags.length)) {
+      html += '<div class="es-side-line" style="margin-top:6px"><b>Rules</b> <a href="est-rules.html" class="pc-muted" style="font-size:11px">edit</a>' +
+        t.rules.adjustments.map(function(a) { return '<div style="margin-top:3px">' + escHtml(a.rule) + ' <b>+' + money(a.amount) + '</b> <span class="pc-muted" style="font-size:11px">' + escHtml(a.label) + (a.notes ? ' — ' + escHtml(a.notes) : '') + '</span></div>'; }).join('') +
+        t.rules.flags.map(function(f) { return '<div style="margin-top:3px;color:#b45309">⚠ ' + escHtml(f.rule) + (f.notes ? ': <span style="color:#92400e">' + escHtml(f.notes) + '</span>' : '') + ' <span class="pc-muted" style="font-size:11px">(' + f.lines + ' line' + (f.lines === 1 ? '' : 's') + ')</span></div>'; }).join('') + '</div>';
+    }
+
     // Pre-Tax markups
     html += '<div class="es-mk"><div class="es-mk-h">Pre-Tax Markups' + (canEdit && !locked ? '<button class="pc-btn pc-btn-icon pc-btn-ghost" data-mkadd="pre" title="Add markup">' + icon('add', 18) + '</button>' : '') + '</div>';
     t.preTax.forEach(function(m) { html += markupRow(m, 'pre', locked); });
@@ -3644,6 +3658,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=440"></script>
+<script src="sw-register.js?v=443"></script>
 </body>
 </html>
