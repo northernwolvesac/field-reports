@@ -6,18 +6,63 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=399">
+<link rel="stylesheet" href="procore-ui.css?v=436">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=399"></script>
-<script src="auth.js?v=399"></script>
-<script src="est-totals.js?v=399"></script>
-<script src="procore-ui.js?v=399"></script>
+<script src="supabase-config.js?v=436"></script>
+<script src="auth.js?v=436"></script>
+<script src="est-totals.js?v=436"></script>
+<script src="procore-ui.js?v=436"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=399"></script>
-<script src="est-drawings.js?v=399"></script>
-<script src="nw-catalog-picker.js?v=399"></script>
-<script src="geo-takeoff.js?v=431"></script>
+<script src="bid-actions.js?v=436"></script>
+<script src="est-drawings.js?v=436"></script>
+<script src="nw-catalog-picker.js?v=436"></script>
+<script src="geo-takeoff.js?v=436"></script>
+<script src="est-engine.js?v=436"></script>
+<style>
+  /* ─── AI review tab (left panel) ─── */
+  .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
+  .tk-mode button { flex: 1; border: 0; background: #fff; padding: 6px 4px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--pc-text, #1f2933); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .tk-mode button + button { border-left: 1px solid var(--pc-border-strong, #d1d5db); }
+  .tk-mode button.on { background: var(--pc-link, #1a66e0); color: #fff; }
+  .tk-mode .cnt { font-size: 10px; line-height: 14px; padding: 0 5px; border-radius: 8px; background: #f59e0b; color: #fff; font-weight: 700; }
+  .tk-mode button.on .cnt { background: #fff; color: var(--pc-link, #1a66e0); }
+  body.tk-review #layerTree, body.tk-review #layerSearchWrap, body.tk-review .tk-actrow { display: none; }
+  .tk-review-panel { flex: 1; overflow-y: auto; min-height: 0; display: none; font-size: 12px; }
+  body.tk-review .tk-review-panel { display: block; }
+  .rv-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--pc-border, #e5e7eb); color: var(--pc-muted, #6b7280); font-size: 11px; position: sticky; top: 0; background: #fff; z-index: 2; flex-wrap: wrap; }
+  .rv-bar label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  .rv-prog { height: 5px; background: #eceff3; border-radius: 3px; overflow: hidden; flex: 1; min-width: 60px; }
+  .rv-prog i { display: block; height: 100%; background: #10b981; }
+  .rv-sheet { border-bottom: 1px solid var(--pc-row-sep, #eceff3); }
+  .rv-sheet-h { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; min-height: 40px; font-weight: 700; font-size: 12px; cursor: pointer; user-select: none; background: #fafbfc; }
+  .rv-sheet-h:hover { background: var(--pc-row-active, #f3f6fb); }
+  .rv-sheet-h .chev { color: #75838a; display: inline-flex; }
+  .rv-sheet-h .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rv-sheet-h .pr { font-weight: 400; color: var(--pc-muted, #6b7280); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rv-kind { padding: 6px 10px 2px 30px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--pc-head, #4b5563); font-weight: 700; }
+  .rv-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 14px; min-height: 36px; cursor: pointer; border-left: 3px solid transparent; }
+  .rv-row:hover { background: var(--pc-row-active, #f3f6fb); }
+  .rv-row.cur { background: var(--pc-link-bg, #e8f0fe); border-left-color: var(--pc-link, #1a66e0); }
+  .rv-row.deleted .t1 { text-decoration: line-through; color: var(--pc-muted, #6b7280); }
+  .rv-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: #f59e0b; box-shadow: 0 0 0 2px #fff inset; }
+  .rv-dot.accepted { background: #10b981; } .rv-dot.corrected { background: #1a66e0; } .rv-dot.deleted { background: #9ca3af; } .rv-dot.partial { background: linear-gradient(90deg, #10b981 50%, #f59e0b 50%); }
+  .rv-row .tx { flex: 1; min-width: 0; }
+  .rv-row .t1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #232729; }
+  .rv-row .t2 { color: var(--pc-muted, #6b7280); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rv-row .t2 b { color: var(--pc-link, #1a66e0); font-weight: 600; }
+  .rv-acts { display: none; gap: 2px; flex: none; }
+  .rv-row:hover .rv-acts, .rv-row.cur .rv-acts { display: inline-flex; }
+  .rv-acts button { width: 24px; height: 24px; border: 0; background: transparent; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #374151; padding: 0; }
+  .rv-acts button:hover { background: #fff; box-shadow: inset 0 0 0 1px var(--pc-border-strong, #d1d5db); }
+  .rv-acts button.ok { color: #059669; } .rv-acts button.del { color: #dc2626; }
+  .rv-empty { padding: 20px 14px; color: var(--pc-muted, #6b7280); line-height: 1.5; }
+  .rv-keys { padding: 8px 14px 14px; color: var(--pc-muted, #6b7280); font-size: 11px; line-height: 1.7; }
+  .rv-keys .kbd { font-family: 'Courier New', monospace; background: var(--pc-secondary, #f0f1f3); border: 1px solid var(--pc-border, #e5e7eb); border-radius: 4px; padding: 0 5px; font-size: 10px; }
+  #rvHint { background: #1f2933; color: #fff; }
+  .rv-form .pc-field { margin-bottom: 10px; }
+  .rv-form .pc-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
 <style>
   html, body { height: 100%; }
   body.pc-page { overflow: hidden; display: flex; flex-direction: column; margin: 0; }
@@ -235,9 +280,11 @@
   <!-- ─── LEFT: takeoff layers ─── -->
   <aside class="tk-left" id="leftPanel">
     <div class="tk-ph"><div class="tk-ph-title">Takeoffs <span id="layerCount">(0)</span></div><button class="pc-btn pc-btn-icon pc-btn-ghost" id="newLayerBtn" title="Create New Takeoff Layer"></button></div>
-    <div class="pc-search tk-search"><input type="search" class="pc-input" id="layerSearch" placeholder="Search Takeoffs"><span id="layerSearchIcon"></span></div>
+    <div class="tk-mode" id="modeSwitch"><button id="modeLayers" class="on">Layers</button><button id="modeReview" title="Every item the AI produced on these plans — accept, correct or delete each one">AI review <span class="cnt" id="rvCount" style="display:none"></span></button></div>
+    <div class="pc-search tk-search" id="layerSearchWrap"><input type="search" class="pc-input" id="layerSearch" placeholder="Search Takeoffs"><span id="layerSearchIcon"></span></div>
     <div class="tk-actrow"><span class="eye" id="allEye" title="Show / hide every layer"></span><button class="pc-btn pc-btn-ghost" id="actionsBtn">Actions <span id="actionsCaret"></span></button><span class="sel" id="selCount" style="display:none"></span></div>
     <div class="tk-tree" id="layerTree"><div class="empty">No takeoff layers yet.</div></div>
+    <div class="tk-review-panel" id="reviewPanel"></div>
     <div class="collapse-handle" id="leftCollapse" title="Collapse panel"></div>
   </aside>
 
@@ -356,6 +403,7 @@ requireAuth().catch(function(){});
     // ?layer=<id> (link from the Estimating grid): open that layer's properties on the Additional Parameters tab, where the Extra quantity is
     var wantLayer = new URLSearchParams(location.search).get('layer');
     if (wantLayer && layerById(wantLayer)) setTimeout(function() { openLayerPopover(wantLayer, document.querySelector('[data-lmenu="' + wantLayer + '"]')); popTab = 'params'; renderPopover(); }, 400);
+    if (params.get('review') === '1') setReviewMode(true);   // link from the AI Estimator: open the AI review tab
     if (EMBED) { P.onCmd(handleCmd); P.emit('ready', { estimateId: estimateId }); if (est) P.emit('title', { name: est.name }); }
   }
   var EST_FULL = 'id,name,quote_number,status,labor_rate,is_ofci,overhead_pct,miscellaneous_pct,tax_rate,client_name,bid_stage,estimator_name,parent_estimate_id,version_label,settings,square_footage';
@@ -1430,7 +1478,7 @@ requireAuth().catch(function(){});
       arc: 'Click the start, a point on the arc, then the end' + who + '.', measure: 'Click two points to read a distance. Nothing is saved.', note: 'Click where the note goes.',
       countline: 'Click the path the items follow' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a count layer first') + '. <span class="kbd">Enter</span> finishes, then type the spacing in feet.',
       stamp: 'Click where the stamp goes.', cloud: 'Click the corners of the cloud. <span class="kbd">Enter</span>/double-click closes it.', highlight: 'Click two opposite corners.', scale: 'Click both ends of a known dimension.' };
-    h.innerHTML = (!scalePpf && pdfPage && ['count', 'note', 'select', 'marquee', 'pan', 'stamp', 'cloud', 'highlight', 'scale'].indexOf(tool) < 0) ? '<b style="color:var(--pc-danger)">Set the scale first</b> — click "Drawing Scale" above the plan.' : (hints[tool] || '');
+    h.innerHTML = (reviewOn && rvStatusText()) || ((!scalePpf && pdfPage && ['count', 'note', 'select', 'marquee', 'pan', 'stamp', 'cloud', 'highlight', 'scale'].indexOf(tool) < 0) ? '<b style="color:var(--pc-danger)">Set the scale first</b> — click "Drawing Scale" above the plan.' : (hints[tool] || ''));
     $('statusPage').textContent = pdfPage ? (plans[planIdx].sheet ? plans[planIdx].sheet + ' · ' : '') + meas.filter(function(m) { return m.tool_type !== 'scale'; }).length + ' marks on this plan' + (selectedIds.size ? ' · ' + selectedIds.size + ' selected' : '') : '';
     ['undoBtn', 'undoTop'].forEach(function(id) { var ub = $(id); if (ub) ub.disabled = !undoStack.length && !draft.length; });
     ['redoBtn', 'redoTop'].forEach(function(id) { var rb = $(id); if (rb) rb.disabled = !redoStack.length; });
@@ -1782,6 +1830,7 @@ requireAuth().catch(function(){});
     ctx.globalAlpha = VS.opacity;
     meas.forEach(function(m) { if (!annotVisible && isAnnot(m)) return; var l = layerById(m.layer_id); if (l && l.is_visible === false) return; drawMark(m, l, selectedIds.has(m.id)); });
     ctx.globalAlpha = 1;
+    drawReviewHl();
     var l = layerById(activeLayerId), col = tool === 'scale' ? '#dc2626' : tool === 'cloud' ? '#dc2626' : tool === 'highlight' ? '#eab308' : (l ? l.color : '#1a66e0');
     if (draft.length) { var pts = draft.map(S); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
       if (hover) { var h = S(hover); ctx.lineTo(h[0], h[1]); } if ((tool === 'area' || tool === 'cloud' || tool === 'arealen') && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); pts.forEach(function(q) { dot(q, col); });
@@ -1935,7 +1984,7 @@ requireAuth().catch(function(){});
       '<tr class="total"><td>Takeoff total</td><td class="n" colspan="2">' + fmtMoney(gm + gh * laborRate) + '</td></tr></table>' +
       '<div style="margin-top:8px;font-size:11px" class="pc-muted">Before overhead, misc and tax — those are applied on the <a class="pc-link" href="estimating.html?est=' + estimateId + '">Estimating</a> page.' + (syncOk ? ' Quantities sync to the estimate lines automatically.' : '') + '</div>';
   }
-  function renderAll() { renderLayerTree(); renderProps(); renderTotals(); renderLegend(); updateStatus(); redraw(); if (thumbsOn) renderThumbs(); refreshPopover(); }
+  function renderAll() { renderLayerTree(); renderProps(); renderTotals(); renderLegend(); updateStatus(); redraw(); if (thumbsOn) renderThumbs(); refreshPopover(); if (reviewOn) renderReview(); }
 
   // ═══════════════════════ takeoff → estimate live sync ═══════════════════════
   var syncTimer = null, syncing = false, syncAgain = false;
@@ -2116,6 +2165,351 @@ requireAuth().catch(function(){});
     toast(done + ' sheet' + (done === 1 ? '' : 's') + ' named' + (bad ? ', ' + bad + ' could not be read' : ''), bad ? 'error' : 'success');
   }
 
+  // ═══════════════════════ AI review queue ═══════════════════════
+  // Every item the AI produced on these plans: equipment and air-device rows read on the sheets (ai_est_pages of the estimate's
+  // AI session) and the duct / pipe / riser runs measured from the drawing lines (auto-marks). Each one is accepted, corrected or
+  // deleted; the decisions live in est_ai_corrections (est-ai-corrections.sql). Run edits change the marks themselves (the takeoff →
+  // estimate sync carries them); device / equipment decisions are applied by est-engine.js when the AI Estimator prices the session.
+  var reviewOn = false, rvLoaded = false, rvOk = true, rvOnlyNew = false, rvCollapsed = {}, rvPulseT = null;
+  var RV = { session: null, files: [], pages: [], corr: {}, sheets: [], flat: [], cur: null, occ: [], occIdx: -1, hl: null, textCache: {}, total: 0, done: 0 };
+  var KIND_LABEL = { equipment: 'Equipment', device: 'Air devices', duct: 'Ducts', pipe: 'Pipes', riser: 'Risers' };
+  var DEV_TYPES = ['diffuser', 'grille', 'register', 'linear', 'vav', 'fpb', 'fsd', 'motorized_damper', 'cod', 'louver', 'other'];
+  function rvNorm(s) { return window.NWEngine ? NWEngine.norm(s) : String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function rvKeyOf(kind, pageId, row) { return window.NWEngine ? (kind === 'device' ? NWEngine.devKey(pageId, row) : NWEngine.eqKey(pageId, row)) : pageId + ':' + rvNorm(row.tag) + '|' + String(row.type || '').toLowerCase().trim(); }
+  async function setReviewMode(on) {
+    reviewOn = !!on; document.body.classList.toggle('tk-review', reviewOn);
+    $('modeLayers').classList.toggle('on', !reviewOn); $('modeReview').classList.toggle('on', reviewOn);
+    if (reviewOn && !rvLoaded) { $('reviewPanel').innerHTML = '<div class="rv-empty">Loading the AI items…</div>'; await loadReview(); }
+    if (!reviewOn) { RV.cur = null; RV.occ = []; RV.hl = null; redraw(); }
+    renderReview(); updateStatus();
+  }
+  async function loadReview() {
+    rvLoaded = true;
+    try {
+      var s = await sb.from('ai_est_sessions').select('id,name,estimate_id,created_at').in('estimate_id', uniq([estimateId, rootId])).order('created_at', { ascending: false }).limit(1);
+      RV.session = (s.data && s.data[0]) || null;
+      if (RV.session) {
+        var f = await sb.from('ai_est_files').select('id,file_name,kind,pages').eq('session_id', RV.session.id); RV.files = f.data || [];
+        var pg = await sb.from('ai_est_pages').select('id,file_id,page_no,sheet_no,sheet_title,sheet_type,status,result').eq('session_id', RV.session.id).eq('status', 'done').order('page_no');
+        RV.pages = (pg.data || []).filter(function(p) { return p.result && typeof p.result === 'object' && !p.result.parse_error; });
+      }
+      var c = await sb.from('est_ai_corrections').select('*').eq('estimate_id', estimateId);
+      RV.corr = {};
+      if (c.error) { rvOk = !/est_ai_corrections|42P01|does not exist|schema cache/i.test(c.error.message); if (rvOk) toast(c.error.message, 'error'); }
+      else (c.data || []).forEach(function(r) { RV.corr[r.kind + '|' + r.item_key] = r; });
+    } catch (e) { console.warn('review', e); }
+  }
+  function rvPlanFor(sp) {
+    var f = RV.files.find(function(x) { return x.id === sp.file_id; });
+    var i = plans.findIndex(function(p) { return f && p.drawing.filename === f.file_name && p.page === sp.page_no; });
+    if (i < 0 && sp.sheet_no) i = plans.findIndex(function(p) { return p.sheet && rvNorm(p.sheet) === rvNorm(sp.sheet_no); });
+    return i;
+  }
+  function rvStatus(kind, key) { var c = RV.corr[kind + '|' + key]; return c ? c.status : 'new'; }
+  function rvRunKind(m, l) { if (/^riser/i.test(m.notes || '')) return 'riser'; return ((l && l.category) || m.layer_category) === 'pipework' ? 'pipe' : 'duct'; }
+  function buildReview() {
+    var byPlan = {}, grp = {}; RV.flat = []; RV.sheets = [];
+    function sheetOf(i) { var p = plans[i], k = p.key; if (!byPlan[k]) { byPlan[k] = { planIdx: i, key: k, sheet: planShort(p), title: p.title || '', items: [], groups: [], total: 0, done: 0 }; RV.sheets.push(byPlan[k]); } return byPlan[k]; }
+    function groupOf(i, kind, layerId) { var gk = i + '|' + layerId; if (!grp[gk]) { var sh = sheetOf(i), l = layerById(layerId); grp[gk] = { kind: kind, key: 'grp:' + gk, layer: l, name: l ? l.name : 'Layer', planIdx: i, sheet: sh.sheet, marks: [], ft: 0, done: 0 }; sh.groups.push(grp[gk]); } return grp[gk]; }
+    // 1 · equipment + air-device rows read on the sheets
+    RV.pages.forEach(function(sp) {
+      var r = sp.result || {}, i = rvPlanFor(sp); if (i < 0) return;
+      var sh = sheetOf(i), seen = {};
+      (r.equipment || []).forEach(function(e) {
+        var k = rvKeyOf('equipment', sp.id, e); seen[k] = (seen[k] || 0) + 1; if (seen[k] > 1) k += '#' + seen[k];
+        var c = RV.corr['equipment|' + k];
+        sh.items.push({ kind: 'equipment', key: k, sheet: sh.sheet, planIdx: i, page: sp, row: e, tag: e.tag || '', label: (e.tag || '—') + (e.type ? ' — ' + e.type : ''), sub: [Number(e.qty) > 1 ? e.qty + ' ea' : '', e.manufacturer, e.model, e.capacity, e.weight_lb ? e.weight_lb + ' lb' : '', e.location].filter(Boolean).join(' · '), status: c ? c.status : 'new', fix: (c && c.status === 'corrected' && c.corrected) || null });
+      });
+      seen = {};
+      (r.air_devices || []).forEach(function(a) {
+        var k = rvKeyOf('device', sp.id, a); seen[k] = (seen[k] || 0) + 1; if (seen[k] > 1) k += '#' + seen[k];
+        var c = RV.corr['device|' + k];
+        sh.items.push({ kind: 'device', key: k, sheet: sh.sheet, planIdx: i, page: sp, row: a, tag: a.tag || '', label: (a.tag || '(no tag)') + ' — ' + (a.type || 'other') + (a.size ? ' ' + a.size : ''), sub: [(Number(a.qty) || 0) + ' ea' + (Number(a.linear_ft) ? ' · ' + a.linear_ft + ' ft' : ''), a.cfm ? a.cfm + ' cfm' : '', a.basis ? 'from ' + a.basis : '', a.notes].filter(Boolean).join(' · '), status: c ? c.status : 'new', fix: (c && c.status === 'corrected' && c.corrected) || null });
+      });
+    });
+    // 2 · measured runs (auto-marks), one group per size layer and plan
+    allMeas.forEach(function(m) {
+      if (m.label !== 'auto' || !m.layer_id || m.tool_type !== 'length') return;
+      var i = plans.findIndex(function(p) { return p.drawing.id === m.drawing_id && p.page === m.page_number; }); if (i < 0) return;
+      var kind = rvRunKind(m, layerById(m.layer_id)), g = groupOf(i, kind, m.layer_id), st = rvStatus(kind, m.id);
+      g.marks.push({ kind: kind, key: m.id, sheet: g.sheet, planIdx: i, m: m, group: g, label: g.name, sub: ftIn(Number(m.computed_value || 0)), status: st });
+      g.ft += Number(m.computed_value || 0); if (st !== 'new') g.done++;
+    });
+    // runs deleted in the review (their mark is gone) stay in the list, greyed, so they can be restored
+    Object.keys(RV.corr).forEach(function(ck) {
+      var c = RV.corr[ck]; if (c.status !== 'deleted' || !/^(duct|pipe|riser)$/.test(c.kind) || !c.original) return;
+      var i = plans.findIndex(function(p) { return p.drawing.id === c.drawing_id && p.page === c.page_number; }); if (i < 0) return;
+      var o = c.original, g = groupOf(i, c.kind, o.layer_id);
+      g.marks.push({ kind: c.kind, key: c.item_key, sheet: g.sheet, planIdx: i, m: Object.assign({ id: c.item_key }, o), group: g, label: g.name, sub: ftIn(Number(o.computed_value || 0)), status: 'deleted', gone: true }); g.done++;
+    });
+    RV.sheets.sort(function(a, b) { return a.planIdx - b.planIdx; });
+    RV.sheets.forEach(function(sh) {
+      sh.groups.sort(function(a, b) { return (a.kind > b.kind ? 1 : a.kind < b.kind ? -1 : 0) || a.name.localeCompare(b.name, undefined, { numeric: true }); });
+      sh.items.forEach(function(it) { sh.total++; if (it.status !== 'new') sh.done++; RV.flat.push(it); });
+      sh.groups.forEach(function(g) { sh.total += g.marks.length; sh.done += g.done; g.marks.forEach(function(it) { RV.flat.push(it); }); });
+    });
+    RV.total = 0; RV.done = 0; RV.sheets.forEach(function(s) { RV.total += s.total; RV.done += s.done; });
+    var cnt = $('rvCount'); if (cnt) { cnt.style.display = RV.total - RV.done > 0 ? '' : 'none'; cnt.textContent = RV.total - RV.done; }
+    if (RV.cur) { var ck2 = RV.cur.kind + '|' + RV.cur.key; RV.cur = RV.flat.find(function(it) { return it.kind + '|' + it.key === ck2; }) || null; }
+  }
+  function renderReview() {
+    var host = $('reviewPanel'); if (!reviewOn || !host || !rvLoaded) return;
+    buildReview();
+    if (!rvOk) { host.innerHTML = '<div class="rv-empty">The review log needs one database update: run <code>est-ai-corrections.sql</code> (app folder) in Supabase → SQL Editor, then reload this page.</div>'; return; }
+    if (!RV.session && !RV.flat.length) { host.innerHTML = '<div class="rv-empty">No AI items on these plans yet.<br><br>Run the AI Estimator on these plans (page menu ⋮) and press “Open in Takeoff” there, or auto-measure a plan — everything the AI produces lands here to be checked.</div>'; return; }
+    var pct = RV.total ? Math.round(RV.done / RV.total * 100) : 0;
+    var html = '<div class="rv-bar"><span><b>' + RV.done + '</b> of <b>' + RV.total + '</b> checked</span><span class="rv-prog"><i style="width:' + pct + '%"></i></span><label><input type="checkbox" class="tk-cb" id="rvOnlyNew"' + (rvOnlyNew ? ' checked' : '') + '>only new</label></div>';
+    if (!RV.flat.length) html += '<div class="rv-empty">Nothing to check on these plans' + (RV.session ? ' — the AI session “' + esc(RV.session.name) + '” has no items on sheets that are in this takeoff (read the sheets there first)' : '') + '.</div>';
+    RV.sheets.forEach(function(sh) {
+      var open = !rvCollapsed[sh.key], left = sh.total - sh.done;
+      if (rvOnlyNew && !left) return;
+      html += '<div class="rv-sheet"><div class="rv-sheet-h" data-rvsheet="' + esc(sh.key) + '"><span class="chev">' + ic(open ? 'expand_more' : 'chevron_right', 20) + '</span><span class="nm" title="' + esc(sh.title) + '">' + esc(sh.sheet) + (sh.title ? ' <span class="pc-muted" style="font-weight:400">' + esc(sh.title) + '</span>' : '') + '</span><span class="pr">' + (left ? left + ' new' : '✓ done') + ' · ' + sh.done + '/' + sh.total + '</span></div>';
+      if (open) {
+        ['equipment', 'device'].forEach(function(kd) { var its = sh.items.filter(function(it) { return it.kind === kd && (!rvOnlyNew || it.status === 'new'); }); if (!its.length) return;
+          html += '<div class="rv-kind">' + KIND_LABEL[kd] + ' · ' + its.length + '</div>' + its.map(rvRowHtml).join(''); });
+        var lastKind = '';
+        sh.groups.forEach(function(g) { if (rvOnlyNew && g.done >= g.marks.length) return; if (g.kind !== lastKind) { lastKind = g.kind; html += '<div class="rv-kind">' + KIND_LABEL[g.kind] + ' — measured runs</div>'; } html += rvGroupHtml(g); });
+      }
+      html += '</div>';
+    });
+    html += '<div class="rv-keys">Click an item to see it on the plan. <span class="kbd">Enter</span> accept + next · <span class="kbd">E</span> correct · <span class="kbd">X</span> delete · <span class="kbd">A</span> accept the whole group · <span class="kbd">J</span> / <span class="kbd">K</span> next / previous · <span class="kbd">N</span> next place on the sheet · <span class="kbd">Esc</span> clear' +
+      (RV.session ? '<br>AI session: <a class="pc-link" href="ai-estimator.html?s=' + RV.session.id + '" target="_top">' + esc(RV.session.name) + '</a> — press “Price it” there after corrections; run edits reach the estimate through the takeoff sync.' : '') + '</div>';
+    host.innerHTML = html;
+    var on = $('rvOnlyNew'); if (on) on.onchange = function() { rvOnlyNew = this.checked; renderReview(); };
+    var cur = host.querySelector('.rv-row.cur'); if (cur) cur.scrollIntoView({ block: 'nearest' });
+  }
+  function rvIsCur(it) { return !!(RV.cur && RV.cur.kind === it.kind && RV.cur.key === it.key); }
+  function rvFixText(fix) { return Object.keys(fix || {}).filter(function(k) { return k !== 'note' && fix[k] !== '' && fix[k] != null; }).map(function(k) { return k === 'qty' ? fix[k] + ' ea' : k === 'linear_ft' || k === 'ft' ? fix[k] + ' ft' : k === 'weight_lb' ? fix[k] + ' lb' : fix[k]; }).join(', '); }
+  function rvRowHtml(it) {
+    return '<div class="rv-row' + (rvIsCur(it) ? ' cur' : '') + (it.status === 'deleted' ? ' deleted' : '') + '" data-rv="' + esc(it.kind + '|' + it.key) + '" title="' + esc(it.label + (it.sub ? ' — ' + it.sub : '')) + '"><span class="rv-dot ' + it.status + '"></span><div class="tx"><div class="t1">' + esc(it.label) + '</div><div class="t2">' + esc(it.sub || '') + (it.fix ? ' <b>→ ' + esc(rvFixText(it.fix)) + '</b>' : '') + '</div></div>' + rvActs(it) + '</div>';
+  }
+  function rvActs(it) {
+    if (!me.canEdit) return '';
+    var isNew = it.status === 'new';
+    return '<span class="rv-acts">' + (isNew ? '<button class="ok" data-act="accept" title="Accept (Enter)">' + ic('check', 16) + '</button>' : '') + (it.status !== 'deleted' ? '<button data-act="correct" title="Correct (E)">' + ic('edit', 16) + '</button><button class="del" data-act="delete" title="Delete — not an item (X)">' + ic('close', 16) + '</button>' : '') + (!isNew ? '<button data-act="reset" title="Back to new (take the decision back)">' + ic('undo', 16) + '</button>' : '') + '</span>';
+  }
+  function rvGroupHtml(g) {
+    var st = g.done >= g.marks.length ? (g.marks.every(function(x) { return x.status === 'deleted'; }) ? 'deleted' : g.marks.some(function(x) { return x.status === 'corrected'; }) ? 'corrected' : 'accepted') : g.done ? 'partial' : 'new';
+    var cur = !!(RV.cur && RV.cur.group === g), live = g.marks.filter(function(x) { return !x.gone; }).length;
+    return '<div class="rv-row' + (cur ? ' cur' : '') + '" data-rvg="' + esc(g.key) + '" title="' + esc(g.name) + '"><span class="rv-dot ' + st + '"></span><div class="tx"><div class="t1"><span class="pc-dot" style="background:' + esc((g.layer && g.layer.color) || '#94a3b8') + ';margin-right:5px"></span>' + esc(g.name) + '</div><div class="t2">' + live + ' run' + (live === 1 ? '' : 's') + ' · ' + Math.round(g.ft) + ' ft · ' + g.done + '/' + g.marks.length + ' checked' + (cur ? ' · <b>run ' + (g.marks.indexOf(RV.cur) + 1) + '</b>' : '') + '</div></div>' +
+      (me.canEdit ? '<span class="rv-acts">' + (g.done < g.marks.length ? '<button class="ok" data-act="acceptgroup" title="Accept every run in this group (A)">' + ic('check_circle', 16) + '</button>' : '<button data-act="resetgroup" title="Back to new">' + ic('undo', 16) + '</button>') + '</span>' : '') + '</div>';
+  }
+  function rvItemByKey(k) { return RV.flat.find(function(it) { return it.kind + '|' + it.key === k; }) || null; }
+  function rvGroupByKey(k) { for (var i = 0; i < RV.sheets.length; i++) { var g = RV.sheets[i].groups.find(function(x) { return x.key === k; }); if (g) return g; } return null; }
+  function onReviewClick(e) {
+    var sh = e.target.closest('[data-rvsheet]'); if (sh) { var k = sh.getAttribute('data-rvsheet'); rvCollapsed[k] = !rvCollapsed[k]; renderReview(); return; }
+    var btn = e.target.closest('[data-act]'), row = e.target.closest('[data-rv],[data-rvg]'); if (!row) return;
+    var it = row.hasAttribute('data-rv') ? rvItemByKey(row.getAttribute('data-rv')) : null, g = row.hasAttribute('data-rvg') ? rvGroupByKey(row.getAttribute('data-rvg')) : null;
+    if (btn) { e.stopPropagation(); var act = btn.getAttribute('data-act');
+      if (act === 'acceptgroup') rvAcceptGroup(g); else if (act === 'resetgroup') rvResetGroup(g);
+      else if (it) { if (act === 'accept') rvAccept(it, false); else if (act === 'correct') rvCorrect(it); else if (act === 'delete') rvDelete(it); else if (act === 'reset') rvReset(it); }
+      return; }
+    if (g) rvSelect(g.marks.find(function(x) { return x.status === 'new'; }) || g.marks[0]); else if (it) rvSelect(it);
+  }
+  // ── show the item on the plan: a run is selected and zoomed to; a tag is looked up in the sheet's text (every place it is printed) ──
+  async function rvSelect(it) {
+    if (!it) return;
+    RV.cur = it; RV.occ = []; RV.occIdx = -1; RV.hl = null;
+    if (planIdx !== it.planIdx) await openPlan(it.planIdx);
+    if (!pdfPage || RV.cur !== it) { renderReview(); return; }
+    selectedIds.clear();
+    if (it.m) {
+      if (!it.gone) selectedIds.add(it.m.id);
+      var pts = it.m.points || [];
+      if (pts.length) { var xs = pts.map(function(p) { return p[0]; }), ys = pts.map(function(p) { return p[1]; }); RV.occ = [{ pt: midOf(pts), box: [Math.min.apply(null, xs), Math.min.apply(null, ys), Math.max.apply(null, xs), Math.max.apply(null, ys)] }]; RV.occIdx = 0; await rvZoomTo(RV.occ[0].box); }
+    } else {
+      var occ = await rvFindTag(it); if (RV.cur !== it) return;
+      RV.occ = occ; RV.occIdx = occ.length ? 0 : -1;
+      if (occ.length) await rvZoomTo(occ[0].box);
+    }
+    renderProps(); rvPulse(); renderReview(); updateStatus();
+  }
+  async function rvTextItems(it) {
+    var p = plans[it.planIdx], k = p.key;
+    if (!RV.textCache[k]) {
+      var out = [];
+      try { var tc = await pdfPage.getTextContent(); tc.items.forEach(function(t) { if (!t.str || !t.str.trim()) return; var q = viewport1.convertToViewportPoint(t.transform[4], t.transform[5]); out.push({ str: t.str, x: q[0], y: q[1], w: Math.max(8, Math.abs(t.width || 8)), h: Math.max(8, Math.abs(t.height || 8)) }); }); } catch (e) { console.warn('text', e); }
+      var ow = it.page && it.page.result && it.page.result.ocr_words;   // outlined-text sheets: the words the vision reader read ([str, cx, cy] in PDF user space)
+      if (Array.isArray(ow)) ow.forEach(function(w) { if (!w || !w[0]) return; var q = viewport1.convertToViewportPoint(Number(w[1]) || 0, Number(w[2]) || 0); out.push({ str: String(w[0]), x: q[0] - 8, y: q[1] + 5, w: 16, h: 10, ocr: true }); });
+      RV.textCache[k] = out;
+    }
+    return RV.textCache[k];
+  }
+  // where a tag is printed on the sheet: text items carrying the tag as a token ("RTU-1", "LDS-A", "C (150)" or "C" beside "(150)")
+  async function rvFindTag(it) {
+    var tagN = rvNorm(it.tag); if (!tagN || /^CFMONLY/.test(tagN)) return [];
+    var items = await rvTextItems(it), short = tagN.length <= 2, hits = [];
+    items.forEach(function(t) {
+      var s = t.str.toUpperCase(), toks = s.split(/[\s,;:()\/]+/).filter(Boolean);
+      var tokHit = toks.some(function(x) { return rvNorm(x) === tagN; }), lead = rvNorm(s).indexOf(tagN) === 0 && /\(/.test(s);
+      if (!tokHit && !lead) return;
+      if (short) {   // a one- or two-letter code needs its cfm bubble beside it, else "C" lights up every C on the sheet
+        var cfm = /\(\s*\d{2,5}\s*\)/.test(s) || items.some(function(u) { return u !== t && /^\(?\s*\d{2,5}\s*\)?$/.test(u.str.trim()) && Math.hypot(u.x - t.x, u.y - t.y) <= 40; });
+        if (!cfm) return;
+      }
+      var typ = /TYP\.?\s*(\d+)/.exec(s);
+      hits.push({ pt: [t.x + t.w / 2, t.y - t.h / 2], box: [t.x - 6, t.y - t.h - 6, t.x + t.w + 6, t.y + 6], mult: typ ? +typ[1] : 1, ocr: !!t.ocr, str: t.str });
+    });
+    var out = []; hits.forEach(function(h) { if (!out.some(function(o) { return Math.hypot(o.pt[0] - h.pt[0], o.pt[1] - h.pt[1]) < 12; })) out.push(h); });   // text layer + OCR may carry the same label
+    out.sort(function(a, b) { return a.pt[1] - b.pt[1] || a.pt[0] - b.pt[0]; });
+    return out;
+  }
+  // zoom so the box (PDF viewport-1 units) takes about a quarter of the window, centred
+  async function rvZoomTo(b) {
+    var vp = $('viewport'); if (!vp || !viewport1 || !pdfPage) return;
+    var fit = Math.max(1, vp.clientWidth - 32) / viewport1.width, bw = Math.max(b[2] - b[0], 30), bh = Math.max(b[3] - b[1], 30);
+    var want = Math.min(vp.clientWidth / (bw * 4), vp.clientHeight / (bh * 4)), z = Math.max(1, Math.min(6, want / fit));
+    if (Math.abs(z - zoom) > 0.05) await setZoom(z); else if (vis !== 1) await renderPage();
+    var cx = (b[0] + b[2]) / 2 * renderScale * vis, cy = (b[1] + b[3]) / 2 * renderScale * vis;
+    vp.scrollLeft = Math.round(padX + cx - vp.clientWidth / 2); vp.scrollTop = Math.round(padY + cy - vp.clientHeight / 2);
+    positionMarkCard();
+  }
+  function rvPulse() { clearInterval(rvPulseT); var n = 0; RV.hl = { phase: 0 }; rvPulseT = setInterval(function() { n++; if (RV.hl) RV.hl.phase = n; redraw(); if (n > 24) { clearInterval(rvPulseT); if (RV.hl) RV.hl.phase = -1; redraw(); } }, 50); }
+  function drawReviewHl() {
+    if (!reviewOn || !RV.occ.length || !RV.hl || !ctx) return;
+    var ph = RV.hl.phase, grow = ph >= 0 ? (1 + 0.5 * Math.abs(Math.sin(ph / 4))) : 1;
+    RV.occ.forEach(function(o, i) {
+      var s = S(o.pt), cur = i === RV.occIdx, r = (cur ? 22 : 14) * grow;
+      ctx.setLineDash([]); ctx.lineWidth = cur ? 3 : 2; ctx.strokeStyle = '#f59e0b'; ctx.globalAlpha = cur ? 0.95 : 0.6;
+      ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.stroke();
+      if (cur) { ctx.fillStyle = 'rgba(245,158,11,.14)'; ctx.fill(); }
+      if (o.mult > 1) { ctx.globalAlpha = 1; label([s[0], s[1] - r - 10], '× ' + o.mult, '#f59e0b'); }
+    });
+    ctx.globalAlpha = 1;
+  }
+  async function rvNextOcc() {
+    if (!RV.cur) return;
+    if (RV.occ.length < 2) { toast(RV.cur.m ? 'A run is one place on the sheet' : RV.occ.length === 1 ? 'Only one place on this sheet' : 'This tag is not in the sheet text — counted from symbols; look at the plan'); return; }
+    RV.occIdx = (RV.occIdx + 1) % RV.occ.length; await rvZoomTo(RV.occ[RV.occIdx].box); rvPulse(); updateStatus();
+  }
+  async function rvStep(dir) {
+    if (!RV.flat.length) return;
+    var i = RV.cur ? RV.flat.indexOf(RV.cur) : (dir > 0 ? -1 : 0), n = RV.flat.length;
+    for (var k = 1; k <= n; k++) { var it = RV.flat[((i + dir * k) % n + n) % n]; if (rvOnlyNew && it.status !== 'new') continue; await rvSelect(it); return; }
+    toast('Everything is checked', 'success');
+  }
+  // ── decisions ──
+  function rvOriginal(it) {
+    if (it.m) { var m = it.m; return { layer_id: m.layer_id, layer: it.group ? it.group.name : null, layer_category: m.layer_category, tool_type: m.tool_type, points: m.points, computed_value: m.computed_value, computed_unit: m.computed_unit, scale_pixels_per_foot: m.scale_pixels_per_foot, color: m.color, notes: m.notes, label: m.label, drawing_id: m.drawing_id, page_number: m.page_number }; }
+    return it.row;
+  }
+  function rvRow(it, status, corrected, note) {
+    var p = plans[it.planIdx], prev = RV.corr[it.kind + '|' + it.key];
+    return { estimate_id: estimateId, session_id: RV.session ? RV.session.id : null, page_id: it.page ? it.page.id : null, drawing_id: p ? p.drawing.id : null, page_number: p ? p.page : null, sheet_no: it.sheet, kind: it.kind, item_key: it.key, status: status,
+      original: it.gone && prev ? prev.original : rvOriginal(it), corrected: corrected || null, note: note || null, user_id: me.id || undefined, user_name: me.name || null };
+  }
+  async function rvUpsert(rows) {
+    if (!rvOk) { toast('Run est-ai-corrections.sql in Supabase first', 'error'); return false; }
+    for (var i = 0; i < rows.length; i += 200) {
+      var r = await sb.from('est_ai_corrections').upsert(rows.slice(i, i + 200), { onConflict: 'estimate_id,kind,item_key' }).select();
+      if (r.error) { toast(r.error.message, 'error'); return false; }
+      (r.data || []).forEach(function(c) { RV.corr[c.kind + '|' + c.item_key] = c; });
+    }
+    return true;
+  }
+  async function rvAccept(it, andNext) {
+    if (!me.canEdit || !it) return;
+    if (it.gone) { rvReset(it); return; }
+    if (!await rvUpsert([rvRow(it, 'accepted')])) return;
+    it.status = 'accepted';
+    if (andNext) await rvStep(1); else renderReview();
+  }
+  async function rvAcceptGroup(g) {
+    if (!me.canEdit || !g) return;
+    var rows = g.marks.filter(function(x) { return x.status === 'new'; }).map(function(x) { return rvRow(x, 'accepted'); });
+    if (!rows.length) return;
+    if (!await rvUpsert(rows)) return;
+    toast(rows.length + ' run' + (rows.length === 1 ? '' : 's') + ' accepted — ' + g.name, 'success'); renderReview();
+  }
+  async function rvResetGroup(g) {
+    if (!me.canEdit || !g) return;
+    var keys = g.marks.filter(function(x) { return !x.gone && x.status !== 'new'; }).map(function(x) { return x.key; }); if (!keys.length) return;
+    var r = await sb.from('est_ai_corrections').delete().eq('estimate_id', estimateId).eq('kind', g.kind).in('item_key', keys); if (r.error) { toast(r.error.message, 'error'); return; }
+    keys.forEach(function(k) { delete RV.corr[g.kind + '|' + k]; }); renderReview();
+  }
+  async function rvDelete(it) {
+    if (!me.canEdit || !it || it.status === 'deleted') return;
+    var note = null;
+    if (!it.m) { note = await P.prompt({ title: 'Delete — not an item', label: 'Why is “' + it.label + '” not ' + (it.kind === 'device' ? 'an air device' : 'a piece of equipment') + '? (optional — it teaches the reader)', placeholder: 'e.g. existing to remain · sprinkler head · legend row · counted twice', required: false }); if (note === null) return; }
+    if (!await rvUpsert([rvRow(it, 'deleted', null, note)])) return;
+    if (it.m && !it.gone) { await deleteMark(it.m.id, true); toast('Run deleted — ↺ on the row brings it back'); }
+    it.status = 'deleted'; await rvStep(1);
+  }
+  async function rvReset(it) {
+    if (!me.canEdit || !it) return;
+    var c = RV.corr[it.kind + '|' + it.key]; if (!c) return;
+    var r = await sb.from('est_ai_corrections').delete().eq('id', c.id); if (r.error) { toast(r.error.message, 'error'); return; }
+    delete RV.corr[it.kind + '|' + it.key];
+    if (it.gone && c.original && c.original.points) {   // a deleted run comes back as a new mark
+      var row = Object.assign({}, c.original); delete row.layer; row.label = 'auto';
+      if (!layerById(row.layer_id)) { toast('Its layer no longer exists — the run cannot be restored', 'error'); renderAll(); return; }
+      var ins = await sb.from('estimate_measurements').insert(row).select().single();
+      if (ins.error) toast(ins.error.message, 'error'); else { allMeas.push(ins.data); var cp = plans[planIdx]; if (cp && ins.data.drawing_id === cp.drawing.id && ins.data.page_number === cp.page) meas.push(ins.data); scheduleSync(); }
+    }
+    it.status = 'new'; renderAll();
+  }
+  async function rvCorrect(it) {
+    if (!me.canEdit || !it || it.status === 'deleted') return;
+    if (it.m) return rvCorrectRun(it);
+    var row = it.row || {}, c = RV.corr[it.kind + '|' + it.key], v = Object.assign({}, row, (c && c.corrected) || {}), isDev = it.kind === 'device';
+    var body = '<div class="rv-form">' +
+      '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">Tag</label><input class="pc-input" id="rcTag" value="' + esc(v.tag || '') + '"></div>' +
+      '<div class="pc-field"><label class="pc-label">Type</label>' + (isDev ? '<select class="pc-select" id="rcType">' + DEV_TYPES.map(function(t) { return '<option value="' + t + '"' + (String(v.type || 'other').toLowerCase() === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>' : '<input class="pc-input" id="rcType" value="' + esc(v.type || '') + '">') + '</div></div>' +
+      '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">Quantity (ea)</label><input class="pc-input" type="number" step="1" min="0" id="rcQty" value="' + esc(v.qty == null ? '' : v.qty) + '"></div>' +
+      (isDev ? '<div class="pc-field"><label class="pc-label">Linear ft (slot diffusers)</label><input class="pc-input" type="number" step="0.1" min="0" id="rcLf" value="' + esc(v.linear_ft || '') + '"></div>' : '<div class="pc-field"><label class="pc-label">Weight (lb)</label><input class="pc-input" type="number" step="1" min="0" id="rcWt" value="' + esc(v.weight_lb || '') + '"></div>') + '</div>' +
+      (isDev ? '<div class="pc-field"><label class="pc-label">Size</label><input class="pc-input" id="rcSize" value="' + esc(v.size || '') + '"></div>' : '<div class="pc-field"><label class="pc-label">Location</label><input class="pc-input" id="rcLoc" value="' + esc(v.location || '') + '"></div>') +
+      '<div class="pc-field"><label class="pc-label">Why (optional — it teaches the reader)</label><input class="pc-input" id="rcNote" value="' + esc((c && c.note) || '') + '" placeholder="e.g. TYP. 3 missed · schedule says grille · tag is on the demo plan"></div>' +
+      '<div class="pc-hint">AI read: ' + esc(it.label + (it.sub ? ' — ' + it.sub : '')) + (rvIsCur(it) && RV.occ.length ? ' · ' + RV.occ.reduce(function(a, o) { return a + (o.mult || 1); }, 0) + ' tag' + (RV.occ.length === 1 && RV.occ[0].mult <= 1 ? '' : 's') + ' found in the sheet text' : '') + '</div></div>';
+    var dlg = P.modal({ title: 'Correct — ' + it.label, body: body, enterSubmits: true, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Save correction', primary: true, close: false, closeOnDone: false, onClick: async function() {
+      var fix = { tag: $('rcTag').value.trim(), type: String($('rcType').value || '').trim(), qty: $('rcQty').value === '' ? null : Number($('rcQty').value) };
+      if (isDev) { fix.linear_ft = $('rcLf').value === '' ? null : Number($('rcLf').value); fix.size = $('rcSize').value.trim(); } else { fix.weight_lb = $('rcWt').value === '' ? null : Number($('rcWt').value); fix.location = $('rcLoc').value.trim(); }
+      Object.keys(fix).forEach(function(k) { if (fix[k] === null || fix[k] === '' || String(fix[k]) === String(row[k] == null ? '' : row[k])) delete fix[k]; });   // keep only what differs from the AI's row
+      var note = $('rcNote').value.trim();
+      if (!Object.keys(fix).length) { if (!await rvUpsert([rvRow(it, 'accepted', null, note)])) return false; it.status = 'accepted'; it.fix = null; dlg.close(); toast('Nothing changed — accepted', 'success'); await rvStep(1); return; }
+      if (!await rvUpsert([rvRow(it, 'corrected', fix, note)])) return false;
+      it.status = 'corrected'; it.fix = fix; dlg.close(); toast('Correction saved — press “Price it” in the AI Estimator to apply it', 'success'); await rvStep(1);
+    } }] });
+    setTimeout(function() { var q = $('rcQty'); if (q) { q.focus(); q.select(); } }, 60);
+  }
+  async function rvCorrectRun(it) {
+    var m = it.m, l = layerById(m.layer_id), cat = (l && l.category) || m.layer_category, opts = layers.filter(function(x) { return x.takeoff_type === 'linear' && x.category === cat; });
+    var body = '<div class="rv-form"><div class="pc-field"><label class="pc-label">Size / layer</label><select class="pc-select" id="rcLayer">' + opts.map(function(x) { return '<option value="' + x.id + '"' + (x.id === m.layer_id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select><div class="pc-hint">Not in the list? Create the layer first (Layers tab → Create New Takeoff Layer), then correct the run.</div></div>' +
+      '<div class="pc-field"><label class="pc-label">Length (ft)</label><input class="pc-input" type="number" step="0.1" min="0" id="rcFt" value="' + Number(m.computed_value || 0).toFixed(1) + '"><div class="pc-hint">Measured ' + esc(ftIn(Number(m.computed_value || 0))) + '. To change the path itself, drag the run or its corner dots on the plan (that counts as a correction too once you accept it).</div></div>' +
+      '<div class="pc-field"><label class="pc-label">Why (optional)</label><input class="pc-input" id="rcNote" placeholder="e.g. label belongs to the branch · existing duct · flex · hatch"></div></div>';
+    var dlg = P.modal({ title: 'Correct run — ' + (l ? l.name : 'run'), body: body, enterSubmits: true, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Save correction', primary: true, close: false, closeOnDone: false, onClick: async function() {
+      var nl = layerById($('rcLayer').value), ft = Number($('rcFt').value), note = $('rcNote').value.trim(), patch = {}, fix = {};
+      if (nl && nl.id !== m.layer_id) { patch.layer_id = nl.id; patch.layer_category = nl.category; patch.color = nl.color; fix.layer = nl.name; }
+      if (isFinite(ft) && ft >= 0 && Math.abs(ft - Number(m.computed_value || 0)) > 0.05) { patch.computed_value = Math.round(ft * 100) / 100; fix.ft = patch.computed_value; }
+      if (!Object.keys(patch).length) { if (!await rvUpsert([rvRow(it, 'accepted', null, note)])) return false; it.status = 'accepted'; dlg.close(); await rvStep(1); return; }
+      var logRow = rvRow(it, 'corrected', fix, note);   // snapshot of the AI's run before it changes
+      if (!await patchMark(m, patch)) return false;
+      if (!await rvUpsert([logRow])) return false;
+      it.status = 'corrected'; dlg.close(); toast('Run corrected', 'success'); await rvStep(1);
+    } }] });
+    setTimeout(function() { var q = $('rcFt'); if (q) { q.focus(); q.select(); } }, 60);
+  }
+  // keys while the AI review tab is open (after the page's own Space / Escape / field checks)
+  function rvKey(e) {
+    if (!reviewOn || e.ctrlKey || e.metaKey || e.altKey) return false;
+    var k = e.key.toLowerCase();
+    if (e.key === 'Escape') { if (!RV.cur) return false; RV.cur = null; RV.occ = []; RV.hl = null; selectedIds.clear(); renderProps(); redraw(); renderReview(); updateStatus(); return true; }
+    if (k === 'j' || (e.key === 'ArrowDown' && !selectedIds.size)) { rvStep(1); return true; }
+    if (k === 'k' || (e.key === 'ArrowUp' && !selectedIds.size)) { rvStep(-1); return true; }
+    if (!RV.cur) { if (e.key === 'Enter' || k === 'y') { rvStep(1); return true; } return false; }
+    if (draft.length) return false;
+    if (e.key === 'Enter' || k === 'y') { rvAccept(RV.cur, true); return true; }
+    if (k === 'e') { rvCorrect(RV.cur); return true; }
+    if (k === 'x' || e.key === 'Delete') { rvDelete(RV.cur); return true; }
+    if (k === 'a') { if (RV.cur.group) rvAcceptGroup(RV.cur.group); else rvAccept(RV.cur, true); return true; }
+    if (k === 'n') { rvNextOcc(); return true; }
+    return false;
+  }
+  function rvStatusText() {
+    if (!reviewOn || !RV.cur) return reviewOn ? 'AI review: click an item on the left, or press <span class="kbd">J</span> for the first one.' : '';
+    var it = RV.cur, where = it.m ? '' : (RV.occ.length ? ' · place ' + (RV.occIdx + 1) + ' of ' + RV.occ.length + ' on the sheet (<span class="kbd">N</span> next)' : ' · tag not found in the sheet text');
+    return 'AI review → <b>' + esc(it.label) + '</b>' + (it.group ? ' (run ' + (it.group.marks.indexOf(it) + 1) + ' of ' + it.group.marks.length + ')' : '') + where + ' — <span class="kbd">Enter</span> accept · <span class="kbd">E</span> correct · <span class="kbd">X</span> delete' + (it.group ? ' · <span class="kbd">A</span> accept the group' : '');
+  }
+
   // ═══════════════════════ upload / export / analyze ═══════════════════════
   async function uploadPdfs(ev) {
     var files = Array.prototype.slice.call(ev.target.files || []); ev.target.value = ''; if (!files.length) return; if (!me.canEdit) { toast('Read-only', 'error'); return; }
@@ -2168,6 +2562,7 @@ requireAuth().catch(function(){});
     $('layerTree').addEventListener('click', onTreeClick); bindTreeDnD($('layerTree'));
     $('allEye').onclick = toggleAllVis; $('actionsBtn').onclick = function(e) { e.stopPropagation(); openActionsMenu(this); };
     $('leftCollapse').onclick = toggleLeft;
+    $('modeLayers').onclick = function() { setReviewMode(false); }; $('modeReview').onclick = function() { setReviewMode(true); }; $('reviewPanel').addEventListener('click', onReviewClick);
     $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); }; $('docBtn').onclick = function(e) { e.stopPropagation(); openDocMenu(this); };
     $('prevPlan').onclick = function() { openPlan(planIdx - 1); }; $('nextPlan').onclick = function() { openPlan(planIdx + 1); };
     $('compareBtn').onclick = function(e) { e.stopPropagation(); openCompareMenu(this); }; $('compareClose').onclick = function() { setCompare(-1); };
@@ -2197,6 +2592,7 @@ requireAuth().catch(function(){});
     document.addEventListener('keydown', function(e) {
       if (e.code === 'Space' && !e.repeat && !inField(e)) { spaceDown = true; if (overlayCanvas) overlayCanvas.classList.add('hand'); $('viewport').classList.add('hand'); }
       if (document.querySelector('.pc-backdrop') || inField(e)) return;
+      if (rvKey(e)) { e.preventDefault(); return; }
       var k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
       if (e.key === 'Enter' && DRAFT_TOOLS.indexOf(tool) >= 0 && draft.length >= 2) finishDraft();
       else if (e.key === 'Escape') { if (pop) { closePopover(); return; } var busy = draft.length || measureLine || marquee || selectedIds.size; draft = []; draftDrops = []; measureLine = null; marquee = null; selectedIds.clear(); renderProps(); redraw(); updateStatus(); if (!busy && activeLayerId) deselectLayer(); }
@@ -2233,9 +2629,10 @@ requireAuth().catch(function(){});
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   // console access for support / debugging
   window.TK = { get plans() { return plans; }, get planIdx() { return planIdx; }, get meas() { return meas; }, get allMeas() { return allMeas; }, get layers() { return layers; }, get me() { return me; }, get est() { return est; }, get scale() { return { ppf: scalePpf, label: scaleLabel }; }, get selected() { return Array.from(selectedIds); }, get groups() { return groupOrder; },
-    detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel };
+    detect: detectPageMeta, setScale: setPresetScale, openPlan: openPlan, autoMeasure: autoMeasure, addStandardLayers: addStandardLayers, render: renderAll, setTool: setTool, saveAnnot: saveAnnot, get draft() { return draft; }, set draft(v) { draft = v; }, finish: finishDraft, applySpacing: applySpacing, sync: syncLayerLines, popover: openLayerPopover, exportExcel: exportExcel,
+    get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=399"></script>
+<script src="sw-register.js?v=436"></script>
 </body>
 </html>

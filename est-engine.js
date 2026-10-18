@@ -461,9 +461,45 @@
       rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
+  // ── reviewer decisions (Takeoff → AI review tab, table est_ai_corrections) ──────────────────────────────
+  // Device / equipment rows the estimator accepted, corrected or deleted on a sheet. Keys must match takeoff.html:
+  // '<page_id>:<norm tag>|<type>' (a second identical row on the same sheet gets '#2' …). Run corrections (duct / pipe /
+  // riser marks) are not applied here — they changed the takeoff marks themselves, so the estimate sync carries them.
+  function devKey(pageId, a) { return pageId + ':' + norm(a.tag || '') + '|' + String(a.type || '').toLowerCase().trim(); }
+  function eqKey(pageId, e) { return pageId + ':' + norm(e.tag || '') + '|' + String(e.type || '').toLowerCase().trim(); }
+  var DEV_FIELDS = ['tag', 'type', 'qty', 'linear_ft', 'size', 'cfm', 'notes'], EQ_FIELDS = ['tag', 'type', 'qty', 'weight_lb', 'location', 'manufacturer', 'model', 'capacity', 'notes'];
+  function applyCorrections(pages, corrs) {
+    if (!corrs || !corrs.length) return pages;
+    var by = {}; corrs.forEach(function (c) { if (c && (c.kind === 'device' || c.kind === 'equipment')) by[c.kind + '|' + c.item_key] = c; });
+    if (!Object.keys(by).length) return pages;
+    return pages.map(function (p) {
+      var r = p.result; if (!r) return p;
+      var touched = false;
+      function fix(kind, rows, keyFn, fields) {
+        if (!rows || !rows.length) return rows;
+        var seen = {};
+        return rows.map(function (row) {
+          var k = keyFn(p.id, row); seen[k] = (seen[k] || 0) + 1; if (seen[k] > 1) k += '#' + seen[k];
+          var c = by[kind + '|' + k]; if (!c) return row;
+          touched = true;
+          if (c.status === 'deleted') return null;
+          if (c.status === 'corrected' && c.corrected) {
+            var n = Object.assign({}, row);
+            fields.forEach(function (f) { var v = c.corrected[f]; if (v !== undefined && v !== null && v !== '') n[f] = (f === 'qty' || f === 'linear_ft' || f === 'weight_lb' || f === 'cfm') ? Number(v) : v; });
+            n.reviewed = 'corrected'; return n;
+          }
+          return Object.assign({}, row, { reviewed: 'accepted' });
+        }).filter(Boolean);
+      }
+      var out = Object.assign({}, r, { air_devices: fix('device', r.air_devices, devKey, DEV_FIELDS), equipment: fix('equipment', r.equipment, eqKey, EQ_FIELDS) });
+      return touched ? Object.assign({}, p, { result: out }) : p;
+    });
+  }
+
   // ── build the breakdown ──────────────────────────────────────────────
   function build(pages, opts) {
     opts = opts || {};
+    if (opts.corrections) pages = applyCorrections(pages, opts.corrections);
     var R = makeRates(opts.norms), C = collect(pages), lines = [], flags = [], sort = 0;
     var famKey = familyFor(opts.ductSpec);
     if (!opts.ductSpec) flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'not read from the specs — priced as rectangular with 1" lining; run 🔍 Duct spec' });
@@ -754,5 +790,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor };
+  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor,
+    applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm };
 })();

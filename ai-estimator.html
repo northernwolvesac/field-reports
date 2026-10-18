@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=434"></script>
-<script src="auth.js?v=434"></script>
-<script src="est-totals.js?v=434"></script>
-<script src="est-engine.js?v=435"></script>
-<script src="geo-takeoff.js?v=434"></script>
+<script src="supabase-config.js?v=436"></script>
+<script src="auth.js?v=436"></script>
+<script src="est-totals.js?v=436"></script>
+<script src="est-engine.js?v=436"></script>
+<script src="geo-takeoff.js?v=436"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -79,6 +79,7 @@ var AE = (function() {
   var FN = SUPABASE_URL + '/functions/v1/ai-estimator';
   var KINDS = [['drawings', 'Drawings'], ['specs', 'Specifications'], ['addendum', 'Addendum / revision'], ['rfi', 'Bid RFI / answers'], ['quote', 'Vendor / sub quote'], ['other', 'Other']];
   var session = null, files = [], pages = [], norms = null, fileCache = {}, running = false, me = null;
+  var corrections = [];   // reviewer decisions from the Takeoff's "AI review" tab (est_ai_corrections) — applied by the engine when pricing
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -189,6 +190,7 @@ var AE = (function() {
     var p = await supabaseClient.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_title, sheet_type, status, error, cost, tokens_in, tokens_out, tag_counts, result, model, started_at').eq('session_id', session.id).order('page_no');
     files = f.data || []; pages = p.data || [];
     pages.forEach(function(pg) { if (pg.result) pg.result = unpack(pg.result); });
+    try { var c = await supabaseClient.from('est_ai_corrections').select('kind, item_key, status, corrected, page_id, sheet_no').eq('session_id', session.id); corrections = c.error ? [] : (c.data || []); } catch (e) { corrections = []; }
     pages.sort(function(a, b) { return files.findIndex(function(x) { return x.id === a.file_id; }) - files.findIndex(function(x) { return x.id === b.file_id; }) || a.page_no - b.page_no; });
   }
 
@@ -226,10 +228,22 @@ var AE = (function() {
       '<button class="btn" onclick="AE.review()" ' + (done ? '' : 'disabled') + '>🔎 AI scope review</button>' +
       '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button>' +
       '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { var r = p.result || {}; return r.geo || r.geo_pipe || r.geo_riser; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button></div></div>' +
-      renderDuctSpec(res) +
+      renderDuctSpec(res) + renderCorrections() +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
       '<div id="revOut">' + renderReview(res) + '</div></div>';
     $('main').innerHTML = html;
+  }
+
+  // what the estimator decided on the Takeoff's AI review tab — device / equipment rows are applied at pricing time, run edits live in the takeoff marks
+  function renderCorrections() {
+    if (!corrections.length) return session.estimate_id ? '<p class="muted" style="margin:8px 0 0">Nothing reviewed yet — check the AI items on the <a href="takeoff.html?est=' + session.estimate_id + '&review=1">Takeoff → AI review</a> tab; corrections there change the price here.</p>' : '';
+    var n = { accepted: 0, corrected: 0, deleted: 0 }, rows = { device: 0, equipment: 0, runs: 0 };
+    corrections.forEach(function(c) { n[c.status] = (n[c.status] || 0) + 1; rows[c.kind === 'device' || c.kind === 'equipment' ? c.kind : 'runs']++; });
+    var fixed = corrections.filter(function(c) { return c.status !== 'accepted' && (c.kind === 'device' || c.kind === 'equipment'); });
+    return '<div class="muted" style="margin:8px 0 0">✔ <b>' + corrections.length + ' reviewer decision' + (corrections.length === 1 ? '' : 's') + '</b> from the Takeoff (' + n.accepted + ' accepted · ' + n.corrected + ' corrected · ' + n.deleted + ' deleted; ' +
+      [rows.equipment ? rows.equipment + ' equipment' : '', rows.device ? rows.device + ' air devices' : '', rows.runs ? rows.runs + ' runs' : ''].filter(Boolean).join(', ') + ') — device and equipment corrections are applied when you press “Price it”' +
+      (session.estimate_id ? ' · <a href="takeoff.html?est=' + session.estimate_id + '&review=1">open the review</a>' : '') + '</div>' +
+      (fixed.length ? '<ul class="l muted" style="margin:4px 0 0">' + fixed.slice(0, 12).map(function(c) { var o = c.corrected || {}; return '<li>' + esc(c.sheet_no || '') + ' ' + esc(c.kind) + ' <b>' + esc(c.item_key.split(':').slice(1).join(':').split('|')[0] || '—') + '</b>: ' + (c.status === 'deleted' ? 'removed' : 'now ' + esc(Object.keys(o).filter(function(k) { return k !== 'note'; }).map(function(k) { return k + ' ' + o[k]; }).join(', '))) + '</li>'; }).join('') + (fixed.length > 12 ? '<li>… and ' + (fixed.length - 12) + ' more</li>' : '') + '</ul>' : '');
   }
 
   function pageRow(p) {
@@ -717,7 +731,7 @@ var AE = (function() {
   }
   async function price() {
     var n = await loadNorms();
-    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null });
+    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections });
     var res = Object.assign({}, session.result || {}, {
       engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
@@ -756,7 +770,7 @@ var AE = (function() {
 
   // ─── AI scope review ────────────────────────────────────────────────
   async function review() {
-    var C = NWEngine.collect(pages);
+    var C = NWEngine.collect(NWEngine.applyCorrections(pages, corrections));
     var k = await supabaseClient.from('est_knowledge').select('title, body_md').in('category', ['process', 'proposal']).limit(6);
     var ctx = 'PROJECT: ' + session.name + ' — ' + (session.location || '') + '\n\nNWAC PROCESS RULES:\n' +
       (k.data || []).filter(function(d) { return /process notes|proposal template/i.test(d.title); }).map(function(d) { return '## ' + d.title + '\n' + d.body_md.slice(0, 14000); }).join('\n\n') +
@@ -849,6 +863,8 @@ var AE = (function() {
       var dIds = Object.keys(dwg).map(function(k) { return dwg[k].id; });
       await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('label', 'auto');
       await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%');
+      // the auto-marks are re-created with new ids: review decisions on the old runs no longer point at anything (device / equipment decisions stay)
+      try { await supabaseClient.from('est_ai_corrections').delete().eq('estimate_id', estId).in('kind', ['duct', 'pipe', 'riser']); } catch (eC) {}
       // 2 · layers by size, rates from the catalog; the duct family comes from the spec reading
       var famKey = NWEngine.familyFor((session.result || {}).duct_spec || null), F = NWEngine.DUCT_FAMILIES[famKey], made = 0;
       async function layerFor(name, cat, group, patterns, size, cd) {
@@ -939,6 +955,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=434"></script>
+<script src="sw-register.js?v=436"></script>
 </body>
 </html>
