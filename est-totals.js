@@ -149,9 +149,12 @@
     var defaultTaxable = !wet && (!!TAXABLE_CATS[cat] || (installCat && countInstall));
     var taxable = (line.is_taxable !== null && line.is_taxable !== undefined) ? !!line.is_taxable : defaultTaxable;
     var crew = String(line.labor_crew_type || '');
+    // sheet-metal weight: duct lines measured in feet, size parsed from the description / catalog name (nw-duct-weight.js)
+    var weightLb = 0, ductKind = '';
+    if (window.NWDuct && cat === 'ductwork' && /^(ft|lf|feet)$/i.test(unit.trim())) { var wd = NWDuct.weightOf(line.description || '', { pressure: flag(es.duct_medium_pressure) ? 'medium' : 'low' }); if (wd) { weightLb = totalQty * wd.lb_ft; ductKind = wd.kind; } }
 
     return {
-      qty: qty, totalQty: totalQty, groupMultiplier: gm, unit: unit,
+      weightLb: weightLb, ductKind: ductKind, qty: qty, totalQty: totalQty, groupMultiplier: gm, unit: unit,
       unitCost: unitCost, wastePct: wastePct, subtotalItemCost: subtotalItemCost,
       markupPct: markupPct, marginPct: subtotalItemSales > 0 ? profit / subtotalItemSales : 0,
       unitSales: unitSales, subtotalItemSales: subtotalItemSales, profit: profit,
@@ -194,6 +197,7 @@
     var wetTap = 0, wetTapSales = 0, services = 0, servicesSales = 0;
     var subtotal = 0, count = 0, optionalTotal = 0;
     var breakdown = { sm: 0, pipe: 0, startup: 0, other: 0 };
+    var duct = { lb: 0, rect: 0, round: 0, oval: 0, shopCost: 0, lineMaterial: 0, lines: 0 };   // sheet-metal weight (lb) + shop $/lb check
 
     (lines || []).forEach(function (li) {
       if (!li) return;
@@ -208,7 +212,7 @@
 
       // ML lines: material + labor
       if (lt.category === 'equipment') equipMat += lt.materialCost;
-      else if (lt.category === 'ductwork') ductMat += lt.materialCost;
+      else if (lt.category === 'ductwork') { ductMat += lt.materialCost; if (lt.weightLb) { duct.lb += lt.weightLb; duct[lt.ductKind] += lt.weightLb; duct.shopCost += window.NWDuct ? NWDuct.metalCost(lt.weightLb, lt.ductKind) : 0; duct.lineMaterial += lt.subtotalItemCost; duct.lines++; } }
       else if (lt.category === 'pipework') pipeMat += lt.materialCost;
       else { otherMat += lt.otherMaterialCost; droppedMat += lt.droppedMaterialCost; }   // disconnects / equipment_install / air_outlets
       matCost += lt.subtotalItemCost;
@@ -301,7 +305,7 @@
       // legacy aliases for existing callers
       material: materialTotal, baseCost: subtotal,
       // ── Procore-shaped block ──
-      summary: summary,
+      summary: summary, duct: duct,
       preTax: preTax, preTaxTotal: preTaxTotal,
       taxes: taxes,
       postTax: postTax, postTaxTotal: postTaxTotal,

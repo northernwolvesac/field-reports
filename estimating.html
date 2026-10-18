@@ -11,18 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=381">
+<link rel="stylesheet" href="procore-ui.css?v=440">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=381"></script>
-<script src="auth.js?v=381"></script>
-<script src="est-totals.js?v=381"></script>
-<script src="procore-ui.js?v=381"></script>
-<script src="nw-catalog-picker.js?v=437"></script>
-<script src="nw-proposal.js?v=381"></script>
-<script src="bid-actions.js?v=381"></script>
+<script src="supabase-config.js?v=440"></script>
+<script src="auth.js?v=440"></script>
+<script src="est-totals.js?v=440"></script>
+<script src="procore-ui.js?v=440"></script>
+<script src="nw-catalog-picker.js?v=440"></script>
+<script src="nw-duct-weight.js?v=440"></script>
+<script src="nw-proposal.js?v=440"></script>
+<script src="bid-actions.js?v=440"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -568,6 +569,7 @@ requireAuth().catch(function(){});
     { key: 'travel_cost',      label: 'Travel Cost',        visible: false, width: 100, num: true },
     { key: 'cost_type',        label: 'Cost Type',          visible: false, width: 90 },
     { key: 'total_cost',       label: 'Total Cost',         visible: false, width: 110, num: true, money: true, agg: 'totalCost' },
+    { key: 'weight_lb',        label: 'Weight (lb)',        visible: true,  width: 100, num: true, agg: 'weightLb' },
     { key: 'total_cost_pct',   label: 'Total Cost (%)',     visible: false, width: 100, num: true },
     { key: 'cost_code',        label: 'Cost Code',          visible: false, width: 100 },
     { key: 'tag',              label: 'Tag',                visible: false, width: 90 },
@@ -1508,6 +1510,7 @@ requireAuth().catch(function(){});
       case 'sub_cost':         return { raw: lt.subcontractorCost, text: money(lt.subcontractorCost) };
       case 'cost_type':        return { raw: lt.costType, text: lt.costType };
       case 'total_cost':       return { raw: lt.totalCost, text: money(lt.totalCost) };
+      case 'weight_lb':        return { raw: lt.weightLb, text: lt.weightLb ? fmtNum(lt.weightLb, 0) + ' lb' : '--', muted: !lt.weightLb };
       case 'total_cost_pct':
         var tc = (lastTotals && lastTotals.summary) ? (lastTotals.summary.labor.cost + lastTotals.summary.materials.cost + lastTotals.summary.subcontractor.cost + lastTotals.summary.services.cost) : 0;
         var p = tc > 0 ? lt.totalCost / tc : 0;
@@ -2249,6 +2252,7 @@ requireAuth().catch(function(){});
       { key: 'individual_labor_rates', label: 'Individual labor rates', on: !!es.individual_labor_rates, enabled: true, hint: 'Lets every cost item carry its own Labor Rate' },
       { key: 'round_ea', label: 'Round quantities using ea', on: es.round_ea === true || es.round_ea === 'true', enabled: true, hint: 'Whole numbers for "ea" quantities in the grid' },
       { key: 'count_install_material', label: 'Count material on install lines', on: !(es.count_install_material === false || es.count_install_material === 'false'), enabled: true, hint: 'Material on Disconnects / Equipment Install / Air Outlets lines is priced and taxed (Procore). Off = labor only' },
+      { key: 'duct_medium_pressure', label: 'Duct weight at medium pressure (4" w.g.)', on: !!(es.duct_medium_pressure === true || es.duct_medium_pressure === 'true'), enabled: true, hint: 'One gauge heavier for the sheet-metal lb of every duct line (mains spec); off = 2" w.g. schedule' },
       { key: 'labor_separate', label: 'Show labor as separate line', on: false, enabled: false },
       { key: 'catalog_margins', label: 'Apply catalog margins', on: false, enabled: false },
       { key: 'auto_budget', label: 'Auto-assign budget codes', on: false, enabled: false },
@@ -3116,6 +3120,11 @@ requireAuth().catch(function(){});
         (sm.services.cost > 0 ? row('Services', '--', '--', '--', money(sm.services.cost), '--', money(sm.services.sales), money(sm.services.profit)) : '') +
         row('Subtotal', '--', '--', '--', money(sm.labor.cost + sm.materials.cost + sm.subcontractor.cost + sm.services.cost), '--', money(sm.subtotal), money(sm.subtotal - (sm.labor.cost + sm.materials.cost + sm.subcontractor.cost + sm.services.cost)), 'total') +
       '</tbody></table></div>';
+    // sheet-metal weight + shop check (nw-duct-weight.js): feet from the takeoff, pounds by SMACNA gauge + 25 % fittings, shop $/lb rect 4 / round 5 / oval 7
+    if (t.duct && t.duct.lb > 0) {
+      var D = t.duct, kinds = [['rect', 'rectangular'], ['round', 'round'], ['oval', 'flat oval']].filter(function(k) { return D[k[0]] > 0; }).map(function(k) { return fmtNum(D[k[0]], 0) + ' lb ' + k[1]; }).join(' · ');
+      html += '<div class="es-side-line" style="margin-top:6px">Sheet metal <b>' + fmtNum(D.lb, 0) + ' lb</b> <span class="pc-muted" style="font-size:11px">(' + kinds + ', ' + D.lines + ' duct lines, ' + ((t.settings && (t.settings.duct_medium_pressure || (t.settings.es_settings || {}).duct_medium_pressure)) ? '4" w.g.' : '2" w.g.') + ' gauge + ' + (window.NWDuct ? NWDuct.FITTING_PCT : 25) + ' % fittings)</span><br>Shop check @ $/lb <b>' + money(D.shopCost) + '</b> <span class="pc-muted" style="font-size:11px">vs ' + money(D.lineMaterial) + ' duct material in the lines (lines include liner / wrap; shop $/lb is bare metal + fab)</span></div>';
+    }
 
     // Pre-Tax markups
     html += '<div class="es-mk"><div class="es-mk-h">Pre-Tax Markups' + (canEdit && !locked ? '<button class="pc-btn pc-btn-icon pc-btn-ghost" data-mkadd="pre" title="Add markup">' + icon('add', 18) + '</button>' : '') + '</div>';
@@ -3635,6 +3644,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=381"></script>
+<script src="sw-register.js?v=440"></script>
 </body>
 </html>

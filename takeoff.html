@@ -6,19 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=438">
+<link rel="stylesheet" href="procore-ui.css?v=440">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=438"></script>
-<script src="auth.js?v=438"></script>
-<script src="est-totals.js?v=438"></script>
-<script src="procore-ui.js?v=438"></script>
+<script src="supabase-config.js?v=440"></script>
+<script src="auth.js?v=440"></script>
+<script src="est-totals.js?v=440"></script>
+<script src="procore-ui.js?v=440"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=438"></script>
-<script src="est-drawings.js?v=438"></script>
-<script src="nw-catalog-picker.js?v=437"></script>
-<script src="geo-takeoff.js?v=438"></script>
-<script src="est-engine.js?v=438"></script>
+<script src="bid-actions.js?v=440"></script>
+<script src="est-drawings.js?v=440"></script>
+<script src="nw-catalog-picker.js?v=440"></script>
+<script src="nw-duct-weight.js?v=440"></script>
+<script src="geo-takeoff.js?v=440"></script>
+<script src="est-engine.js?v=440"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -1972,16 +1973,20 @@ requireAuth().catch(function(){});
       '<div class="row"><span>All plans (' + t.marks + ' marks, ' + t.pages + ' plans)</span><b>' + qtyStr(t.qty, L.takeoff_type) + '</b></div>' +
       '<div class="row"><span>Unit material</span><b>' + P.money(L.unit_material_cost) + ' /' + P.uom(typeUnit(L.takeoff_type)) + (L.waste_pct ? ' +' + L.waste_pct + '% waste' : '') + '</b></div>' +
       '<div class="row"><span>Unit labor</span><b>' + (Math.round(Number(L.unit_labor_hours) * 60 * 10) / 10) + ' min' + (Number(L.labor_factor) !== 1 ? ' ×' + L.labor_factor : '') + '</b></div>' +
+      (function() { var wd = window.NWDuct && L.category === 'ductwork' && L.takeoff_type === 'linear' ? NWDuct.weightOf(L.name) : null; return wd ? '<div class="row"><span>Sheet metal</span><b>' + wd.lb_ft + ' lb/ft · ' + wd.gauge + ' ga · ' + Math.round(t.qty * wd.lb_ft).toLocaleString('en-US') + ' lb</b></div>' : ''; })() +
       '<div class="row"><span>Material</span><b>' + fmtMoney(t.mat) + '</b></div><div class="row"><span>Labor</span><b>' + t.hrs.toFixed(1) + ' h · ' + fmtMoney(t.labor) + '</b></div><div class="row"><span>Total</span><b>' + fmtMoney(t.total) + '</b></div>' +
       '<div style="margin-top:8px"><button class="pc-btn pc-btn-outline" id="pEdit">' + ic('edit', 16) + 'Layer properties</button></div>';
     $('pEdit').onclick = function() { openLayerPopover(L.id, document.querySelector('[data-lmenu="' + L.id + '"]')); };
   }
   function renderTotals() {
     var g = {}, gm = 0, gh = 0;
-    layers.forEach(function(l) { var t = layerTotals(l); var k = l.group_name || 'Default Group'; g[k] = g[k] || { mat: 0, hrs: 0 }; g[k].mat += t.mat; g[k].hrs += t.hrs; gm += t.mat; gh += t.hrs; });
+    var lbTot = 0, lbKind = { rect: 0, round: 0, oval: 0 }, shop = 0;
+    layers.forEach(function(l) { var t = layerTotals(l); var k = l.group_name || 'Default Group'; g[k] = g[k] || { mat: 0, hrs: 0 }; g[k].mat += t.mat; g[k].hrs += t.hrs; gm += t.mat; gh += t.hrs;
+      if (window.NWDuct && l.category === 'ductwork' && l.takeoff_type === 'linear') { var wd = NWDuct.weightOf(l.name); if (wd) { var lb = t.qty * wd.lb_ft; lbTot += lb; lbKind[wd.kind] += lb; shop += NWDuct.metalCost(lb, wd.kind); } } });
     $('totals').innerHTML = '<table>' + Object.keys(g).sort().map(function(k) { return '<tr><td>' + esc(k) + '</td><td class="n">' + fmtMoney(g[k].mat) + '</td><td class="n">' + g[k].hrs.toFixed(0) + ' h</td></tr>'; }).join('') +
       '<tr><td>Material</td><td class="n" colspan="2">' + fmtMoney(gm) + '</td></tr><tr><td>Labor ' + gh.toFixed(0) + ' h × ' + P.money0(laborRate) + '</td><td class="n" colspan="2">' + fmtMoney(gh * laborRate) + '</td></tr>' +
-      '<tr class="total"><td>Takeoff total</td><td class="n" colspan="2">' + fmtMoney(gm + gh * laborRate) + '</td></tr></table>' +
+      '<tr class="total"><td>Takeoff total</td><td class="n" colspan="2">' + fmtMoney(gm + gh * laborRate) + '</td></tr>' +
+      (lbTot > 0 ? '<tr><td>Sheet metal</td><td class="n" colspan="2">' + Math.round(lbTot).toLocaleString('en-US') + ' lb</td></tr><tr><td class="pc-muted" style="font-size:11px">rect ' + Math.round(lbKind.rect).toLocaleString('en-US') + ' · round ' + Math.round(lbKind.round).toLocaleString('en-US') + ' · oval ' + Math.round(lbKind.oval).toLocaleString('en-US') + ' lb · shop @ $/lb</td><td class="n" colspan="2">' + fmtMoney(shop) + '</td></tr>' : '') + '</table>' +
       '<div style="margin-top:8px;font-size:11px" class="pc-muted">Before overhead, misc and tax — those are applied on the <a class="pc-link" href="estimating.html?est=' + estimateId + '">Estimating</a> page.' + (syncOk ? ' Quantities sync to the estimate lines automatically.' : '') + '</div>';
   }
   function renderAll() { renderLayerTree(); renderProps(); renderTotals(); renderLegend(); updateStatus(); redraw(); if (thumbsOn) renderThumbs(); refreshPopover(); if (reviewOn) renderReview(); }
@@ -2642,6 +2647,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=438"></script>
+<script src="sw-register.js?v=440"></script>
 </body>
 </html>

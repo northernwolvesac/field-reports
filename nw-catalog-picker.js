@@ -120,6 +120,7 @@
     if (isStale(it)) p.push('<span class="pc-pill" style="background:#f1f5f9;color:#475569" title="Not checked in the last 6 months">' + (it.price_checked_at ? 'checked ' + String(it.price_checked_at).slice(0, 10) : 'unchecked') + '</span>');
     else p.push('<span class="pc-pill" style="background:#dcfce7;color:#15803d">checked ' + String(it.price_checked_at).slice(0, 10) + '</span>');
     if (it.price_source) p.push('<span class="pc-muted" style="font-size:11px" title="Price source">' + esc(it.price_source) + '</span>');
+    if (window.NWDuct && /duct|rect|oval|round|spiral/i.test(String(it.folder_path || '')) && /^(ft|lf)$/i.test(String(it.unit || ''))) { var wd = NWDuct.weightOf(it.name); if (wd) p.push('<span class="pc-pill" style="background:#e0f2fe;color:#075985" title="Sheet-metal weight: SMACNA 2 in. w.g. gauge + ' + NWDuct.FITTING_PCT + ' % fittings">' + wd.lb_ft + ' lb/ft · ' + wd.gauge + ' ga</span>'); }
     var u = usageMap && usageMap[String(it.id)]; if (u) p.push('<span class="pc-muted" style="font-size:11px">used ' + u.n_lines + '×</span>');
     return p.length ? '<div class="ck" style="margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + p.join('') + '</div>' : '';
   }
