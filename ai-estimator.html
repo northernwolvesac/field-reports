@@ -14,14 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=457"></script>
-<script src="auth.js?v=457"></script>
-<script src="est-totals.js?v=457"></script>
+<script src="supabase-config.js?v=458"></script>
+<script src="auth.js?v=458"></script>
+<script src="est-totals.js?v=458"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=457"></script>
-<script src="nw-email.js?v=457"></script>
-<script src="est-engine.js?v=457"></script>
-<script src="geo-takeoff.js?v=457"></script>
+<script src="email-utils.js?v=458"></script>
+<script src="nw-email.js?v=458"></script>
+<script src="est-engine.js?v=458"></script>
+<script src="geo-takeoff.js?v=458"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -186,8 +186,42 @@ var AE = (function() {
     var r = await supabaseClient.from('ai_est_sessions').select('*').eq('id', sid).single();
     if (r.error) { $('main').innerHTML = '<div class="card">' + esc(r.error.message) + '</div>'; return; }
     session = r.data; $('hTitle').textContent = session.name;
+    await checkEstimateLink();
     await reload();
     render();
+  }
+  // the estimate this session points at may have been deleted on the Bid Board (a duplicate of the real one): drop the dead link
+  var estimateGone = false;
+  async function checkEstimateLink() {
+    if (!session.estimate_id) return;
+    var ec = await supabaseClient.from('estimates').select('id').eq('id', session.estimate_id).maybeSingle();
+    if (ec.error || ec.data) return;
+    session.estimate_id = null; estimateGone = true;
+    await supabaseClient.from('ai_est_sessions').update({ estimate_id: null }).eq('id', session.id);
+  }
+  function estKey() { var m = /\d{2,}/.exec(session.name || ''); return m ? m[0] : (session.name || '').split(/\s+/).slice(0, 2).join(' '); }   // "414 West 14th street" → 414
+  async function findEstimates(q) {
+    var r = await supabaseClient.from('estimates').select('id,name,quote_number,status,bid_stage,line_count,total_sales,estimator_name,created_at,parent_estimate_id').eq('is_template', false).ilike('name', '%' + q + '%').order('created_at', { ascending: false }).limit(25);
+    return r.error ? [] : (r.data || []).filter(function(x) { return !x.parent_estimate_id; });
+  }
+  function estLabel(x) { return x.name + ' (' + (x.quote_number ? 'Q' + x.quote_number + ', ' : '') + (x.line_count || 0) + ' lines' + (x.total_sales ? ', ' + money(x.total_sales) : '') + ', ' + (x.status || '') + (x.estimator_name ? ', ' + x.estimator_name : '') + ', ' + String(x.created_at).slice(0, 10) + ')'; }
+  function linkEstimate() {
+    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">🔗 Link to an estimate</h3><button class="btn" onclick="AE.closeModal()">Close</button></div>' +
+      '<p class="muted">Pick the Bid Board estimate this session belongs to. “Update estimate” then writes the AI breakdown into it and “Open in Takeoff” lays the plans in its Takeoff.</p>' +
+      '<div class="row"><input type="text" id="leQ" value="' + esc(estKey()) + '" placeholder="part of the estimate name" style="min-width:260px" onkeydown="if(event.key===\'Enter\')AE.linkSearch()"><button class="btn" onclick="AE.linkSearch()">Search</button></div>' +
+      '<div id="leList" class="muted" style="margin-top:10px">Searching…</div>';
+    $('modal').classList.add('open');
+    linkSearch();
+  }
+  async function linkSearch() {
+    var q = ($('leQ').value || '').trim(); if (!q) { $('leList').textContent = 'Type part of the name'; return; }
+    var list = await findEstimates(q);
+    $('leList').innerHTML = list.length ? list.map(function(x) { return '<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line,#e5e7eb)"><span>' + esc(estLabel(x)) + '</span><button class="btn" onclick="AE.linkTo(\'' + x.id + '\')">Link</button></div>'; }).join('') : '<span class="muted">No estimate matches “' + esc(q) + '”. “Create estimate” makes a new one.</span>';
+  }
+  async function linkTo(id) {
+    var u = await supabaseClient.from('ai_est_sessions').update({ estimate_id: id }).eq('id', session.id);
+    if (u.error) { toast(u.error.message); return; }
+    session.estimate_id = id; estimateGone = false; closeModal(); toast('Linked ✓'); render();
   }
   async function reload() {
     var f = await supabaseClient.from('ai_est_files').select('*').eq('session_id', session.id).order('created_at');
@@ -211,7 +245,8 @@ var AE = (function() {
       '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
       ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + (res.run && res.run.finished_at ? ' · last run ' + res.run.read + ' sheet' + (res.run.read === 1 ? '' : 's') + ' in ' + Math.max(1, Math.round(res.run.secs / 60)) + ' min, $' + Number(res.run.cost || 0).toFixed(2) + (res.run.retries ? ', ' + res.run.retries + ' retr' + (res.run.retries === 1 ? 'y' : 'ies') : '') + (res.run.failed ? ', <span class="flag">' + res.run.failed + ' failed</span>' : '') : '') + (res.run && res.run.active && !running && res.run.heartbeat && Date.now() - new Date(res.run.heartbeat).getTime() < 120000 ? ' · <span class="flag">reading in another tab' + (res.run.by ? ' (' + esc(res.run.by) + ')' : '') + '</span>' : '') + '</div></div>' +
       '<div class="row"><label title="Shop drawings and T&amp;B are counted per plan sheet with new work; type a number here to override">SD/T&amp;B sheets<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
-      (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a>' : '') + '</div></div></div>' +
+      (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a>' : '<button class="btn" onclick="AE.linkEstimate()" title="Tie this session to an estimate that already exists on the Bid Board">🔗 Link estimate</button>') + '</div></div>' +
+      (estimateGone ? '<div class="muted" style="margin-top:6px">⚠ The estimate this session was linked to no longer exists (deleted on the Bid Board). Link the session to the right estimate, or “Create estimate” makes a new one.</div>' : '') + '</div>' +
 
       '<div class="card"><h3>1 · Bid documents</h3>' +
       '<div class="row"><select id="upKind">' + KINDS.map(function(k) { return '<option value="' + k[0] + '">' + k[1] + '</option>'; }).join('') + '</select>' +
@@ -1306,12 +1341,15 @@ var AE = (function() {
       // 1 · one takeoff drawing per session file (copied into the takeoff bucket once, matched by file name)
       var erq = await supabaseClient.from('estimates').select('parent_estimate_id').eq('id', estId).single(), dwgRoot = (erq.data && erq.data.parent_estimate_id) || estId;
       var ex = await supabaseClient.from('estimate_drawings').select('id,filename,page_count,page_meta').eq('estimate_id', dwgRoot);
-      var have = {}; (ex.data || []).forEach(function(d) { have[d.filename] = d; });
+      // the same PDF may already be in the Takeoff under its original name (the session copy carries an upload-time prefix)
+      var nfn = function(n) { return String(n || '').toLowerCase().replace(/^\d{10,}_/, '').replace(/[^a-z0-9]+/g, ''); };
+      var have = {}; (ex.data || []).forEach(function(d) { have[d.filename] = d; have[nfn(d.filename)] = d; });
       var fileIds = Array.from(new Set(list.map(function(p) { return p.file_id; }))), dwg = {};
       for (var fi = 0; fi < fileIds.length; fi++) {
         var f = files.find(function(x) { return x.id === fileIds[fi]; });
         var meta = {}; pages.forEach(function(p) { var r = p.result || {}; if (p.file_id === f.id && r.sheet_no) meta[String(p.page_no)] = { sheet: r.sheet_no }; });
-        if (have[f.file_name]) { dwg[f.id] = have[f.file_name]; await supabaseClient.from('estimate_drawings').update({ page_meta: Object.assign({}, have[f.file_name].page_meta || {}, meta) }).eq('id', have[f.file_name].id); continue; }
+        var hv = have[f.file_name] || have[nfn(f.file_name)];
+        if (hv) { dwg[f.id] = hv; await supabaseClient.from('estimate_drawings').update({ page_meta: Object.assign({}, hv.page_meta || {}, meta) }).eq('id', hv.id); continue; }
         bridging = 'Copying ' + f.file_name + '…'; render();
         var bytes = await fileBytes(f.id), path = dwgRoot + '/' + Date.now() + '_' + f.file_name.replace(/[^A-Za-z0-9._-]/g, '_');
         var up = await supabaseClient.storage.from('estimate-drawings').upload(path, new Blob([bytes], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false });
@@ -1398,9 +1436,22 @@ var AE = (function() {
 
   async function toEstimate() {
     var e = (session.result || {}).engine; if (!e) return;
-    if (session.estimate_id && !confirm('Replace the line items of the linked estimate with this AI breakdown?')) return;
     var v = (session.result || {}).review || {};
     var estId = session.estimate_id;
+    if (!estId) {   // an estimate of the same job may already be on the Bid Board: link to it rather than make a duplicate
+      var same = await findEstimates(estKey());
+      if (same.length === 1 || (same.length > 1 && same[0].name.toLowerCase().indexOf((session.name || '').toLowerCase().slice(0, 8)) === 0)) {
+        var cand = same[0];
+        if (confirm('The Bid Board already has “' + estLabel(cand) + '”.\n\nOK = link this session to it and replace its ' + (cand.line_count || 0) + ' line items with the AI breakdown.\nCancel = create a new, separate estimate.')) {
+          estId = cand.id; session.estimate_id = estId; await supabaseClient.from('ai_est_sessions').update({ estimate_id: estId }).eq('id', session.id);
+        }
+      }
+    }
+    if (estId) {
+      var cur = await supabaseClient.from('estimates').select('name,line_count,total_sales').eq('id', estId).maybeSingle();
+      if (!cur.data) { toast('The linked estimate no longer exists — link the session to another one'); session.estimate_id = null; estimateGone = true; await supabaseClient.from('ai_est_sessions').update({ estimate_id: null }).eq('id', session.id); render(); return; }
+      if (session.estimate_id === estId && !confirm('Replace the ' + (cur.data.line_count || 0) + ' line items' + (cur.data.total_sales ? ' (' + money(cur.data.total_sales) + ')' : '') + ' of “' + cur.data.name + '” with this AI breakdown?')) return;
+    }
     if (!estId) {
       var r = await supabaseClient.from('estimates').insert({ name: session.name, project_address: session.location, estimator_name: me.name, status: 'draft',
         is_ofci: !!(session.result || {}).ofci, overhead_pct: (session.result || {}).ofci ? 0.30 : 0.20,
@@ -1422,9 +1473,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=457"></script>
+<script src="sw-register.js?v=458"></script>
 </body>
 </html>
