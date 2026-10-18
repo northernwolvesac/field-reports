@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=444"></script>
-<script src="auth.js?v=444"></script>
-<script src="est-totals.js?v=444"></script>
-<script src="est-engine.js?v=444"></script>
-<script src="geo-takeoff.js?v=444"></script>
+<script src="supabase-config.js?v=445"></script>
+<script src="auth.js?v=445"></script>
+<script src="est-totals.js?v=445"></script>
+<script src="est-engine.js?v=445"></script>
+<script src="geo-takeoff.js?v=445"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -527,7 +527,7 @@ var AE = (function() {
             if (aiScale && !NWGeo.hasScale(pdata2.fullText)) pdata2.fullText += ' SCALE: ' + aiScale;
             var gp = await NWGeo.measurePipes(pdata2);
             geoPipe = gp.error ? { error: gp.error, at: new Date().toISOString() }
-              : (gp.total_ft <= 3 * aiPipeFt && gp.total_ft >= aiPipeFt / 4) ? { sizes: gp.sizes, total_ft: gp.total_ft, ptft: gp.ptft, labels: gp.labels, at: new Date().toISOString() }
+              : (gp.total_ft <= 3 * aiPipeFt && gp.total_ft >= aiPipeFt / 4) ? { sizes: gp.sizes, total_ft: gp.total_ft, ptft: gp.ptft, labels: gp.labels, sr: gp.sr, single_ft: gp.single_ft, paired_ft: gp.paired_ft, single_sizes: gp.single_sizes, at: new Date().toISOString() }
               : { error: 'pipes: measured ' + Math.round(gp.total_ft) + ' ft vs the AI\'s ' + Math.round(aiPipeFt) + ' ft — not used', at: new Date().toISOString() };
           }
         }
@@ -1065,6 +1065,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=444"></script>
+<script src="sw-register.js?v=445"></script>
 </body>
 </html>
