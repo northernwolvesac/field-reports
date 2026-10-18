@@ -45,8 +45,8 @@ tagged items on this sheet, and use the drawing to decide what each tag is.
 
 Rules:
 - Schedules: capture EVERY row (tag, type, manufacturer/model, capacity, weight, electrical, notes). Weight in lb if shown.
-- Plans — AIR DEVICES, count them like an estimator pricing them: one row per device family (its tag letter / code, e.g. "C",
-  "CD-1", "SA", "RG") with the TOTAL qty on this sheet. Count every drawn symbol once; a tag written "TYP. 5" / "TYPICAL OF 5"
+- Plans — AIR DEVICES, count them like an estimator pricing them: one row per device code (the WHOLE code as printed, e.g. "C",
+  "CD-1", "SA", "RG", "LDS-A", "SD-A", "RD-B" — codes that share a suffix letter are different rows, never merge them into one "family A") with the TOTAL qty on this sheet. Slot / linear codes (LDS, LSD, LD, LDR, LDX, SLOT, LINEAR …) are type linear; their size is the slot width and the length printed on the plan (or "see plans"). Count every drawn symbol once; a tag written "TYP. 5" / "TYPICAL OF 5"
   stands for 5 devices; a device tag placed once next to a group of identical symbols covers the whole group. Use the DEVICE TAGS
   count (exact, from the text layer, TYP multipliers applied) as the quantity of each tagged family — only add symbols that carry
   no tag at all. Give each row: type (diffuser/grille/register/linear/vav/fpb/fsd/motorized_damper/cod/louver), tag family, size
