@@ -2024,8 +2024,61 @@
     });
     return { bubbles: bub.length, no_symbol: noSym, by_colour: out };
   }
+  // ─── symbol glyph families: the small closed shapes drawn on the sheet, counted by shape and paper size (no scale needed) ───
+  // stroked rectangles / squares (with 0–4 diagonal strokes inside), circles (closed runs of curve chords), coloured fills. The sheet
+  // reader matches the legend's air-device symbols to these families and takes the family count as the quantity (Esquire: 138 small
+  // squares-with-X + 90 one-foot circles = the 228 outlets Procore has; BOSS: 2-ft circles 11 + 11 = 22). Tag bubbles, light fixtures,
+  // sprinklers and furniture form families too — the reader tells them apart by the legend, so every family is reported with the share
+  // that has a cfm number or a short tag beside it.
+  function glyphFamilies(data, opts) {
+    opts = opts || {};
+    var sy = data.symSegs || [], S = data.segs || [], n = S.length / 5, i, diag = [], fam = {}, boxes = 0;
+    if (!sy.length && !(data.fills || []).length) return null;
+    for (i = 0; i < n; i++) { var o = i * 5; if (Math.abs(S[o + 2] - S[o]) >= 2.5 && Math.abs(S[o + 3] - S[o + 1]) >= 2.5) diag.push([Math.min(S[o], S[o + 2]), Math.min(S[o + 1], S[o + 3]), Math.max(S[o], S[o + 2]), Math.max(S[o + 1], S[o + 3])]); }
+    function inch(v) { return Math.round(v / 72 * 20) / 20; }   // paper inches, 1/20 in
+    function add(k, box, extra) { var f = fam[k] = fam[k] || Object.assign({ n: 0, boxes: [] }, extra); f.n++; if (f.boxes.length < 400) f.boxes.push(box); boxes++; }
+    var seen = {};
+    for (i = 0; i + 4 <= sy.length; i++) {
+      var q = sy.slice(i, i + 4), st = data.styles[q[0][4]]; if (!st || q[1][4] !== q[0][4] || q[2][4] !== q[0][4] || q[3][4] !== q[0][4]) continue;
+      var xs = [], ys = []; q.forEach(function (sg) { xs.push(sg[0], sg[2]); ys.push(sg[1], sg[3]); });
+      var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys), w = x1 - x0, h = y1 - y0;
+      if (Math.min(w, h) < 4 || Math.max(w, h) > 60) continue;
+      var onEdge = q.every(function (sg) { return (Math.abs(sg[0] - sg[2]) < 0.6 && (Math.abs(sg[0] - x0) < 0.6 || Math.abs(sg[0] - x1) < 0.6)) || (Math.abs(sg[1] - sg[3]) < 0.6 && (Math.abs(sg[1] - y0) < 0.6 || Math.abs(sg[1] - y1) < 0.6)); });
+      if (!onEdge) continue;
+      var key = Math.round(x0) + ',' + Math.round(y0) + ',' + Math.round(x1) + ',' + Math.round(y1); if (seen[key]) continue; seen[key] = 1;
+      var nd = 0; diag.forEach(function (g) { if (Math.abs(g[0] - x0) < 1.5 && Math.abs(g[1] - y0) < 1.5 && Math.abs(g[2] - x1) < 1.5 && Math.abs(g[3] - y1) < 1.5) nd++; });
+      var shade = Math.max.apply(null, st.col) > 0.35 ? 'gray' : 'black', square = Math.abs(w - h) < 0.15 * Math.max(w, h);
+      add((square ? 'square' : 'rect') + '|' + inch(w) + '|' + inch(h) + '|' + Math.min(nd, 4) + '|' + shade + (st.dash ? '|dashed' : ''), [x0, y0, x1, y1], { shape: square ? 'square' : 'rectangle', w_in: inch(w), h_in: inch(h), diagonals: Math.min(nd, 4), line: shade + (st.dash ? ' dashed' : '') });
+    }
+    var run = [];
+    function flush() {
+      if (run.length >= 3) { var xs2 = [], ys2 = []; run.forEach(function (sg) { xs2.push(sg[0], sg[2]); ys2.push(sg[1], sg[3]); });
+        var a0 = Math.min.apply(null, xs2), a1 = Math.max.apply(null, xs2), b0 = Math.min.apply(null, ys2), b1 = Math.max.apply(null, ys2), cw = a1 - a0, ch = b1 - b0;
+        if (cw >= 4 && cw <= 45 && ch >= 4 && Math.abs(cw - ch) < 0.3 * Math.max(cw, ch)) add('circle|' + inch(cw), [a0, b0, a1, b1], { shape: 'circle', w_in: inch(cw), h_in: inch(ch), diagonals: 0, line: '' }); }
+      run = [];
+    }
+    for (i = 0; i < sy.length; i++) { var sg2 = sy[i], side = Math.abs(sg2[0] - sg2[2]) < 0.6 || Math.abs(sg2[1] - sg2[3]) < 0.6; if (side) { flush(); continue; } if (run.length && (sg2[4] !== run[0][4] || Math.hypot(sg2[0] - run[run.length - 1][2], sg2[1] - run[run.length - 1][3]) > 2)) flush(); run.push(sg2); }
+    flush();
+    function colName(c) { var r = c[0], g = c[1], b = c[2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn < 40) return mx > 200 ? 'white' : mx > 110 ? 'gray' : 'black'; if (b >= r && b >= g) return g > 180 && r < 150 ? 'cyan' : (r > 150 ? 'purple' : 'blue'); if (g >= r && g >= b) return r > 200 ? 'yellow' : 'green'; return g > 150 ? (b > 120 ? 'pink' : 'orange') : (b > 120 ? 'pink' : 'red'); }
+    (data.fills || []).forEach(function (f) { var fw = f[2] - f[0], fh = f[3] - f[1]; if (Math.max(fw, fh) < 4 || Math.max(fw, fh) > 60) return; var cn = colName([f[4], f[5], f[6]]); if (cn === 'white') return; add('fill|' + cn + '|' + inch(fw) + '|' + inch(fh), [f[0], f[1], f[2], f[3]], { shape: 'filled shape', colour: cn, w_in: inch(fw), h_in: inch(fh), diagonals: 0, line: '' }); });
+    // text beside each glyph (cfm bubbles "(150)" / short device codes) within ~1 inch of paper
+    var txt = (data.text || []).concat(opts.words || []).map(function (t) { var s0 = String(t.str || '').trim(); return s0.length && s0.length <= 16 ? { s: s0, x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2 } : null; }).filter(Boolean);
+    var isCfm = function (t) { return /^\(?\s*\d{2,4}\s*(CFM)?\s*\)?$/i.test(t.s); }, isTag = function (t) { return /^[A-Z]{1,3}(-?[A-Z0-9]{1,2})?$/.test(t.s); };
+    var out = Object.keys(fam).map(function (k) {
+      var f = fam[k], wc = 0, wt = 0;
+      f.boxes.forEach(function (b) { var cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, near = txt.filter(function (t) { return Math.hypot(t.x - cx, t.y - cy) <= 72; }); if (near.some(isCfm)) wc++; if (near.some(isTag)) wt++; });
+      var scaled = f.boxes.length ? f.n / f.boxes.length : 1;
+      return { key: k, shape: f.shape, colour: f.colour, w_in: f.w_in, h_in: f.h_in, diagonals: f.diagonals, line: f.line, n: f.n, cfm_beside: Math.round(wc * scaled), tag_beside: Math.round(wt * scaled), boxes: opts.wantBoxes ? f.boxes : undefined };
+    }).filter(function (f) { return f.n >= 3; }).sort(function (a, b) { return b.n - a.n; }).slice(0, opts.max || 16);
+    return out.length ? { families: out, total: boxes } : null;
+  }
+  // one line per family, for the sheet reader's prompt
+  function glyphText(gf) {
+    if (!gf || !gf.families) return '';
+    return gf.families.map(function (f, i) { return '#' + (i + 1) + ': ' + f.n + ' × ' + (f.shape === 'filled shape' ? f.colour + ' filled shape' : f.shape) + ' ' + f.w_in + '×' + f.h_in + ' in' + (f.diagonals ? ' with ' + f.diagonals + ' diagonal stroke' + (f.diagonals > 1 ? 's' : '') + ' inside' : '') + (f.line ? ' (' + f.line + ' line)' : '') + (f.cfm_beside ? ', ' + f.cfm_beside + ' with a cfm number beside' : '') + (f.tag_beside ? ', ' + f.tag_beside + ' with a short tag beside' : ''); }).join('\n');
+  }
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
   function measureRisers(data) { data.mode = 'risers'; return measure(data); }
-  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, symbolCensus: symbolCensus, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
+  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, symbolCensus: symbolCensus, glyphFamilies: glyphFamilies, glyphText: glyphText, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
     isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, _worker: workerMain };   // _worker: for offline tests
 })();

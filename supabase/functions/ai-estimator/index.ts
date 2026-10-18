@@ -243,6 +243,9 @@ function repairJson(s: string): any {
   throw new Error("unreadable JSON");
 }
 
+const GLYPH_NOTE = "SYMBOL GLYPHS counted from the vector layer of this sheet (one family per line: count x shape, paper size in inches, diagonal strokes inside, how many have a cfm number or a short tag beside them). Find the legend's air-device symbols among these families by shape and size: a family that matches a legend symbol gives the EXACT quantity of that device on this sheet - use that count instead of counting by eye, and say in the row's basis which family (#n) you used. Families that are tag bubbles, light fixtures, sprinkler heads, thermostats, furniture, column markers or dimension marks are not devices.
+";
+
 // ─── handlers ─────────────────────────────────────────────────────────
 async function runPage(db: any, body: any, kind: "sheet" | "quote") {
   const { data: pg, error } = await db.from("ai_est_pages").select("id, session_id, page_no, result").eq("id", body.page_id).single();
@@ -291,6 +294,7 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
         if (body.symbol_census && body.symbol_census.by_colour)
           prompt += "\n\nCOLOURED SYMBOLS beside the bare cfm bubbles (exact, counted from the vector layer; each symbol once): " + JSON.stringify(body.symbol_census.by_colour) +
             " — bubbles with no symbol: " + body.symbol_census.no_symbol + ". USE THESE NUMBERS as the quantities of the bare-cfm device rows: one row per colour (put the colour in the tag), qty = that colour's count; your job is to say what each colour is (supply diffuser / return grille / exhaust register / round diffuser / linear) from the legend and the symbol shape. Do not count the bubbles yourself.";
+        if (body.glyph_text) prompt += "\n\n" + GLYPH_NOTE + String(body.glyph_text).slice(0, 3000);
         if (body.text_hint) prompt += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
       }
       content.push({ type: "text", text: prompt });
@@ -303,6 +307,7 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
       const prev: any = (pg as any).result || {};
       if (prev.triage) result.triage = prev.triage;
       if (prev.ocr_labels) result.ocr_labels = prev.ocr_labels;
+      if (Array.isArray(body.glyph_families) && body.glyph_families.length) result.glyphs = body.glyph_families.slice(0, 16);
       await db.from("ai_est_pages").update({
         status: "done", result, tokens_in: r.tokens_in, tokens_out: r.tokens_out, cost: r.cost,
         sheet_no: result.sheet_no || result.quote_no || null, sheet_title: result.sheet_title || result.vendor || null,
