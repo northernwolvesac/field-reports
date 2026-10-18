@@ -1684,16 +1684,21 @@
         if (nBlack >= 1 && nBlack >= 0.5 * nAny) { segs = blackSegs; }
       }
       var votes = {};
-      labs.forEach(function (l) { var h = near(l, segs); if (h.length) votes[segs[h[0][1]][8]] = (votes[segs[h[0][1]][8]] || 0) + 1; });
+      // filled bars of any thickness are one pen (a dash-dot pipe line keeps its thick dashes and thinner corner pieces in different fill keys)
+      function fam(key) { return /^fill\|/.test(key) ? 'fill' : key; }
+      labs.forEach(function (l) { var h = near(l, segs); if (h.length) votes[fam(segs[h[0][1]][8])] = (votes[fam(segs[h[0][1]][8])] || 0) + 1; });
       var top = 0; for (var vk in votes) top = Math.max(top, votes[vk]);
       if (!top) return { error: 'no pipe lines next to the size labels', ptft: ptft, labels: labs.length };
-      var keep = Object.keys(votes).filter(function (kk) { return votes[kk] >= Math.max(2, 0.25 * top) || votes[kk] === top; });
-      var S = segs.filter(function (s) { return keep.indexOf(s[8]) >= 0; });
+      // (D.pipeKeep2: keep any pen two labels point at — tried for the 645 Madison loop that changes pen mid-way; it mostly adds wall lines, off)
+      var keep = Object.keys(votes).filter(function (kk) { return votes[kk] >= (D.pipeKeep2 === true ? 2 : Math.max(2, 0.25 * top)) || votes[kk] === top; });
+      var S = segs.filter(function (s) { return keep.indexOf(fam(s[8])) >= 0; });
       var size = {}, seedD = {};
       function seed(i, l, d) { if (!(i in size) || d < seedD[i]) { size[i] = [l.d, l.svc]; seedD[i] = d; } }   // the closest label owns a line
       labs.forEach(function (l) {
         var h = near(l, S);
-        if (h.length) { var b0 = h[0][0]; h.forEach(function (x) { if (x[0] <= b0 + 0.9 * ptft) seed(x[1], l, x[0]); }); return; }
+        // the lines beside the label seed it — but only lines drawn like the nearest one: a "2in" label beside the condenser-water bar
+        // must not also seed the room outline 10 pt behind it (645 Madison: 65 ft of walls priced as 1in copper)
+        if (h.length) { var b0 = h[0][0], sk0 = fam(S[h[0][1]][8]); h.forEach(function (x) { if (x[0] <= b0 + 0.9 * ptft && fam(S[x[1]][8]) === sk0) seed(x[1], l, x[0]); }); return; }
         var led = false;
         leaderEnds(l, leaders).concat(leaderEnds({ bbox: l.block }, leaders)).forEach(function (pt) {
           var bi = null, bd = 4;
@@ -1714,18 +1719,27 @@
         if (pc.length) { pc.sort(function (a, b) { return a[0] - b[0]; }); pc.forEach(function (x) { if (x[0] <= pc[0][0] + 0.9 * ptft) seed(x[1], l, x[0] + 0.5 * ptft); }); }
       });
       // network: touching ends or an end on another line's body (tee); nearest label wins (multi-source BFS)
-      var grid = {};
+      // a dash-dot pipe line drawn as filled bars (645 Madison's condenser-water loop: 100–350 pt bars with a dot gap between them) is one
+      // run: collinear pieces of the same style continue across a gap of up to 0.6 ft, and bar ends meet within their own thickness
+      var GAP = Math.min(0.6 * ptft, 12), R = Math.ceil(GAP / 4) + 1, grid = {};
       S.forEach(function (s, i) { [[s[0], s[1]], [s[2], s[3]]].forEach(function (e) { var key = Math.floor(e[0] / 4) + ',' + Math.floor(e[1] / 4); (grid[key] = grid[key] || []).push(i); }); });
+      function barW(s) { var m = /^fill\|([\d.]+)/.exec(s[8]); return m ? +m[1] : 0; }
       function nbrs(i) {
-        var s = S[i], cand = {}, out = [];
+        var s = S[i], cand = {}, out = [], wi = barW(s);
         [[s[0], s[1]], [s[2], s[3]]].forEach(function (e) {
           var gx = Math.floor(e[0] / 4), gy = Math.floor(e[1] / 4);
-          for (var ax = gx - 1; ax <= gx + 1; ax++) for (var ay = gy - 1; ay <= gy + 1; ay++) (grid[ax + ',' + ay] || []).forEach(function (j) { if (j !== i) cand[j] = 1; });
+          for (var ax = gx - R; ax <= gx + R; ax++) for (var ay = gy - R; ay <= gy + R; ay++) (grid[ax + ',' + ay] || []).forEach(function (j) { if (j !== i) cand[j] = 1; });
         });
         Object.keys(cand).forEach(function (js) {
-          var j = +js, t = S[j], E = [[s[0], s[1]], [s[2], s[3]]], F = [[t[0], t[1]], [t[2], t[3]]], touch = false;
-          for (var a = 0; a < 2; a++) for (var b = 0; b < 2; b++) if (hyp(E[a][0] - F[b][0], E[a][1] - F[b][1]) < 1.5) touch = true;
-          if (touch || Math.min(ptSeg(t[0], t[1], s), ptSeg(t[2], t[3], s), ptSeg(s[0], s[1], t), ptSeg(s[2], s[3], t)) < 1.5) out.push(j);
+          var j = +js, t = S[j], E = [[s[0], s[1]], [s[2], s[3]]], F = [[t[0], t[1]], [t[2], t[3]]], touch = false, tol = 1.5 + Math.min(3, Math.max(wi, barW(t)));
+          var best = 1e9;
+          for (var a = 0; a < 2; a++) for (var b = 0; b < 2; b++) { var dd = hyp(E[a][0] - F[b][0], E[a][1] - F[b][1]); if (dd < best) best = dd; if (dd < tol) touch = true; }
+          if (touch || Math.min(ptSeg(t[0], t[1], s), ptSeg(t[2], t[3], s), ptSeg(s[0], s[1], t), ptSeg(s[2], s[3], t)) < tol) { out.push(j); return; }
+          // same pen, same direction, end to end across a small gap, and on the same line (lateral offset within the tolerance)
+          if (D.pipeGap !== false && best <= GAP && fam(s[8]) === fam(t[8]) && Math.abs(s[4] * t[5] - s[5] * t[4]) < 0.05) {
+            var mid = [(t[0] + t[2]) / 2, (t[1] + t[3]) / 2], lat = Math.abs(-(mid[0] - s[0]) * s[5] + (mid[1] - s[1]) * s[4]);
+            if (lat < tol) out.push(j);
+          }
         });
         return out;
       }
@@ -1757,18 +1771,50 @@
           if (!(j in dist) || c < dist[j]) { dist[j] = c; size[j] = size[cur]; push(c, j); }
         });
       }
-      var sizes = {}, total = 0;
-      Object.keys(size).forEach(function (is) {
-        var i = +is, kk = pipeLabel(size[i][0]) + (size[i][1] === 'CD' ? ' CD' : '');
+      // a closed four-sided rectangle on its own (no branch, no continuation) is a room or equipment outline the label happened to sit
+      // beside (645 Madison: the IT room boundary drawn with the same bars as the pipe loop), never a pipe run
+      var sizedIdx = Object.keys(size).map(Number), inS = {}; sizedIdx.forEach(function (i) { inS[i] = 1; });
+      var comp = {}, cid = 0;
+      sizedIdx.forEach(function (i0) {
+        if (comp[i0] != null) return; var stack = [i0], members = []; comp[i0] = cid;
+        while (stack.length) { var c = stack.pop(); members.push(c); nb(c).forEach(function (j) { if (inS[j] && comp[j] == null) { comp[j] = cid; stack.push(j); } }); }
+        if (members.length === 4 && members.every(function (m) { return nb(m).filter(function (j) { return inS[j]; }).length === 2; })) {
+          var ortho = members.every(function (m) { return nb(m).filter(function (j) { return inS[j]; }).every(function (j) { return Math.abs(S[m][4] * S[j][4] + S[m][5] * S[j][5]) < 0.2; }); });
+          var minL = Math.min.apply(null, members.map(function (m) { return S[m][6]; }));
+          if (ortho && minL >= 3 * ptft && D.pipeRect !== false) members.forEach(function (m) { delete size[m]; });
+        }
+        cid++;
+      });
+      var sizes = {}, total = 0; sizedIdx = Object.keys(size).map(Number);
+      sizedIdx.forEach(function (i) {
+        var kk = pipeLabel(size[i][0]) + (size[i][1] === 'CD' ? ' CD' : '');
         sizes[kk] = (sizes[kk] || 0) + S[i][6] / ptft; total += S[i][6] / ptft;
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
+      // pairs vs single lines: supply and return drawn as two parallel lines (L'Catteron CHWS/R, 0.25–2.5 ft apart, overlapping) are both
+      // measured already; a lone line standing for both ("CONDENSER WATER SUPPLY AND RETURN" on one symbol, 645 Madison) is counted once
+      // here — single_sizes says how much of each size has no partner, so the engine can double it when the sheet says S+R on one line
+      var singleSizes = {}, pairedFt = 0, singleFt = 0;
+      sizedIdx.forEach(function (i) {
+        var s = S[i], kk = pipeLabel(size[i][0]) + (size[i][1] === 'CD' ? ' CD' : ''), paired = false;
+        for (var q = 0; q < sizedIdx.length && !paired; q++) {
+          var j = sizedIdx[q]; if (j === i) continue; var t = S[j];
+          if (fam(s[8]) !== fam(t[8]) || Math.abs(s[4] * t[4] + s[5] * t[5]) < 0.97) continue;   // a partner is drawn with the same pen
+          var mid = [(t[0] + t[2]) / 2, (t[1] + t[3]) / 2], lat = Math.abs(-(mid[0] - s[0]) * s[5] + (mid[1] - s[1]) * s[4]);
+          if (lat < 0.25 * ptft || lat > 2.5 * ptft) continue;
+          var a0 = (t[0] - s[0]) * s[4] + (t[1] - s[1]) * s[5], a1 = (t[2] - s[0]) * s[4] + (t[3] - s[1]) * s[5], lo = Math.max(0, Math.min(a0, a1)), hi = Math.min(s[6], Math.max(a0, a1));
+          if (hi - lo >= 0.5 * Math.min(s[6], t[6])) paired = true;
+        }
+        if (paired) pairedFt += s[6] / ptft; else { singleFt += s[6] / ptft; if (size[i][1] !== 'CD') singleSizes[kk] = (singleSizes[kk] || 0) + s[6] / ptft; }
+      });
+      for (var z2 in singleSizes) singleSizes[z2] = Math.round(singleSizes[z2] * 10) / 10;
       // a few labels cannot size hundreds of feet: that is a size spreading over walls or equipment, not a pipe run
       if (labs.length < 12 && total > 150 * labs.length) return { error: 'only ' + labs.length + ' pipe labels for ' + Math.round(total) + ' ft of lines — geometry not trusted', ptft: ptft, labels: labs.length };
       // one line standing for the supply AND the return pipe ("1-1/4" CHWS/R", legend "CONDENSER WATER SUPPLY AND RETURN" on one symbol):
       // the length is counted once per line here; the engine flags it so the estimator doubles it when the pair is priced per pipe
       var sr = /\bS\s*[\/&]\s*R\b|SUPPLY\s*(AND|&|\/|\+)\s*RETURN|\b(CHW|CW|HW|HHW|CHWS|CWS|HWS|GLY\w*)\s*[\/&]\s*R\b/i.test(D.fullText);
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }), sr: sr || undefined,
+        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes,
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry

@@ -224,7 +224,8 @@
   }
   function sheetLabels(groups) { return Object.keys(groups).map(function (k) { var v = groups[k]; return v.length > 1 ? k + ' (' + v.join(' + ') + ')' : v[0]; }); }
 
-  function collect(pages) {
+  function collect(pages, opts) {
+    opts = opts || {};
     // tags that are never air devices however the reader typed them (BOSS: 60 sprinkler heads "SP" came back as grilles)
     function notAirDevice(a) {
       var t = String(a.tag || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''), nt = String(a.notes || '') + ' ' + String(a.size || '');
@@ -232,7 +233,7 @@
     }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
+    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
     var schedDev = {};
@@ -425,13 +426,23 @@
             // measured from the piping plan's own lines (geo-takeoff.js); the AI reading stays a cross-check
             var aiP = (r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
             geoCheck.push({ sheet: sh, geo: r.geo_pipe.total_ft, ai: aiP, what: 'Pipe' });
+            // supply and return on ONE line (legend "… SUPPLY AND RETURN" on a single symbol, "CHWS/R" labels) — the lines drawn without a
+            // parallel partner stand for two pipes, so their feet are counted twice (645 Madison: Kastriot carried the 1in loop as 531 ft =
+            // 2 × the drawn length); lines drawn as pairs (L'Catteron) are both measured already and stay as they are
+            // Whether one drawn line stands for supply AND return is the estimator's call (session "Pipe lines" choice, opts.pipeSr): the
+            // geometry cannot tell a single S+R loop from a pair when a room outline runs beside it (645 Madison). With the choice on,
+            // every water size measured on the sheet is counted twice (condensate never); otherwise the single-line feet are only reported.
+            var srFt = 0, wet = 0;
             if (r.geo_pipe.sr) srSheets.push(sh);
             Object.keys(r.geo_pipe.sizes || {}).forEach(function (key) {
               var cd = / CD$/.test(key), sz = key.replace(/ CD$/, '');
               var k = (cd ? 'CD' : '') + '|' + sz + '|';
               var o = pipe[k] = pipe[k] || { service: cd ? 'CD' : '', size: sz, material: '', lf: 0, sheets: [], geo: true };
-              o.lf += r.geo_pipe.sizes[key]; o.sheets.push(sh);
+              var extra = (opts.pipeSr && !cd) ? r.geo_pipe.sizes[key] : 0;
+              o.lf += r.geo_pipe.sizes[key] + extra; o.sheets.push(sh); if (!cd) wet += r.geo_pipe.sizes[key]; if (extra) { o.sr_ft = (o.sr_ft || 0) + extra; srFt += extra; }
             });
+            if (srFt) srDoubled.push({ sheet: sh, ft: Math.round(srFt) });
+            else if (wet && (r.geo_pipe.sr || (r.geo_pipe.single_ft || 0) > 0.5 * (r.geo_pipe.total_ft || 1))) srSingle.push({ sheet: sh, ft: Math.round(wet), single: Math.round(r.geo_pipe.single_ft || 0) });
           }
           if (takeoffSheet && !(r.geo_pipe && r.geo_pipe.total_ft > 0)) (r.pipe_runs || []).forEach(function (x) {
             var k = (x.service || '') + '|' + (x.size || '') + '|' + (x.material || '');
@@ -458,7 +469,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── reviewer decisions (Takeoff → AI review tab, table est_ai_corrections) ──────────────────────────────
@@ -500,7 +511,7 @@
   function build(pages, opts) {
     opts = opts || {};
     if (opts.corrections) pages = applyCorrections(pages, opts.corrections);
-    var R = makeRates(opts.norms), C = collect(pages), lines = [], flags = [], sort = 0;
+    var R = makeRates(opts.norms), C = collect(pages, opts), lines = [], flags = [], sort = 0;
     var famKey = familyFor(opts.ductSpec);
     if (!opts.ductSpec) flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'not read from the specs — priced as rectangular with 1" lining; run 🔍 Duct spec' });
     else if (opts.ductSpec.confidence === 'low') flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'spec reading uncertain — ' + DUCT_FAMILIES[famKey].label + '; confirm' });
@@ -598,8 +609,10 @@
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
-    if (C.srSheets.length)
-      flags.push({ category: 'pipework', item: 'Supply + return on one line', flag: 'the piping plan draws supply and return as ONE line ("S/R" labels or legend) on ' + C.srSheets.join(', ') + ' — measured lengths count each line once; double the pipe (and insulation) where the pair is priced per pipe (645 Madison: Procore carried 2x)' });
+    if (C.srDoubled && C.srDoubled.length)
+      flags.push({ category: 'pipework', item: 'Supply + return on one line', flag: 'session choice "one line = supply + return": the water pipe measured on the plans is counted twice — ' + C.srDoubled.map(function (d) { return d.sheet + ' +' + d.ft + ' ft'; }).join(', ') + ' (condensate once)' });
+    else if (C.srSingle && C.srSingle.length)
+      flags.push({ category: 'pipework', item: 'Supply + return on one line?', flag: 'water pipe counted once per drawn line on ' + C.srSingle.map(function (d) { return d.sheet + ' (' + d.ft + ' ft' + (d.single ? ', ' + d.single + ' ft with no parallel partner' : '') + ')'; }).join(', ') + ' — if the legend draws supply and return as ONE line (645 Madison: Procore carried 2x), set "Pipe lines" to count twice and price again' });
     if (C.pipeFloors.length >= 2 && !C.risers.length)
       flags.push({ category: 'pipework', item: 'Pipe risers', flag: 'piping on ' + C.pipeFloors.length + ' floors but no water riser diagram measured — vertical pipe between floors is not in this estimate' });
     if (Object.keys(C.duct).length && !C.geoCheck.some(function (g) { return g.what !== 'Pipe'; }))

@@ -9,9 +9,9 @@
 <title>AI Benchmark — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=440"></script>
-<script src="auth.js?v=440"></script>
-<script src="est-engine.js?v=440"></script>
+<script src="supabase-config.js?v=444"></script>
+<script src="auth.js?v=444"></script>
+<script src="est-engine.js?v=444"></script>
 <style>
   body { padding-bottom: 40px; }
   .ab-wrap { max-width: 1380px; margin: 0 auto; }
@@ -127,8 +127,8 @@ var AB = (function() {
 
   // ─── measured quantities from the stored sheet reads (same accounting as the price) ───
   function isTakeoffSheet(r) { var t = r.sheet_type || ''; return t === 'duct_plan' || t === 'pipe_plan' || (t === 'other' && /plan/i.test(r.sheet_title || '') && !/enlarged/i.test(r.sheet_title || '')); }
-  function metrics(pages) {
-    var C = NWEngine.collect(pages), m = { duct_ft: 0, ai_duct_ft: 0, outlets_ea: 0, linear_ft: 0, vav_ea: 0, pipe_ft: 0, riser_ft: 0, equipment_ea: 0, sheets: pages.length, read: 0, cost: 0 };
+  function metrics(pages, opts) {
+    var C = NWEngine.collect(pages, opts || {}), m = { duct_ft: 0, ai_duct_ft: 0, outlets_ea: 0, linear_ft: 0, vav_ea: 0, pipe_ft: 0, riser_ft: 0, equipment_ea: 0, sheets: pages.length, read: 0, cost: 0 };
     Object.keys(C.duct).forEach(function(k) { m.duct_ft += num(C.duct[k].lf); });
     Object.keys(C.pipe).forEach(function(k) { var o = C.pipe[k]; m.pipe_ft += num(o.lf); if (o.riser) m.riser_ft += num(o.lf); });
     Object.keys(C.devices).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) m.outlets_ea += num(d.qty); else if (d.type === 'linear') m.linear_ft += d.lf ? num(d.lf) : num(d.qty) * 4; else if (/vav|fpb/.test(d.type)) m.vav_ea += num(d.qty); });
@@ -152,7 +152,8 @@ var AB = (function() {
     for (var i = 0; i < list.length; i++) {
       var b = list[i];
       try {
-        var pages = await pagesOf(b), m = metrics(pages);
+        var pages = await pagesOf(b), sr = await sb.from('ai_est_sessions').select('result').eq('id', b.session_id).maybeSingle();
+        var m = metrics(pages, { pipeSr: !!(sr.data && sr.data.result && sr.data.result.pipe_sr) });   // the session's "Pipe lines" choice counts here too
         var up = await sb.from('est_ai_bench_runs').upsert({ bench_id: b.id, version: appVer, at: new Date().toISOString(), measured: m, user_name: me.name || null }, { onConflict: 'bench_id,version' });
         if (up.error) throw new Error(up.error.message);
         n++;
@@ -308,6 +309,6 @@ var AB = (function() {
   return { recompute: recompute, addJob: addJob, editJob: editJob, saveJob: saveJob, removeJob: removeJob, pullTruth: pullTruth, closeModal: closeModal, metrics: metrics, truthFromLines: truthFromLines, get bench() { return bench; }, get runs() { return runs; } };
 })();
 </script>
-<script src="sw-register.js?v=440"></script>
+<script src="sw-register.js?v=444"></script>
 </body>
 </html>

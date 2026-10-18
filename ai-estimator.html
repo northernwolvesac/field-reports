@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=440"></script>
-<script src="auth.js?v=440"></script>
-<script src="est-totals.js?v=440"></script>
-<script src="est-engine.js?v=440"></script>
-<script src="geo-takeoff.js?v=440"></script>
+<script src="supabase-config.js?v=444"></script>
+<script src="auth.js?v=444"></script>
+<script src="est-totals.js?v=444"></script>
+<script src="est-engine.js?v=444"></script>
+<script src="geo-takeoff.js?v=444"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -781,7 +781,16 @@ var AE = (function() {
       '<div class="row"><b style="font-size:12.5px">Duct construction</b>' +
       '<select id="ductFam" onchange="AE.setDuctFam(this.value)">' + opts + '</select>' +
       '<button class="btn" onclick="AE.readDuctSpec()" ' + (specBusy || running ? 'disabled' : '') + '>' + (specBusy ? '🔍 Reading specs…' : '🔍 Read duct spec') + '</button>' +
-      '<span class="muted">' + (sp ? (sp.choice ? 'set by hand' : 'from the specs' + (sp.confidence ? ' (' + esc(sp.confidence) + ' confidence)' : '')) : 'not read yet — default') + '</span></div>' + ev + other + '</div>';
+      '<span class="muted">' + (sp ? (sp.choice ? 'set by hand' : 'from the specs' + (sp.confidence ? ' (' + esc(sp.confidence) + ' confidence)' : '')) : 'not read yet — default') + '</span></div>' + ev + other +
+      '<div class="row" style="margin-top:8px"><b style="font-size:12.5px">Pipe lines</b>' +
+      '<select id="pipeSr" onchange="AE.setPipeSr(this.value)" title="How the piping plans draw a water circuit: two lines (supply and return each drawn) or one line standing for both"><option value="">each drawn line = one pipe (pairs drawn)</option><option value="x2"' + (res.pipe_sr ? ' selected' : '') + '>one line = supply + return — count the water pipe twice</option></select>' +
+      '<span class="muted">' + (res.pipe_sr ? 'water pipe measured on the plans is doubled (condensate once)' : 'check the legend: a single-line symbol “… supply and return” means twice') + '</span></div></div>';
+  }
+  async function setPipeSr(v) {
+    var res = Object.assign({}, session.result || {}); if (v) res.pipe_sr = true; else delete res.pipe_sr;
+    session.result = res;
+    await supabaseClient.from('ai_est_sessions').update({ result: res }).eq('id', session.id);
+    toast('Pipe lines set — press “Price it”');
   }
   async function setDuctFam(v) {
     var res = Object.assign({}, session.result || {}); res.duct_spec = Object.assign({}, res.duct_spec || {}, { choice: v });
@@ -832,7 +841,7 @@ var AE = (function() {
     var n = await loadNorms();
     // sheets read before the text-layer freeze existed: apply it now (and keep it)
     pages.forEach(function(p) { if (p.status === 'done' && freezeDevices(p)) supabaseClient.from('ai_est_pages').update({ result: p.result }).eq('id', p.id).then(function() {}); });
-    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections });
+    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr });
     var res = Object.assign({}, session.result || {}, {
       engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
@@ -871,7 +880,7 @@ var AE = (function() {
 
   // ─── AI scope review ────────────────────────────────────────────────
   async function review() {
-    var C = NWEngine.collect(NWEngine.applyCorrections(pages, corrections));
+    var C = NWEngine.collect(NWEngine.applyCorrections(pages, corrections), { pipeSr: !!(session.result || {}).pipe_sr });
     var k = await supabaseClient.from('est_knowledge').select('title, body_md').in('category', ['process', 'proposal']).limit(6);
     var ctx = 'PROJECT: ' + session.name + ' — ' + (session.location || '') + '\n\nNWAC PROCESS RULES:\n' +
       (k.data || []).filter(function(d) { return /process notes|proposal template/i.test(d.title); }).map(function(d) { return '## ' + d.title + '\n' + d.body_md.slice(0, 14000); }).join('\n\n') +
@@ -1053,9 +1062,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=440"></script>
+<script src="sw-register.js?v=444"></script>
 </body>
 </html>
