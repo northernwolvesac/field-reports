@@ -6,19 +6,19 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=437">
+<link rel="stylesheet" href="procore-ui.css?v=438">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=437"></script>
-<script src="auth.js?v=437"></script>
-<script src="est-totals.js?v=437"></script>
-<script src="procore-ui.js?v=437"></script>
+<script src="supabase-config.js?v=438"></script>
+<script src="auth.js?v=438"></script>
+<script src="est-totals.js?v=438"></script>
+<script src="procore-ui.js?v=438"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=437"></script>
-<script src="est-drawings.js?v=437"></script>
-<script src="nw-catalog-picker.js?v=437"></script>
-<script src="geo-takeoff.js?v=437"></script>
-<script src="est-engine.js?v=437"></script>
+<script src="bid-actions.js?v=438"></script>
+<script src="est-drawings.js?v=438"></script>
+<script src="nw-catalog-picker.js?v=438"></script>
+<script src="geo-takeoff.js?v=438"></script>
+<script src="est-engine.js?v=438"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -2293,9 +2293,15 @@ requireAuth().catch(function(){});
   }
   function rvGroupHtml(g) {
     var st = g.done >= g.marks.length ? (g.marks.every(function(x) { return x.status === 'deleted'; }) ? 'deleted' : g.marks.some(function(x) { return x.status === 'corrected'; }) ? 'corrected' : 'accepted') : g.done ? 'partial' : 'new';
-    var cur = !!(RV.cur && RV.cur.group === g), live = g.marks.filter(function(x) { return !x.gone; }).length;
-    return '<div class="rv-row' + (cur ? ' cur' : '') + '" data-rvg="' + esc(g.key) + '" title="' + esc(g.name) + '"><span class="rv-dot ' + st + '"></span><div class="tx"><div class="t1"><span class="pc-dot" style="background:' + esc((g.layer && g.layer.color) || '#94a3b8') + ';margin-right:5px"></span>' + esc(g.name) + '</div><div class="t2">' + live + ' run' + (live === 1 ? '' : 's') + ' · ' + Math.round(g.ft) + ' ft · ' + g.done + '/' + g.marks.length + ' checked' + (cur ? ' · <b>run ' + (g.marks.indexOf(RV.cur) + 1) + '</b>' : '') + '</div></div>' +
-      (me.canEdit ? '<span class="rv-acts">' + (g.done < g.marks.length ? '<button class="ok" data-act="acceptgroup" title="Accept every run in this group (A)">' + ic('check_circle', 16) + '</button>' : '<button data-act="resetgroup" title="Back to new">' + ic('undo', 16) + '</button>') + '</span>' : '') + '</div>';
+    var cur = !!(RV.cur && RV.cur.group === g), gone = g.marks.filter(function(x) { return x.gone; }).length, live = g.marks.length - gone;
+    return '<div class="rv-row' + (cur ? ' cur' : '') + '" data-rvg="' + esc(g.key) + '" title="' + esc(g.name) + '"><span class="rv-dot ' + st + '"></span><div class="tx"><div class="t1"><span class="pc-dot" style="background:' + esc((g.layer && g.layer.color) || '#94a3b8') + ';margin-right:5px"></span>' + esc(g.name) + '</div><div class="t2">' + live + ' run' + (live === 1 ? '' : 's') + ' · ' + Math.round(g.ft) + ' ft · ' + g.done + '/' + g.marks.length + ' checked' + (gone ? ' · <b>' + gone + ' deleted</b>' : '') + (cur ? ' · <b>run ' + (g.marks.indexOf(RV.cur) + 1) + '</b>' : '') + '</div></div>' +
+      (me.canEdit ? '<span class="rv-acts">' + (g.done < g.marks.length ? '<button class="ok" data-act="acceptgroup" title="Accept every run in this group (A)">' + ic('check_circle', 16) + '</button>' : '') + (gone ? '<button data-act="restoregroup" title="Bring the ' + gone + ' deleted run' + (gone === 1 ? '' : 's') + ' back">' + ic('history', 16) + '</button>' : '') + (g.done > gone ? '<button data-act="resetgroup" title="Accepted / corrected runs back to new">' + ic('undo', 16) + '</button>' : '') + '</span>' : '') + '</div>';
+  }
+  async function rvRestoreGroup(g) {
+    if (!me.canEdit || !g) return;
+    var gone = g.marks.filter(function(x) { return x.gone; }); if (!gone.length) return;
+    if (!await P.confirm({ title: 'Restore deleted runs', message: 'Put the ' + gone.length + ' deleted run' + (gone.length === 1 ? '' : 's') + ' of ' + g.name + ' back on the plan?', okLabel: 'Restore' })) return;
+    for (var i = 0; i < gone.length; i++) await rvReset(gone[i]);
   }
   function rvItemByKey(k) { return RV.flat.find(function(it) { return it.kind + '|' + it.key === k; }) || null; }
   function rvGroupByKey(k) { for (var i = 0; i < RV.sheets.length; i++) { var g = RV.sheets[i].groups.find(function(x) { return x.key === k; }); if (g) return g; } return null; }
@@ -2304,7 +2310,7 @@ requireAuth().catch(function(){});
     var btn = e.target.closest('[data-act]'), row = e.target.closest('[data-rv],[data-rvg]'); if (!row) return;
     var it = row.hasAttribute('data-rv') ? rvItemByKey(row.getAttribute('data-rv')) : null, g = row.hasAttribute('data-rvg') ? rvGroupByKey(row.getAttribute('data-rvg')) : null;
     if (btn) { e.stopPropagation(); var act = btn.getAttribute('data-act');
-      if (act === 'acceptgroup') rvAcceptGroup(g); else if (act === 'resetgroup') rvResetGroup(g);
+      if (act === 'acceptgroup') rvAcceptGroup(g); else if (act === 'resetgroup') rvResetGroup(g); else if (act === 'restoregroup') rvRestoreGroup(g);
       else if (it) { if (act === 'accept') rvAccept(it, false); else if (act === 'correct') rvCorrect(it); else if (act === 'delete') rvDelete(it); else if (act === 'reset') rvReset(it); }
       return; }
     if (g) rvSelect(g.marks.find(function(x) { return x.status === 'new'; }) || g.marks[0]); else if (it) rvSelect(it);
@@ -2636,6 +2642,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=437"></script>
+<script src="sw-register.js?v=438"></script>
 </body>
 </html>

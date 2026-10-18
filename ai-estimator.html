@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=436"></script>
-<script src="auth.js?v=436"></script>
-<script src="est-totals.js?v=436"></script>
-<script src="est-engine.js?v=436"></script>
-<script src="geo-takeoff.js?v=436"></script>
+<script src="supabase-config.js?v=438"></script>
+<script src="auth.js?v=438"></script>
+<script src="est-totals.js?v=438"></script>
+<script src="est-engine.js?v=438"></script>
+<script src="geo-takeoff.js?v=438"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -190,7 +190,7 @@ var AE = (function() {
     var p = await supabaseClient.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_title, sheet_type, status, error, cost, tokens_in, tokens_out, tag_counts, result, model, started_at').eq('session_id', session.id).order('page_no');
     files = f.data || []; pages = p.data || [];
     pages.forEach(function(pg) { if (pg.result) pg.result = unpack(pg.result); });
-    try { var c = await supabaseClient.from('est_ai_corrections').select('kind, item_key, status, corrected, page_id, sheet_no').eq('session_id', session.id); corrections = c.error ? [] : (c.data || []); } catch (e) { corrections = []; }
+    try { var c = await supabaseClient.from('est_ai_corrections').select('kind, item_key, status, corrected, page_id, sheet_no, note, original').eq('session_id', session.id); corrections = c.error ? [] : (c.data || []); } catch (e) { corrections = []; }
     pages.sort(function(a, b) { return files.findIndex(function(x) { return x.id === a.file_id; }) - files.findIndex(function(x) { return x.id === b.file_id; }) || a.page_no - b.page_no; });
   }
 
@@ -243,7 +243,7 @@ var AE = (function() {
     return '<div class="muted" style="margin:8px 0 0">✔ <b>' + corrections.length + ' reviewer decision' + (corrections.length === 1 ? '' : 's') + '</b> from the Takeoff (' + n.accepted + ' accepted · ' + n.corrected + ' corrected · ' + n.deleted + ' deleted; ' +
       [rows.equipment ? rows.equipment + ' equipment' : '', rows.device ? rows.device + ' air devices' : '', rows.runs ? rows.runs + ' runs' : ''].filter(Boolean).join(', ') + ') — device and equipment corrections are applied when you press “Price it”' +
       (session.estimate_id ? ' · <a href="takeoff.html?est=' + session.estimate_id + '&review=1">open the review</a>' : '') + '</div>' +
-      (fixed.length ? '<ul class="l muted" style="margin:4px 0 0">' + fixed.slice(0, 12).map(function(c) { var o = c.corrected || {}; return '<li>' + esc(c.sheet_no || '') + ' ' + esc(c.kind) + ' <b>' + esc(c.item_key.split(':').slice(1).join(':').split('|')[0] || '—') + '</b>: ' + (c.status === 'deleted' ? 'removed' : 'now ' + esc(Object.keys(o).filter(function(k) { return k !== 'note'; }).map(function(k) { return k + ' ' + o[k]; }).join(', '))) + '</li>'; }).join('') + (fixed.length > 12 ? '<li>… and ' + (fixed.length - 12) + ' more</li>' : '') + '</ul>' : '');
+      (fixed.length ? '<ul class="l muted" style="margin:4px 0 0">' + fixed.slice(0, 12).map(function(c) { var o = c.corrected || {}, og = c.original || {}; return '<li>' + esc(c.sheet_no || '') + ' ' + esc(c.kind) + ' <b>' + esc(og.tag || (og.type ? og.type : '') || c.item_key.split(':').slice(1).join(':').split('|')[0] || '—') + '</b>' + (og.type && og.tag ? ' (' + esc(og.type) + ')' : '') + ': ' + (c.status === 'deleted' ? 'removed' : 'now ' + esc(Object.keys(o).map(function(k) { return k + ' ' + o[k]; }).join(', '))) + (c.note ? ' — ' + esc(c.note) : '') + '</li>'; }).join('') + (fixed.length > 12 ? '<li>… and ' + (fixed.length - 12) + ' more</li>' : '') + '</ul>' : '');
   }
 
   function pageRow(p) {
@@ -955,6 +955,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=436"></script>
+<script src="sw-register.js?v=438"></script>
 </body>
 </html>
