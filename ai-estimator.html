@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=452"></script>
-<script src="auth.js?v=452"></script>
-<script src="est-totals.js?v=452"></script>
-<script src="est-engine.js?v=452"></script>
-<script src="geo-takeoff.js?v=452"></script>
+<script src="supabase-config.js?v=453"></script>
+<script src="auth.js?v=453"></script>
+<script src="est-totals.js?v=453"></script>
+<script src="est-engine.js?v=453"></script>
+<script src="geo-takeoff.js?v=453"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -220,7 +220,7 @@ var AE = (function() {
       '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">2 · AI reads every sheet — ' + done + ' / ' + pages.length + ' done</h3>' +
       '<div class="row"><button class="btn primary" id="readBtn" onclick="AE.readAll()" ' + (!todo || running ? 'disabled' : '') + '>' + (running ? 'Reading…' : '▶ Read ' + todo + ' sheet' + (todo === 1 ? '' : 's')) + '</button>' +
       '<button class="btn" onclick="AE.measureDucts(true)" ' + (running || measuring || !pages.some(function(x) { return isDuctPlan(x) || isPipePlan(x) || isRiserSheet(x); }) ? 'disabled' : '') + ' title="Measure new ductwork from the vector lines of the duct plans">' + (measuring ? '📐 Measuring…' : '📐 Measure ducts & pipes') + '</button></div></div>' +
-      (measuring ? '<div class="muted" id="geoMsg" style="margin-top:6px">' + esc(measuring) + '</div>' : '') +
+      (measuring ? '<div class="muted" id="geoMsg" style="margin-top:6px">' + esc(measuring) + '</div>' : '') + (diffing ? '<div class="muted" style="margin-top:6px">Δ ' + esc(diffing) + '</div>' : '') +
       '<div class="prog"><div id="rdProg" style="width:' + (pages.length ? Math.round(done / pages.length * 100) : 0) + '%"></div></div>' +
       (pages.length ? '<table class="t" style="margin-top:10px"><tr><th>#</th><th>Sheet</th><th class="hide-m">Type</th><th>Found</th><th>Status</th><th class="n hide-m">$</th><th></th></tr>' + pages.map(pageRow).join('') + '</table>' : '<div class="muted" style="margin-top:8px">Upload the drawing set first.</div>') + '</div>' +
 
@@ -265,6 +265,8 @@ var AE = (function() {
     if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
     if (r.repeat) bits.push('🔁 read ' + r.repeat.passes + '×' + (r.repeat.error ? ' — ' + esc(r.repeat.error) : r.repeat.changes.length ? ' — ' + esc(r.repeat.changes.slice(0, 5).join(', ')) + (r.repeat.changes.length > 5 ? ' …' : '') : ' — the reads agree'));
     if (r.frozen && r.frozen.length) bits.push('🔒 text-layer counts: ' + esc(r.frozen.join(', ')));
+    if (r.addendum_diff) bits.push('<a href="#" onclick="event.stopPropagation();AE.showDiff(\'' + p.id + '\');return false" title="What changed against the sheet this one replaces">Δ vs ' + esc(r.addendum_diff.old_sheet) + ': ' + esc(diffSummary(r.addendum_diff)) + '</a>');
+    else if (r.triage && r.triage.supersedes && p.status === 'done') bits.push('<a href="#" onclick="event.stopPropagation();AE.compareAddendum(\'' + p.id + '\');return false">Δ compare with ' + esc(r.triage.supersedes_sheet || 'the replaced sheet') + '</a>');
     if (r.geo_pipe && r.geo_pipe.total_ft) bits.push('📐 ' + Math.round(r.geo_pipe.total_ft) + ' ft pipe measured');
     if (r.geo_pipe && r.geo_pipe.error) bits.push('📐 ' + r.geo_pipe.error);
     if (r.geo_riser && r.geo_riser.total_ft) bits.push('📐 ' + Math.round(r.geo_riser.total_ft) + ' ft vertical pipe (risers)');
@@ -488,10 +490,10 @@ var AE = (function() {
     if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
     return data;
   }
-  async function measureDucts(all) {
+  async function measureDucts(all, only) {
     if (measuring || !window.NWGeo) return;
-    var list = pages.filter(function(p) { return (isDuctPlan(p) && (all || !(p.result && p.result.geo))) || (isPipePlan(p) && (all || !(p.result && p.result.geo_pipe))) || (isRiserSheet(p) && (all || !(p.result && p.result.geo_riser))); });
-    if (!list.length) return;
+    var list = only || pages.filter(function(p) { return (isDuctPlan(p) && (all || !(p.result && p.result.geo))) || (isPipePlan(p) && (all || !(p.result && p.result.geo_pipe))) || (isRiserSheet(p) && (all || !(p.result && p.result.geo_riser))); });
+    if (!list.length) { if (!only) runAddendumDiffs(); return; }
     window.NW_HOLD_RELOAD = true;                      // a new app version must not reload the page mid-measurement
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
@@ -545,7 +547,93 @@ var AE = (function() {
     }
     measuring = ''; window.NW_HOLD_RELOAD = false; render();
     if (!(session.result || {}).duct_spec) readDuctSpec();      // then read how the ducts must be built
-    toast('Ducts / pipes measured on ' + list.length + ' sheet' + (list.length === 1 ? '' : 's') + ' — press “Price it”');
+    if (!only) { toast('Ducts / pipes measured on ' + list.length + ' sheet' + (list.length === 1 ? '' : 's') + ' — press “Price it”'); runAddendumDiffs(); }
+  }
+
+  // ─── addenda: what changed between a sheet and the one it replaces (text lines, size / tag census, duct and pipe feet per size,
+  // air-device and equipment rows), and which review decisions still hold ───
+  var diffing = '';
+  function normTag(s) { return NWEngine.norm(s); }
+  function pageDisp(p) { return (p && (p.sheet_no || (p.result || {}).sheet_no)) || ('page ' + (p ? p.page_no : '?')); }
+  async function pageText(p) {
+    var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, tc = await (await pdf.getPage(1)).getTextContent(); pdf.destroy();
+    var lines = pageLines(tc); return { lines: lines, stats: textStats(lines.join(' ')) };
+  }
+  function diffCounts(a, b) { var out = {}; Object.keys(Object.assign({}, a || {}, b || {})).forEach(function(k) { var x = Number((a || {})[k]) || 0, y = Number((b || {})[k]) || 0; if (Math.round(x * 10) !== Math.round(y * 10)) out[k] = [Math.round(x * 10) / 10, Math.round(y * 10) / 10]; }); return out; }
+  function sumRuns(rows, unitKey) { var o = {}; (rows || []).forEach(function(x) { var k = String(x.size || '?'); o[k] = (o[k] || 0) + (Number(x[unitKey || 'lf']) || 0); }); return o; }
+  function devRows(r) { var o = {}; (r.air_devices || []).forEach(function(a) { if (/^\(?\s*cfm only/i.test(String(a.tag || ''))) return; var k = (normTag(a.tag) || '-') + '|' + String(a.type || 'other').toLowerCase(); o[k] = o[k] || { tag: a.tag || '(no tag)', type: String(a.type || 'other').toLowerCase(), qty: 0, lf: 0 }; o[k].qty += Number(a.qty) || 0; o[k].lf += Number(a.linear_ft) || 0; }); return o; }
+  function eqRows(r) { var o = {}; (r.equipment || []).forEach(function(e) { var k = normTag(e.tag); if (!k) return; o[k] = o[k] || { tag: e.tag, type: e.type || '', qty: 0 }; o[k].qty += Number(e.qty) || 1; }); return o; }
+  async function addendumDiff(np) {
+    var t = (np.result || {}).triage || {}, op = pages.find(function(x) { return x.id === t.supersedes; });
+    if (!op) return null;
+    var nr = np.result || {}, orr = op.result || {};
+    // the old sheet keeps its read; its geometry is measured now if it never was (it was skipped before the measuring pass)
+    if (!orr.geo && !orr.geo_pipe && (nr.geo || nr.geo_pipe)) { var st = op.status; op.status = 'done'; try { await measureDucts(true, [op]); } catch (e) {} op.status = st; orr = op.result || {}; }
+    var ot = await pageText(op), nt = await pageText(np);
+    var norm = function(l) { return l.replace(/\s+/g, ' ').trim().toUpperCase(); };
+    var oset = {}, nset = {}; ot.lines.forEach(function(l) { var k = norm(l); if (k.length >= 4) oset[k] = l; }); nt.lines.forEach(function(l) { var k = norm(l); if (k.length >= 4) nset[k] = l; });
+    var added = Object.keys(nset).filter(function(k) { return !oset[k]; }).map(function(k) { return nset[k]; }), removed = Object.keys(oset).filter(function(k) { return !nset[k]; }).map(function(k) { return oset[k]; });
+    var dSizes = diffCounts(ot.stats.sizes, nt.stats.sizes), dTags = diffCounts(ot.stats.tags, nt.stats.tags), dDev = diffCounts(ot.stats.devices, nt.stats.devices);
+    var og = orr.geo && orr.geo.sizes ? orr.geo.sizes : sumRuns(orr.duct_runs), ng = nr.geo && nr.geo.sizes ? nr.geo.sizes : sumRuns(nr.duct_runs);
+    var duct = { old_ft: Math.round(Object.values(og).reduce(function(a, b) { return a + b; }, 0)), new_ft: Math.round(Object.values(ng).reduce(function(a, b) { return a + b; }, 0)), sizes: diffCounts(og, ng), src: (orr.geo && orr.geo.sizes ? 'geometry' : 'AI read') + ' → ' + (nr.geo && nr.geo.sizes ? 'geometry' : 'AI read') };
+    var opp = orr.geo_pipe && orr.geo_pipe.sizes ? orr.geo_pipe.sizes : sumRuns(orr.pipe_runs), npp = nr.geo_pipe && nr.geo_pipe.sizes ? nr.geo_pipe.sizes : sumRuns(nr.pipe_runs);
+    var pipe = { old_ft: Math.round(Object.values(opp).reduce(function(a, b) { return a + b; }, 0)), new_ft: Math.round(Object.values(npp).reduce(function(a, b) { return a + b; }, 0)), sizes: diffCounts(opp, npp) };
+    var od = devRows(orr), nd = devRows(nr), devices = [];
+    Object.keys(Object.assign({}, od, nd)).forEach(function(k) { var a = od[k], b = nd[k]; if (a && b && a.qty === b.qty && Math.round(a.lf) === Math.round(b.lf)) return; devices.push({ tag: (b || a).tag, type: (b || a).type, old: a ? a.qty : null, new: b ? b.qty : null, old_lf: a ? Math.round(a.lf) : 0, new_lf: b ? Math.round(b.lf) : 0 }); });
+    var oe = eqRows(orr), ne = eqRows(nr), equipment = [];
+    Object.keys(Object.assign({}, oe, ne)).forEach(function(k) { var a = oe[k], b = ne[k]; if (a && b && a.qty === b.qty) return; equipment.push({ tag: (b || a).tag, type: (b || a).type, old: a ? a.qty : null, new: b ? b.qty : null }); });
+    // review decisions on the old sheet: carried to the new one when the AI's row is unchanged, listed as stale otherwise
+    var carried = 0, stale = [];
+    if (session.estimate_id && corrections.length) {
+      var rows = [];
+      corrections.filter(function(c) { return c.page_id === op.id && (c.kind === 'device' || c.kind === 'equipment'); }).forEach(function(c) {
+        var o = c.original || {}, k = normTag(o.tag) + '|' + String(o.type || 'other').toLowerCase(), match = c.kind === 'device' ? nd[k] : ne[normTag(o.tag)];
+        var same = match && (c.kind === 'device' ? (match.qty === (Number(o.qty) || 0)) : (match.qty === (Number(o.qty) || 1)));
+        if (!same) { stale.push(c.kind + ' ' + (o.tag || '?') + ' (' + c.status + ')'); return; }
+        var newKey = c.kind === 'device' ? NWEngine.devKey(np.id, { tag: o.tag, type: o.type }) : NWEngine.eqKey(np.id, { tag: o.tag, type: o.type });
+        rows.push({ estimate_id: session.estimate_id, session_id: session.id, page_id: np.id, sheet_no: pageDisp(np), kind: c.kind, item_key: newKey, status: c.status, original: o, corrected: c.corrected || null, note: ((c.note ? c.note + ' · ' : '') + 'carried from ' + pageDisp(op)).slice(0, 300), user_name: me && me.name });
+      });
+      if (rows.length) { var up = await supabaseClient.from('est_ai_corrections').upsert(rows, { onConflict: 'estimate_id,kind,item_key' }); if (!up.error) { carried = rows.length; rows.forEach(function(r) { if (!corrections.some(function(c) { return c.kind === r.kind && c.item_key === r.item_key; })) corrections.push(r); }); } }
+    }
+    var diff = { old_page_id: op.id, old_sheet: pageDisp(op), old_file: (files.find(function(f) { return f.id === op.file_id; }) || {}).file_name || null, at: new Date().toISOString(),
+      text: { added_n: added.length, removed_n: removed.length, added: added.slice(0, 40).map(function(l) { return l.slice(0, 160); }), removed: removed.slice(0, 40).map(function(l) { return l.slice(0, 160); }) },
+      labels: { sizes: dSizes, tags: dTags, devices: dDev }, duct: duct, pipe: pipe, devices: devices, equipment: equipment, corrections: { carried: carried, stale: stale } };
+    diff.changes = (Object.keys(duct.sizes).length ? 1 : 0) + (Object.keys(pipe.sizes).length ? 1 : 0) + devices.length + equipment.length + (added.length + removed.length > 0 ? 1 : 0);
+    var res = Object.assign({}, np.result || {}, { addendum_diff: diff });
+    await supabaseClient.from('ai_est_pages').update({ result: res }).eq('id', np.id); np.result = res;
+    return diff;
+  }
+  async function runAddendumDiffs(force) {
+    if (diffing) return;
+    var todo = pages.filter(function(p) { var r = p.result || {}; return r.triage && r.triage.supersedes && p.status === 'done' && (force || !r.addendum_diff || (r.geo && r.geo.at && r.addendum_diff.at < r.geo.at)); });
+    if (!todo.length) return;
+    diffing = 'Comparing…'; paintKeep();
+    for (var i = 0; i < todo.length; i++) { diffing = 'Comparing ' + pageDisp(todo[i]) + ' with the sheet it replaces (' + (i + 1) + '/' + todo.length + ')…'; paintKeep(); try { await addendumDiff(todo[i]); } catch (e) { console.warn('addendum diff', e); } }
+    diffing = ''; render(); toast(todo.length + ' addendum sheet' + (todo.length === 1 ? '' : 's') + ' compared — see Δ on the sheet rows');
+  }
+  function diffSummary(d) {
+    var bits = [];
+    if (d.duct.old_ft !== d.duct.new_ft) bits.push('duct ' + d.duct.old_ft + ' → ' + d.duct.new_ft + ' ft'); else if (Object.keys(d.duct.sizes).length) bits.push('duct sizes shifted');
+    if (d.pipe.old_ft !== d.pipe.new_ft) bits.push('pipe ' + d.pipe.old_ft + ' → ' + d.pipe.new_ft + ' ft');
+    if (d.devices.length) bits.push(d.devices.length + ' device row' + (d.devices.length === 1 ? '' : 's') + ' changed');
+    if (d.equipment.length) bits.push(d.equipment.length + ' equipment');
+    if (d.text.added_n + d.text.removed_n) bits.push('+' + d.text.added_n + ' / −' + d.text.removed_n + ' text lines');
+    if (d.corrections.carried) bits.push(d.corrections.carried + ' decisions carried'); if (d.corrections.stale.length) bits.push(d.corrections.stale.length + ' decisions to redo');
+    return bits.length ? bits.join(' · ') : 'no change found';
+  }
+  function showDiff(id) {
+    var p = pages.find(function(x) { return x.id === id; }); if (!p || !p.result || !p.result.addendum_diff) return;
+    var d = p.result.addendum_diff, tbl = function(rows, head) { return rows.length ? '<table class="t" style="margin-top:6px"><tr>' + head.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table>' : '<div class="muted">none</div>'; };
+    var cnt = function(o, label) { return tbl(Object.keys(o).map(function(k) { return '<tr><td>' + esc(k) + '</td><td class="n">' + o[k][0] + '</td><td class="n">' + o[k][1] + '</td></tr>'; }), [label, 'before', 'after']); };
+    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">Δ ' + esc(pageDisp(p)) + ' vs ' + esc(d.old_sheet) + ' <span class="muted">(' + esc(d.old_file || 'earlier file') + ')</span></h3><button class="btn" onclick="AE.closeModal()">Close</button></div>' +
+      '<p class="muted">' + esc(diffSummary(d)) + ' · compared ' + esc(String(d.at).slice(0, 16).replace('T', ' ')) + '</p>' +
+      '<div class="grid2"><div><h3>Ductwork (' + esc(d.duct.src) + ')</h3>' + cnt(d.duct.sizes, 'size · ft') + '<h3 style="margin-top:12px">Pipe</h3>' + cnt(d.pipe.sizes, 'size · ft') + '<h3 style="margin-top:12px">Size / tag labels in the text</h3>' + cnt(Object.assign({}, d.labels.sizes, d.labels.tags, d.labels.devices), 'label · count') + '</div>' +
+      '<div><h3>Air devices</h3>' + tbl(d.devices.map(function(x) { return '<tr><td>' + esc(x.tag) + ' <span class="muted">' + esc(x.type) + '</span></td><td class="n">' + (x.old == null ? '—' : x.old) + (x.old_lf ? ' (' + x.old_lf + ' ft)' : '') + '</td><td class="n">' + (x.new == null ? '<span class="flag">removed</span>' : x.new) + (x.new_lf ? ' (' + x.new_lf + ' ft)' : '') + '</td></tr>'; }), ['device', 'before', 'after']) +
+      '<h3 style="margin-top:12px">Equipment</h3>' + tbl(d.equipment.map(function(x) { return '<tr><td>' + esc(x.tag) + ' <span class="muted">' + esc(x.type) + '</span></td><td class="n">' + (x.old == null ? '—' : x.old) + '</td><td class="n">' + (x.new == null ? '<span class="flag">removed</span>' : x.new) + '</td></tr>'; }), ['tag', 'before', 'after']) +
+      '<h3 style="margin-top:12px">Review decisions</h3><div class="muted">' + d.corrections.carried + ' carried to this sheet' + (d.corrections.stale.length ? ' · to redo (the AI row changed): ' + esc(d.corrections.stale.join(', ')) : '') + '</div></div></div>' +
+      '<h3 style="margin-top:12px">Text added (' + d.text.added_n + ')</h3><ul class="l">' + d.text.added.map(function(l) { return '<li>' + esc(l) + '</li>'; }).join('') + (d.text.added_n > 40 ? '<li>…</li>' : '') + '</ul>' +
+      '<h3 style="margin-top:12px">Text removed (' + d.text.removed_n + ')</h3><ul class="l">' + d.text.removed.map(function(l) { return '<li>' + esc(l) + '</li>'; }).join('') + (d.text.removed_n > 40 ? '<li>…</li>' : '') + '</ul>';
+    $('modal').classList.add('open');
   }
 
   // ─── reading sheets through the Edge Function ──────────────────────
@@ -758,9 +846,12 @@ var AE = (function() {
       var keep = g[g.length - 1], kf = files.find(function(x) { return x.id === keep.file_id; }) || {};
       for (var i = 0; i < g.length - 1; i++) {
         var p = g[i]; if (p.file_id === keep.file_id || (p.result && p.result.triage && p.result.triage.superseded && p.status === 'skipped')) continue;
-        var res = Object.assign({}, p.result || {}); res.triage = Object.assign({}, res.triage, { superseded: kf.file_name || 'a later file' });
+        var res = Object.assign({}, p.result || {}); res.triage = Object.assign({}, res.triage, { superseded: kf.file_name || 'a later file', superseded_by: keep.id });
         await supabaseClient.from('ai_est_pages').update({ status: 'skipped', result: res }).eq('id', p.id);
         p.status = 'skipped'; p.result = res; n++;
+        // the later sheet remembers which one it replaces — the addendum diff compares the two once the new one is read and measured
+        var kres = Object.assign({}, keep.result || {}); kres.triage = Object.assign({}, kres.triage, { supersedes: p.id, supersedes_sheet: p.sheet_no || (p.result && p.result.sheet_no) || null });
+        await supabaseClient.from('ai_est_pages').update({ result: kres }).eq('id', keep.id); keep.result = kres;
       }
     }
     return n;
@@ -1176,9 +1267,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=452"></script>
+<script src="sw-register.js?v=453"></script>
 </body>
 </html>
