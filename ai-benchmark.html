@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0696D7">
+<title>AI Benchmark — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=440"></script>
+<script src="auth.js?v=440"></script>
+<script src="est-engine.js?v=440"></script>
+<style>
+  body { padding-bottom: 40px; }
+  .ab-wrap { max-width: 1380px; margin: 0 auto; }
+  .ab-body { padding: 16px; }
+  .card { background: var(--nw-card); border: 1px solid var(--nw-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color: var(--nw-muted); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > label { font-size: 12px; color: var(--nw-muted); display: flex; flex-direction: column; gap: 4px; }
+  input[type=text], input[type=number], select, textarea { padding: 8px 10px; border: 1px solid var(--nw-border); border-radius: 8px; font-size: 13px; background: #fff; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--nw-border); background: #fff; font-weight: 700; font-size: 12px; cursor: pointer; color: var(--nw-text); }
+  .btn.primary { background: var(--nw-text); color: #fff; border-color: var(--nw-text); }
+  .btn.sm { padding: 3px 8px; font-size: 11px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .muted { color: var(--nw-muted); font-size: 12px; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.t th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--nw-muted); border-bottom: 1px solid var(--nw-border); padding: 6px 6px; white-space: nowrap; }
+  table.t th.n, table.t td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.t td { padding: 6px 6px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  table.t tr.off td { color: #94a3b8; }
+  table.t tr.sum td { background: #f8fafc; font-weight: 800; border-top: 2px solid var(--nw-border); }
+  .e { display: inline-block; min-width: 46px; text-align: right; padding: 1px 6px; border-radius: 6px; font-weight: 700; font-size: 11.5px; }
+  .e.g { background: #dcfce7; color: #166534; } .e.a { background: #fef3c7; color: #92400e; } .e.r { background: #fee2e2; color: #991b1b; } .e.x { background: #f1f5f9; color: #94a3b8; font-weight: 400; }
+  .d { color: var(--nw-muted); font-size: 11px; }
+  .d.up { color: #991b1b; } .d.dn { color: #166534; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .kpi .k { border: 1px solid var(--nw-border); border-radius: 10px; padding: 10px 14px; }
+  .kpi .k .l { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--nw-muted); }
+  .kpi .k .v { font-size: 26px; font-weight: 800; line-height: 1.2; }
+  .kpi .k .s { font-size: 11.5px; color: var(--nw-muted); }
+  .tr { font-size: 11px; color: var(--nw-muted); }
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 300; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: min(760px, 100%); max-height: 88vh; overflow: auto; padding: 18px 20px; }
+  .modal h3 { margin: 0 0 12px; font-size: 15px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .grid3 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--nw-muted); }
+  .pick { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 12.5px; }
+  .pick:hover { background: #f0f9ff; }
+  .spark { vertical-align: middle; }
+  .prog { height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .prog > div { height: 100%; background: var(--nw-text); width: 0; transition: width .3s; }
+  @media (max-width: 900px) { .hide-m { display: none; } .grid3 { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="ab-wrap">
+  <div class="header">
+    <a href="ai-estimator.html" class="back-btn">&#8592;</a>
+    <div class="header-content"><h1>AI Benchmark</h1></div>
+    <div class="profile-circle" id="profileCircle">--</div>
+  </div>
+  <div class="ab-body" id="main"><div class="muted">Loading…</div></div>
+</div>
+<div class="modal-bg" id="modal" onclick="if(event.target===this)AB.closeModal()"><div class="modal" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+// ═══════════════════════════════════════════════════════════════════════
+// AI Benchmark — how well the AI takeoff reproduces NWAC's own Procore takeoffs, job by job, engine version by engine version.
+// Truth = the Procore takeoff of the same drawings (est_procore_lines: ductwork ft, air outlets ea / linear ft, pipe ft,
+// equipment installs) or a hand-entered figure. Measured = NWEngine.collect() over the stored sheet reads of the session
+// (no AI cost): duct ft as the engine accounts it (drawing geometry ×1.08 fittings + UP/DN risers, AI reading where the geometry
+// is weak), the AI's own duct reading beside it, outlets, linear feet, pipe feet, scheduled equipment. "Recompute" stores one
+// run per app version (service worker cache name), the history table keeps every version's means.
+// ═══════════════════════════════════════════════════════════════════════
+var AB = (function() {
+  'use strict';
+  var $ = function(id) { return document.getElementById(id); };
+  var sb = window.supabaseClient;
+  var METRICS = [['duct_ft', 'Duct ft', 'ft'], ['outlets_ea', 'Outlets', 'ea'], ['linear_ft', 'Linear', 'ft'], ['pipe_ft', 'Pipe', 'ft'], ['equipment_ea', 'Equipment', 'ea']];
+  var bench = [], runs = [], versions = [], curVer = null, cmpVer = null, appVer = null, me = { name: '', canEdit: false }, busy = '', schemaOk = true, prog = 0;
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
+  function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+  function fmt(v, unit) { if (v == null || v === '') return '—'; var n = num(v); return (unit === 'ft' ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('en-US'); }
+  function verNum(v) { var m = /(\d+)/.exec(v || ''); return m ? +m[1] : 0; }
+
+  async function init() {
+    try {
+      var u = await sb.auth.getUser(), p = await sb.from('profiles').select('role,full_name').eq('id', u.data.user.id).maybeSingle();
+      me.name = (p.data && p.data.full_name) || ''; me.canEdit = !!(p.data && /^(admin|manager|lead_pm|project_manager|apm|estimator)$/.test(p.data.role || ''));
+      if (window.initAuthUI) { try { initAuthUI(); } catch (e) {} }
+    } catch (e) { console.warn(e); }
+    try { var ks = await caches.keys(); var k = ks.filter(function(x) { return /^nw-field-v\d+$/.test(x); }).sort(function(a, b) { return verNum(b) - verNum(a); })[0]; appVer = k ? 'v' + verNum(k) : null; } catch (e) {}
+    if (!appVer) appVer = 'v' + (/v=(\d+)/.exec(document.querySelector('script[src*="est-engine"]').getAttribute('src')) || [0, 0])[1];
+    await load(); render();
+  }
+  async function load() {
+    var b = await sb.from('est_ai_bench').select('*').order('sort_order').order('name');
+    if (b.error) { schemaOk = !/est_ai_bench|42P01|does not exist|schema cache/i.test(b.error.message); if (schemaOk) toast(b.error.message); bench = []; runs = []; return; }
+    bench = b.data || [];
+    var r = await sb.from('est_ai_bench_runs').select('*').order('at', { ascending: false });
+    runs = r.data || [];
+    versions = []; runs.forEach(function(x) { if (versions.indexOf(x.version) < 0) versions.push(x.version); });
+    versions.sort(function(a, b) { return verNum(b) - verNum(a); });
+    if (!curVer || versions.indexOf(curVer) < 0) curVer = versions[0] || null;
+    if (cmpVer && versions.indexOf(cmpVer) < 0) cmpVer = null;
+  }
+  function runOf(bid, ver) { return runs.find(function(x) { return x.bench_id === bid && x.version === ver; }) || null; }
+  function err(m, t) { t = num(t); if (!(t > 0) || m == null) return null; return (num(m) - t) / t; }
+  function eCls(e) { if (e == null) return 'x'; var a = Math.abs(e); return a <= 0.10 ? 'g' : a <= 0.15 ? 'a' : 'r'; }
+  function eTxt(e) { return e == null ? '—' : (e > 0 ? '+' : '') + Math.round(e * 100) + '%'; }
+  function stats(ver, key) {
+    var es = [];
+    bench.forEach(function(b) { if (!b.use) return; var r = runOf(b.id, ver); if (!r) return; var e = err(r.measured[key], (b.truth || {})[key]); if (e != null) es.push(e); });
+    if (!es.length) return null;
+    var abs = es.reduce(function(a, e) { return a + Math.abs(e); }, 0) / es.length, sgn = es.reduce(function(a, e) { return a + e; }, 0) / es.length, w15 = es.filter(function(e) { return Math.abs(e) <= 0.15; }).length;
+    return { n: es.length, abs: abs, sgn: sgn, w15: w15 };
+  }
+
+  // ─── measured quantities from the stored sheet reads (same accounting as the price) ───
+  function isTakeoffSheet(r) { var t = r.sheet_type || ''; return t === 'duct_plan' || t === 'pipe_plan' || (t === 'other' && /plan/i.test(r.sheet_title || '') && !/enlarged/i.test(r.sheet_title || '')); }
+  function metrics(pages) {
+    var C = NWEngine.collect(pages), m = { duct_ft: 0, ai_duct_ft: 0, outlets_ea: 0, linear_ft: 0, vav_ea: 0, pipe_ft: 0, riser_ft: 0, equipment_ea: 0, sheets: pages.length, read: 0, cost: 0 };
+    Object.keys(C.duct).forEach(function(k) { m.duct_ft += num(C.duct[k].lf); });
+    Object.keys(C.pipe).forEach(function(k) { var o = C.pipe[k]; m.pipe_ft += num(o.lf); if (o.riser) m.riser_ft += num(o.lf); });
+    Object.keys(C.devices).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) m.outlets_ea += num(d.qty); else if (d.type === 'linear') m.linear_ft += d.lf ? num(d.lf) : num(d.qty) * 4; else if (/vav|fpb/.test(d.type)) m.vav_ea += num(d.qty); });
+    Object.keys(C.sched).forEach(function(t) { m.equipment_ea += Math.max(1, num(C.sched[t].qty) || (C.planEq[t] && C.planEq[t].qty) || 1); });
+    Object.keys(C.planEq).forEach(function(t) { if (!C.sched[t] && /\d/.test(t)) m.equipment_ea += Math.max(1, num(C.planEq[t].qty)); });
+    pages.forEach(function(p) { var r = p.result || {}; if (p.status === 'done') m.read++; m.cost += num(p.cost); if (r && !r.parse_error && isTakeoffSheet(r) && !/demo/i.test(r.sheet_type || '')) (r.duct_runs || []).forEach(function(x) { m.ai_duct_ft += num(x.lf); }); });
+    Object.keys(m).forEach(function(k) { m[k] = Math.round(m[k] * 100) / 100; });
+    return m;
+  }
+  async function pagesOf(b) {
+    var all = [];
+    for (var from = 0; ; from += 200) { var r = await sb.from('ai_est_pages').select('id, file_id, page_no, sheet_no, sheet_type, status, cost, tag_counts, result').eq('session_id', b.session_id).order('page_no').range(from, from + 199); if (r.error) throw new Error(r.error.message); all = all.concat(r.data || []); if (!r.data || r.data.length < 200) break; }
+    var skip = (b.skip_sheets || []).map(function(s) { return String(s).toUpperCase(); });
+    return all.filter(function(p) { var sh = String((p.result && p.result.sheet_no) || p.sheet_no || '').toUpperCase(); return skip.indexOf(sh) < 0; });
+  }
+  async function recompute(only) {
+    if (busy) return; if (!me.canEdit) { toast('Read-only'); return; }
+    var list = only ? bench.filter(function(b) { return b.id === only; }) : bench.slice();
+    busy = 'Recomputing ' + appVer + '…'; prog = 0; render();
+    var n = 0, bad = 0;
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i];
+      try {
+        var pages = await pagesOf(b), m = metrics(pages);
+        var up = await sb.from('est_ai_bench_runs').upsert({ bench_id: b.id, version: appVer, at: new Date().toISOString(), measured: m, user_name: me.name || null }, { onConflict: 'bench_id,version' });
+        if (up.error) throw new Error(up.error.message);
+        n++;
+      } catch (e) { bad++; console.warn('bench', b.name, e); }
+      prog = Math.round((i + 1) / list.length * 100); var pb = $('progBar'); if (pb) pb.style.width = prog + '%';
+    }
+    busy = ''; await load(); curVer = appVer; render();
+    toast(n + ' job' + (n === 1 ? '' : 's') + ' recomputed for ' + appVer + (bad ? ', ' + bad + ' failed (see console)' : ''));
+  }
+
+  // ─── render ───
+  function kpi(l, v, s) { return '<div class="k"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="s">' + (s || '') + '</div></div>'; }
+  function spark(key) {
+    var vs = versions.slice().sort(function(a, b) { return verNum(a) - verNum(b); }).slice(-14), pts = vs.map(function(v) { var s = stats(v, key); return s ? s.abs * 100 : null; });
+    var valid = pts.filter(function(x) { return x != null; }); if (valid.length < 2) return '';
+    var mx = Math.max.apply(null, valid.concat([20])), W = 160, H = 34, n = pts.length, d = '';
+    pts.forEach(function(y, i) { if (y == null) return; var x = 6 + i * (W - 12) / Math.max(1, n - 1), yy = H - 4 - (y / mx) * (H - 8); d += (d ? ' L' : 'M') + x.toFixed(1) + ' ' + yy.toFixed(1); });
+    return '<svg class="spark" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '"><line x1="6" x2="' + (W - 6) + '" y1="' + (H - 4 - (10 / mx) * (H - 8)).toFixed(1) + '" y2="' + (H - 4 - (10 / mx) * (H - 8)).toFixed(1) + '" stroke="#86efac" stroke-dasharray="3 3"/><path d="' + d + '" fill="none" stroke="#0f172a" stroke-width="1.6"/></svg>';
+  }
+  function render() {
+    var host = $('main');
+    if (!schemaOk) { host.innerHTML = '<div class="card">The benchmark needs one database update: run <code>est-ai-bench.sql</code> (app folder) in Supabase → SQL Editor, then reload.</div>'; return; }
+    var sDuct = curVer ? stats(curVer, 'duct_ft') : null, sOut = curVer ? stats(curVer, 'outlets_ea') : null, sLin = curVer ? stats(curVer, 'linear_ft') : null, sPipe = curVer ? stats(curVer, 'pipe_ft') : null;
+    var scored = bench.filter(function(b) { return b.use; }).length;
+    var html = '<div class="card"><div class="row" style="justify-content:space-between"><div><h3 style="margin:0">Accuracy vs Procore truth — ' + (curVer ? esc(curVer) : 'no run yet') + '</h3><div class="muted">' + bench.length + ' benchmark jobs, ' + scored + ' scored · app version now ' + esc(appVer || '?') + (versions.length ? ' · runs for ' + versions.length + ' version' + (versions.length === 1 ? '' : 's') : '') + '</div></div>' +
+      '<div class="row">' + (versions.length ? '<label>Version<select id="verSel">' + versions.map(function(v) { return '<option value="' + esc(v) + '"' + (v === curVer ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join('') + '</select></label>' +
+      '<label>Compare with<select id="cmpSel"><option value="">—</option>' + versions.map(function(v) { return '<option value="' + esc(v) + '"' + (v === cmpVer ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join('') + '</select></label>' : '') +
+      '<button class="btn primary" onclick="AB.recompute()" ' + (busy || !me.canEdit || !bench.length ? 'disabled' : '') + ' title="Run the engine over the stored sheet reads of every job (no AI cost) and keep the result as ' + esc(appVer) + '">' + (busy ? esc(busy) : '↻ Recompute ' + esc(appVer)) + '</button>' +
+      '<button class="btn" onclick="AB.addJob()" ' + (me.canEdit ? '' : 'disabled') + '>+ Add job</button></div></div>' +
+      (busy ? '<div class="prog"><div id="progBar" style="width:' + prog + '%"></div></div>' : '') +
+      '<div class="kpi" style="margin-top:12px">' +
+      kpi('Duct ft — mean |error|', sDuct ? Math.round(sDuct.abs * 1000) / 10 + '%' : '—', sDuct ? 'signed ' + (sDuct.sgn > 0 ? '+' : '') + Math.round(sDuct.sgn * 1000) / 10 + '% · ' + sDuct.w15 + ' of ' + sDuct.n + ' within ±15% ' + spark('duct_ft') : '') +
+      kpi('Air outlets — mean |error|', sOut ? Math.round(sOut.abs * 1000) / 10 + '%' : '—', sOut ? 'signed ' + (sOut.sgn > 0 ? '+' : '') + Math.round(sOut.sgn * 1000) / 10 + '% · ' + sOut.w15 + ' of ' + sOut.n + ' within ±15% ' + spark('outlets_ea') : '') +
+      kpi('Linear diffusers — mean |error|', sLin ? Math.round(sLin.abs * 1000) / 10 + '%' : '—', sLin ? sLin.w15 + ' of ' + sLin.n + ' within ±15%' : 'jobs with linear truth only') +
+      kpi('Pipe ft — mean |error|', sPipe ? Math.round(sPipe.abs * 1000) / 10 + '%' : '—', sPipe ? sPipe.w15 + ' of ' + sPipe.n + ' within ±15%' : 'jobs with pipe truth only') +
+      '</div></div>';
+    // per-job table
+    html += '<div class="card"><h3>Jobs</h3>' + (bench.length ? '<div style="overflow-x:auto"><table class="t"><tr><th>Job</th><th class="hide-m">Sheets</th>' +
+      METRICS.map(function(mt) { return '<th class="n" colspan="2">' + mt[1] + ' <span class="tr">AI / truth</span></th>'; }).join('') + '<th class="n hide-m">AI read duct</th><th></th></tr>' +
+      bench.map(rowHtml).join('') + sumRow() + '</table></div>' : '<div class="muted">No benchmark jobs yet — press “+ Add job” and pick an AI Estimator session whose drawings were taken off in Procore.</div>') +
+      '<p class="muted" style="margin:10px 0 0">Measured = the engine\'s own accounting of the stored sheet reads (drawing geometry ×1.08 fittings + UP/DN risers, the AI reading where the geometry is weak; outlets = diffusers / grilles / registers, linear = slot feet; equipment = scheduled units). Green ≤ 10 %, amber ≤ 15 %, red beyond. Click a truth figure to edit it; “Procore” pulls the truth from the Procore takeoff lines of the linked project.</p></div>';
+    // history
+    if (versions.length) {
+      html += '<div class="card"><h3>History — every engine version</h3><div style="overflow-x:auto"><table class="t"><tr><th>Version</th><th>When</th><th class="n">Jobs</th><th class="n">Duct mean |err|</th><th class="n">Duct signed</th><th class="n">Duct within ±15%</th><th class="n">Outlets mean |err|</th><th class="n">Linear mean |err|</th><th class="n">Pipe mean |err|</th></tr>' +
+        versions.map(function(v) { var d = stats(v, 'duct_ft'), o = stats(v, 'outlets_ea'), l = stats(v, 'linear_ft'), p = stats(v, 'pipe_ft'), at = runs.filter(function(x) { return x.version === v; }).map(function(x) { return x.at; }).sort().pop();
+          return '<tr' + (v === curVer ? ' style="font-weight:700"' : '') + '><td>' + esc(v) + '</td><td class="muted">' + esc((at || '').slice(0, 16).replace('T', ' ')) + '</td><td class="n">' + (d ? d.n : 0) + '</td><td class="n">' + (d ? Math.round(d.abs * 1000) / 10 + '%' : '—') + '</td><td class="n">' + (d ? (d.sgn > 0 ? '+' : '') + Math.round(d.sgn * 1000) / 10 + '%' : '—') + '</td><td class="n">' + (d ? d.w15 + ' / ' + d.n : '—') + '</td><td class="n">' + (o ? Math.round(o.abs * 1000) / 10 + '% (' + o.n + ')' : '—') + '</td><td class="n">' + (l ? Math.round(l.abs * 1000) / 10 + '% (' + l.n + ')' : '—') + '</td><td class="n">' + (p ? Math.round(p.abs * 1000) / 10 + '% (' + p.n + ')' : '—') + '</td></tr>'; }).join('') + '</table></div></div>';
+    }
+    host.innerHTML = html;
+    var vs = $('verSel'); if (vs) vs.onchange = function() { curVer = this.value; render(); };
+    var cs = $('cmpSel'); if (cs) cs.onchange = function() { cmpVer = this.value || null; render(); };
+  }
+  function rowHtml(b) {
+    var r = curVer ? runOf(b.id, curVer) : null, c = cmpVer ? runOf(b.id, cmpVer) : null, m = (r && r.measured) || {}, mc = (c && c.measured) || {}, t = b.truth || {};
+    var cells = METRICS.map(function(mt) {
+      var k = mt[0], tv = t[k], e = r ? err(m[k], tv) : null, ec = c ? err(mc[k], tv) : null;
+      var delta = (e != null && ec != null) ? '<div class="d ' + (Math.abs(e) < Math.abs(ec) - 0.005 ? 'dn' : Math.abs(e) > Math.abs(ec) + 0.005 ? 'up' : '') + '">' + esc(cmpVer) + ' ' + eTxt(ec) + '</div>' : '';
+      return '<td class="n">' + (r ? fmt(m[k], mt[2]) : '<span class="muted">—</span>') + ' / <a href="#" class="tv" data-b="' + b.id + '" data-k="' + k + '" title="Edit the truth figure" style="color:inherit;text-decoration:underline dotted">' + fmt(tv, mt[2]) + '</a></td><td class="n"><span class="e ' + eCls(e) + '">' + eTxt(e) + '</span>' + delta + '</td>';
+    }).join('');
+    return '<tr' + (b.use ? '' : ' class="off"') + '><td><a href="ai-estimator.html?s=' + b.session_id + '" style="font-weight:700;color:inherit">' + esc(b.name) + '</a>' + (b.use ? '' : ' <span class="tr">not scored</span>') + '<div class="tr">' + esc(b.truth_src || '') + (b.procore_project_id ? ' · Procore ' + b.procore_project_id : '') + (b.skip_sheets && b.skip_sheets.length ? ' · skips ' + esc(b.skip_sheets.join(', ')) : '') + (b.notes ? ' · ' + esc(b.notes) : '') + '</div></td>' +
+      '<td class="hide-m muted">' + (m.sheets != null ? m.read + '/' + m.sheets + (m.cost ? ' · $' + num(m.cost).toFixed(2) : '') : '') + '</td>' + cells +
+      '<td class="n hide-m muted">' + (r ? fmt(m.ai_duct_ft, 'ft') : '—') + '</td>' +
+      '<td style="white-space:nowrap">' + (me.canEdit ? '<button class="btn sm" onclick="AB.editJob(\'' + b.id + '\')">Edit</button> <button class="btn sm" onclick="AB.pullTruth(\'' + b.id + '\')" title="Pull the truth from the Procore takeoff lines">Procore</button> <button class="btn sm" onclick="AB.recompute(\'' + b.id + '\')" title="Recompute this job only">↻</button>' : '') + '</td></tr>';
+  }
+  function sumRow() {
+    if (!curVer) return '';
+    var cells = METRICS.map(function(mt) { var s = stats(curVer, mt[0]); return '<td class="n">' + (s ? s.n + ' jobs' : '—') + '</td><td class="n">' + (s ? '<span class="e ' + eCls(s.abs) + '">' + Math.round(s.abs * 1000) / 10 + '%</span><div class="d">signed ' + (s.sgn > 0 ? '+' : '') + Math.round(s.sgn * 1000) / 10 + '%</div>' : '') + '</td>'; }).join('');
+    return '<tr class="sum"><td>Mean |error| (scored jobs)</td><td class="hide-m"></td>' + cells + '<td class="hide-m"></td><td></td></tr>';
+  }
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a.tv'); if (!a) return; e.preventDefault(); if (!me.canEdit) return;
+    var b = bench.find(function(x) { return x.id === a.getAttribute('data-b'); }), k = a.getAttribute('data-k'); if (!b) return;
+    var v = prompt('Truth for ' + b.name + ' — ' + k.replace('_', ' ') + ' (empty = unknown):', (b.truth || {})[k] == null ? '' : (b.truth || {})[k]);
+    if (v === null) return;
+    var t = Object.assign({}, b.truth || {}); if (v.trim() === '') delete t[k]; else t[k] = Number(v);
+    sb.from('est_ai_bench').update({ truth: t }).eq('id', b.id).then(function(r) { if (r.error) toast(r.error.message); else { b.truth = t; render(); } });
+  });
+
+  // ─── jobs: add / edit / truth from Procore ───
+  function closeModal() { $('modal').classList.remove('open'); }
+  function openModal(html) { $('modalBody').innerHTML = html; $('modal').classList.add('open'); }
+  async function addJob() {
+    openModal('<h3>Add a benchmark job</h3><p class="muted">Pick an AI Estimator session whose drawings NWAC also took off in Procore (the truth).</p><input type="text" id="sq" placeholder="Search sessions…" style="width:100%"><div id="sl" style="max-height:360px;overflow:auto;margin-top:8px"></div>');
+    var all = (await sb.from('ai_est_sessions').select('id,name,created_at').order('created_at', { ascending: false }).limit(300)).data || [], have = {}; bench.forEach(function(b) { have[b.session_id] = 1; });
+    function paint() { var q = $('sq').value.toLowerCase(); $('sl').innerHTML = all.filter(function(s) { return !have[s.id] && (!q || s.name.toLowerCase().indexOf(q) >= 0); }).slice(0, 60).map(function(s) { return '<div class="pick" data-id="' + s.id + '"><b>' + esc(s.name) + '</b> <span class="muted">' + esc(s.created_at.slice(0, 10)) + '</span></div>'; }).join('') || '<div class="muted">Nothing found</div>'; }
+    $('sq').oninput = paint; paint();
+    $('sl').onclick = async function(e) { var d = e.target.closest('.pick'); if (!d) return; var s = all.find(function(x) { return x.id === d.getAttribute('data-id'); });
+      var name = s.name.replace(/^BENCH(MARK|2)?\s*[—·\-]\s*/i, '').replace(/\s*\(AI test\)\s*$/i, '').trim();
+      var r = await sb.from('est_ai_bench').insert({ session_id: s.id, name: name, truth: {}, sort_order: bench.length + 1 }).select().single(); if (r.error) { toast(r.error.message); return; }
+      closeModal(); await load(); render(); editJob(r.data.id); };
+    $('sq').focus();
+  }
+  function editJob(id) {
+    var b = bench.find(function(x) { return x.id === id; }); if (!b) return; var t = b.truth || {};
+    openModal('<h3>' + esc(b.name) + '</h3><div class="grid3">' +
+      '<label>Name<input type="text" id="eName" value="' + esc(b.name) + '"></label><label>Truth source<input type="text" id="eSrc" value="' + esc(b.truth_src || '') + '" placeholder="Procore takeoff (Kastriot)"></label><label>Procore project id<input type="text" id="ePid" value="' + esc(b.procore_project_id || '') + '"></label>' +
+      METRICS.map(function(mt) { return '<label>Truth — ' + mt[1] + ' (' + mt[2] + ')<input type="number" step="any" id="e_' + mt[0] + '" value="' + esc(t[mt[0]] == null ? '' : t[mt[0]]) + '"></label>'; }).join('') +
+      '<label>Truth — dampers (ea)<input type="number" step="any" id="e_dampers_ea" value="' + esc(t.dampers_ea == null ? '' : t.dampers_ea) + '"></label>' +
+      '<label>Skip sheets (comma)<input type="text" id="eSkip" value="' + esc((b.skip_sheets || []).join(', ')) + '" placeholder="M-100.01"></label>' +
+      '<label>Scored<select id="eUse"><option value="1"' + (b.use ? ' selected' : '') + '>yes</option><option value="0"' + (b.use ? '' : ' selected') + '>no — shown only</option></select></label>' +
+      '<label style="grid-column:1/-1">Notes<input type="text" id="eNotes" value="' + esc(b.notes || '') + '" placeholder="why it is not scored, what the truth misses …"></label></div>' +
+      '<div class="row" style="margin-top:14px;justify-content:space-between"><button class="btn" style="color:#b91c1c" onclick="AB.removeJob(\'' + b.id + '\')">Remove job</button><div class="row"><button class="btn" onclick="AB.closeModal()">Cancel</button><button class="btn primary" onclick="AB.saveJob(\'' + b.id + '\')">Save</button></div></div>');
+  }
+  async function saveJob(id) {
+    var b = bench.find(function(x) { return x.id === id; }); if (!b) return;
+    var t = {}; METRICS.concat([['dampers_ea']]).forEach(function(mt) { var v = $('e_' + mt[0]).value.trim(); if (v !== '') t[mt[0]] = Number(v); });
+    var patch = { name: $('eName').value.trim() || b.name, truth_src: $('eSrc').value.trim() || null, procore_project_id: $('ePid').value.trim() ? Number($('ePid').value.trim()) : null, truth: t, skip_sheets: $('eSkip').value.split(/\s*,\s*/).filter(Boolean), use: $('eUse').value === '1', notes: $('eNotes').value.trim() || null };
+    var r = await sb.from('est_ai_bench').update(patch).eq('id', id); if (r.error) { toast(r.error.message); return; }
+    closeModal(); await load(); render(); toast('Saved');
+  }
+  async function removeJob(id) {
+    var b = bench.find(function(x) { return x.id === id; }); if (!b || !confirm('Remove ' + b.name + ' from the benchmark (its runs go too)?')) return;
+    var r = await sb.from('est_ai_bench').delete().eq('id', id); if (r.error) { toast(r.error.message); return; }
+    closeModal(); await load(); render();
+  }
+  // Procore takeoff lines → truth: ductwork ft, air outlets (diffusers / grilles / registers) ea, linear diffuser ft, pipe ft, equipment installs ea
+  function truthFromLines(lines) {
+    var t = { duct_ft: 0, outlets_ea: 0, linear_ft: 0, pipe_ft: 0, equipment_ea: 0, dampers_ea: 0 }, n = 0;
+    lines.forEach(function(l) {
+      var g = String(l.grp || '').toLowerCase(), it = String(l.item || '').toLowerCase(), u = String(l.unit || '').toLowerCase(), q = num(l.qty); n++;
+      if (g === 'ductwork' || (/duct/.test(it) && /ft/.test(u) && !/linear|slot/.test(it))) t.duct_ft += q;
+      else if (g === 'pipe' || /pipe|copper|pvc|black iron|refrigerant|condensate/.test(it) && /ft/.test(u)) t.pipe_ft += q;
+      else if (g === 'air outlet' || /diffuser|grille|register|damper/.test(it)) {
+        if (/linear|slot/.test(it) && /ft/.test(u)) t.linear_ft += q; else if (/damper/.test(it)) t.dampers_ea += q; else if (/diffuser|grille|register|louver/.test(it)) t.outlets_ea += q;
+      }
+      else if (g === 'install' || /^equipment \d|equipment.*lb/.test(it)) t.equipment_ea += q;
+    });
+    Object.keys(t).forEach(function(k) { t[k] = Math.round(t[k] * 10) / 10; if (!t[k]) delete t[k]; });
+    return { truth: t, lines: n };
+  }
+  async function pullTruth(id) {
+    var b = bench.find(function(x) { return x.id === id; }); if (!b) return;
+    if (!b.procore_project_id) {
+      openModal('<h3>Which Procore project is the truth for ' + esc(b.name) + '?</h3><input type="text" id="pq" placeholder="Search Procore projects…" style="width:100%" value="' + esc(b.name.split(/\s+/).slice(0, 2).join(' ')) + '"><div id="pl" style="max-height:360px;overflow:auto;margin-top:8px"></div>');
+      var paint = async function() { var q = $('pq').value.trim(); if (q.length < 2) { $('pl').innerHTML = ''; return; }
+        var r = await sb.from('est_procore_projects').select('id,name,total,created').ilike('name', '%' + q.replace(/[%_]/g, '') + '%').order('created', { ascending: false }).limit(40);
+        $('pl').innerHTML = (r.data || []).map(function(p) { return '<div class="pick" data-id="' + p.id + '"><b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.created || '') + ' · $' + Math.round(num(p.total)).toLocaleString('en-US') + ' · ' + p.id + '</span></div>'; }).join('') || '<div class="muted">Nothing found</div>'; };
+      var tmr = null; $('pq').oninput = function() { clearTimeout(tmr); tmr = setTimeout(paint, 250); }; paint();
+      $('pl').onclick = async function(e) { var d = e.target.closest('.pick'); if (!d) return; var pid = Number(d.getAttribute('data-id'));
+        var r = await sb.from('est_ai_bench').update({ procore_project_id: pid }).eq('id', b.id); if (r.error) { toast(r.error.message); return; } b.procore_project_id = pid; closeModal(); pullTruth(id); };
+      return;
+    }
+    var ln = await sb.from('est_procore_lines').select('grp,item,type,qty,unit').eq('project_id', b.procore_project_id);
+    if (ln.error) { toast(ln.error.message); return; }
+    var got = truthFromLines(ln.data || []);
+    if (!got.lines) { toast('No takeoff lines for Procore project ' + b.procore_project_id); return; }
+    var keep = b.truth || {}, next = Object.assign({}, keep, got.truth);
+    if (!confirm('Procore ' + b.procore_project_id + ' (' + got.lines + ' lines): ' + Object.keys(got.truth).map(function(k) { return k.replace('_', ' ') + ' ' + got.truth[k]; }).join(', ') + '\n\nUse these as the truth for ' + b.name + '?')) return;
+    var r = await sb.from('est_ai_bench').update({ truth: next, truth_src: 'Procore takeoff lines' }).eq('id', b.id); if (r.error) { toast(r.error.message); return; }
+    await load(); render(); toast('Truth updated from Procore');
+  }
+
+  init();
+  return { recompute: recompute, addJob: addJob, editJob: editJob, saveJob: saveJob, removeJob: removeJob, pullTruth: pullTruth, closeModal: closeModal, metrics: metrics, truthFromLines: truthFromLines, get bench() { return bench; }, get runs() { return runs; } };
+})();
+</script>
+<script src="sw-register.js?v=440"></script>
+</body>
+</html>

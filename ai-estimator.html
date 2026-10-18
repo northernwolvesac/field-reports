@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=439"></script>
-<script src="auth.js?v=439"></script>
-<script src="est-totals.js?v=439"></script>
-<script src="est-engine.js?v=439"></script>
-<script src="geo-takeoff.js?v=439"></script>
+<script src="supabase-config.js?v=440"></script>
+<script src="auth.js?v=440"></script>
+<script src="est-totals.js?v=440"></script>
+<script src="est-engine.js?v=440"></script>
+<script src="geo-takeoff.js?v=440"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -143,7 +143,7 @@ var AE = (function() {
       '<label>AI model<select id="nModel"><option value="claude-sonnet-5">Sonnet 5 (fast, ~$0.10/sheet)</option><option value="claude-opus-5-5">Opus 5.5 (most careful)</option></select></label>' +
       '<button class="btn primary" style="align-self:flex-end" onclick="AE.create()">Create session</button></div>' +
       '<p class="muted" style="margin:10px 0 0">One session per bid: upload the drawings, specs, addenda, bid RFIs and vendor quotes. The AI reads every sheet, then the estimate is priced with NWAC standards (Kastriot\'s Estimating Standards) and NWAC\'s Procore unit rates.</p></div>' +
-      '<div class="card"><h3>Sessions</h3>' + (rows ? '<table class="t"><tr><th>Bid</th><th>Status</th><th>Created</th><th></th></tr>' + rows + '</table>' : '<div class="muted">No sessions yet.</div>') + '</div>';
+      '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Sessions</h3><a class="btn" href="ai-benchmark.html" title="Accuracy of the AI takeoff vs NWAC\'s Procore takeoffs, per job and per engine version">📊 Benchmark</a></div>' + (rows ? '<table class="t"><tr><th>Bid</th><th>Status</th><th>Created</th><th></th></tr>' + rows + '</table>' : '<div class="muted">No sessions yet.</div>') + '</div>';
   }
 
   // the plans an estimator already uploaded to the estimate's Takeoff go into this session — no second upload — and the AI reads them
@@ -1056,6 +1056,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, toTakeoff: toTakeoff };
 })();
 </script>
-<script src="sw-register.js?v=439"></script>
+<script src="sw-register.js?v=440"></script>
 </body>
 </html>
