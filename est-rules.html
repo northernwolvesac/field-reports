@@ -12,8 +12,8 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="supabase-config.js?v=448"></script>
-<script src="auth.js?v=448"></script>
+<script src="supabase-config.js?v=449"></script>
+<script src="auth.js?v=449"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
@@ -22,6 +22,8 @@
   .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
   .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; color: #111318; }
   .btn.primary { background: #111318; color: #fff; border-color: #111318; } .btn.danger { color: #b91c1c; border-color: #fca5a5; } .btn:disabled { opacity: .5; cursor: default; }
+  .top .btn, .card .btn, .acts .btn, .ask .btn, td .btn { width: auto; display: inline-block; white-space: nowrap; flex-shrink: 0; }
+  .top .ttl { min-width: 0; } .top .ttl span { white-space: normal; }
   .tabs { display: flex; gap: 6px; margin: 14px 0; border-bottom: 1px solid #e5e7eb; }
   .tab { padding: 9px 14px; font-size: 13px; font-weight: 700; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .tab.on { color: #111318; border-color: #111318; }
@@ -284,7 +286,8 @@ requireAuth().catch(function(){});
   function renderChips() { $('chips').innerHTML = SUGGEST.map(function(s) { return '<button type="button">' + esc(s) + '</button>'; }).join(''); $('chips').querySelectorAll('button').forEach(function(b) { b.addEventListener('click', function() { $('q').value = b.textContent; ask(); }); }); }
   function addMsg(cls, text, sources) {
     var box = $('msgs'); if (box.querySelector('.empty')) box.innerHTML = '';
-    var d = document.createElement('div'); d.className = 'm ' + cls; d.textContent = text;
+    var d = document.createElement('div'); d.className = 'm ' + cls;
+    if (cls === 'a') d.innerHTML = esc(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^#+\s*(.+)$/gm, '<b>$1</b>').replace(/^\s*[-*]\s+/gm, '• '); else d.textContent = text;
     if (sources && sources.length) { var seen = {}, s = sources.filter(function(x) { var k = x.title + '|' + x.page; if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 6); var sd = document.createElement('div'); sd.className = 'src'; sd.textContent = 'Sources: ' + s.map(function(x) { return x.title + (x.page ? ' p. ' + x.page : '') + (x.org ? ' (' + x.org + ')' : ''); }).join(' · '); d.appendChild(sd); }
     box.appendChild(d); box.scrollTop = box.scrollHeight; return d;
   }
@@ -311,6 +314,6 @@ requireAuth().catch(function(){});
   load();
 })();
 </script>
-<script src="sw-register.js?v=448"></script>
+<script src="sw-register.js?v=449"></script>
 </body>
 </html>
