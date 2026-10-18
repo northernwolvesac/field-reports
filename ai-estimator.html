@@ -14,11 +14,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=447"></script>
-<script src="auth.js?v=447"></script>
-<script src="est-totals.js?v=447"></script>
-<script src="est-engine.js?v=447"></script>
-<script src="geo-takeoff.js?v=447"></script>
+<script src="supabase-config.js?v=451"></script>
+<script src="auth.js?v=451"></script>
+<script src="est-totals.js?v=451"></script>
+<script src="est-engine.js?v=451"></script>
+<script src="geo-takeoff.js?v=451"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -80,6 +80,7 @@ var AE = (function() {
   var KINDS = [['drawings', 'Drawings'], ['specs', 'Specifications'], ['addendum', 'Addendum / revision'], ['rfi', 'Bid RFI / answers'], ['quote', 'Vendor / sub quote'], ['other', 'Other']];
   var session = null, files = [], pages = [], norms = null, fileCache = {}, running = false, me = null;
   var corrections = [];   // reviewer decisions from the Takeoff's "AI review" tab (est_ai_corrections) — applied by the engine when pricing
+  var specQa = [], specChunks = 0, specIndexing = '', qaBusy = false;   // "Ask the specs": indexed passages (ai_est_spec_chunks) + the session's questions and answers
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -191,6 +192,8 @@ var AE = (function() {
     files = f.data || []; pages = p.data || [];
     pages.forEach(function(pg) { if (pg.result) pg.result = unpack(pg.result); });
     try { var c = await supabaseClient.from('est_ai_corrections').select('kind, item_key, status, corrected, page_id, sheet_no, note, original').eq('session_id', session.id); corrections = c.error ? [] : (c.data || []); } catch (e) { corrections = []; }
+    try { var qa = await supabaseClient.from('ai_est_spec_qa').select('*').eq('session_id', session.id).order('created_at', { ascending: false }).limit(30); specQa = qa.error ? [] : (qa.data || []);
+      var sc = await supabaseClient.from('ai_est_spec_chunks').select('id', { count: 'exact', head: true }).eq('session_id', session.id); specChunks = sc.error ? -1 : (sc.count || 0); } catch (e) { specQa = []; specChunks = -1; }
     pages.sort(function(a, b) { return files.findIndex(function(x) { return x.id === a.file_id; }) - files.findIndex(function(x) { return x.id === b.file_id; }) || a.page_no - b.page_no; });
   }
 
@@ -230,7 +233,7 @@ var AE = (function() {
       '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { var r = p.result || {}; return r.geo || r.geo_pipe || r.geo_riser; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button></div></div>' +
       renderDuctSpec(res) + renderCorrections() +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
-      '<div id="revOut">' + renderReview(res) + '</div></div>';
+      '<div id="revOut">' + renderReview(res) + '</div></div>' + renderSpecQa();
     $('main').innerHTML = html;
   }
 
@@ -694,6 +697,7 @@ var AE = (function() {
     await Promise.all([worker(), worker(), worker()]);
     running = false; window.NW_HOLD_RELOAD = false; await reload(); render();
     measureDucts(false);        // measure the new duct plans from their lines right away
+    if (specChunks === 0 && specPages().length) indexSpecs(true);   // the spec sheets become searchable passages (no AI cost)
     var bad = list.filter(function(p) { return p.status === 'error'; }).length;
     toast(bad ? bad + ' sheet(s) failed — press ↻ on them' : 'All sheets read ✓');
   }
@@ -826,6 +830,95 @@ var AE = (function() {
       toast('Duct construction: ' + NWEngine.DUCT_FAMILIES[NWEngine.familyFor(r.spec)].label + ' — press “Price it”');
     } catch (e) { toast('Duct spec: ' + e.message); }
     specBusy = false; render();
+  }
+
+  // ─── Ask the specs: passages per CSI section / clause (ai_est_spec_chunks) + answers with citations (Edge action specqa) ───
+  function specPages() {
+    return pages.filter(function(p) {
+      var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {}, t = r.sheet_type || p.sheet_type || '', title = String(r.sheet_title || p.sheet_title || '');
+      if (f.kind === 'quote' || p.status === 'error') return false;
+      if (f.kind === 'specs' || f.kind === 'addendum' || f.kind === 'rfi') return p.status !== 'skipped' || /specs|notes/i.test(t);
+      return p.status === 'done' && (t === 'specs' || t === 'legend' || t === 'schedule' || (t === 'other' && /note|general|index|requirement|scope/i.test(title)));
+    });
+  }
+  // text items → lines (same baseline, left to right), so headings and clause numbers stay on their own line
+  function pageLines(tc) {
+    var rows = [];
+    tc.items.forEach(function(it) { if (!it.str || !it.str.trim()) return; var y = Math.round(it.transform[5]), x = it.transform[4]; var row = rows.find(function(r) { return Math.abs(r.y - y) <= 2; }); if (!row) { row = { y: y, items: [] }; rows.push(row); } row.items.push({ x: x, s: it.str }); });
+    rows.sort(function(a, b) { return b.y - a.y; });
+    return rows.map(function(r) { r.items.sort(function(a, b) { return a.x - b.x; }); var s = ''; r.items.forEach(function(it, i) { s += (i && !/\s$/.test(s) && !/^\s/.test(it.s) ? ' ' : '') + it.s; }); return s.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+  }
+  var SEC_RE = /^(?:SECTION|DIVISION)\s+(\d{2}\s?\d{2}\s?\d{2}(?:\.\d{2})?|\d{2})\s*[-–—:.]?\s*(.{0,80})$/i, PART_RE = /^PART\s+([1-3])\b\s*[-–—:.]?\s*(.{0,60})$/i, CLAUSE_RE = /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\s+([A-Z][^.]{2,70})$/, CAPS_RE = /^[A-Z][A-Z0-9 ,&\/\-()']{7,70}$/;
+  function chunkLines(lines, meta) {
+    var out = [], section = meta.section || null, clause = null, buf = [], n = 0;
+    function flush() { var t = buf.join('\n').trim(); buf = []; if (!t) return;
+      var parts = [], s = t; while (s.length > 1500) { var cut = s.lastIndexOf('. ', 1400); if (cut < 600) cut = s.lastIndexOf(' ', 1400); if (cut < 600) cut = 1400; parts.push(s.slice(0, cut + 1).trim()); s = s.slice(Math.max(0, cut - 120)).trim(); } if (s) parts.push(s);
+      parts.forEach(function(c) { if (c.length >= 40) out.push({ section: section, clause: clause, chunk_no: n++, content: c }); }); }
+    lines.forEach(function(l) {
+      var m;
+      if ((m = SEC_RE.exec(l))) { flush(); section = (m[1] + (m[2] ? ' — ' + m[2].trim() : '')).slice(0, 90); clause = null; return; }
+      if ((m = PART_RE.exec(l))) { flush(); clause = ('PART ' + m[1] + (m[2] ? ' ' + m[2].trim() : '')).slice(0, 60); buf.push(l); return; }
+      if ((m = CLAUSE_RE.exec(l)) || (CAPS_RE.test(l) && !/\d\s*(x|×)\s*\d/.test(l) && buf.join('').length > 300)) { flush(); clause = l.slice(0, 70); buf.push(l); return; }
+      buf.push(l);
+    });
+    flush(); return out;
+  }
+  async function indexSpecs(quiet) {
+    if (specIndexing) return;
+    var src = specPages(); if (!src.length) { if (!quiet) toast('No specification or notes sheets on this session'); return; }
+    specIndexing = 'Indexing…'; render();
+    try {
+      await supabaseClient.from('ai_est_spec_chunks').delete().eq('session_id', session.id);
+      var total = 0;
+      for (var i = 0; i < src.length; i++) {
+        var p = src[i]; specIndexing = 'Indexing ' + (p.sheet_no || 'page ' + p.page_no) + ' (' + (i + 1) + '/' + src.length + ')…'; paintKeep();
+        var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, tc = await (await pdf.getPage(1)).getTextContent(); pdf.destroy();
+        var lines = pageLines(tc); if (lines.join(' ').length < 200) continue;
+        var meta = { section: null }; var tm = lines.slice(0, 40).find(function(l) { return SEC_RE.test(l); }); if (!tm && (p.sheet_title || (p.result || {}).sheet_title)) meta.section = String(p.sheet_title || p.result.sheet_title).slice(0, 90);
+        var rows = chunkLines(lines, meta).map(function(c) { return { session_id: session.id, page_id: p.id, sheet_no: p.sheet_no || (p.result || {}).sheet_no || null, page_no: p.page_no, section: c.section, clause: c.clause, chunk_no: c.chunk_no, content: c.content }; });
+        for (var k = 0; k < rows.length; k += 100) { var ins = await supabaseClient.from('ai_est_spec_chunks').insert(rows.slice(k, k + 100)); if (ins.error) throw new Error(/ai_est_spec_chunks|does not exist|schema cache/i.test(ins.error.message) ? 'run ai-est-spec-schema.sql in Supabase first' : ins.error.message); }
+        total += rows.length;
+      }
+      specChunks = total; if (!quiet || total) toast(total + ' spec passages indexed from ' + src.length + ' sheet' + (src.length === 1 ? '' : 's'));
+    } catch (e) { toast('Index specs: ' + e.message); }
+    specIndexing = ''; render();
+  }
+  function openQuestions() {
+    var out = [], res = session.result || {};
+    try { (NWEngine.collect(pages).questions || []).forEach(function(q) { if (q && q.q) out.push(String(q.q)); }); } catch (e) {}
+    ((res.engine || {}).flags || []).forEach(function(f) { if (f && f.flag && /confirm|verify|check|spec|which|who|not read|unknown/i.test(f.flag)) out.push(f.item + ' — ' + f.flag); });
+    ((res.review || {}).open_items || []).forEach(function(x) { out.push(typeof x === 'string' ? x : (x.item || x.text || JSON.stringify(x))); });
+    return out.map(function(s) { return String(s).replace(/\s+/g, ' ').trim().slice(0, 240); }).filter(function(s, i, a) { return s && a.indexOf(s) === i; }).slice(0, 25);
+  }
+  function qaPick(v) { if (v) $('qaQ').value = v; }
+  async function askSpecs() {
+    var q = ($('qaQ') ? $('qaQ').value : '').trim(); if (!q) { toast('Type a question'); return; }
+    if (qaBusy) return; if (!specChunks) { toast('Index the specs first (button on the right)'); return; }
+    qaBusy = true; render();
+    try {
+      var hist = specQa.slice(0, 3).reverse().map(function(x) { return { q: x.question, a: x.answer }; });
+      var r = await callFn({ action: 'specqa', session_id: session.id, question: q, history: hist, user_name: me && me.name });
+      specQa.unshift({ id: r.id, question: q, answer: r.answer, sources: r.sources, used: r.used, found: r.found, cost: r.cost, created_at: r.created_at || new Date().toISOString() });
+    } catch (e) { toast('Ask the specs: ' + e.message); }
+    qaBusy = false; render(); var el = $('qaQ'); if (el) el.value = '';
+  }
+  function mdLite(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\[(\d{1,2})\]/g, '<span class="st" title="passage $1">$1</span>').replace(/^\s*[-*]\s+/gm, '• ').replace(/\n/g, '<br>'); }
+  function renderSpecQa() {
+    var src = specPages(), oq = openQuestions();
+    var h = '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">4 · Ask the specs</h3><div class="row">' +
+      '<span class="muted">' + (specChunks < 0 ? 'needs ai-est-spec-schema.sql' : specChunks ? specChunks + ' passages from the spec sheets' : (src.length ? src.length + ' spec / notes sheet' + (src.length === 1 ? '' : 's') + ' not indexed yet' : 'no spec sheets on this session')) + '</span>' +
+      '<button class="btn" onclick="AE.indexSpecs()" ' + (specIndexing || !src.length ? 'disabled' : '') + ' title="Split the specification and notes sheets into passages per section and clause (no AI cost)">' + (specIndexing ? esc(specIndexing) : (specChunks ? '↻ Re-index specs' : '📚 Index specs')) + '</button></div></div>' +
+      '<div class="row" style="margin-top:8px"><input type="text" id="qaQ" style="flex:1;min-width:260px" placeholder="e.g. What duct insulation is required? Who furnishes the VAV controllers? Is TAB by the mechanical contractor?" onkeydown="if(event.key===\'Enter\')AE.askSpecs()">' +
+      (oq.length ? '<select onchange="AE.qaPick(this.value)" style="max-width:320px"><option value="">Open questions from the read (' + oq.length + ')…</option>' + oq.map(function(s) { return '<option value="' + esc(s) + '">' + esc(s.slice(0, 90)) + '</option>'; }).join('') + '</select>' : '') +
+      '<button class="btn primary" onclick="AE.askSpecs()" ' + (qaBusy || !specChunks ? 'disabled' : '') + '>' + (qaBusy ? 'Asking…' : '💬 Ask') + '</button></div>' +
+      '<p class="muted" style="margin:6px 0 0">Answers come only from this bid\'s specification passages, each fact with its passage number; the sources list below the answer shows section, clause, sheet and page. Click a source to open the sheet read.</p>';
+    if (specQa.length) h += specQa.slice(0, 12).map(function(x) {
+      var used = Array.isArray(x.used) ? x.used : [], srcs = (x.sources || []).filter(function(s) { return !used.length || used.indexOf(s.n) >= 0; });
+      return '<div style="margin-top:12px;padding:10px 12px;background:#f8fafc;border-radius:8px"><div><b>Q:</b> ' + esc(x.question) + ' <span class="muted">' + esc(String(x.created_at || '').slice(0, 16).replace('T', ' ')) + (x.user_name ? ' · ' + esc(x.user_name) : '') + (x.cost ? ' · $' + Number(x.cost).toFixed(2) : '') + '</span></div>' +
+        '<div style="margin-top:4px">' + (x.found === false ? '<span class="flag">Not answered by the specs — </span>' : '') + mdLite(x.answer || '') + '</div>' +
+        (srcs.length ? '<ul class="l" style="margin-top:6px">' + srcs.map(function(s) { return '<li><a href="#" onclick="AE.showPage(\'' + esc(s.page_id || '') + '\');return false" style="color:inherit"><b>[' + s.n + ']</b> ' + esc((s.section ? s.section : '') + (s.clause ? ' §' + s.clause : '')) + ' — <b>' + esc(s.sheet || 'sheet') + '</b> p.' + esc(s.page) + '</a> <span class="basis">' + esc(String(s.snippet || '').slice(0, 160)) + '…</span></li>'; }).join('') + '</ul>' : '') + '</div>';
+    }).join('');
+    return h + '</div>';
   }
 
   // ─── pricing ────────────────────────────────────────────────────────
@@ -1064,9 +1157,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick };
 })();
 </script>
-<script src="sw-register.js?v=447"></script>
+<script src="sw-register.js?v=451"></script>
 </body>
 </html>

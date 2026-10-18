@@ -245,6 +245,20 @@ function repairJson(s: string): any {
 
 const GLYPH_NOTE = "SYMBOL GLYPHS counted from the vector layer of this sheet (one family per line: count x shape, paper size in inches, diagonal strokes inside, how many have a cfm number or a short tag beside them). Find the legend's air-device symbols among these families by shape and size: a family that matches a legend symbol gives the EXACT quantity of that device on this sheet - use that count instead of counting by eye, and say in the row's basis which family (#n) you used. Families that are tag bubbles, light fixtures, sprinkler heads, thermostats, furniture, column markers or dimension marks are not devices.\n";
 
+// ─── spec Q&A: the bid's specification passages (ai_est_spec_chunks, full-text search) answer the estimator's question with citations ───
+const SPECQA_PROMPT = `You answer an HVAC estimator's question about THIS project's specifications and general notes.
+Use only the SPEC PASSAGES below. Answer in 1 to 6 short sentences, practical for pricing (what is required, who furnishes it, sizes,
+materials, thicknesses, standards). After every fact put the passage number in square brackets, e.g. [2]; quote the exact requirement
+wording in quotes when it is short. When the passages do not answer the question, say so plainly (found = false) and do not guess —
+you may add one line of what to confirm with the engineer. Reply in the language the question is written in.`;
+const SPECQA_SCHEMA = { type: "object", additionalProperties: false, required: ["answer", "used", "found"], properties: {
+  answer: { type: "string" }, used: { type: "array", items: { type: "integer" } }, found: { type: "boolean" } } };
+// keywords for a second, looser search when the literal question finds nothing (drops stop words, keeps numbers and sizes)
+function kbKeywords(q: string): string {
+  const stop = new Set(["the", "a", "an", "of", "for", "in", "on", "to", "is", "are", "what", "how", "many", "much", "do", "does", "we", "our", "i", "it", "and", "or", "with", "per", "should", "can", "be", "at", "by", "from", "this", "that", "which", "when", "there", "any", "who", "where", "required", "shall"]);
+  return q.toLowerCase().replace(/[^\w\s"'/.-]/g, " ").split(/\s+/).filter((w) => w && !stop.has(w) && w.length > 1).slice(0, 8).join(" OR ");
+}
+
 // ─── handlers ─────────────────────────────────────────────────────────
 async function runPage(db: any, body: any, kind: "sheet" | "quote") {
   const { data: pg, error } = await db.from("ai_est_pages").select("id, session_id, page_no, result").eq("id", body.page_id).single();
@@ -382,6 +396,34 @@ Deno.serve(async (req: Request) => {
       if (prevChoice) spec.choice = prevChoice;
       await db.from("ai_est_sessions").update({ result: { ...(cur?.result || {}), duct_spec: spec } }).eq("id", ses.id);
       return json({ ok: true, spec });
+    }
+    if (body.action === "specqa") {
+      const { data: ses } = await db.from("ai_est_sessions").select("id, name, model").eq("id", body.session_id).single();
+      if (!ses) return json({ ok: false, error: "session not found" }, 404);
+      const question = String(body.question || "").trim().slice(0, 1500);
+      if (!question) return json({ ok: false, error: "Ask a question" }, 400);
+      let hits: any[] = [];
+      const s1 = await db.rpc("ai_est_spec_search", { sid: ses.id, q: question, lim: 14 });
+      if (s1.error && /ai_est_spec_search|does not exist/i.test(s1.error.message)) return json({ ok: false, error: "run ai-est-spec-schema.sql in Supabase first" }, 500);
+      if (!s1.error) hits = s1.data || [];
+      if (hits.length < 4) {
+        const s2 = await db.rpc("ai_est_spec_search", { sid: ses.id, q: kbKeywords(question), lim: 14 });
+        if (!s2.error) { const seen = new Set(hits.map((h: any) => h.chunk_id)); (s2.data || []).forEach((h: any) => { if (!seen.has(h.chunk_id)) hits.push(h); }); }
+      }
+      hits = hits.slice(0, 16);
+      const passages = hits.length
+        ? hits.map((h: any, i: number) => `[${i + 1}] ${h.sheet_no || "sheet"} p.${h.page_no ?? "-"}${h.section ? " — " + h.section : ""}${h.clause ? " §" + h.clause : ""}\n${String(h.content).slice(0, 1800)}`).join("\n\n")
+        : "(no passages matched the question — the specs may not cover it, or they are not indexed yet)";
+      const history = (Array.isArray(body.history) ? body.history.slice(-3) : []).map((h: any) => "Q: " + String(h.q || "").slice(0, 400) + "\nA: " + String(h.a || "").slice(0, 800)).join("\n\n");
+      const model = MODELS[ses.model] ? ses.model : DEFAULT_MODEL;
+      const r = await claude(model, [{ type: "text", text: SPECQA_PROMPT + "\n\nPROJECT: " + ses.name + "\n\nSPEC PASSAGES:\n" + passages + (history ? "\n\nEARLIER IN THIS CONVERSATION:\n" + history : "") + "\n\nQUESTION: " + question }], 1500, SPECQA_SCHEMA);
+      let a: any = r.data;
+      if (!a || typeof a.answer !== "string") { try { a = parseJson(r.text); } catch (_e) { a = { answer: r.text || "(no answer)", used: [], found: false }; } }
+      const used: number[] = Array.isArray(a.used) ? a.used.map((n: any) => Number(n)).filter((n: number) => n >= 1 && n <= hits.length) : [];
+      const sources = hits.map((h: any, i: number) => ({ n: i + 1, sheet: h.sheet_no, page: h.page_no, section: h.section, clause: h.clause, page_id: h.page_id, snippet: String(h.content).slice(0, 240) }));
+      const row = { session_id: ses.id, question, answer: String(a.answer || ""), sources: sources.filter((s: any) => !used.length || used.indexOf(s.n) >= 0), used, found: a.found !== false && hits.length > 0, model, cost: r.cost, user_name: String(body.user_name || "").slice(0, 80) || null };
+      const ins = await db.from("ai_est_spec_qa").insert(row).select("id, created_at").single();
+      return json({ ok: true, id: ins.data?.id, created_at: ins.data?.created_at, answer: row.answer, found: row.found, used, sources: row.sources, hits: hits.length, cost: r.cost, model });
     }
     if (body.action === "ocr") {
       const model = MODELS[body.model] ? body.model : "claude-haiku-4-5";
