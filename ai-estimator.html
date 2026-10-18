@@ -14,11 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=455"></script>
-<script src="auth.js?v=455"></script>
-<script src="est-totals.js?v=455"></script>
-<script src="est-engine.js?v=455"></script>
-<script src="geo-takeoff.js?v=455"></script>
+<script src="supabase-config.js?v=456"></script>
+<script src="auth.js?v=456"></script>
+<script src="est-totals.js?v=456"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="email-utils.js?v=456"></script>
+<script src="nw-email.js?v=456"></script>
+<script src="est-engine.js?v=456"></script>
+<script src="geo-takeoff.js?v=456"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -213,6 +216,7 @@ var AE = (function() {
       '<div class="card"><h3>1 · Bid documents</h3>' +
       '<div class="row"><select id="upKind">' + KINDS.map(function(k) { return '<option value="' + k[0] + '">' + k[1] + '</option>'; }).join('') + '</select>' +
       '<input type="file" id="upFile" accept="application/pdf" multiple onchange="AE.upload(this.files)">' +
+      '<button class="btn" onclick="AE.pasteQuote()" title="A rep answered by e-mail: paste the text and it is read like a quote PDF">📋 Paste a quote e-mail</button>' +
       '<span class="muted" id="upMsg"></span></div>' +
       '<div class="prog"><div id="upProg"></div></div>' +
       (files.length ? '<table class="t" style="margin-top:10px"><tr><th>File</th><th>Kind</th><th class="n">Pages</th><th class="n hide-m">Size</th></tr>' + files.map(function(f) {
@@ -227,7 +231,8 @@ var AE = (function() {
       (runStats ? '<div class="muted" style="margin-top:6px">▶ ' + esc(runProgress()) + '</div>' : '') +
       (pages.length ? '<table class="t" style="margin-top:10px"><tr><th>#</th><th>Sheet</th><th class="hide-m">Type</th><th>Found</th><th>Status</th><th class="n hide-m">$</th><th></th></tr>' + pages.map(pageRow).join('') + '</table>' : '<div class="muted" style="margin-top:8px">Upload the drawing set first.</div>') + '</div>' +
 
-      '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">3 · Estimate</h3><div class="row">' +
+      renderEquipment() +
+      '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">4 · Estimate</h3><div class="row">' +
       '<label class="muted" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="ofci" ' + (res.ofci ? 'checked' : '') + '> Owner-furnished equipment (30% OH)</label>' +
       '<label class="muted" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="highRise" ' + (res.highRise ? 'checked' : '') + '> Roof above 10th floor (crane)</label>' +
       '<button class="btn primary" onclick="AE.price()" ' + (done ? '' : 'disabled') + '>💲 Price it</button>' +
@@ -649,6 +654,7 @@ var AE = (function() {
   }
   async function readPage(p) {
     var f = files.find(function(x) { return x.id === p.file_id; }), body;
+    if (f && !f.storage_path) throw new Error('this quote was pasted from an e-mail — paste it again to re-read it');
     if (f.kind === 'quote') {
       var q = await pdfJob({ op: 'first', n: 20, buf: (await fileBytes(p.file_id)).slice(0) });
       body = { action: 'quote', page_id: p.id, pdf_base64: await b64(q.bytes) };
@@ -1066,7 +1072,7 @@ var AE = (function() {
   function mdLite(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\[(\d{1,2})\]/g, '<span class="st" title="passage $1">$1</span>').replace(/^\s*[-*]\s+/gm, '• ').replace(/\n/g, '<br>'); }
   function renderSpecQa() {
     var src = specPages(), oq = openQuestions();
-    var h = '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">4 · Ask the specs</h3><div class="row">' +
+    var h = '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">5 · Ask the specs</h3><div class="row">' +
       '<span class="muted">' + (specChunks < 0 ? 'needs ai-est-spec-schema.sql' : specChunks ? specChunks + ' passages from the spec sheets' : (src.length ? src.length + ' spec / notes sheet' + (src.length === 1 ? '' : 's') + ' not indexed yet' : 'no spec sheets on this session')) + '</span>' +
       '<button class="btn" onclick="AE.indexSpecs()" ' + (specIndexing || !src.length ? 'disabled' : '') + ' title="Split the specification and notes sheets into passages per section and clause (no AI cost)">' + (specIndexing ? esc(specIndexing) : (specChunks ? '↻ Re-index specs' : '📚 Index specs')) + '</button></div></div>' +
       '<div class="row" style="margin-top:8px"><input type="text" id="qaQ" style="flex:1;min-width:260px" placeholder="e.g. What duct insulation is required? Who furnishes the VAV controllers? Is TAB by the mechanical contractor?" onkeydown="if(event.key===\'Enter\')AE.askSpecs()">' +
@@ -1080,6 +1086,92 @@ var AE = (function() {
         (srcs.length ? '<ul class="l" style="margin-top:6px">' + srcs.map(function(s) { return '<li><a href="#" onclick="AE.showPage(\'' + esc(s.page_id || '') + '\');return false" style="color:inherit"><b>[' + s.n + ']</b> ' + esc((s.section ? s.section : '') + (s.clause ? ' §' + s.clause : '')) + ' — <b>' + esc(s.sheet || 'sheet') + '</b> p.' + esc(s.page) + '</a> <span class="basis">' + esc(String(s.snippet || '').slice(0, 160)) + '…</span></li>'; }).join('') + '</ul>' : '') + '</div>';
     }).join('');
     return h + '</div>';
+  }
+
+  // ─── Equipment: every scheduled unit × plan count × quotes (NWEngine.equipment), unit prices entered by hand, quote requests ───
+  var EQ_STATUS = { quoted: ['quoted', '#dcfce7', '#166534'], package: ['in package quote', '#dcfce7', '#166534'], priced: ['price entered', '#e0f2fe', '#075985'], budget: ['BUDGET — quote needed', '#fef3c7', '#92400e'], skip: ['not priced', '#f1f5f9', '#94a3b8'] };
+  function eqRowsNow() { try { return NWEngine.equipment(pages, { corrections: corrections, equipmentPrices: (session.result || {}).equipment_prices || {} }); } catch (e) { console.warn('equipment', e); return { rows: [], quotes: [] }; } }
+  function renderEquipment() {
+    var done = pages.some(function(p) { return p.status === 'done'; }); if (!done) return '';
+    var eq = eqRowsNow(), rows = eq.rows, need = rows.filter(function(r) { return r.status === 'budget'; }), rfqs = (session.result || {}).rfqs || [];
+    var h = '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">3 · Equipment — ' + rows.length + ' unit' + (rows.length === 1 ? '' : 's') + (need.length ? ', <span class="flag">' + need.length + ' without a quote</span>' : '') + '</h3>' +
+      '<div class="row"><button class="btn" onclick="AE.requestQuotes()" ' + (need.length ? '' : 'disabled') + ' title="E-mail the schedule rows that have no quote to the rep">✉ Request quotes' + (need.length ? ' (' + need.length + ')' : '') + '</button></div></div>';
+    if (!rows.length) return h + '<div class="muted">No equipment schedule read yet.</div></div>';
+    h += '<table class="t" style="margin-top:8px"><tr><th>Tag</th><th>Type · make · model · capacity</th><th class="n">Qty <span class="basis">sched / plans</span></th><th>Pricing</th><th class="n">Unit $</th><th class="n">Line $</th></tr>' +
+      rows.map(function(r) {
+        var st = EQ_STATUS[r.status] || EQ_STATUS.skip, chip = '<span class="st" style="background:' + st[1] + ';color:' + st[2] + '">' + st[0] + '</span>';
+        var detail = r.status === 'quoted' || r.status === 'package' ? ' <span class="basis">' + esc(r.vendor || '') + '</span>' : r.status === 'priced' ? ' <span class="basis">' + esc(r.source || '') + '</span>' : r.status === 'budget' ? ' <span class="basis">' + (r.budget ? '$' + r.budget.cost.toLocaleString() + ' ea — ' + esc(r.budget.why) : (r.alt ? 'alternate' : 'no budget rule')) + '</span>' : ' <span class="basis">' + esc(r.why || '') + '</span>';
+        var unit = r.status === 'priced' ? r.price : (r.status === 'budget' && r.budget ? r.budget.cost : null), line = unit != null ? unit * r.qty : null, editable = r.status !== 'quoted' && r.status !== 'skip';
+        return '<tr' + (r.status === 'skip' ? ' class="muted"' : '') + '><td><b>' + esc(r.label) + '</b>' + (r.alt ? ' <span class="flag">ALT</span>' : '') + '<div class="basis">' + esc(r.sheets.join(', ')) + '</div></td><td>' + esc(r.desc || r.type || '') + (r.weight_lb ? '<div class="basis">' + r.weight_lb + ' lb' + (r.location ? ' · ' + esc(r.location) : '') + '</div>' : (r.location ? '<div class="basis">' + esc(r.location) + '</div>' : '')) + '</td>' +
+          '<td class="n">' + r.qty + ' <span class="basis">' + (r.qty_sched || '—') + ' / ' + (r.qty_plan || '—') + '</span></td><td>' + chip + detail + '</td>' +
+          '<td class="n">' + (editable ? '<input type="number" step="1" min="0" style="width:96px;text-align:right" value="' + (r.status === 'priced' ? r.price : '') + '" placeholder="' + (r.budget ? r.budget.cost : '') + '" onchange="AE.setEqPrice(\'' + esc(r.tag) + '\', this.value)" title="Unit price from the rep\'s e-mail or a catalog — replaces the budget">' : '') + '</td>' +
+          '<td class="n">' + (line != null ? money(line) : '') + '</td></tr>';
+      }).join('') + '</table>' +
+      '<p class="muted" style="margin:8px 0 0">Quoted = the tag is inside a vendor quote (priced as the quote\'s lump sum). In package quote = covered by manufacturer / model / family. Type a unit price to replace a budget (it is kept with the session and used when you press “Price it”); paste the rep\'s e-mail reply with “Paste a quote e-mail” above to read it as a quote.</p>' +
+      (rfqs.length ? '<div class="muted" style="margin-top:6px">Quote requests sent: ' + rfqs.slice(-6).map(function(x) { return esc(x.vendor || x.to) + ' (' + esc(String(x.sent_at).slice(0, 10)) + ', ' + (x.tags || []).length + ' tag' + ((x.tags || []).length === 1 ? '' : 's') + ')'; }).join(' · ') + '</div>' : '');
+    return h + '</div>';
+  }
+  async function setEqPrice(tag, v) {
+    var res = Object.assign({}, session.result || {}), ep = Object.assign({}, res.equipment_prices || {});
+    if (v === '' || v == null) delete ep[tag]; else ep[tag] = { price: Number(v), source: 'entered by ' + ((me && me.name) || 'estimator') + ' ' + new Date().toISOString().slice(0, 10), at: new Date().toISOString() };
+    res.equipment_prices = ep; session.result = res;
+    await supabaseClient.from('ai_est_sessions').update({ result: res }).eq('id', session.id);
+    toast(v === '' ? 'Price cleared — press “Price it”' : 'Unit price saved — press “Price it”'); paintKeep();
+  }
+  // vendors / reps that carry a manufacturer (vendors + vendor_manufacturers tables of the field app)
+  async function repsFor(makers) {
+    var out = {}; if (!makers.length) return out;
+    try {
+      var vm = await supabaseClient.from('vendor_manufacturers').select('manufacturer_name, vendor_id, vendors(name, quote_email, extra_emails)').limit(400);
+      (vm.data || []).forEach(function(x) { var v = x.vendors; if (!v || !v.quote_email) return; makers.forEach(function(m) { if (m && (String(x.manufacturer_name).toLowerCase().indexOf(m) >= 0 || m.indexOf(String(x.manufacturer_name).toLowerCase()) >= 0)) out[m] = { vendor: v.name, email: v.quote_email }; }); });
+    } catch (e) {}
+    return out;
+  }
+  function rfqBody(rows, vendorName) {
+    var lines = rows.map(function(r) { return (r.label || r.tag) + ': ' + [r.type, r.manufacturer, r.model, r.capacity, r.cfm ? r.cfm + ' cfm' : '', r.weight_lb ? r.weight_lb + ' lb' : ''].filter(Boolean).join(', ') + ' — qty ' + r.qty + (r.alt ? ' (alternate)' : ''); });
+    return 'Hello' + (vendorName ? ' ' + vendorName + ' team' : '') + ',\n\nPlease quote the following HVAC equipment for our bid:\n\nProject: ' + session.name + (session.location ? '\nLocation: ' + session.location : '') + '\nBid due: (please confirm date)\n\n' + lines.join('\n') +
+      '\n\nPlease include unit pricing per tag, lead time, freight, and any substitutions (basis of design or approved equal). Submittal data on award.\n\nThank you,\n' + ((me && me.name) || 'Estimating') + '\nNorthern Wolves Air Conditioning\nestimating@northernwolvesac.com';
+  }
+  async function requestQuotes() {
+    var rows = eqRowsNow().rows.filter(function(r) { return r.status === 'budget'; }); if (!rows.length) { toast('Every unit has a quote or a price'); return; }
+    var makers = Array.from(new Set(rows.map(function(r) { return String(r.manufacturer || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').trim().split(/\s+/)[0]; }).filter(function(m) { return m && m.length >= 3; })));
+    var reps = await repsFor(makers), sugg = Object.keys(reps).map(function(m) { return reps[m].vendor + ' <' + reps[m].email + '> for ' + m; });
+    var to = Object.keys(reps).length ? reps[Object.keys(reps)[0]].email : '';
+    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">✉ Request quotes — ' + rows.length + ' unit' + (rows.length === 1 ? '' : 's') + ' without a quote</h3><button class="btn" onclick="AE.closeModal()">Close</button></div>' +
+      (sugg.length ? '<p class="muted">Reps on file: ' + esc(sugg.join(' · ')) + '</p>' : '<p class="muted">No rep on file for these makes (vendors → manufacturers) — type the address.</p>') +
+      '<div class="row"><label>To<input type="text" id="rfqTo" value="' + esc(to) + '" placeholder="rep@vendor.com, second@vendor.com" style="min-width:320px"></label><label>Subject<input type="text" id="rfqSubj" value="' + esc('RFQ — ' + session.name + ' — HVAC equipment (' + rows.length + ' tags)') + '" style="min-width:380px"></label></div>' +
+      '<label style="display:block;margin-top:8px;font-size:12px;color:var(--nw-muted)">Message<textarea id="rfqBody" style="width:100%;min-height:260px;font-family:inherit">' + esc(rfqBody(rows, Object.keys(reps).length ? reps[Object.keys(reps)[0]].vendor : '')) + '</textarea></label>' +
+      '<div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" onclick="AE.closeModal()">Cancel</button><button class="btn primary" onclick="AE.sendRfq()">Send e-mail</button></div>';
+    $('modal').classList.add('open');
+  }
+  async function sendRfq() {
+    var to = $('rfqTo').value.trim(), subject = $('rfqSubj').value.trim(), body = $('rfqBody').value;
+    if (!to || !/@/.test(to)) { toast('Type the rep\'s e-mail address'); return; }
+    if (!window.nwSendBrandedEmail) { toast('E-mail helper did not load — reload the page'); return; }
+    var rows = eqRowsNow().rows.filter(function(r) { return r.status === 'budget'; });
+    try {
+      await nwSendBrandedEmail({ to: to, subject: subject, bodyText: body, reportType: 'Request for Quote', title: 'Request for Quote', subtitle: session.name, senderName: (me && me.name) || 'Estimating', files: [] });
+      var res = Object.assign({}, session.result || {}); res.rfqs = (res.rfqs || []).concat([{ to: to, vendor: (to.split('@')[1] || '').split('.')[0], subject: subject, tags: rows.map(function(r) { return r.tag; }), sent_at: new Date().toISOString(), by: me && me.name }]);
+      session.result = res; await supabaseClient.from('ai_est_sessions').update({ result: res }).eq('id', session.id);
+      closeModal(); toast('Quote request sent to ' + to); render();
+    } catch (e) { toast('Send failed: ' + (e && (e.text || e.message) || e)); }
+  }
+  function pasteQuote() {
+    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">📋 Paste a quote e-mail</h3><button class="btn" onclick="AE.closeModal()">Close</button></div>' +
+      '<p class="muted">Paste the rep\'s reply (prices, tags, lead time, exclusions). It is read like a quote PDF (vendor, total, lines with tags) and counts in the price like any other quote — about $0.05.</p>' +
+      '<div class="row"><label>Vendor (optional)<input type="text" id="pqVendor" placeholder="e.g. ADE Systems" style="min-width:220px"></label></div>' +
+      '<textarea id="pqText" style="width:100%;min-height:280px;margin-top:8px;font-family:inherit" placeholder="Paste the e-mail text here…"></textarea>' +
+      '<div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" onclick="AE.closeModal()">Cancel</button><button class="btn primary" id="pqBtn" onclick="AE.submitPastedQuote()">Read the quote</button></div>';
+    $('modal').classList.add('open');
+  }
+  async function submitPastedQuote() {
+    var text = $('pqText').value.trim(); if (text.length < 40) { toast('Paste the quote text first'); return; }
+    var btn = $('pqBtn'); btn.disabled = true; btn.textContent = 'Reading…';
+    try {
+      var r = await callFn({ action: 'quote_text', session_id: session.id, text: text, vendor_hint: $('pqVendor').value.trim() });
+      closeModal(); await reload(); render();
+      toast('Quote read: ' + (r.quote.vendor || 'vendor') + (r.quote.total ? ' — ' + money(r.quote.total) : '') + ', ' + r.quote.lines + ' line' + (r.quote.lines === 1 ? '' : 's') + ' — press “Price it”');
+    } catch (e) { toast('Quote: ' + e.message); btn.disabled = false; btn.textContent = 'Read the quote'; }
   }
 
   // ─── pricing ────────────────────────────────────────────────────────
@@ -1097,7 +1189,7 @@ var AE = (function() {
     var n = await loadNorms();
     // sheets read before the text-layer freeze existed: apply it now (and keep it)
     pages.forEach(function(p) { if (p.status === 'done' && freezeDevices(p)) supabaseClient.from('ai_est_pages').update({ result: p.result }).eq('id', p.id).then(function() {}); });
-    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr });
+    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr, equipmentPrices: (session.result || {}).equipment_prices || {} });
     var res = Object.assign({}, session.result || {}, {
       engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
@@ -1318,9 +1410,9 @@ var AE = (function() {
     toast('Estimate ready ✓'); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=455"></script>
+<script src="sw-register.js?v=456"></script>
 </body>
 </html>

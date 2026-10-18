@@ -510,6 +510,48 @@
     });
   }
 
+  // ── equipment: every scheduled unit (and the numbered units only the plans show) with how it is priced ──
+  // quoted (by tag inside a vendor quote) · package (a quote covers it by manufacturer / model / family) · priced (unit price entered
+  // on the session, opts.equipmentPrices[tag] = {price, source, vendor, qty, firm}) · budget (NWAC budget rule) · skip (owner-furnished,
+  // existing / by others, air device, duct accessory, not a unit tag). The Equipment card and the breakdown both use it.
+  function quotedTags(C) { var q = {}; (C.quotes || []).forEach(function (x) { (x.lines || []).forEach(function (l) { (l.tags || []).forEach(function (t) { q[norm(t)] = x.vendor || true; }); }); }); return q; }
+  function equipmentRows(C, quoted, opts) {
+    opts = opts || {}; quoted = quoted || quotedTags(C);
+    var prices = opts.equipmentPrices || {}, qBlob = (C.quotes || []).map(function (q) { return JSON.stringify(q || {}).toLowerCase(); }).join(' ');
+    var tags = Object.keys(C.sched);
+    Object.keys(C.planEq).forEach(function (tag) { if (!C.sched[tag] && isRealTag(C.planEq[tag].label || tag) && /unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens|erv|boiler/i.test((C.planEq[tag].type || '') + ' ' + tag)) tags.push(tag); });
+    return tags.sort().map(function (tag) {
+      var s = C.sched[tag] || Object.assign({ sheets: C.planEq[tag].sheets || ['plan'], label: C.planEq[tag].label }, C.planEq[tag]);
+      var row = { tag: tag, label: s.label || tag, type: s.type || '', manufacturer: s.manufacturer || '', model: s.model || '', capacity: s.capacity || '', cfm: s.cfm || '', weight_lb: Number(s.weight_lb) || 0, location: s.location || '',
+        qty_sched: Number(s.qty) || 0, qty_plan: (C.planEq[tag] && C.planEq[tag].qty) || 0, sheet: (s.sheets || [])[0] || 'plan', sheets: uniq(s.sheets || []), desc: [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · '), furnished_by: s.furnished_by || '', notes: s.notes || '' };
+      row.qty = Math.max(1, row.qty_sched || row.qty_plan || 1);
+      row.alt = /alternate|\balt\b|add alt/i.test([s.type, s.notes, s.label].join(' '));
+      if (quoted[tag]) { row.status = 'quoted'; row.vendor = typeof quoted[tag] === 'string' ? quoted[tag] : ''; return row; }
+      if (/owner/i.test(s.furnished_by || '')) { row.status = 'skip'; row.why = 'owner-furnished'; return row; }
+      if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) { row.status = 'skip'; row.why = 'air device (priced below)'; return row; }
+      if (/existing|to remain|reference only|by others|n\.?i\.?c/i.test([s.type, s.notes, s.furnished_by].join(' '))) { row.status = 'skip'; row.why = 'existing / by others'; return row; }
+      if (!isRealTag(s.label || tag) && !(s.qty > 0 && !/[()]/.test(s.label || tag))) { row.status = 'skip'; row.why = 'not a unit tag'; return row; }
+      var fam = (s.type || '') + ' ' + tag;
+      if (/duct\/hood|connection|\bduct\b|grille|diffuser|register/i.test(fam)) { row.status = 'skip'; row.why = 'duct accessory'; return row; }
+      var ep = prices[tag];
+      if (ep && ep.price != null && ep.price !== '') { row.status = 'priced'; row.price = Number(ep.price) || 0; row.source = ep.source || ''; row.vendor = ep.vendor || ''; row.firm = ep.firm !== false; if (Number(ep.qty) > 0) row.qty = Number(ep.qty); return row; }
+      // a package quote covers units it never names by tag: Daikin's VRV quote covers the cassettes and branch selectors, Klimany's LG quote
+      // the ducted fan coils, CaptiveAire the hoods — match by manufacturer, model or equipment family before calling anything unquoted
+      var mfr = String(s.manufacturer || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(function (w) { return w.length >= 3 && !/^(inc|llc|corp|the|and|applied|industries|systems|company)$/.test(w); })[0];
+      var mdl = String(s.model || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6);
+      var covered = (mfr && qBlob.indexOf(mfr) >= 0) || (mdl.length >= 5 && qBlob.indexOf(mdl) >= 0) ||
+        (/vrf|vrv|cassette|branch selector|ductless|indoor unit|fan coil/i.test(fam) && /vrf|vrv|multi v|multi-v|heat recovery|fan coil|cassette/.test(qBlob)) ||
+        (/hood|\bkef\b|\bkeh\b|\bmua\b|make[- ]?up|ansul|grease/i.test(fam) && /hood|captiveaire|kitchen|ansul/.test(qBlob)) ||
+        (/\bfan\b|exhaust|transfer/i.test(fam) && !/hood|\bmua\b|make[- ]?up/i.test(fam) && /roof fan|cabinet fan|inline fan|exhaust fan|ceiling fan|greenheck|\bcsp\b|downblast|down blast/.test(qBlob)) ||
+        (/air curtain/i.test(fam) && /air curtain|\bmars\b|berner/.test(qBlob)) ||
+        (/duct heater|\bedh\b|electric heater/i.test(fam) && /duct heater|neptronic|electric heater/.test(qBlob));   // the air-outlet vendor's quote (ADE) carries the fans
+      if (covered) { row.status = 'package'; row.vendor = ((C.quotes || []).filter(function (q) { return JSON.stringify(q || {}).toLowerCase().indexOf(mfr || mdl || 'no-match') >= 0; })[0] || {}).vendor || 'a vendor quote'; return row; }
+      row.status = 'budget'; row.budget = row.alt ? null : budgetFor(s, tag); return row;
+    });
+  }
+  // for the page: the rows of a session straight from its pages
+  function equipment(pages, opts) { opts = opts || {}; var C = collect(opts.corrections ? applyCorrections(pages, opts.corrections) : pages, opts); return { rows: equipmentRows(C, quotedTags(C), opts), quotes: C.quotes }; }
+
   // ── build the breakdown ──────────────────────────────────────────────
   function build(pages, opts) {
     opts = opts || {};
@@ -553,33 +595,13 @@
       (q.lines || []).forEach(function (l) { (l.tags || []).forEach(function (t) { quoted[norm(t)] = q.vendor || true; }); });
     });
     var bms = C.quotes.some(function (q) { return q.kind === 'controls'; });
-    var unqTags = Object.keys(C.sched);
-    Object.keys(C.planEq).forEach(function (tag) { if (!C.sched[tag] && isRealTag(C.planEq[tag].label || tag) && /unit|fan|pump|heater|ac|hp|fcu|ahu|rtu|doas|curtain|cooler|tank|separator|humidifier|crac|split|vrf|condens|erv|boiler/i.test((C.planEq[tag].type || '') + ' ' + tag)) unqTags.push(tag); });
-    unqTags.sort().forEach(function (tag) {
-      var s = C.sched[tag] || Object.assign({ sheets: C.planEq[tag].sheets || ['plan'], label: C.planEq[tag].label }, C.planEq[tag]);
-      if (quoted[tag] || /owner/i.test(s.furnished_by || '')) return;
-      if (/diffuser|grille|register|vav|damper|louver/i.test(s.type || '')) return;   // air devices are counted below
-      if (/existing|to remain|reference only|by others|n\.?i\.?c/i.test([s.type, s.notes, s.furnished_by].join(' '))) return;
-      if (!isRealTag(s.label || tag) && !(s.qty > 0 && !/[()]/.test(s.label || tag))) return;   // schedule notes / model fragments are not units
-      // a package quote covers units it never names by tag: Daikin's VRV quote covers the cassettes and branch selectors, Klimany's LG quote
-      // the ducted fan coils, CaptiveAire the hoods — match by manufacturer, model or equipment family before calling anything unquoted
-      var qBlob = (C.quotes || []).map(function (q) { return JSON.stringify(q || {}).toLowerCase(); }).join(' ');
-      var mfr = String(s.manufacturer || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(function (w) { return w.length >= 3 && !/^(inc|llc|corp|the|and|applied|industries|systems|company)$/.test(w); })[0];
-      var mdl = String(s.model || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6);
-      var fam = (s.type || '') + ' ' + tag;
-      var covered = (mfr && qBlob.indexOf(mfr) >= 0) || (mdl.length >= 5 && qBlob.indexOf(mdl) >= 0) ||
-        (/vrf|vrv|cassette|branch selector|ductless|indoor unit|fan coil/i.test(fam) && /vrf|vrv|multi v|multi-v|heat recovery|fan coil|cassette/.test(qBlob)) ||
-        (/hood|\bkef\b|\bkeh\b|\bmua\b|make[- ]?up|ansul|grease/i.test(fam) && /hood|captiveaire|kitchen|ansul/.test(qBlob)) ||
-        (/\bfan\b|exhaust|transfer/i.test(fam) && !/hood|\bmua\b|make[- ]?up/i.test(fam) && /roof fan|cabinet fan|inline fan|exhaust fan|ceiling fan|greenheck|\bcsp\b|downblast|down blast/.test(qBlob)) ||
-        (/air curtain/i.test(fam) && /air curtain|\bmars\b|berner/.test(qBlob)) ||
-        (/duct heater|\bedh\b|electric heater/i.test(fam) && /duct heater|neptronic|electric heater/.test(qBlob));   // the air-outlet vendor's quote (ADE) carries the fans
-      if (/duct\/hood|connection|\bduct\b|grille|diffuser|register/i.test(fam)) return;   // duct accessories and air devices are not equipment
-      var alt = /alternate|\balt\b|add alt/i.test([s.type, s.notes, s.label].join(' '));
-      if (covered) { var qv = ((C.quotes || []).filter(function (q) { return JSON.stringify(q || {}).toLowerCase().indexOf(mfr || mdl || 'no-match') >= 0; })[0] || {}).vendor || 'a vendor quote'; add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model].filter(Boolean).join(' · ') + ' (in ' + qv + ')', 0, 'ea', 0, 0, 'covered by the vendor package quote — no separate price', { is_firm: true }); return; }
-      var bq = alt ? null : budgetFor(s, tag), bqty = Math.max(1, s.qty || (C.planEq[tag] && C.planEq[tag].qty) || 1);
-      add('equipment', (s.label || tag) + ' — ' + [s.type, s.manufacturer, s.model, s.capacity].filter(Boolean).join(' · ') + (bq ? ' [BUDGET]' : ''), bqty, 'ea', bq ? bq.cost : 0, 0,
-        bq ? 'budget — ' + bq.why + '; on schedule ' + s.sheets[0] + ', no vendor quote' : 'on schedule ' + s.sheets[0] + ' — no quote yet',
-        { is_firm: false, is_optional: alt, flag: bq ? 'budget $' + bq.cost.toLocaleString() + ' each — no vendor quote, get one' : (alt ? 'alternate — price separately' : 'quote needed') });
+    equipmentRows(C, quoted, opts).forEach(function (e) {
+      if (e.status === 'skip' || e.status === 'quoted') return;                      // inside a quote's lump sum, or not ours to price
+      if (e.status === 'package') { add('equipment', e.label + ' — ' + e.desc + ' (in ' + e.vendor + ')', 0, 'ea', 0, 0, 'covered by the vendor package quote — no separate price', { is_firm: true }); return; }
+      if (e.status === 'priced') { add('equipment', e.label + ' — ' + e.desc, e.qty, 'ea', e.price, 0, 'unit price entered' + (e.source ? ' — ' + e.source : '') + '; on schedule ' + e.sheet, { is_firm: e.firm !== false, is_optional: e.alt, vendor_name: e.vendor || null, flag: e.alt ? 'alternate — price separately' : null }); return; }
+      add('equipment', e.label + ' — ' + e.desc + (e.budget ? ' [BUDGET]' : ''), e.qty, 'ea', e.budget ? e.budget.cost : 0, 0,
+        e.budget ? 'budget — ' + e.budget.why + '; on schedule ' + e.sheet + ', no vendor quote' : 'on schedule ' + e.sheet + ' — no quote yet',
+        { is_firm: false, is_optional: e.alt, flag: e.budget ? 'budget $' + e.budget.cost.toLocaleString() + ' each — no vendor quote, get one' : (e.alt ? 'alternate — price separately' : 'quote needed') });
     });
 
     // 3. Ductwork
@@ -807,5 +829,5 @@
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
   window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor,
-    applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm };
+    applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();

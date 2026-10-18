@@ -425,6 +425,26 @@ Deno.serve(async (req: Request) => {
       const ins = await db.from("ai_est_spec_qa").insert(row).select("id, created_at").single();
       return json({ ok: true, id: ins.data?.id, created_at: ins.data?.created_at, answer: row.answer, found: row.found, used, sources: row.sources, hits: hits.length, cost: r.cost, model });
     }
+    if (body.action === "quote_text") {
+      // a rep's quote pasted from an e-mail: read like a quote PDF, stored as its own quote "file" + page (no storage object)
+      const { data: ses } = await db.from("ai_est_sessions").select("id, model").eq("id", body.session_id).single();
+      if (!ses) return json({ ok: false, error: "session not found" }, 404);
+      const text = String(body.text || "").trim().slice(0, 60000);
+      if (text.length < 40) return json({ ok: false, error: "paste the quote text first" }, 400);
+      const model = MODELS[ses.model] ? ses.model : DEFAULT_MODEL;
+      const r = await claude(model, [{ type: "text", text: QUOTE_PROMPT + (body.vendor_hint ? "\n\nThe quote came from: " + String(body.vendor_hint).slice(0, 120) : "") + "\n\nQUOTE (text of the e-mail):\n" + text }], 4000, QUOTE_SCHEMA);
+      let result: any = r.data;
+      if (!result) { try { result = parseJson(r.text); } catch (_e) { return json({ ok: false, error: "the quote could not be read — is it a quote?" }, 422); } }
+      result.source = "email_text"; result.email_excerpt = text.slice(0, 3000);
+      const name = "E-mail quote — " + (result.vendor || body.vendor_hint || "vendor") + (result.quote_no ? " " + result.quote_no : "");
+      const f = await db.from("ai_est_files").insert({ session_id: ses.id, kind: "quote", file_name: name.slice(0, 160), storage_path: null, pages: 1, size: text.length }).select("id").single();
+      if (f.error) return json({ ok: false, error: f.error.message }, 500);
+      const now = new Date().toISOString();
+      const pg = await db.from("ai_est_pages").insert({ session_id: ses.id, file_id: f.data.id, page_no: 1, sheet_type: "quote", sheet_no: result.quote_no || null, sheet_title: result.vendor || null, status: "done", result, model,
+        tokens_in: r.tokens_in, tokens_out: r.tokens_out, cost: r.cost, started_at: now, finished_at: now }).select("id").single();
+      if (pg.error) return json({ ok: false, error: pg.error.message }, 500);
+      return json({ ok: true, page_id: pg.data.id, file_id: f.data.id, quote: { vendor: result.vendor, quote_no: result.quote_no, total: result.total, lines: (result.lines || []).length, kind: result.kind }, cost: r.cost });
+    }
     if (body.action === "ocr") {
       const model = MODELS[body.model] ? body.model : "claude-haiku-4-5";
       const img = String(body.image || "").replace(/^data:image\/\w+;base64,/, "");
