@@ -338,6 +338,9 @@
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
           if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) return;   // a bare '(cfm only)' row is an upper bound, reported as a check, never priced; symbol rows named '… (cfm only)' are counted
           if (/no symbol|unmarked|no device symbol|bubble only|cfm[- ]only bubble|^cfm[- ]only/i.test(String(a.tag || '') + ' ' + String(a.notes || ''))) return;
+          // a sheet whose text layer carries device tags (Esquire: A / B / C with cfm, frozen to the census) — symbol rows the reader adds
+          // on top as "(cfm only)" are the same devices seen without their tag (double count), a check only; untagged sheets (CENTRALE) keep them
+          if (/cfm[- ]only/i.test(String(a.tag || '')) && p.tag_counts && p.tag_counts.devices && Object.keys(p.tag_counts.devices).reduce(function (s0, k0) { return s0 + (k0 === '(cfm only)' ? 0 : Number(p.tag_counts.devices[k0]) || 0); }, 0) >= 3) return;
           if (notAirDevice(a)) return;                                             // sprinkler heads, thermostats, GB … are not outlets   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
