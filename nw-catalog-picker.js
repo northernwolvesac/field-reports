@@ -719,14 +719,14 @@
     function applyAuditFilter(q) {
       var a = st.filters.audit;
       if (a === 'review') return q.eq('needs_review', true);
-      if (a === 'zero_cost') return q.eq('unit_cost', 0);
+      if (a === 'zero_cost') return q.eq('unit_cost', 0).not('folder_path', 'ilike', 'NWAC Standards%').not('nw_category', 'in', '("services","equipment_install")');   // labor-only standards are priced by time
       if (a === 'zero_labor') return q.eq('unit_labor_min', 0).not('item_type', 'in', '("Labor","Travel")');
       if (a === 'stale') return q.or('price_checked_at.is.null,price_checked_at.lt.' + staleDate());
       return q;
     }
     async function auditCounts() {
       var base = function () { return sb().from('est_catalog_items').select('id', { count: 'exact', head: true }).not('folder_path', 'ilike', 'Archive%'); };
-      var r = await Promise.all([base(), base().eq('needs_review', true), base().eq('unit_cost', 0), base().eq('unit_labor_min', 0).not('item_type', 'in', '("Labor","Travel")'), base().or('price_checked_at.is.null,price_checked_at.lt.' + staleDate())]);
+      var r = await Promise.all([base(), base().eq('needs_review', true), base().eq('unit_cost', 0).not('folder_path', 'ilike', 'NWAC Standards%').not('nw_category', 'in', '("services","equipment_install")'), base().eq('unit_labor_min', 0).not('item_type', 'in', '("Labor","Travel")'), base().or('price_checked_at.is.null,price_checked_at.lt.' + staleDate())]);
       return { items: r[0].count || 0, review: r[1].count || 0, zero_cost: r[2].count || 0, zero_labor: r[3].count || 0, stale: r[4].count || 0 };
     }
     async function queryCatalog() {

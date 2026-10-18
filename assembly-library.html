@@ -11,12 +11,12 @@
 <meta name="theme-color" content="#0696D7">
 <title>Cost Catalog — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=436">
+<link rel="stylesheet" href="procore-ui.css?v=437">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=436"></script>
-<script src="auth.js?v=436"></script>
-<script src="procore-ui.js?v=436"></script>
-<script src="nw-catalog-picker.js?v=436"></script>
+<script src="supabase-config.js?v=437"></script>
+<script src="auth.js?v=437"></script>
+<script src="procore-ui.js?v=437"></script>
+<script src="nw-catalog-picker.js?v=437"></script>
 <style>
   /* ── Cost Catalog page (Procore "Select catalog item" layout, rendered in-page) ── */
   .pc-page [hidden] { display: none !important; }
@@ -164,8 +164,8 @@ requireAuth().catch(function(){});
     $('bulkClear').innerHTML = icon('close', 16);
     $('bulkMove').innerHTML = icon('folder_open', 18) + ' Move to folder ' + icon('expand_more', 16);
     $('bulkDelete').innerHTML = icon('delete', 18) + ' Delete';
-    $('bulkAdjust').innerHTML = icon('percent', 18) + ' Adjust prices';
-    $('bulkReviewed').innerHTML = icon('task_alt', 18) + ' Mark checked';
+    $('bulkAdjust').innerHTML = icon('tune', 18) + ' Adjust prices';
+    $('bulkReviewed').innerHTML = icon('check_circle', 18) + ' Mark checked';
     $('bulkExport').innerHTML = icon('download', 18) + ' CSV';
     $('btnExport').innerHTML = icon('download', 18) + ' Export CSV';
     $('btnImport').innerHTML = icon('upload', 18) + ' Import CSV';
@@ -283,6 +283,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=436"></script>
+<script src="sw-register.js?v=437"></script>
 </body>
 </html>
