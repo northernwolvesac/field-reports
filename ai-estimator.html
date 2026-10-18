@@ -14,14 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=458"></script>
-<script src="auth.js?v=458"></script>
-<script src="est-totals.js?v=458"></script>
+<script src="supabase-config.js?v=459"></script>
+<script src="auth.js?v=459"></script>
+<script src="est-totals.js?v=459"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=458"></script>
-<script src="nw-email.js?v=458"></script>
-<script src="est-engine.js?v=458"></script>
-<script src="geo-takeoff.js?v=458"></script>
+<script src="email-utils.js?v=459"></script>
+<script src="nw-email.js?v=459"></script>
+<script src="est-engine.js?v=459"></script>
+<script src="geo-takeoff.js?v=459"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1323,11 +1323,19 @@ var AE = (function() {
     var r = NWEngine.pipeRate(NWEngine.makeRates(norms), { size: size, service: cd ? 'CD' : '', material: cd ? 'pvc' : '' });
     return r ? { id: null, name: null, cost: r.cost, hrs: r.hrs, basis: r.basis + (r.flag ? ' — ' + r.flag : '') } : null;
   }
+  // sheets the geometry could not measure (sparse renovation plans, outlined text) still get an AI takeoff: the sheet reader's duct runs
+  // become length marks at their size labels and its air devices count marks at their tags — lengths and counts from the read, not traced
+  var EXISTING_RE = /existing|to remain|not new|demolish|demo\b|relocat|by others|n\.?i\.?c\b|\(e\)/i;
+  function readerRuns(p) { var r = p.result || {}; return (r.duct_runs || []).filter(function(x) { return x.size && Number(x.lf) > 0 && !EXISTING_RE.test((x.notes || '') + ' ' + x.size); }); }
+  function readerDevices(p) { var r = p.result || {}; return (r.air_devices || []).filter(function(a) { return a.tag && Number(a.qty) > 0 && !EXISTING_RE.test(a.notes || ''); }); }
+  function scalePtft(res) { var m = /(\d+(?:\/\d+)?)\s*["\u201d]\s*=\s*1\s*['\u2019]/.exec(String((res || {}).scale || '')); if (!m) return 0; var inch = m[1].indexOf('/') > 0 ? Number(m[1].split('/')[0]) / Number(m[1].split('/')[1]) : Number(m[1]); return inch > 0 ? inch * 72 : 0; }
+  function runSize(x) { var z = NWEngine.sizeOf ? NWEngine.sizeOf(x.size) : null; if (z) return z.round ? z.w + '"Ø' : z.w + 'x' + z.h; var m = /(\d{1,2})\s*[xX]\s*(\d{1,2})/.exec(String(x.size)); if (m) return m[1] + 'x' + m[2]; var r = /(\d{1,2})/.exec(String(x.size)); return r && (x.shape === 'round' || /["”]?\s*(Ø|ø|dia)/i.test(x.size)) ? r[1] + '"Ø' : null; }
   async function toTakeoff() {
     if (bridging) return;
     if (!session.estimate_id) { toast('Create the estimate first'); return; }
     var estId = session.estimate_id;
-    var list = pages.filter(function(p) { var r = p.result || {}; return (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || ((isPipePlan(p) || isDuctPlan(p)) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0); });
+    var list = pages.filter(function(p) { var r = p.result || {}; return (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || ((isPipePlan(p) || isDuctPlan(p)) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0)
+      || (isDuctPlan(p) && p.status === 'done' && (readerRuns(p).length || readerDevices(p).length)); });
     // nothing measured (no geometry on the plans): the plans still go to the Takeoff, where the estimator traces or auto-measures
     var noGeo = !list.length;
     if (noGeo) { list = pages.filter(function(p) { var f0 = files.find(function(x) { return x.id === p.file_id; }) || {}; return f0.kind !== 'quote' && f0.kind !== 'specs' && f0.storage_path && p.status !== 'error'; }); if (!list.length) { toast('No drawing sheets on this session yet'); return; } }
@@ -1392,6 +1400,15 @@ var AE = (function() {
           notes: rate.basis + (cat === 'ductwork' ? ' · ×1.08 fittings allowance' : '') + ' · from the AI Estimator' }).select().single();
         if (r.error) throw new Error(r.error.message); layers.push(r.data); made++; return r.data;
       }
+      async function countLayerFor(name, dev) {
+        var l = layers.find(function(x) { return x.name.toLowerCase() === name.toLowerCase(); });
+        if (l) return l;
+        var t = String(dev.type || 'air device').toLowerCase(), rate = await bridgeRate([name, t + '%', '%' + t + '%']);
+        var r = await supabaseClient.from('estimate_takeoff_layers').insert({ estimate_id: estId, group_name: 'Air Outlets', name: name, takeoff_type: 'count', category: 'air_outlets', labor_crew_type: 'sm', unit: 'ea',
+          unit_material_cost: rate.cost, unit_labor_hours: rate.hrs, catalog_item_id: rate.id, multiplier: 1, color: BRIDGE_COLORS[layers.length % BRIDGE_COLORS.length], sort_order: layers.length,
+          notes: (rate.basis || 'no rate found — set one') + ' · from the AI Estimator (sheet reader)' }).select().single();
+        if (r.error) throw new Error(r.error.message); layers.push(r.data); made++; return r.data;
+      }
       // 3 · the drawing geometry again, this time keeping every piece, laid on the plan
       var rows = [], scales = [];
       for (var i = 0; i < list.length; i++) {
@@ -1400,10 +1417,10 @@ var AE = (function() {
         var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, page = await pdf.getPage(1), vp = page.getViewport({ scale: 1 });
         var V = function(x, y) { var q = vp.convertToViewportPoint(x, y); return [q[0], q[1]]; };
         var mk = function(l, pts, ft, ptft, extra) { return Object.assign({ drawing_id: d.id, page_number: p.page_no, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: ptft || null, label: 'auto' }, extra || {}); };
-        var ptft = null;
+        var ptft = null, laidDuct = 0, textItems = null;
         if (isDuctPlan(p) && res.geo && res.geo.total_ft > 0) {
-          var data = withLabels(await NWGeo.extract(page), p); data.wantPieces = true; var g = await NWGeo.measure(data);
-          if (g && !g.error && g.xy) { ptft = g.ptft;
+          var data = withLabels(await NWGeo.extract(page), p); data.wantPieces = true; var g = await NWGeo.measure(data); textItems = data.text;
+          if (g && !g.error && g.xy) { ptft = g.ptft; laidDuct = g.xy.length;
             for (var k = 0; k < g.xy.length; k++) { var pc = g.xy[k], sz = String(pc.size || ''), round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x');
               var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group', null, sz, false);
               if (pc.k === 'd') { var h = pc.len * ptft / 2; rows.push(mk(l, [V(pc.cx - pc.ux * h, pc.cy - pc.uy * h), V(pc.cx + pc.ux * h, pc.cy + pc.uy * h)], pc.len, ptft)); }
@@ -1415,6 +1432,33 @@ var AE = (function() {
             for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
               var pl = await layerFor(cd ? size + ' condensate drain' : size + ' copper pipe & 1" insulation', 'pipework', 'Pipes', cd ? [size + '%pvc%', size + ' copper pipe & 1" insulation'] : null, size, cd);
               rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / pp.ptft, pp.ptft)); } }
+        }
+        if (isDuctPlan(p) && (readerRuns(p).length || readerDevices(p).length)) {
+          ptft = ptft || scalePtft(res);
+          if (!textItems) { try { textItems = withLabels(await NWGeo.extract(page), p).text; } catch (eT) { textItems = res.ocr_labels || []; } }
+          var usedT = {}, strip = 0;
+          function anchorsFor(test) { var out = []; (textItems || []).forEach(function(t, i) { if (usedT[i] || !test(String(t.str || ''))) return; usedT[i] = 1; out.push({ x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2, dir: t.dir || [1, 0] }); }); return out; }
+          function stripPt() { var y = 60 + 26 * (strip++); return [60, y]; }
+          if (!laidDuct && ptft) readerRuns(p).forEach(function(x) { x._sz = runSize(x); });
+          var runsR = !laidDuct && ptft ? readerRuns(p).filter(function(x) { return x._sz; }) : [];
+          for (var ri = 0; ri < runsR.length; ri++) {
+            var x = runsR[ri], sz = x._sz, round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x'), ft = Number(x.lf);
+            var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group', null, sz, false);
+            var want = sz.toLowerCase().replace(/["”]/g, ''), A = anchorsFor(function(str) { var t = str.toUpperCase().replace(/\s/g, ''); if (/\(E\)/.test(t)) return false;
+              if (round) { var mr = /^(?:[A-Z]{1,3})?(\d{1,2})"?(Ø|DIA|RD)/.exec(t); return !!mr && mr[1] + 'ø' === want.replace('"', ''); }
+              var m = /(\d{1,2})X(\d{1,2})$/.exec(t); return !!m && (m[1] + 'x' + m[2] === want || m[2] + 'x' + m[1] === want); });
+            if (A.length) { var each = ft / A.length; A.forEach(function(a) { var h = each * ptft / 2; rows.push(mk(l, [V(a.x - a.dir[0] * h, a.y - a.dir[1] * h), V(a.x + a.dir[0] * h, a.y + a.dir[1] * h)], each, ptft, { notes: 'AI read: ' + ft + ' ft of ' + sz + ' on this sheet' + (A.length > 1 ? ', split over ' + A.length + ' size labels' : '') + ' — length from the sheet reader, placed at the label, not traced' })); }); }
+            else { var sp = stripPt(); rows.push(mk(l, [sp, [sp[0] + ft * ptft, sp[1]]], ft, ptft, { notes: 'AI read: ' + ft + ' ft of ' + sz + ' — length from the sheet reader; no size label found on the sheet to place it at' })); }
+          }
+          var devs = readerDevices(p);
+          for (var di = 0; di < devs.length; di++) {
+            var dv = devs[di], tag = String(dv.tag).toUpperCase().trim(), qty = Math.round(Number(dv.qty)), type = String(dv.type || 'air device');
+            var dname = tag + ' — ' + type + (dv.size && !/schedule|plan|see /i.test(dv.size) ? ' ' + dv.size : ''), dl = await countLayerFor(dname, dv);
+            var DA = anchorsFor(function(str) { return str.toUpperCase().trim() === tag; }).slice(0, qty), placed = DA.length;
+            var cm = function(pt, note) { return { drawing_id: d.id, page_number: p.page_no, tool_type: 'count', points: [pt], computed_value: 1, computed_unit: 'ea', layer_id: dl.id, layer_category: dl.category, color: dl.color, scale_pixels_per_foot: ptft || null, label: 'auto', notes: note }; };
+            DA.forEach(function(a) { rows.push(cm(V(a.x, a.y), 'AI read: ' + qty + ' × ' + tag + ' (' + dv.basis + ') — placed at a tag on the sheet')); });
+            for (var q = placed; q < qty; q++) rows.push(cm(stripPt(), 'AI read: ' + qty + ' × ' + tag + ' (' + dv.basis + ') — ' + (placed ? 'more counted than tags found; ' : 'no tag printed on the sheet; ') + 'not placed'));
+          }
         }
         if (isRiserSheet(p) && res.geo_riser && res.geo_riser.total_ft > 0) {
           var rdata = await NWGeo.extract(page); rdata.wantPieces = true; var rr = await NWGeo.measureRisers(rdata);
@@ -1428,7 +1472,8 @@ var AE = (function() {
       bridging = 'Saving ' + rows.length + ' marks…'; render();
       var all = scales.concat(rows);
       for (var c = 0; c < all.length; c += 200) { var ins2 = await supabaseClient.from('estimate_measurements').insert(all.slice(c, c + 200)); if (ins2.error) throw new Error(ins2.error.message); }
-      toast('✅ ' + rows.length + ' runs on ' + list.length + ' plans, ' + made + ' layers — opening the takeoff');
+      var nCnt = rows.filter(function(r) { return r.tool_type === 'count'; }).length;
+      toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + ' on ' + list.length + ' plans, ' + made + ' layers — opening the takeoff');
       setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
     } catch (e) { toast('Takeoff: ' + (e.message || e)); }
     bridging = ''; render();
@@ -1438,22 +1483,15 @@ var AE = (function() {
     var e = (session.result || {}).engine; if (!e) return;
     var v = (session.result || {}).review || {};
     var estId = session.estimate_id;
-    if (!estId) {   // an estimate of the same job may already be on the Bid Board: link to it rather than make a duplicate
-      var same = await findEstimates(estKey());
-      if (same.length === 1 || (same.length > 1 && same[0].name.toLowerCase().indexOf((session.name || '').toLowerCase().slice(0, 8)) === 0)) {
-        var cand = same[0];
-        if (confirm('The Bid Board already has “' + estLabel(cand) + '”.\n\nOK = link this session to it and replace its ' + (cand.line_count || 0) + ' line items with the AI breakdown.\nCancel = create a new, separate estimate.')) {
-          estId = cand.id; session.estimate_id = estId; await supabaseClient.from('ai_est_sessions').update({ estimate_id: estId }).eq('id', session.id);
-        }
-      }
-    }
+    // the AI estimate is its own Bid Board entry ("<job> (AI)"), so the estimator's own takeoff of the same job stays untouched and the two can be compared;
+    // 🔗 Link estimate is the explicit way to point the session at an existing estimate instead
     if (estId) {
       var cur = await supabaseClient.from('estimates').select('name,line_count,total_sales').eq('id', estId).maybeSingle();
       if (!cur.data) { toast('The linked estimate no longer exists — link the session to another one'); session.estimate_id = null; estimateGone = true; await supabaseClient.from('ai_est_sessions').update({ estimate_id: null }).eq('id', session.id); render(); return; }
       if (session.estimate_id === estId && !confirm('Replace the ' + (cur.data.line_count || 0) + ' line items' + (cur.data.total_sales ? ' (' + money(cur.data.total_sales) + ')' : '') + ' of “' + cur.data.name + '” with this AI breakdown?')) return;
     }
     if (!estId) {
-      var r = await supabaseClient.from('estimates').insert({ name: session.name, project_address: session.location, estimator_name: me.name, status: 'draft',
+      var r = await supabaseClient.from('estimates').insert({ name: /\(AI\)\s*$/i.test(session.name) ? session.name : session.name + ' (AI)', project_address: session.location, estimator_name: 'AI Estimator (' + me.name + ')', status: 'draft',
         is_ofci: !!(session.result || {}).ofci, overhead_pct: (session.result || {}).ofci ? 0.30 : 0.20,
         exclusions: (v.exclusions || []).join('\n') || null, notes: 'Built by the AI Estimator (session ' + session.id + '). Check every BUDGET line and flag before sending.' }).select('id').single();
       if (r.error) { toast(r.error.message); return; }
@@ -1476,6 +1514,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=458"></script>
+<script src="sw-register.js?v=459"></script>
 </body>
 </html>

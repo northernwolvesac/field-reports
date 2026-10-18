@@ -419,6 +419,7 @@
             ductRisers.n += r.geo.riser_n || 0; ductRisers.ft += r.geo.riser_ft || 0; ductRisers.sheets.push(sh + ' (' + (r.geo.riser_n || 0) + ')');
           }
           if (takeoffSheet && !coarseDup && (weakGeo || !(r.geo && r.geo.total_ft > 0))) (r.duct_runs || []).forEach(function (x) {
+            if (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || ''))) return;   // "(E)16x10 to remain" is not new work (414 W 14th)
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
             var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);

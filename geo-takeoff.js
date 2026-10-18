@@ -272,7 +272,10 @@
       .replace(/(\d{1,2})\s*"+\s*[^\s"\dA-Za-z]{1,2}$/g, '$1"Ø').replace(/\s+/g, ' ').trim())
       // a runout labelled with its diffuser ("6"ø D-2", "10/6 D-3"): the word is cut at the hyphen, the tag stub goes — not on square
       // sizes, which with a tag are the grille / diffuser itself ("24x24 CD")
-      .replace(/^(\d{1,2})(x(\d{1,2})|"Ø)\s+[A-Z]{1,2}(?:-[A-Z0-9]{0,2})?$/, function (m, a, rest, b) { return /\b(UP|DN)$/i.test(m) || (b && a === b) ? m : a + rest; });   // "12x8 DN" is a riser label
+      .replace(/^(\d{1,2})(x(\d{1,2})|"Ø)\s+[A-Z]{1,2}(?:-[A-Z0-9]{0,2})?$/, function (m, a, rest, b) { return /\b(UP|DN)$/i.test(m) || (b && a === b) ? m : a + rest; })   // "12x8 DN" is a riser label
+      // a damper / tag stub in front of the size ("VD 14x6", "D 14x6" when the cell was cut, "BDD 12x8") labels the duct itself — not a
+      // square size with a tag ("CD 24x24" is the diffuser), not the S/A R/A prefixes the size regex already reads
+      .replace(/^[A-Z]{1,3}\s+(\d{1,2})x(\d{1,2})$/, function (m, a, b) { return a === b || /^[SREO]A\s/.test(m) || /^TD\s/.test(m) ? m : a + 'x' + b; });
   }
   // glyph boxes → words; boxes are [x0,y0,x1,y1] in PDF user space
   function clusterWords(glyphs, opts) {
