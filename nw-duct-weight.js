@@ -30,6 +30,7 @@
     if (/rectangular|rect\b|\bR6\b|\bR8\b/i.test(s) && (m = /(\d{1,3})\s*x\s*(\d{1,3})/.exec(s))) return { kind: 'rect', w: +m[1], h: +m[2] };
     if (/round\/oval|oval|spiral|round/i.test(s) && (m = /(\d{1,3})\s*x\s*(\d{1,3})/.exec(s))) { var a = +m[1], b = +m[2]; return a === b ? { kind: 'round', w: a, h: a } : { kind: 'oval', w: Math.max(a, b), h: Math.min(a, b) }; }
     if ((m = /(\d{1,3})\s*(?:"|in)?\s*(?:Ø|ø|⌀|dia\b|rd\b|round)/i.exec(s))) return { kind: 'round', w: +m[1], h: +m[1] };
+    if (/spiral|snap-?lock|round pipe|flex duct/i.test(s) && (m = /(\d{1,3})\s*"/.exec(s))) return { kind: 'round', w: +m[1], h: +m[1] };   // 'Spiral galvanized duct 14" bare'
     if ((m = /(\d{1,3})\s*x\s*(\d{1,3})/.exec(s)) && /duct|galv|ACL|lined|wrap/i.test(s)) return { kind: 'rect', w: +m[1], h: +m[2] };
     if ((m = /^\s*(\d{1,3})\s*x\s*(\d{1,3})\s*$/.exec(s))) return { kind: 'rect', w: +m[1], h: +m[2] };
     return null;
