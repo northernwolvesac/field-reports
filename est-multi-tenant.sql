@@ -155,7 +155,7 @@ alter table public.est_org_invites enable row level security;
 drop policy if exists est_orgs_read on public.est_orgs;
 create policy est_orgs_read on public.est_orgs for select to authenticated using (public.est_is_member(id) or public.est_is_global_admin());
 drop policy if exists est_orgs_write on public.est_orgs;
-create policy est_orgs_write on public.est_orgs for all to authenticated using (public.est_is_global_admin() or public.est_org_role(id) in ('owner','admin')) with check (public.est_is_global_admin() or public.est_org_role(id) in ('owner','admin') or created_by = auth.uid());
+create policy est_orgs_write on public.est_orgs for all to authenticated using (public.est_is_global_admin() or public.est_org_role(id) in ('owner','admin')) with check (public.est_is_global_admin() or public.est_org_role(id) in ('owner','admin'));   -- only the global admin creates an org (no membership exists yet); owners / admins edit theirs
 drop policy if exists est_org_members_read on public.est_org_members;
 create policy est_org_members_read on public.est_org_members for select to authenticated using (user_id = auth.uid() or public.est_is_member(org_id) or public.est_is_global_admin());
 drop policy if exists est_org_members_write on public.est_org_members;
@@ -217,7 +217,7 @@ begin
 end $$;
 
 -- cost per org: what the reads cost, by month
-create or replace view public.est_org_cost as
+create or replace view public.est_org_cost with (security_invoker = true) as   -- runs as the caller: RLS on sessions / pages keeps other orgs' cost out
   select s.org_id, date_trunc('month', p.started_at) as month, count(*) as pages, round(sum(coalesce(p.cost, 0))::numeric, 2) as cost
   from public.ai_est_pages p join public.ai_est_sessions s on s.id = p.session_id
   group by 1, 2;
