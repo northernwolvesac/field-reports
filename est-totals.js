@@ -102,6 +102,29 @@
   }
 
   // Every Procore grid column for one line. ctx: {groupMultiplier, rates, settings} (rates/settings are optional caches).
+  // ── insulation budget (2026-10-19, Russ): duct and pipe lines carry insulation inside their price — split it out so the
+  // insulation budget is visible, and optionally (es_settings.insulation_sub) move its labor to a subcontract bucket ──
+  var INS_PIPE_FT = { 0.5: 3.0, 0.75: 3.2, 1: 3.6, 1.25: 4.1, 1.5: 4.6, 2: 5.4, 2.5: 6.3, 3: 7.2, 4: 9.0, 5: 11, 6: 13.5 };   // $/ft fiberglass ASJ 1"
+  function pipeSize(desc) { var m = /(\d+(?:-\d\/\d)?|\d\/\d)"/.exec(desc || ''); if (!m) return 0; var t = m[1], v = 0; if (t.indexOf('-') >= 0) { var a = t.split('-'); var f = a[1].split('/'); v = +a[0] + (+f[0]) / (+f[1]); } else if (t.indexOf('/') >= 0) { var g = t.split('/'); v = (+g[0]) / (+g[1]); } else v = +t; return v; }
+  function nearest(tbl, s) { var ks = Object.keys(tbl).map(Number).sort(function (a, b) { return a - b; }), best = ks[0]; ks.forEach(function (k) { if (k <= s) best = k; }); return tbl[best]; }
+  // returns { kind:'duct'|'pipe'|'explicit', qtyUnit: sq ft or ft per line unit, mat: $ per line unit, min: labor minutes per line unit } or null
+  function insulationOf(line, cat, unit) {
+    var d = String(line.description || ''), dl = d.toLowerCase();
+    if (/duct wrap|duct liner|pipe insulation|duct board|grease duct wrap|pvc jacket/i.test(d)) return { kind: 'explicit', qtyUnit: 1, mat: num(line.unit_material_cost), min: num(line.unit_labor_hours) * 60 };
+    if (cat === 'ductwork' && /^(ft|lf)$/i.test(unit) && window.NWDuct) {
+      var w = NWDuct.weightOf(d); if (!w) return null;
+      var sqft = w.perim_in / 12;                                         // duct surface per ft
+      var liner = /acl|lined|liner/i.test(d), wrap = /\bR6\b|\bR8\b|wrap|1\.5"|2"\s*(acl)?\s*$/i.test(d) && !liner;
+      if (!liner && !wrap) return null;
+      var rate = liner ? 2.4 : (/R8|2"/.test(d) ? 1.7 : 1.35), min = liner ? 5 : 4.5;   // $/sq ft and min/sq ft (catalog NW Insulation)
+      return { kind: 'duct', qtyUnit: sqft, mat: sqft * rate, min: sqft * min };
+    }
+    if (cat === 'pipework' && /^(ft|lf)$/i.test(unit) && /insulat/i.test(d) && !/bare/i.test(d)) {
+      var s = pipeSize(d); if (!s) return null;
+      return { kind: 'pipe', qtyUnit: 1, mat: nearest(INS_PIPE_FT, s), min: 10 };
+    }
+    return null;
+  }
   function nwLineTotals(line, est, ctx) {
     line = line || {}; est = est || {}; ctx = ctx || {};
     var rates = ctx.rates || nwEstRates(est);
@@ -131,6 +154,8 @@
     var profit = subtotalItemSales - subtotalItemCost;
 
     var unitLaborTime = num(line.unit_labor_hours);
+    var ins = insulationOf(line, cat, unit), insSub = flag(es.insulation_sub);
+    if (ins && insSub && ins.kind !== 'explicit') unitLaborTime = Math.max(0, unitLaborTime - ins.min / 60);   // insulators do that part
     var indiv = flag(es.individual_labor_rates);
     var laborRate = (indiv && num(line.labor_rate) > 0) ? num(line.labor_rate) : rates.labor;
     var globalSalesRate = num(settings.labor_sales_rate);
@@ -154,6 +179,7 @@
     if (window.NWDuct && cat === 'ductwork' && /^(ft|lf|feet)$/i.test(unit.trim())) { var wd = NWDuct.weightOf(line.description || '', { pressure: flag(es.duct_medium_pressure) ? 'medium' : 'low' }); if (wd) { weightLb = totalQty * wd.lb_ft; ductKind = wd.kind; } }
 
     return {
+      insulation: ins ? { kind: ins.kind, qty: totalQty * ins.qtyUnit, mat: totalQty * ins.mat, min: totalQty * ins.min, sub: insSub } : null,
       weightLb: weightLb, ductKind: ductKind, qty: qty, totalQty: totalQty, groupMultiplier: gm, unit: unit,
       unitCost: unitCost, wastePct: wastePct, subtotalItemCost: subtotalItemCost,
       markupPct: markupPct, marginPct: subtotalItemSales > 0 ? profit / subtotalItemSales : 0,
@@ -227,6 +253,7 @@
     var subtotal = 0, count = 0, optionalTotal = 0;
     var breakdown = { sm: 0, pipe: 0, startup: 0, other: 0 };
     var duct = { lb: 0, rect: 0, round: 0, oval: 0, shopCost: 0, lineMaterial: 0, lines: 0 };   // sheet-metal weight (lb) + shop $/lb check
+    var insul = { duct_sqft: 0, duct_mat: 0, duct_min: 0, pipe_ft: 0, pipe_mat: 0, pipe_min: 0, explicit_mat: 0, explicit_min: 0, lines: 0, sub: flag(settings.es_settings && settings.es_settings.insulation_sub), subCost: 0 };
     var perLine = [];   // per-line totals in line order, for the rules
 
     (lines || []).forEach(function (li) {
@@ -238,6 +265,7 @@
       subtotal += lt.totalSales;
       taxableSales += lt.taxableSales;   // every cost type — a taxable wet-tap / services line is taxed too
 
+      if (lt.insulation) { var I = lt.insulation; insul.lines++; if (I.kind === 'duct') { insul.duct_sqft += I.qty; insul.duct_mat += I.mat; insul.duct_min += I.min; } else if (I.kind === 'pipe') { insul.pipe_ft += I.qty; insul.pipe_mat += I.mat; insul.pipe_min += I.min; } else { insul.explicit_mat += I.mat; insul.explicit_min += I.min; } }
       if (lt.costType === 'S') { wetTap += lt.subcontractorCost; wetTapSales += lt.totalSales; return; }
       if (lt.costType === 'O') { services += lt.otherCost; servicesSales += lt.totalSales; return; }
 
@@ -258,6 +286,8 @@
       if (KNOWN_CREWS[lt.crew]) breakdown[lt.crew] += lt.totalLaborTime;
     });
 
+    // ── insulation by subcontractor: the labor taken out of the duct / pipe lines comes back as a services amount ──
+    if (insul.sub) { var subRate = num(settings.insulation_sub_rate) || r.labor; insul.subCost = (insul.duct_min + insul.pipe_min) / 60 * subRate; services += insul.subCost; servicesSales += insul.subCost; subtotal += insul.subCost; }
     // ── company rules: minimum charges / allowances join the buckets of the lines they matched ──
     var ruleSet = Array.isArray(est.rules) ? est.rules : (typeof window !== 'undefined' && Array.isArray(window.NW_EST_RULES) ? window.NW_EST_RULES : []);
     var rulesOut = nwEstRules(lines, perLine, ruleSet);
@@ -347,7 +377,7 @@
       // legacy aliases for existing callers
       material: materialTotal, baseCost: subtotal,
       // ── Procore-shaped block ──
-      summary: summary, duct: duct, rules: rulesOut,
+      summary: summary, duct: duct, rules: rulesOut, insulation: insul,
       preTax: preTax, preTaxTotal: preTaxTotal,
       taxes: taxes,
       postTax: postTax, postTaxTotal: postTaxTotal,

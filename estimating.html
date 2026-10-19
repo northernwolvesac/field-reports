@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=443">
+<link rel="stylesheet" href="procore-ui.css?v=471">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=443"></script>
-<script src="auth.js?v=443"></script>
-<script src="est-totals.js?v=462"></script>
-<script src="procore-ui.js?v=443"></script>
-<script src="nw-catalog-picker.js?v=443"></script>
-<script src="nw-duct-weight.js?v=443"></script>
-<script src="nw-proposal.js?v=443"></script>
-<script src="bid-actions.js?v=443"></script>
+<script src="supabase-config.js?v=471"></script>
+<script src="auth.js?v=471"></script>
+<script src="est-totals.js?v=471"></script>
+<script src="procore-ui.js?v=471"></script>
+<script src="nw-catalog-picker.js?v=471"></script>
+<script src="nw-duct-weight.js?v=471"></script>
+<script src="nw-proposal.js?v=471"></script>
+<script src="bid-actions.js?v=471"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -2259,6 +2259,7 @@ requireAuth().catch(function(){});
       { key: 'individual_labor_rates', label: 'Individual labor rates', on: !!es.individual_labor_rates, enabled: true, hint: 'Lets every cost item carry its own Labor Rate' },
       { key: 'round_ea', label: 'Round quantities using ea', on: es.round_ea === true || es.round_ea === 'true', enabled: true, hint: 'Whole numbers for "ea" quantities in the grid' },
       { key: 'count_install_material', label: 'Count material on install lines', on: !(es.count_install_material === false || es.count_install_material === 'false'), enabled: true, hint: 'Material on Disconnects / Equipment Install / Air Outlets lines is priced and taxed (Procore). Off = labor only' },
+      { key: 'insulation_sub', label: 'Insulation by subcontractor', on: !!(es.insulation_sub === true || es.insulation_sub === 'true'), enabled: true, hint: 'Takes the insulation labor out of the duct / pipe lines and shows it as a separate Insulation (sub) amount at the labor rate' },
       { key: 'duct_medium_pressure', label: 'Duct weight at medium pressure (4" w.g.)', on: !!(es.duct_medium_pressure === true || es.duct_medium_pressure === 'true'), enabled: true, hint: 'One gauge heavier for the sheet-metal lb of every duct line (mains spec); off = 2" w.g. schedule' },
       { key: 'labor_separate', label: 'Show labor as separate line', on: false, enabled: false },
       { key: 'catalog_margins', label: 'Apply catalog margins', on: false, enabled: false },
@@ -3128,6 +3129,12 @@ requireAuth().catch(function(){});
         row('Subtotal', '--', '--', '--', money(sm.labor.cost + sm.materials.cost + sm.subcontractor.cost + sm.services.cost), '--', money(sm.subtotal), money(sm.subtotal - (sm.labor.cost + sm.materials.cost + sm.subcontractor.cost + sm.services.cost)), 'total') +
       '</tbody></table></div>';
     // sheet-metal weight + shop check (nw-duct-weight.js): feet from the takeoff, pounds by SMACNA gauge + 25 % fittings, shop $/lb rect 4 / round 5 / oval 7
+    // insulation budget (inside the duct / pipe lines unless subcontracted)
+    if (t.insulation && (t.insulation.duct_sqft > 0 || t.insulation.pipe_ft > 0 || t.insulation.explicit_mat > 0)) {
+      var I = t.insulation, insMat = I.duct_mat + I.pipe_mat + I.explicit_mat, insH = (I.duct_min + I.pipe_min + I.explicit_min) / 60;
+      html += '<div class="es-side-line" style="margin-top:6px">Insulation budget <b>' + money(insMat) + '</b> material · <b>' + fmtNum(insH, 1) + ' h</b>' + (I.sub ? ' → <b>Insulation (sub) ' + money(I.subCost) + '</b>' : '') +
+        '<div class="pc-muted" style="font-size:11px">' + (I.duct_sqft ? 'duct ' + fmtNum(I.duct_sqft, 0) + ' sq ft (' + money(I.duct_mat) + ', ' + fmtNum(I.duct_min / 60, 1) + ' h)' : '') + (I.pipe_ft ? (I.duct_sqft ? ' · ' : '') + 'pipe ' + fmtNum(I.pipe_ft, 0) + ' ft (' + money(I.pipe_mat) + ', ' + fmtNum(I.pipe_min / 60, 1) + ' h)' : '') + (I.explicit_mat ? ' · insulation lines ' + money(I.explicit_mat) : '') + (I.sub ? ' — labor moved out of our hours' : ' — inside the duct / pipe lines') + '</div></div>';
+    }
     if (t.duct && t.duct.lb > 0) {
       var D = t.duct, kinds = [['rect', 'rectangular'], ['round', 'round'], ['oval', 'flat oval']].filter(function(k) { return D[k[0]] > 0; }).map(function(k) { return fmtNum(D[k[0]], 0) + ' lb ' + k[1]; }).join(' · ');
       html += '<div class="es-side-line" style="margin-top:6px">Sheet metal <b>' + fmtNum(D.lb, 0) + ' lb</b> <span class="pc-muted" style="font-size:11px">(' + kinds + ', ' + D.lines + ' duct lines, ' + ((t.settings && (t.settings.duct_medium_pressure || (t.settings.es_settings || {}).duct_medium_pressure)) ? '4" w.g.' : '2" w.g.') + ' gauge + ' + (window.NWDuct ? NWDuct.FITTING_PCT : 25) + ' % fittings)</span><br>Shop check @ $/lb <b>' + money(D.shopCost) + '</b> <span class="pc-muted" style="font-size:11px">vs ' + money(D.lineMaterial) + ' duct material in the lines (lines include liner / wrap; shop $/lb is bare metal + fab)</span></div>';
@@ -3658,6 +3665,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=443"></script>
+<script src="sw-register.js?v=471"></script>
 </body>
 </html>
