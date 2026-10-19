@@ -362,6 +362,23 @@
           if (!slotCreditTag || (slotLens && lk0 && slotLens[lk0] && !slotCreditTag.covered)) slotCreditTag = { tag: norm(a.tag), covered: !!(slotLens && lk0 && slotLens[lk0]) };
         });
         slotCreditTag = slotCreditTag ? slotCreditTag.tag : '';
+        // plain-bar slots (geo.bar_slots): the sheet's thin un-X-ed rectangles go to the linear rows that have no length at all — no schedule
+        // length, no reader feet, no X-ed glyph of their length (BOSS R1/R2 "1 in slot, see plan", Esquire "C varies") — capped at twice
+        // their section count (the longest bars first); dampers share the shape, so rows with a length never take them
+        var noLenSecs = 0, barFt = 0, barUsed = false, barN = 0;
+        if (takeoffSheet && r.geo && r.geo.bar_slots && r.geo.bar_slots.n) (r.air_devices || []).forEach(function (a) {
+          var t1 = String(a.type || '').toLowerCase(), sd1 = schedDev[norm(a.tag)];
+          if (notAirDevice(a) || !(t1 === 'linear' || (sd1 && sd1.type === 'linear'))) return;
+          if ((sd1 && sd1.len) || Number(a.linear_ft || 0)) return;
+          var lk1 = sd1 && sd1.len ? String(Math.round(sd1.len * 2) / 2) : '';
+          if (lk1 && slotLens && slotLens[lk1]) return;
+          noLenSecs += Number(a.qty || 0);
+        });
+        if (noLenSecs > 0) {
+          var bl = r.geo.bar_slots.list || [], cap = noLenSecs;   // one bar per length-less section, the longest first (Esquire M-102B: 6 "C" sections among 50 bars → the six 13-14 ft slots)
+          barN = Math.min(bl.length, cap); barFt = bl.slice(0, barN).reduce(function (s0, v) { return s0 + v; }, 0);
+          if (!bl.length) { barN = r.geo.bar_slots.n; barFt = r.geo.bar_slots.ft; }
+        }
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
           if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) return;   // a bare '(cfm only)' row is an upper bound, reported as a check, never priced; symbol rows named '… (cfm only)' are counted
           if (/no symbol|unmarked|no device symbol|bubble only|cfm[- ]only bubble|^cfm[- ]only/i.test(String(a.tag || '') + ' ' + String(a.notes || ''))) return;
@@ -394,6 +411,10 @@
             else if (covered) alf = 0;                        // already inside the drawn feet
             else if (alf) sg.kept.push((fam || a.tag) + ' ' + Math.round(alf) + ' ft');
             sg.sections += Number(a.qty || 0); if (sg.fams.indexOf(fam || a.tag) < 0) sg.fams.push(fam || a.tag);
+          }
+          if (atype === 'linear' && !alf && !(sd && sd.len) && barFt > 0 && !barUsed) {   // the sheet's plain-bar slots, once, to the first length-less linear row
+            alf = Math.round(barFt * 10) / 10; barUsed = true;
+            var bs = slotSheets[sh + '|bars'] = { ft: alf, n: barN, bars: true, sections: noLenSecs, fams: [a.tag], kept: [] };
           }
           var k = atype + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
           var d = devices[k] = devices[k] || { type: atype, tag: a.tag || '', size: a.size || (sd && sd.type === 'linear' && sd.len ? sd.len + ' ft slot' : ''), notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
@@ -768,6 +789,7 @@
     });
     Object.keys(C.slotSheets || {}).forEach(function (sh) {
       var sg = C.slotSheets[sh];
+      if (sg.bars) { flags.push({ category: 'air devices', item: 'Slot diffusers — ' + sh.replace('|bars', ''), flag: Math.round(sg.ft) + ' ft of plain-bar slot diffuser drawn on ' + sh.replace('|bars', '') + ' (' + sg.n + ' bars, credited to ' + sg.fams.join('/') + ' — ' + sg.sections + ' sections with no length on the schedule or the plan); check the slot lengths' }); return; }
       flags.push({ category: 'air devices', item: 'Slot diffusers — ' + sh, flag: Math.round(sg.ft) + ' ft of slot diffuser drawn on ' + sh + ' (' + sg.n + ' glyphs: ' + Object.keys(sg.lens).map(function (l) { return sg.lens[l] + ' × ' + l + ' ft'; }).join(', ') + ')' + (sg.sections ? '; the reader\'s linear tags (' + sg.fams.join('/') + ') add up to ' + sg.sections + ' sections' : '') + (sg.kept && sg.kept.length ? ' — not drawn this way, kept at qty × schedule length: ' + sg.kept.join(', ') : ' — priced by the drawn feet') });
     });
     (C.devCheck || []).forEach(function (c) {

@@ -976,7 +976,7 @@
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
-        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
@@ -1253,6 +1253,32 @@
       if (out.length < 3) return null;
       var lens = {}; out.forEach(function (l) { var kk = String(Math.round(l * 2) / 2); lens[kk] = (lens[kk] || 0) + 1; });
       return { n: out.length, ft: Math.round(out.reduce(function (a, b) { return a + b; }, 0) * 10) / 10, lens: lens };
+    }
+    // slot diffusers drawn as plain thin bars — a closed rectangle 1-5" wide and 2-16 ft long with no X (BOSS R1/R2 return slots: 1.14-pt
+    // rectangles 1.2" x 3-14 ft; Esquire "C" slots: 3.6" x 12.5-14 ft). Dampers are the same shape across a duct (L'Catteron VD), so the
+    // engine credits this census only to linear-diffuser rows that have no length from the schedule, the reader or the X-ed glyphs
+    function barSlots(D, ptft) {
+      var sy = D.symSegs || [], S = D.segs, n = S.length / 5, diag = [], lens = [], seen = {}, i;
+      if (!sy.length || !ptft) return null;
+      for (i = 0; i < n; i++) { var o = i * 5; if (Math.abs(S[o + 2] - S[o]) >= 2.5 && Math.abs(S[o + 3] - S[o + 1]) >= 2.5) diag.push([Math.min(S[o], S[o + 2]), Math.min(S[o + 1], S[o + 3]), Math.max(S[o], S[o + 2]), Math.max(S[o + 1], S[o + 3])]); }
+      for (i = 0; i + 4 <= sy.length; i++) {
+        var q = sy.slice(i, i + 4), st = D.styles[q[0][4]];
+        if (!st || q[1][4] !== q[0][4] || q[2][4] !== q[0][4] || q[3][4] !== q[0][4]) continue;
+        if (Math.max.apply(null, st.col) > 0.35 || st.w < 0.5 || st.dash) continue;
+        var xs = [], ys = []; q.forEach(function (s) { xs.push(s[0], s[2]); ys.push(s[1], s[3]); });
+        var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys), w = x1 - x0, h = y1 - y0, L = Math.max(w, h), Wd = Math.min(w, h);
+        if (!(Wd >= 0.06 * ptft && Wd <= 0.4 * ptft && L >= 2 * ptft && L <= 16 * ptft && L >= 8 * Wd)) continue;
+        var onEdge = q.every(function (s) { return (Math.abs(s[0] - s[2]) < 0.6 && (Math.abs(s[0] - x0) < 0.6 || Math.abs(s[0] - x1) < 0.6)) || (Math.abs(s[1] - s[3]) < 0.6 && (Math.abs(s[1] - y0) < 0.6 || Math.abs(s[1] - y1) < 0.6)); });
+        if (!onEdge) continue;
+        var k = Math.round(x0) + ',' + Math.round(y0) + ',' + Math.round(x1) + ',' + Math.round(y1); if (seen[k]) continue;
+        var nd = 0; diag.forEach(function (g) { if (Math.abs(g[0] - x0) < 1.5 && Math.abs(g[1] - y0) < 1.5 && Math.abs(g[2] - x1) < 1.5 && Math.abs(g[3] - y1) < 1.5) nd++; });
+        if (nd) continue;
+        seen[k] = 1; lens.push(Math.round(L / ptft * 10) / 10);
+      }
+      if (lens.length < 2) return null;
+      lens.sort(function (a, b) { return b - a; });
+      var hist = {}; lens.forEach(function (l) { var kk = String(Math.round(l * 2) / 2); hist[kk] = (hist[kk] || 0) + 1; });
+      return { n: lens.length, ft: Math.round(lens.reduce(function (a, b) { return a + b; }, 0) * 10) / 10, lens: hist, list: lens.slice(0, 80) };
     }
     function linearBands(D, ptft) {
       var n = D.segs.length / 5, segs = [];
