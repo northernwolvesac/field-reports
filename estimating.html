@@ -11,19 +11,22 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=471">
+<link rel="stylesheet" href="procore-ui.css?v=479">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=471"></script>
-<script src="auth.js?v=471"></script>
-<script src="est-totals.js?v=471"></script>
-<script src="procore-ui.js?v=471"></script>
-<script src="nw-catalog-picker.js?v=471"></script>
-<script src="nw-duct-weight.js?v=471"></script>
-<script src="nw-proposal.js?v=471"></script>
-<script src="bid-actions.js?v=471"></script>
+<script src="supabase-config.js?v=479"></script>
+<script src="auth.js?v=479"></script>
+<script src="est-totals.js?v=479"></script>
+<script src="procore-ui.js?v=479"></script>
+<script src="nw-catalog-picker.js?v=479"></script>
+<script src="nw-duct-weight.js?v=479"></script>
+<script src="nw-proposal.js?v=479"></script>
+<script src="bid-actions.js?v=479"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="email-utils.js?v=479"></script>
+<script src="nw-email.js?v=479"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -783,6 +786,50 @@ requireAuth().catch(function(){});
   }
   function isLocked() { return !!getSettings().pricing_locked; }
   function esSettings() { return getSettings().es_settings || {}; }
+
+  // ── insulation RFQ (2026-10-19): the Insulation budget breakdown → e-mail to the insulation sub (Energy Plus by default) ──
+  var INS_SUB = { to: 'david@energyplusny.com', cc: 'mfreund@energyplusny.com', name: 'Energy Plus NY' };
+  function insRfqBody(t) {
+    var I = t.insulation, det = I.detail || {}, keys = Object.keys(det).sort();
+    var rows = keys.map(function(k) { var d = det[k]; return '  - ' + k + ': ' + fmtNum(d.qty, 0) + ' ' + d.unit + (d.kind === 'duct' ? ' of duct surface' : ''); });
+    var e = currentEst || {};
+    return 'Hello ' + INS_SUB.name + ' team,\n\nPlease quote the insulation for the project below (material + labor, installed):\n\nProject: ' + (e.name || '') + (e.project_address ? '\nAddress: ' + e.project_address : '') + (e.client_name ? '\nClient / GC: ' + e.client_name : '') + (e.bid_due_date ? '\nBid due: ' + e.bid_due_date : '') +
+      '\n\nTake-off quantities:\n' + rows.join('\n') +
+      '\n\nDuct quantities are square feet of duct surface (perimeter × length, fittings included at 25 %). Pipe quantities are linear feet by pipe size; please include fittings, valves and hangers in the per-foot rate or list them separately.' +
+      '\n\nPlease send a lump-sum price with the unit rates you used, lead time, and anything excluded (lifts, firestop, jacketing).\n\nThank you,\n' + (currentUserName || 'Estimating') + '\nNorthern Wolves Air Conditioning\nestimating@northernwolvesac.com';
+  }
+  window.openInsRfq = function() {
+    var t = lastTotals || (window.nwEstTotals ? computeAllTotals(currentLines, currentEst) : null);
+    if (!t || !t.insulation || !Object.keys(t.insulation.detail || {}).length) { showToast('No duct / pipe insulation in this estimate yet', 'error'); return; }
+    var m = document.getElementById('insRfqModal');
+    if (!m) {
+      m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'insRfqModal';
+      m.innerHTML = '<div class="modal-card" style="max-width:720px"><div class="modal-body">' +
+        '<h3 style="margin:0 0 10px">✉ Request insulation quote</h3>' +
+        '<div class="field"><label>To</label><input type="text" id="insRfqTo"></div>' +
+        '<div class="field"><label>Cc</label><input type="text" id="insRfqCc"></div>' +
+        '<div class="field"><label>Subject</label><input type="text" id="insRfqSubj"></div>' +
+        '<div class="field"><label>Message</label><textarea id="insRfqBody" style="width:100%;min-height:300px;font-family:inherit"></textarea></div>' +
+        '</div><div class="modal-actions"><button type="button" class="pc-btn pc-btn-secondary" onclick="closeModal(\'insRfqModal\')">Cancel</button><button type="button" class="pc-btn pc-btn-primary" id="insRfqSend" onclick="sendInsRfq()">Send e-mail</button></div></div>';
+      document.body.appendChild(m);
+    }
+    document.getElementById('insRfqTo').value = INS_SUB.to; document.getElementById('insRfqCc').value = INS_SUB.cc;
+    document.getElementById('insRfqSubj').value = 'RFQ — ' + (currentEst && currentEst.name || 'estimate') + ' — insulation';
+    document.getElementById('insRfqBody').value = insRfqBody(t);
+    openModal('insRfqModal');
+  };
+  window.sendInsRfq = async function() {
+    var to = document.getElementById('insRfqTo').value.trim(), cc = document.getElementById('insRfqCc').value.trim(), subject = document.getElementById('insRfqSubj').value.trim(), body = document.getElementById('insRfqBody').value;
+    if (!/@/.test(to)) { showToast('Type the e-mail address', 'error'); return; }
+    if (!window.nwSendBrandedEmail || !window.emailjs) { showToast('E-mail helper did not load — reload the page', 'error'); return; }
+    var btn = document.getElementById('insRfqSend'); btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      await nwSendBrandedEmail({ to: nwEmailList(to, cc), subject: subject, bodyText: body, reportType: 'Request for Quote', title: 'Request for Quote — insulation', subtitle: currentEst && currentEst.name, senderName: currentUserName || 'Estimating', files: [] });
+      await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.insulation_rfqs = (s.es_settings.insulation_rfqs || []).concat([{ to: to, sent_at: new Date().toISOString(), by: currentUserName }]).slice(-10); });
+      closeModal('insRfqModal'); showToast('Quote request sent to ' + to);
+    } catch (e) { showToast('Send failed: ' + (e && (e.text || e.message) || e), 'error'); }
+    btn.disabled = false; btn.textContent = 'Send e-mail';
+  };
   function manualGroups() {
     var mg = getSettings().manual_groups;
     if (Array.isArray(mg)) return mg.filter(function(g) { return g && g.name; }).map(function(g) { return { name: g.name, multiplier: num(g.multiplier) || 1 }; });
@@ -3133,7 +3180,8 @@ requireAuth().catch(function(){});
     if (t.insulation && (t.insulation.duct_sqft > 0 || t.insulation.pipe_ft > 0 || t.insulation.explicit_mat > 0)) {
       var I = t.insulation, insMat = I.duct_mat + I.pipe_mat + I.explicit_mat, insH = (I.duct_min + I.pipe_min + I.explicit_min) / 60;
       html += '<div class="es-side-line" style="margin-top:6px">Insulation budget <b>' + money(insMat) + '</b> material · <b>' + fmtNum(insH, 1) + ' h</b>' + (I.sub ? ' → <b>Insulation (sub) ' + money(I.subCost) + '</b>' : '') +
-        '<div class="pc-muted" style="font-size:11px">' + (I.duct_sqft ? 'duct ' + fmtNum(I.duct_sqft, 0) + ' sq ft (' + money(I.duct_mat) + ', ' + fmtNum(I.duct_min / 60, 1) + ' h)' : '') + (I.pipe_ft ? (I.duct_sqft ? ' · ' : '') + 'pipe ' + fmtNum(I.pipe_ft, 0) + ' ft (' + money(I.pipe_mat) + ', ' + fmtNum(I.pipe_min / 60, 1) + ' h)' : '') + (I.explicit_mat ? ' · insulation lines ' + money(I.explicit_mat) : '') + (I.sub ? ' — labor moved out of our hours' : ' — inside the duct / pipe lines') + '</div></div>';
+        '<div class="pc-muted" style="font-size:11px">' + (I.duct_sqft ? 'duct ' + fmtNum(I.duct_sqft, 0) + ' sq ft (' + money(I.duct_mat) + ', ' + fmtNum(I.duct_min / 60, 1) + ' h)' : '') + (I.pipe_ft ? (I.duct_sqft ? ' · ' : '') + 'pipe ' + fmtNum(I.pipe_ft, 0) + ' ft (' + money(I.pipe_mat) + ', ' + fmtNum(I.pipe_min / 60, 1) + ' h)' : '') + (I.explicit_mat ? ' · insulation lines ' + money(I.explicit_mat) : '') + (I.sub ? ' — labor moved out of our hours' : ' — inside the duct / pipe lines') + '</div>' +
+        (canEdit ? '<button type="button" class="pc-btn pc-btn-outline" style="margin-top:6px" onclick="openInsRfq()">✉ Request insulation quote</button>' : '') + '</div>';
     }
     if (t.duct && t.duct.lb > 0) {
       var D = t.duct, kinds = [['rect', 'rectangular'], ['round', 'round'], ['oval', 'flat oval']].filter(function(k) { return D[k[0]] > 0; }).map(function(k) { return fmtNum(D[k[0]], 0) + ' lb ' + k[1]; }).join(' · ');
@@ -3665,6 +3713,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=471"></script>
+<script src="sw-register.js?v=479"></script>
 </body>
 </html>
