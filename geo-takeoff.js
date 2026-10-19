@@ -926,8 +926,10 @@
       var S2 = S.slice(), used2 = fp.used.slice(), minW = Infinity; keep.forEach(function (k) { minW = Math.min(minW, +k.split('|')[1]); });
       // extra styles must be heavy lines (≥ 1.5 pt — thick polylines / filled bars); thin flex and leader styles never qualify
       Object.keys(bySty).forEach(function (key) {
-        if (keep.indexOf(key) >= 0 || bySty[key].length < 40) return;
         var w = +key.split('|')[1], darkK = /^0(\.0+)?,0(\.0+)?,0(\.0+)?\|/.test(key);
+        // a sparse sheet draws its few single-line branches with a heavy pen used nowhere else (414 W 14th: four 14x6 runouts, 12 segments
+        // of 1.44 pt, 30 ft) — a heavy dark pen qualifies from 4 segments; lighter pens still need the 40 that keep stray strokes out
+        if (keep.indexOf(key) >= 0 || bySty[key].length < (darkK && w >= 1.2 ? 4 : 40)) return;
         if (w < Math.max(darkK ? (D.singleMinW || 1.0) : 1.5, minW * 0.6)) return;   // black 1.0-1.5 pt lines too (April Tax: VAV feeds and runouts are 1.08-pt single lines)
         var isBar = /^fill\|/.test(key);
         bySty[key].forEach(function (sg) { var ns = norm(sg); ns.q = isBar; ns.sk = key; ns.thin = !isBar && w < 1.5; S2.push(ns); used2.push([]); });

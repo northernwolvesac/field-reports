@@ -400,7 +400,7 @@
           });
         });
         {
-          var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
+          var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || '')) ? 0 : Number(x.lf || 0)); }, 0);
           var coarseDup = !!coarseSet[sh];
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
           // the AI's reading of the same sheet is the cross-check: a measurement more than 3x it (+40 ft) (the wrong line style paired up: OGCP 5200 gave
@@ -417,7 +417,31 @@
             // a single-line drawing measured from the labelled runs alone misses the unlabelled branches (Parkinson's 312 ft, AI 355, Procore 578)
             (r.geo.single_style && aiFt > r.geo.total_ft * GEO_FITTINGS) ? 'single-line drawing, AI reads more' : '';
           var weakGeo = !!weakWhy;
-          if (weakGeo && !coarseDup) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: gl, why: weakWhy });
+          // a single-line drawing where the reader sees more than the traced runs: the traced sizes are real (414 W 14th: four 14x6
+          // runouts 30.1 ft, Vladimir 30.3) and the reader's other sizes (transfer ducts drawn as lined boxes + flex, nothing to trace)
+          // are the rest — per size, the larger of the two sources, instead of throwing the geometry away
+          var mergeGeo = !coarseDup && takeoffSheet && weakWhy === 'single-line drawing, AI reads more';
+          if (weakGeo && !coarseDup && !mergeGeo) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: gl, why: weakWhy });
+          if (mergeGeo) {
+            var aiBySize = {};
+            (r.duct_runs || []).forEach(function (x) {
+              if (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || ''))) return;
+              var z0 = sizeOf(x.size); if (!z0) return;
+              var k0 = (x.shape === 'round' || x.shape === 'oval' || z0.round ? 'round' : 'rect') + '|' + (z0.round ? z0.w : z0.w + 'x' + z0.h);
+              aiBySize[k0] = (aiBySize[k0] || 0) + Number(x.lf || 0);
+            });
+            var geoBySize = {};
+            Object.keys(r.geo.sizes || {}).forEach(function (sz) { var z1 = sizeOf(sz); if (!z1) return; var k1 = (/Ø/.test(sz) ? 'round' : 'rect') + '|' + (z1.round ? z1.w : z1.w + 'x' + z1.h); geoBySize[k1] = (geoBySize[k1] || 0) + r.geo.sizes[sz] * GEO_FITTINGS; });
+            var mergedFt = 0, fromGeo = 0;
+            Object.keys(aiBySize).forEach(function (k2) { if (!geoBySize[k2]) geoBySize[k2] = 0; });
+            Object.keys(geoBySize).forEach(function (k2) {
+              var g2 = geoBySize[k2], a2 = aiBySize[k2] || 0, use = Math.max(g2, a2); if (!use) return;
+              var parts = k2.split('|'), round2 = parts[0] === 'round', dims = parts[1].split('x');
+              var o2 = duct[k2] = duct[k2] || { shape: parts[0], size: round2 ? dims[0] + '"Ø' : parts[1], lf: 0, sheets: [], geo: false };
+              o2.lf += use; o2.sheets.push(sh); if (g2 >= a2) { o2.geo = true; fromGeo += use; } mergedFt += use;
+            });
+            geoCheck.push({ sheet: sh, geo: Math.round(fromGeo), ai: aiFt, merged: Math.round(mergedFt), labels: gl, why: 'single-line drawing: traced sizes + the reader\'s other sizes' });
+          }
           if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
             geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
@@ -440,7 +464,7 @@
             });
             ductRisers.n += r.geo.riser_n || 0; ductRisers.ft += r.geo.riser_ft || 0; ductRisers.sheets.push(sh + ' (' + (r.geo.riser_n || 0) + ')');
           }
-          if (takeoffSheet && !coarseDup && (weakGeo || !(r.geo && r.geo.total_ft > 0))) (r.duct_runs || []).forEach(function (x) {
+          if (takeoffSheet && !coarseDup && !mergeGeo && (weakGeo || !(r.geo && r.geo.total_ft > 0))) (r.duct_runs || []).forEach(function (x) {
             if (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || ''))) return;   // "(E)16x10 to remain" is not new work (414 W 14th)
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';

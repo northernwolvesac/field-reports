@@ -14,14 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=467"></script>
-<script src="auth.js?v=467"></script>
-<script src="est-totals.js?v=467"></script>
+<script src="supabase-config.js?v=468"></script>
+<script src="auth.js?v=468"></script>
+<script src="est-totals.js?v=468"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=467"></script>
-<script src="nw-email.js?v=467"></script>
-<script src="est-engine.js?v=467"></script>
-<script src="geo-takeoff.js?v=467"></script>
+<script src="email-utils.js?v=468"></script>
+<script src="nw-email.js?v=468"></script>
+<script src="est-engine.js?v=468"></script>
+<script src="geo-takeoff.js?v=468"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1444,8 +1444,12 @@ var AE = (function() {
           var usedT = {}, strip = 0, lastAnchor = {};   // last placed label per duct width — the tapering trunk 24x14 → 24x10 → 24x6 reads as one line of labels
           function anchorsFor(test) { var out = []; (textItems || []).forEach(function(t, i) { if (usedT[i] || !test(String(t.str || ''))) return; usedT[i] = 1; out.push({ x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2, dir: t.dir || [1, 0] }); }); return out; }
           function stripPt() { var y = 60 + 26 * (strip++); return [60, y]; }
-          if (!laidDuct && ptft) readerRuns(p).forEach(function(x) { x._sz = runSize(x); });
-          var runsR = !laidDuct && ptft ? readerRuns(p).filter(function(x) { return x._sz; }) : [];
+          // sizes the geometry traced are on the plan already; the reader's runs fill in the sizes it could not trace (414: the traced
+          // 14x6 runouts + the reader's 24x14 / 24x10 / 24x6 transfer ducts drawn as lined boxes)
+          var laidSizes = {}; if (laidDuct) Object.keys((res.geo && res.geo.sizes) || {}).forEach(function(sz) { var m0 = /(\d{1,2})\s*[xX]\s*(\d{1,2})/.exec(sz); laidSizes[m0 ? Math.max(+m0[1], +m0[2]) + 'x' + Math.min(+m0[1], +m0[2]) : sz.replace(/["”]/g, '').toLowerCase()] = 1; });
+          var sizeKey = function(sz) { var m0 = /(\d{1,2})\s*[xX]\s*(\d{1,2})/.exec(sz); return m0 ? Math.max(+m0[1], +m0[2]) + 'x' + Math.min(+m0[1], +m0[2]) : String(sz).replace(/["”]/g, '').toLowerCase(); };
+          if (ptft) readerRuns(p).forEach(function(x) { x._sz = runSize(x); });
+          var runsR = ptft ? readerRuns(p).filter(function(x) { return x._sz && !(laidDuct && laidSizes[sizeKey(x._sz)]); }) : [];
           for (var ri = 0; ri < runsR.length; ri++) {
             var x = runsR[ri], sz = x._sz, round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x'), ft = Number(x.lf);
             var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group', null, sz, false);
@@ -1544,6 +1548,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=467"></script>
+<script src="sw-register.js?v=468"></script>
 </body>
 </html>
