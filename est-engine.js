@@ -410,7 +410,12 @@
           var famM = /^([A-Z]{1,3})/i.exec(String(a.tag || '').trim()), fam = famM ? famM[1].toUpperCase() : '';
           if (atype === 'linear' && fam && r.geo && r.geo.linear && r.geo.linear[fam] && r.geo.linear[fam].ft > 0) {
             var lk = sh + '|' + fam;
-            alf = linGeoUsed[lk] ? 0 : r.geo.linear[fam].ft; linGeoUsed[lk] = 1;
+            // the drawn rows beat the reader's guess, but never more rows than the tags add up to: April Tax M-501 draws 25 dashed "D" rows
+            // (436 ft) where the "D (120) TYP. 3" / "D (200) TYP. 5" tags make 20 sections — the extra rows are duplicates / untagged runs
+            var famRows = r.geo.linear[fam].n || 0, famSecs = 0;
+            (r.air_devices || []).forEach(function (a2) { var f2 = /^([A-Z]{1,3})/i.exec(String(a2.tag || '').trim()); if (f2 && f2[1].toUpperCase() === fam && !notAirDevice(a2)) famSecs += Number(a2.qty || 0); });
+            var famFt = r.geo.linear[fam].ft; if (famRows > famSecs && famSecs >= 3) famFt = Math.round(famFt * famSecs / famRows * 10) / 10;
+            alf = linGeoUsed[lk] ? 0 : famFt; linGeoUsed[lk] = 1;
             var lg = linGeoSheets[sh] = linGeoSheets[sh] || { ft: 0, runs: 0, sections: 0, fams: [] };
             if (alf) { lg.ft += alf; lg.runs += r.geo.linear[fam].n || 0; lg.fams.push(fam); }
             lg.sections += Number(a.qty || 0);
