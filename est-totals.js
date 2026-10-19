@@ -118,7 +118,7 @@
       if (!liner && !wrap) return null;
       var rate = liner ? 2.4 : (/R8|2"/.test(d) ? 1.7 : 1.35), min = liner ? 5 : 4.5;   // $/sq ft and min/sq ft (catalog NW Insulation)
       var dl2 = liner ? 'Duct liner 1" (acoustic)' : (/R8|2"/.test(d) ? 'Duct wrap 2" R8 FSK' : 'Duct wrap 1-1/2" R6 FSK');
-      return { kind: 'duct', label: dl2, unit: 'sq ft', qtyUnit: sqft, mat: sqft * rate, min: sqft * min };
+      return { kind: 'duct', liner: liner, label: dl2, unit: 'sq ft', qtyUnit: sqft, mat: sqft * rate, min: sqft * min, wrapMat: sqft * 1.35, wrapMin: sqft * 4.5 };
     }
     if (cat === 'pipework' && /^(ft|lf)$/i.test(unit) && /insulat/i.test(d) && !/bare/i.test(d)) {
       var s = pipeSize(d); if (!s) return null;
@@ -158,7 +158,16 @@
 
     var unitLaborTime = num(line.unit_labor_hours);
     var ins = insulationOf(line, cat, unit), insSub = flag(es.insulation_sub);
-    if (ins && insSub && ins.kind !== 'explicit') unitLaborTime = Math.max(0, unitLaborTime - ins.min / 60);   // insulators do that part
+    // acoustic lining is applied by the duct shop; es_settings.al_shop_pct (default 100) = share of the lined duct that really gets lining
+    // (first runs of the mains), the rest is bare duct wrapped in the field by the insulation sub (R6 rate) — Russ 2026-10-19
+    if (ins) {
+      var shopFrac = ins.kind === 'duct' && ins.liner ? Math.min(1, Math.max(0, (es.al_shop_pct == null || es.al_shop_pct === '' ? 100 : num(es.al_shop_pct)) / 100)) : 0;
+      ins.shopQty = ins.kind === 'duct' && ins.liner ? ins.qtyUnit * shopFrac : 0; ins.shopMat = ins.shopQty ? ins.mat * shopFrac : 0; ins.shopMin = ins.shopQty ? ins.min * shopFrac : 0;
+      ins.fieldQty = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? ins.qtyUnit * (1 - shopFrac) : ins.qtyUnit;
+      ins.fieldMat = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? ins.wrapMat * (1 - shopFrac) : ins.mat;
+      ins.fieldMin = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? ins.wrapMin * (1 - shopFrac) : ins.min;
+    }
+    if (ins && insSub && ins.kind !== 'explicit') unitLaborTime = Math.max(0, unitLaborTime - ins.fieldMin / 60);   // insulators do the field part; lining stays with the shop
     var indiv = flag(es.individual_labor_rates);
     var laborRate = (indiv && num(line.labor_rate) > 0) ? num(line.labor_rate) : rates.labor;
     var globalSalesRate = num(settings.labor_sales_rate);
@@ -182,7 +191,8 @@
     if (window.NWDuct && cat === 'ductwork' && /^(ft|lf|feet)$/i.test(unit.trim())) { var wd = NWDuct.weightOf(line.description || '', { pressure: flag(es.duct_medium_pressure) ? 'medium' : 'low' }); if (wd) { weightLb = totalQty * wd.lb_ft; ductKind = wd.kind; } }
 
     return {
-      insulation: ins ? { kind: ins.kind, label: ins.label, unit: ins.unit, qty: totalQty * ins.qtyUnit, mat: totalQty * ins.mat, min: totalQty * ins.min, sub: insSub } : null,
+      insulation: ins ? { kind: ins.kind, liner: !!ins.liner, label: ins.label, unit: ins.unit, qty: totalQty * ins.qtyUnit, mat: totalQty * ins.mat, min: totalQty * ins.min, sub: insSub,
+        shopQty: totalQty * ins.shopQty, shopMat: totalQty * ins.shopMat, shopMin: totalQty * ins.shopMin, fieldQty: totalQty * ins.fieldQty, fieldMat: totalQty * ins.fieldMat, fieldMin: totalQty * ins.fieldMin } : null,
       weightLb: weightLb, ductKind: ductKind, qty: qty, totalQty: totalQty, groupMultiplier: gm, unit: unit,
       unitCost: unitCost, wastePct: wastePct, subtotalItemCost: subtotalItemCost,
       markupPct: markupPct, marginPct: subtotalItemSales > 0 ? profit / subtotalItemSales : 0,
@@ -256,7 +266,9 @@
     var subtotal = 0, count = 0, optionalTotal = 0;
     var breakdown = { sm: 0, pipe: 0, startup: 0, other: 0 };
     var duct = { lb: 0, rect: 0, round: 0, oval: 0, shopCost: 0, lineMaterial: 0, lines: 0 };   // sheet-metal weight (lb) + shop $/lb check
-    var insul = { duct_sqft: 0, duct_mat: 0, duct_min: 0, pipe_ft: 0, pipe_mat: 0, pipe_min: 0, explicit_mat: 0, explicit_min: 0, lines: 0, sub: flag(settings.es_settings && settings.es_settings.insulation_sub), subCost: 0, detail: {} };
+    var insul = { duct_sqft: 0, duct_mat: 0, duct_min: 0, pipe_ft: 0, pipe_mat: 0, pipe_min: 0, explicit_mat: 0, explicit_min: 0, lines: 0, sub: flag(settings.es_settings && settings.es_settings.insulation_sub), subCost: 0, detail: {},
+      al_shop_pct: (settings.es_settings && settings.es_settings.al_shop_pct != null && settings.es_settings.al_shop_pct !== '') ? num(settings.es_settings.al_shop_pct) : 100,
+      liner_sqft: 0, shop: { sqft: 0, mat: 0, min: 0 }, field: { duct_sqft: 0, duct_mat: 0, duct_min: 0, from_liner_sqft: 0, from_liner_mat: 0, from_liner_min: 0, pipe_ft: 0, pipe_mat: 0, pipe_min: 0 } };
     var perLine = [];   // per-line totals in line order, for the rules
 
     (lines || []).forEach(function (li) {
@@ -268,7 +280,10 @@
       subtotal += lt.totalSales;
       taxableSales += lt.taxableSales;   // every cost type — a taxable wet-tap / services line is taxed too
 
-      if (lt.insulation) { var I = lt.insulation; insul.lines++; var dk = I.label || I.kind, dd = insul.detail[dk] = insul.detail[dk] || { kind: I.kind, unit: I.unit, qty: 0, mat: 0, min: 0, lines: 0 }; dd.qty += I.qty; dd.mat += I.mat; dd.min += I.min; dd.lines++; if (I.kind === 'duct') { insul.duct_sqft += I.qty; insul.duct_mat += I.mat; insul.duct_min += I.min; } else if (I.kind === 'pipe') { insul.pipe_ft += I.qty; insul.pipe_mat += I.mat; insul.pipe_min += I.min; } else { insul.explicit_mat += I.mat; insul.explicit_min += I.min; } }
+      if (lt.insulation) { var I = lt.insulation; insul.lines++; var dk = I.label || I.kind, dd = insul.detail[dk] = insul.detail[dk] || { kind: I.kind, unit: I.unit, qty: 0, mat: 0, min: 0, lines: 0 }; dd.qty += I.qty; dd.mat += I.mat; dd.min += I.min; dd.lines++; dd.fieldQty = (dd.fieldQty || 0) + I.fieldQty; dd.fieldMat = (dd.fieldMat || 0) + I.fieldMat; dd.fieldMin = (dd.fieldMin || 0) + I.fieldMin; dd.liner = !!I.liner;
+        if (I.kind === 'duct' && I.liner) { insul.liner_sqft += I.qty; insul.shop.sqft += I.shopQty; insul.shop.mat += I.shopMat; insul.shop.min += I.shopMin; insul.field.from_liner_sqft += I.fieldQty; insul.field.from_liner_mat += I.fieldMat; insul.field.from_liner_min += I.fieldMin; insul.field.duct_sqft += I.fieldQty; insul.field.duct_mat += I.fieldMat; insul.field.duct_min += I.fieldMin; }
+        else if (I.kind === 'duct') { insul.field.duct_sqft += I.fieldQty; insul.field.duct_mat += I.fieldMat; insul.field.duct_min += I.fieldMin; }
+        else if (I.kind === 'pipe') { insul.field.pipe_ft += I.fieldQty; insul.field.pipe_mat += I.fieldMat; insul.field.pipe_min += I.fieldMin; } if (I.kind === 'duct') { insul.duct_sqft += I.qty; insul.duct_mat += I.mat; insul.duct_min += I.min; } else if (I.kind === 'pipe') { insul.pipe_ft += I.qty; insul.pipe_mat += I.mat; insul.pipe_min += I.min; } else { insul.explicit_mat += I.mat; insul.explicit_min += I.min; } }
       if (lt.costType === 'S') { wetTap += lt.subcontractorCost; wetTapSales += lt.totalSales; return; }
       if (lt.costType === 'O') { services += lt.otherCost; servicesSales += lt.totalSales; return; }
 
@@ -290,7 +305,7 @@
     });
 
     // ── insulation by subcontractor: the labor taken out of the duct / pipe lines comes back as a services amount ──
-    if (insul.sub) { var subRate = num(settings.insulation_sub_rate) || r.labor; insul.subCost = (insul.duct_min + insul.pipe_min) / 60 * subRate; services += insul.subCost; servicesSales += insul.subCost; subtotal += insul.subCost; }
+    if (insul.sub) { var subRate = num(settings.insulation_sub_rate) || r.labor; insul.subCost = (insul.field.duct_min + insul.field.pipe_min) / 60 * subRate; services += insul.subCost; servicesSales += insul.subCost; subtotal += insul.subCost; }
     // ── company rules: minimum charges / allowances join the buckets of the lines they matched ──
     var ruleSet = Array.isArray(est.rules) ? est.rules : (typeof window !== 'undefined' && Array.isArray(window.NW_EST_RULES) ? window.NW_EST_RULES : []);
     var rulesOut = nwEstRules(lines, perLine, ruleSet);
