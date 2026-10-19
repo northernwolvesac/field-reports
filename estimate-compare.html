@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0696D7">
+<title>Compare takeoffs — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=463"></script>
+<script src="auth.js?v=463"></script>
+<script src="est-totals.js?v=463"></script>
+<style>
+  body { padding-bottom: 40px; }
+  .cp-wrap { max-width: 1380px; margin: 0 auto; }
+  .cp-body { padding: 16px; }
+  .card { background: var(--nw-card); border: 1px solid var(--nw-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color: var(--nw-muted); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type=text] { padding: 8px 10px; border: 1px solid var(--nw-border); border-radius: 8px; font-size: 13px; background: #fff; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--nw-border); background: #fff; font-weight: 700; font-size: 12px; cursor: pointer; color: var(--nw-text); text-decoration: none; display: inline-block; }
+  .btn.primary { background: var(--nw-text); color: #fff; border-color: var(--nw-text); }
+  .btn.sm { padding: 3px 8px; font-size: 11px; }
+  .muted { color: var(--nw-muted); font-size: 12px; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.t th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--nw-muted); border-bottom: 1px solid var(--nw-border); padding: 6px 6px; white-space: nowrap; }
+  table.t th.n, table.t td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.t td { padding: 5px 6px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  table.t tr.sec td { background: #f8fafc; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--nw-muted); border-top: 2px solid var(--nw-border); }
+  table.t tr.sub td { background: #fbfdff; font-weight: 700; }
+  table.t tr.tot td { background: #f1f5f9; font-weight: 800; font-size: 13.5px; border-top: 2px solid var(--nw-border); }
+  table.t tr.one td { background: #fffbeb; }
+  .src { display: inline-block; font-size: 10px; padding: 1px 5px; border-radius: 5px; background: #f1f5f9; color: #64748b; margin-left: 4px; vertical-align: middle; }
+  .src.tk { background: #e0f2fe; color: #075985; }
+  .e { display: inline-block; min-width: 46px; text-align: right; padding: 1px 6px; border-radius: 6px; font-weight: 700; font-size: 11.5px; }
+  .e.g { background: #dcfce7; color: #166534; } .e.a { background: #fef3c7; color: #92400e; } .e.r { background: #fee2e2; color: #991b1b; } .e.x { background: #f1f5f9; color: #94a3b8; font-weight: 400; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .kpi .k { border: 1px solid var(--nw-border); border-radius: 10px; padding: 10px 14px; }
+  .kpi .k .l { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--nw-muted); }
+  .kpi .k .v { font-size: 20px; font-weight: 800; line-height: 1.25; }
+  .kpi .k .s { font-size: 11.5px; color: var(--nw-muted); }
+  .who { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .who .w { border: 1px solid var(--nw-border); border-radius: 10px; padding: 10px 14px; }
+  .who .w b { font-size: 14px; }
+  .who .w .tag { display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 6px; margin-right: 6px; }
+  .who .w.a .tag { background: #0f172a; color: #fff; } .who .w.b .tag { background: #0696D7; color: #fff; }
+  .pick { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 12.5px; }
+  .pick:hover { background: #f0f9ff; }
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 300; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: min(680px, 100%); max-height: 88vh; overflow: auto; padding: 18px 20px; }
+  .modal h3 { margin: 0 0 12px; font-size: 15px; }
+  @media (max-width: 900px) { .hide-m { display: none; } .who { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="cp-wrap">
+  <div class="header">
+    <a href="ai-estimator.html" class="back-btn" id="backBtn">&#8592;</a>
+    <div class="header-content"><h1>Compare takeoffs</h1></div>
+    <div class="profile-circle" id="profileCircle">--</div>
+  </div>
+  <div class="cp-body" id="main"><div class="muted">Loading…</div></div>
+</div>
+<div class="modal-bg" id="modal" onclick="if(event.target===this)CP.closeModal()"><div class="modal" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+// ═══════════════════════════════════════════════════════════════════════
+// Compare two estimates of the same job line by line — the AI takeoff against the estimator's own, or any two versions.
+// Source = the estimate line items of each side (takeoff layer lines carry the takeoff quantities with the layer multiplier
+// applied; lines without a layer are the engine's or hand-entered ones). Lines are matched by a key that ignores wording:
+// duct size, pipe size + material, outlet type, service kind, equipment tag. Totals use est-totals.js like the Estimate tab.
+// ═══════════════════════════════════════════════════════════════════════
+var CP = (function() {
+  'use strict';
+  var $ = function(id) { return document.getElementById(id); };
+  var sb = window.supabaseClient;
+  var A = null, B = null, me = { name: '' };
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
+  function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+  function money(v) { return '$' + Math.round(num(v)).toLocaleString('en-US'); }
+  function qty(v, unit) { var n = num(v); return (Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('en-US') + (unit ? ' ' + unit : ''); }
+  function closeModal() { $('modal').classList.remove('open'); }
+
+  // ── the matching key of a line: what it is, not how it is worded ──
+  var SECTIONS = [['ductwork', 'Ductwork'], ['pipework', 'Pipework'], ['air_outlets', 'Air outlets & accessories'], ['equipment', 'Equipment'], ['disconnects', 'Disconnects / demolition'], ['services', 'Services'], ['other', 'Other']];
+  var OUTLET_RE = /(diffuser|grille|register|louver|thermostat|t-stat|sensor|damper|\bvd\b|\bfd\b|\bbdd\b|\bsd\b|slot|linear|exhaust fan|\bef\b|plaque|perforated)/i;
+  function keyOf(l) {
+    var d = String(l.description || ''), cat = String(l.category || '').toLowerCase(), dl = d.toLowerCase();
+    var m = /(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})/.exec(d), r = /(\d{1,2})\s*["”]?\s*(?:ø|Ø|⌀|dia\b|round|\brd\b)/i.exec(d);
+    if (cat === 'ductwork' || (!cat && (m || r))) {
+      if (m) { var w = Math.max(+m[1], +m[2]), h = Math.min(+m[1], +m[2]); return { sec: 'ductwork', key: 'duct|' + w + 'x' + h, label: w + 'x' + h + ' duct' + (/liner|acl|lined/i.test(d) ? ' (lined)' : '') + (/double.?wall|dw/i.test(d) ? ' double wall' : '') }; }
+      if (r) return { sec: 'ductwork', key: 'duct|' + r[1] + 'Ø', label: r[1] + '"Ø round duct' };
+      return { sec: 'ductwork', key: 'duct|' + norm(d), label: d };
+    }
+    if (cat === 'pipework' || /\b(copper|pvc|cpvc|black iron|steel pipe|pex|refrigerant|condensate)\b/i.test(d) && /["”]/.test(d)) {
+      var sz = /(\d+(?:[- ]\d\/\d)?|\d\/\d)\s*["”]/.exec(d), mat = (/copper|pvc|cpvc|black iron|steel|pex|insul/i.exec(d) || ['pipe'])[0].toLowerCase(), svc = /condens|\bcd\b/i.test(d) ? ' condensate' : /refrig|suction|liquid/i.test(d) ? ' refrigerant' : '';
+      return { sec: 'pipework', key: 'pipe|' + (sz ? sz[1].replace(/\s/g, '') : '?') + '|' + mat + svc, label: (sz ? sz[1] + '" ' : '') + mat + svc + ' pipe' };
+    }
+    if (cat === 'air_outlets' || OUTLET_RE.test(d)) {
+      var t = OUTLET_RE.exec(d), type = t ? t[1].toLowerCase() : 'device';
+      if (/diffusers? \/ grilles?|grilles? \/ registers?/i.test(d)) type = 'diffuser';
+      if (type === 't-stat' || type === 'sensor') type = 'thermostat';
+      if (/^(vd|fd|bdd|sd)$/.test(type) || type === 'damper') type = 'damper';
+      if (type === 'ef' || type === 'exhaust fan') return { sec: 'equipment', key: 'equip|exhaust fan', label: 'exhaust fan' };
+      if (type === 'linear' || type === 'slot') type = 'linear diffuser';
+      if (type === 'plaque' || type === 'perforated') type = 'diffuser';
+      if (type === 'device') return { sec: 'air_outlets', key: 'outlet|' + norm(d), label: d };
+      return { sec: 'air_outlets', key: 'outlet|' + type, label: type + 's' };
+    }
+    if (cat === 'equipment' || /\b[A-Z]{1,4}-\d+[A-Z]?\b/.test(d)) { var tg = /\b([A-Z]{1,4}-\d+[A-Z]?)\b/.exec(d); return { sec: 'equipment', key: 'equip|' + (tg ? tg[1] : norm(d)), label: tg ? tg[1] + ' — ' + d.replace(tg[1], '').replace(/^[\s—–-]+/, '').slice(0, 40) : d }; }
+    if (cat === 'disconnects' || /disconnect|demoli|remove existing/i.test(d)) return { sec: 'disconnects', key: 'disc', label: 'Disconnect / remove existing' };
+    if (cat === 'services' || /shop drawing|testing|balanc|man.?lift|scaffold|crane|rigging|permit|clean|commission|as.?built|submittal|engineering|insurance/i.test(d)) {
+      var s = /shop drawing|testing|balanc|lift|scaffold|crane|rigging|permit|clean|commission|as.?built|submittal|engineering|insurance/i.exec(dl), kind = s ? s[0] : norm(d);
+      if (/testing|balanc/.test(kind)) kind = 'testing & balancing'; if (/lift|scaffold/.test(kind)) kind = 'lift / scaffolding'; if (/crane|rigging/.test(kind)) kind = 'crane / rigging';
+      return { sec: 'services', key: 'svc|' + kind, label: kind.charAt(0).toUpperCase() + kind.slice(1) };
+    }
+    return { sec: 'other', key: 'other|' + norm(d), label: d };
+  }
+  function norm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 40); }
+  function lineCost(l, rate) { return num(l.quantity) * (num(l.unit_material_cost) + num(l.unit_labor_hours) * rate); }
+
+  async function loadSide(id) {
+    var e = await sb.from('estimates').select('*').eq('id', id).single();
+    if (e.error) throw new Error(e.error.message);
+    var li = await sb.from('estimate_line_items').select('*').eq('estimate_id', id).order('sort_order');
+    if (li.error) throw new Error(li.error.message);
+    var ly = await sb.from('estimate_takeoff_layers').select('id').eq('estimate_id', id);
+    var lines = li.data || [], est = e.data, rate = num(est.labor_rate) || 60, tot = null;
+    try { tot = window.nwEstTotals ? nwEstTotals(lines, est) : null; } catch (err) { console.warn(err); }
+    var rows = {};
+    lines.forEach(function(l) {
+      var k = keyOf(l), r = rows[k.key] = rows[k.key] || { sec: k.sec, key: k.key, label: k.label, qty: 0, unit: l.unit || '', cost: 0, hrs: 0, lines: [], tk: false };
+      r.qty += num(l.quantity); r.cost += lineCost(l, rate); r.hrs += num(l.quantity) * num(l.unit_labor_hours); r.lines.push(l); if (l.layer_id) r.tk = true;
+      if (!r.unit && l.unit) r.unit = l.unit;
+    });
+    return { id: id, est: est, lines: lines, rows: rows, rate: rate, tot: tot, layers: (ly.data || []).length,
+      total: tot ? num(tot.total != null ? tot.total : tot.bidPrice) : num(est.total_sales), material: tot ? num(tot.materialTotal) : 0, labor: tot ? num(tot.labor) : 0, hours: tot ? num(tot.laborHours) : 0 };
+  }
+
+  function delta(a, b) {   // b against a: what the second takeoff has more / less than the first
+    if (!a && !b) return '<span class="e x">—</span>';
+    if (!a) return '<span class="e a">only B</span>';
+    if (!b) return '<span class="e a">only A</span>';
+    var p = (b - a) / Math.abs(a) * 100, c = Math.abs(p) <= 10 ? 'g' : Math.abs(p) <= 25 ? 'a' : 'r';
+    return '<span class="e ' + c + '">' + (p > 0 ? '+' : '') + Math.round(p) + '%</span>';
+  }
+  function who(side, s, cls) {
+    var e = s.est;
+    return '<div class="w ' + cls + '"><span class="tag">' + side + '</span><b>' + esc(e.name) + '</b><div class="muted">' + (e.quote_number ? 'Q' + e.quote_number + ' · ' : '') + esc(e.estimator_name || '') + ' · ' + esc(String(e.status || '')) + ' · ' + String(e.created_at || '').slice(0, 10) +
+      ' · ' + s.lines.length + ' lines' + (s.layers ? ' · ' + s.layers + ' takeoff layers' : ' · no takeoff layers') + '</div>' +
+      '<div class="row" style="margin-top:6px"><a class="btn sm" href="takeoff.html?est=' + e.id + '">Takeoff</a><a class="btn sm" href="estimating.html?est=' + e.id + '">Estimate</a>' + (cls === 'b' ? '<button class="btn sm" onclick="CP.pick()">Compare with another…</button>' : '') + '</div></div>';
+  }
+  function render() {
+    var keys = {}; Object.keys(A.rows).concat(Object.keys(B.rows)).forEach(function(k) { keys[k] = 1; });
+    var html = '<div class="card"><div class="who">' + who('A', A, 'a') + who('B', B, 'b') + '</div></div>';
+    var dT = B.total - A.total;
+    html += '<div class="card"><div class="kpi">' +
+      '<div class="k"><div class="l">Bid price A</div><div class="v">' + money(A.total) + '</div><div class="s">' + money(A.material) + ' material · ' + Math.round(A.hours) + ' h labor</div></div>' +
+      '<div class="k"><div class="l">Bid price B</div><div class="v">' + money(B.total) + '</div><div class="s">' + money(B.material) + ' material · ' + Math.round(B.hours) + ' h labor</div></div>' +
+      '<div class="k"><div class="l">B − A</div><div class="v">' + (dT >= 0 ? '+' : '−') + money(Math.abs(dT)) + '</div><div class="s">' + delta(A.total, B.total) + ' of A</div></div>' +
+      secKpi('ductwork', 'Duct', 'ft') + secKpi('air_outlets', 'Outlets', 'ea') + secKpi('pipework', 'Pipe', 'ft') + '</div></div>';
+    html += '<div class="card"><h3>Line by line — matched by what the line is, not its wording</h3><div style="overflow:auto"><table class="t"><thead><tr><th>Item</th><th class="n">A qty</th><th class="n">B qty</th><th class="n">B vs A</th><th class="n hide-m">A cost</th><th class="n hide-m">B cost</th><th class="n">B − A $</th></tr></thead><tbody>';
+    var onlyA = 0, onlyB = 0;
+    SECTIONS.forEach(function(S) {
+      var ks = Object.keys(keys).filter(function(k) { var r = A.rows[k] || B.rows[k]; return r.sec === S[0]; });
+      if (!ks.length) return;
+      ks.sort(function(x, y) { return (A.rows[x] || B.rows[x]).label.localeCompare((A.rows[y] || B.rows[y]).label, undefined, { numeric: true }); });
+      var sa = 0, sbb = 0;
+      html += '<tr class="sec"><td colspan="7">' + S[1] + '</td></tr>';
+      ks.forEach(function(k) {
+        var ra = A.rows[k], rb = B.rows[k], r = ra || rb, ca = ra ? ra.cost : 0, cb = rb ? rb.cost : 0; sa += ca; sbb += cb;
+        if (!ra) onlyB++; if (!rb) onlyA++;
+        var names = function(rr) { return rr ? rr.lines.map(function(l) { return esc(l.description) + ' (' + qty(l.quantity, l.unit) + ')' + (l.layer_id ? ' [takeoff]' : ''); }).join('\n') : ''; };
+        html += '<tr class="' + (!ra || !rb ? 'one' : '') + '" title="' + esc('A: ' + names(ra) + '\nB: ' + names(rb)) + '"><td>' + esc(r.label) +
+          (ra && ra.tk ? '<span class="src tk">A takeoff</span>' : ra ? '<span class="src">A line</span>' : '') + (rb && rb.tk ? '<span class="src tk">B takeoff</span>' : rb ? '<span class="src">B line</span>' : '') + '</td>' +
+          '<td class="n">' + (ra ? qty(ra.qty, ra.unit) : '—') + '</td><td class="n">' + (rb ? qty(rb.qty, rb.unit) : '—') + '</td><td class="n">' + delta(ra ? ra.qty : 0, rb ? rb.qty : 0) + '</td>' +
+          '<td class="n hide-m">' + (ra ? money(ca) : '—') + '</td><td class="n hide-m">' + (rb ? money(cb) : '—') + '</td><td class="n">' + ((cb - ca) >= 0 ? '+' : '−') + money(Math.abs(cb - ca)) + '</td></tr>';
+      });
+      html += '<tr class="sub"><td>' + S[1] + ' — direct cost (material + labor hours × rate)</td><td></td><td></td><td class="n">' + delta(sa, sbb) + '</td><td class="n hide-m">' + money(sa) + '</td><td class="n hide-m">' + money(sbb) + '</td><td class="n">' + ((sbb - sa) >= 0 ? '+' : '−') + money(Math.abs(sbb - sa)) + '</td></tr>';
+    });
+    html += '<tr class="tot"><td>Bid price (with overhead, misc, tax — as on the Estimate tab)</td><td></td><td></td><td class="n">' + delta(A.total, B.total) + '</td><td class="n hide-m">' + money(A.total) + '</td><td class="n hide-m">' + money(B.total) + '</td><td class="n">' + (dT >= 0 ? '+' : '−') + money(Math.abs(dT)) + '</td></tr>';
+    html += '</tbody></table></div><div class="muted" style="margin-top:8px">' + onlyA + ' item' + (onlyA === 1 ? '' : 's') + ' only in A, ' + onlyB + ' only in B (amber rows). Hover a row for the original lines of each side. Direct cost = quantity × (unit material + labor hours × ' + money(A.rate) + '/h' + (B.rate !== A.rate ? ' / ' + money(B.rate) + '/h' : '') + ').</div></div>';
+    $('main').innerHTML = html;
+  }
+  function secKpi(sec, label, unit) {
+    var sum = function(S) { var t = 0; Object.keys(S.rows).forEach(function(k) { if (S.rows[k].sec === sec) t += S.rows[k].qty; }); return t; };
+    var a = sum(A), b = sum(B); if (!a && !b) return '';
+    return '<div class="k"><div class="l">' + label + ' A / B</div><div class="v">' + qty(a) + ' / ' + qty(b) + ' ' + unit + '</div><div class="s">' + delta(a, b) + '</div></div>';
+  }
+
+  // ── pick the other estimate ──
+  function pick() {
+    var q = (A.est.name || '').match(/\d{2,}/); q = q ? q[0] : (A.est.name || '').split(/\s+/).slice(0, 2).join(' ');
+    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">Compare “' + esc(A.est.name) + '” with…</h3><button class="btn" onclick="CP.closeModal()">Close</button></div>' +
+      '<div class="row"><input type="text" id="pkQ" value="' + esc(q) + '" placeholder="part of the estimate name" style="min-width:260px" onkeydown="if(event.key===\'Enter\')CP.search()"><button class="btn" onclick="CP.search()">Search</button></div><div id="pkList" class="muted" style="margin-top:10px">Searching…</div>';
+    $('modal').classList.add('open'); search();
+  }
+  async function search() {
+    var q = ($('pkQ').value || '').trim(); if (!q) { $('pkList').textContent = 'Type part of the name'; return; }
+    var r = await sb.from('estimates').select('id,name,quote_number,status,line_count,total_sales,estimator_name,created_at,parent_estimate_id,version_label').eq('is_template', false).ilike('name', '%' + q + '%').order('created_at', { ascending: false }).limit(30);
+    var list = (r.data || []).filter(function(x) { return x.id !== A.id; });
+    $('pkList').innerHTML = list.length ? list.map(function(x) { return '<div class="pick" onclick="CP.go(\'' + x.id + '\')">' + esc(x.name) + (x.version_label && !/original/i.test(x.version_label) ? ' · ' + esc(x.version_label) : '') + ' <span class="muted">(' + (x.quote_number ? 'Q' + x.quote_number + ', ' : '') + (x.line_count || 0) + ' lines' + (x.total_sales ? ', ' + money(x.total_sales) : '') + ', ' + esc(x.status || '') + (x.estimator_name ? ', ' + esc(x.estimator_name) : '') + ', ' + String(x.created_at).slice(0, 10) + ')</span></div>'; }).join('') : '<span class="muted">No other estimate matches “' + esc(q) + '”.</span>';
+  }
+  function go(id) { location.href = 'estimate-compare.html?a=' + A.id + '&b=' + id; }
+
+  async function init() {
+    var p = new URLSearchParams(location.search), a = p.get('a'), b = p.get('b');
+    if (p.get('back')) $('backBtn').href = p.get('back');
+    try {
+      var u = await sb.auth.getUser(); if (!u.data || !u.data.user) return;
+      if (!a) { $('main').innerHTML = '<div class="card">Open this page from an estimate: <code>estimate-compare.html?a=&lt;estimate&gt;&amp;b=&lt;estimate&gt;</code>.</div>'; return; }
+      A = await loadSide(a);
+      if (!b) { $('main').innerHTML = '<div class="card"><div class="who">' + who('A', A, 'a') + '<div class="w b"><span class="tag">B</span><button class="btn primary" onclick="CP.pick()">Pick the estimate to compare with…</button></div></div></div>'; return; }
+      B = await loadSide(b);
+      render();
+    } catch (e) { $('main').innerHTML = '<div class="card">' + esc(e.message || e) + '</div>'; }
+  }
+  init();
+  return { pick: pick, search: search, go: go, closeModal: closeModal, keyOf: keyOf };
+})();
+</script>
+<script src="sw-register.js?v=463"></script>
+</body>
+</html>

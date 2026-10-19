@@ -205,9 +205,11 @@ var AE = (function() {
     return r.error ? [] : (r.data || []).filter(function(x) { return !x.parent_estimate_id; });
   }
   function estLabel(x) { return x.name + ' (' + (x.quote_number ? 'Q' + x.quote_number + ', ' : '') + (x.line_count || 0) + ' lines' + (x.total_sales ? ', ' + money(x.total_sales) : '') + ', ' + (x.status || '') + (x.estimator_name ? ', ' + x.estimator_name : '') + ', ' + String(x.created_at).slice(0, 10) + ')'; }
-  function linkEstimate() {
-    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">🔗 Link to an estimate</h3><button class="btn" onclick="AE.closeModal()">Close</button></div>' +
-      '<p class="muted">Pick the Bid Board estimate this session belongs to. “Update estimate” then writes the AI breakdown into it and “Open in Takeoff” lays the plans in its Takeoff.</p>' +
+  var linkMode = 'link';   // 'link' = tie the session to the picked estimate; 'compare' = open the compare page against it
+  function linkEstimate(mode) {
+    linkMode = mode === 'compare' ? 'compare' : 'link';
+    $('modalBody').innerHTML = '<div class="row" style="justify-content:space-between"><h3 style="margin:0">' + (linkMode === 'compare' ? '⇄ Compare the AI takeoff with…' : '🔗 Link to an estimate') + '</h3><button class="btn" onclick="AE.closeModal()">Close</button></div>' +
+      '<p class="muted">' + (linkMode === 'compare' ? 'Pick the estimator\'s own estimate of this job (or any version): the compare page puts the two side by side — duct feet per size, outlets, pipe, services, equipment, bid price.' : 'Pick the Bid Board estimate this session belongs to. “Update estimate” then writes the AI breakdown into it and “Open in Takeoff” lays the plans in its Takeoff.') + '</p>' +
       '<div class="row"><input type="text" id="leQ" value="' + esc(estKey()) + '" placeholder="part of the estimate name" style="min-width:260px" onkeydown="if(event.key===\'Enter\')AE.linkSearch()"><button class="btn" onclick="AE.linkSearch()">Search</button></div>' +
       '<div id="leList" class="muted" style="margin-top:10px">Searching…</div>';
     $('modal').classList.add('open');
@@ -216,7 +218,8 @@ var AE = (function() {
   async function linkSearch() {
     var q = ($('leQ').value || '').trim(); if (!q) { $('leList').textContent = 'Type part of the name'; return; }
     var list = await findEstimates(q);
-    $('leList').innerHTML = list.length ? list.map(function(x) { return '<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line,#e5e7eb)"><span>' + esc(estLabel(x)) + '</span><button class="btn" onclick="AE.linkTo(\'' + x.id + '\')">Link</button></div>'; }).join('') : '<span class="muted">No estimate matches “' + esc(q) + '”. “Create estimate” makes a new one.</span>';
+    if (linkMode === 'compare') list = list.filter(function(x) { return x.id !== session.estimate_id; });
+    $('leList').innerHTML = list.length ? list.map(function(x) { return '<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line,#e5e7eb)"><span>' + esc(estLabel(x)) + '</span>' + (linkMode === 'compare' ? '<a class="btn" href="estimate-compare.html?a=' + session.estimate_id + '&b=' + x.id + '&back=' + encodeURIComponent('ai-estimator.html?s=' + session.id) + '">Compare</a>' : '<button class="btn" onclick="AE.linkTo(\'' + x.id + '\')">Link</button>') + '</div>'; }).join('') : '<span class="muted">No ' + (linkMode === 'compare' ? 'other ' : '') + 'estimate matches “' + esc(q) + '”.' + (linkMode === 'compare' ? '' : ' “Create estimate” makes a new one.') + '</span>';
   }
   async function linkTo(id) {
     var u = await supabaseClient.from('ai_est_sessions').update({ estimate_id: id }).eq('id', session.id);
@@ -245,7 +248,7 @@ var AE = (function() {
       '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
       ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + (res.run && res.run.finished_at ? ' · last run ' + res.run.read + ' sheet' + (res.run.read === 1 ? '' : 's') + ' in ' + Math.max(1, Math.round(res.run.secs / 60)) + ' min, $' + Number(res.run.cost || 0).toFixed(2) + (res.run.retries ? ', ' + res.run.retries + ' retr' + (res.run.retries === 1 ? 'y' : 'ies') : '') + (res.run.failed ? ', <span class="flag">' + res.run.failed + ' failed</span>' : '') : '') + (res.run && res.run.active && !running && res.run.heartbeat && Date.now() - new Date(res.run.heartbeat).getTime() < 120000 ? ' · <span class="flag">reading in another tab' + (res.run.by ? ' (' + esc(res.run.by) + ')' : '') + '</span>' : '') + '</div></div>' +
       '<div class="row"><label title="Shop drawings and T&amp;B are counted per plan sheet with new work; type a number here to override">SD/T&amp;B sheets<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
-      (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a>' : '<button class="btn" onclick="AE.linkEstimate()" title="Tie this session to an estimate that already exists on the Bid Board">🔗 Link estimate</button>') + '</div></div>' +
+      (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a><button class="btn" onclick="AE.linkEstimate(\'compare\')" title="Put the AI takeoff side by side with the estimator\'s own estimate of this job">⇄ Compare</button>' : '<button class="btn" onclick="AE.linkEstimate()" title="Tie this session to an estimate that already exists on the Bid Board">🔗 Link estimate</button>') + '</div></div>' +
       (estimateGone ? '<div class="muted" style="margin-top:6px">⚠ The estimate this session was linked to no longer exists (deleted on the Bid Board). Link the session to the right estimate, or “Create estimate” makes a new one.</div>' : '') + '</div>' +
 
       '<div class="card"><h3>1 · Bid documents</h3>' +
@@ -1474,6 +1477,10 @@ var AE = (function() {
       bridging = 'Saving ' + rows.length + ' marks…'; render();
       var all = scales.concat(rows);
       for (var c = 0; c < all.length; c += 200) { var ins2 = await supabaseClient.from('estimate_measurements').insert(all.slice(c, c + 200)); if (ins2.error) throw new Error(ins2.error.message); }
+      // the takeoff now owns ducts, pipes and outlets: the engine's own lines of those categories (from "Create estimate") would double them
+      // once the Takeoff page syncs its layers into the estimate — the engine keeps services, equipment, disconnects and the rest
+      var owned = {}; layers.forEach(function(l) { owned[l.category] = 1; }); var ownedCats = Object.keys(owned).filter(function(c) { return /^(ductwork|pipework|air_outlets)$/.test(c); });
+      if (ownedCats.length) { try { await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estId).is('layer_id', null).in('category', ownedCats); } catch (eD) {} }
       var nCnt = rows.filter(function(r) { return r.tool_type === 'count'; }).length;
       toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + ' on ' + list.length + ' plans, ' + made + ' layers — opening the takeoff');
       setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
@@ -1498,10 +1505,17 @@ var AE = (function() {
         exclusions: (v.exclusions || []).join('\n') || null, notes: 'Built by the AI Estimator (session ' + session.id + '). Check every BUDGET line and flag before sending.' }).select('id').single();
       if (r.error) { toast(r.error.message); return; }
       estId = r.data.id;
-    } else {
-      await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estId);
     }
-    var rows = e.lines.map(function(l) {
+    // categories the estimate's Takeoff already carries as layers (ducts / pipes / outlets laid on the plans) stay with the takeoff:
+    // their synced lines are kept and the engine's lines of those categories are not written again
+    var ownedCats = {};
+    try { var lq = await supabaseClient.from('estimate_takeoff_layers').select('category').eq('estimate_id', estId); (lq.data || []).forEach(function(l) { if (/^(ductwork|pipework|air_outlets)$/.test(l.category)) ownedCats[l.category] = 1; }); } catch (eL) {}
+    if (session.estimate_id) {
+      var del = supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estId);
+      await (Object.keys(ownedCats).length ? del.is('layer_id', null) : del);
+    }
+    var skippedCats = Object.keys(ownedCats);
+    var rows = e.lines.filter(function(l) { return !ownedCats[l.category]; }).map(function(l) {
       return { estimate_id: estId, category: l.category, description: l.description, quantity: l.quantity, unit: l.unit, unit_material_cost: l.unit_material_cost,
         unit_labor_hours: l.unit_labor_hours, labor_crew_type: l.labor_crew_type, vendor_name: l.vendor_name || null, vendor_quote_ref: l.vendor_quote_ref || null,
         is_firm: l.is_firm !== false, is_wet_tap: !!l.is_wet_tap, sort_order: l.sort_order, notes: [l.basis, l.flag ? '⚠ ' + l.flag : ''].filter(Boolean).join(' — ') };
@@ -1510,7 +1524,7 @@ var AE = (function() {
     if (ins.error) { toast(ins.error.message); return; }
     session.estimate_id = estId;
     await supabaseClient.from('ai_est_sessions').update({ estimate_id: estId }).eq('id', session.id);
-    toast('Estimate ready ✓'); render();
+    toast('Estimate ready ✓' + (skippedCats.length ? ' — ' + skippedCats.join(', ').replace(/_/g, ' ') + ' stay with the takeoff' : '')); render();
   }
 
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
