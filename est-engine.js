@@ -11,6 +11,7 @@
     airOutlet: 1.6, linearPerFt: 0.8, vavOrDamper: 2.67, fpb: 8,           // Air Outlets Installation Standards
     wetTap: 10000,                                                          // Pricing and Markup Standards
     ductSD: 2500, pipeSD: 1300, tab: 2500,                                  // Shop Drawings and Testing (per floor)
+    lift: 2500,                                                             // Man-lift / scaffolding (NWAC "Man-lift, scafoldings", per job)
     thermostat: 500, sensor: 400, tstatWiring: 50, vavControls: 1000        // Standalone Controls Standards
   };
   // Equipment Installation Standards: man-hours per unit
@@ -216,6 +217,25 @@
 
   // ── read the AI sheet results ────────────────────────────────────────
   function norm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }   // AC1-1 = AC-1-1
+  // the device tags a sheet actually prints: the PDF text layer's tag census, plus the OCR words of an outlined-text sheet (414 W 14th:
+  // "CD" x5 in the OCR, nothing in the text layer)
+  function devWords(p) {
+    var r = (p && p.result) || {}, w = {}, dt = (p && p.tag_counts && p.tag_counts.devices) || {};
+    Object.keys(dt).forEach(function (k) { if (k !== '(cfm only)') w[norm(k)] = (w[norm(k)] || 0) + (Number(dt[k]) || 0); });
+    (r.ocr_words || []).forEach(function (x) { var t = norm(String(x && x[0] || '').trim()); if (/^[A-Z]{1,3}\d{0,2}$/.test(t)) w[t] = (w[t] || 0) + 1; });
+    return w;
+  }
+  // a row the reader counted from drawn symbols ("A" x24 "repeated across plan grid") on a sheet whose real device tags it also read
+  // from the text (CD x4, CG x4): the tags are the truth there, a symbol family that never appears as a printed tag is grid bubbles,
+  // column marks or legend art, not outlets (414 W 14th: Vladimir 8 outlets, the reader 8 + 24 "A"). Untagged sheets keep their
+  // symbol counts (that is what the glyph census is for).
+  function symbolRowDropped(a, p) {
+    if (!a || String(a.basis || '').toLowerCase() !== 'symbols') return false;
+    var r = (p && p.result) || {}, w = devWords(p);
+    var tagRows = (r.air_devices || []).filter(function (x) { return x !== a && String(x.basis || '').toLowerCase() === 'tags' && w[norm(x.tag)] > 0; });
+    if (!tagRows.length) return false;
+    return !(w[norm(a.tag)] > 0);
+  }
   // "15", "ground", "roof"… from whatever the reader put in floor; null when it is not a level
   function levelKey(floor) {
     var fl = String(floor || '').trim().toLowerCase().replace(/^(level|floor|flr\.?)\s*/, '').replace(/(st|nd|rd|th)\s*(floor|fl\.?)?$/, '').trim();
@@ -233,6 +253,7 @@
     }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
+    var symDropped = [];
     var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
@@ -320,7 +341,7 @@
           Object.keys(dtags).forEach(function (t) { if (t !== '(cfm only)') tagN += Number(dtags[t] || 0); });
           (r.air_devices || []).forEach(function (a) {
             if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) { aiCfm += Number(a.qty || 0); return; }   // a bare '(cfm only)' row; 'blue square-X diffuser (cfm only)' is a real symbol row
-            if (notAirDevice(a)) return;
+            if (notAirDevice(a) || symbolRowDropped(a, p)) return;
             if (/diffuser|grille|register|linear|louver/.test(String(a.type || '').toLowerCase())) aiN += Number(a.qty || 0);   // TD transfer ducts / dampers (type other) carry no cfm tag
           });
           devCheck.push({ sheet: sh, ai: aiN, tags: tagN, cfmOnly: cfmOnly || aiCfm, hasTags: !!(p.tag_counts && p.tag_counts.devices) });
@@ -342,6 +363,7 @@
           // on top as "(cfm only)" are the same devices seen without their tag (double count), a check only; untagged sheets (CENTRALE) keep them
           if (/cfm[- ]only/i.test(String(a.tag || '')) && p.tag_counts && p.tag_counts.devices && Object.keys(p.tag_counts.devices).reduce(function (s0, k0) { return s0 + (k0 === '(cfm only)' ? 0 : Number(p.tag_counts.devices[k0]) || 0); }, 0) >= 3) return;
           if (notAirDevice(a)) return;                                             // sprinkler heads, thermostats, GB … are not outlets   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
+          if (symbolRowDropped(a, p)) { symDropped.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0) + ' (' + String(a.type || 'device') + ')'); return; }
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
@@ -473,6 +495,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
+      symDropped: symDropped,
       rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
@@ -779,6 +802,12 @@
       'Standard — $1,300 per plan sheet with new piping' + (C.pipeSheets.length ? ' (' + C.pipeSheets.join(', ') + ')' : C.pipeFloors.length ? ' (levels ' + C.pipeFloors.join(', ') + ')' : ''));
     if (!C.quotes.some(function (q) { return q.kind === 'tab'; }))
       add('services', 'Testing & balancing — ' + floors + ' plan sheet' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $2,500 per plan sheet, same count as the ductwork shop drawings');
+    // a man-lift / scaffolding line for ceiling work: NWAC carries it on 203 of the 1,142 Procore bids with ductwork shop drawings
+    // ($2,500, "Man-lift, scafoldings"); 414 W 14th (Vladimir) has it — the estimator decides, so it is not firm
+    if (Object.keys(C.duct).length || Object.keys(C.devices).length)
+      add('services', 'Man-lift / scaffolding', 1, 'ea', STD.lift, 0, 'NWAC Procore rate — $2,500, carried on 203 of 1,142 duct jobs',
+        { is_firm: false, flag: 'keep for ceiling work above 12 ft or over fixtures / furniture — drop when a ladder does it' });
+    if ((C.symDropped || []).length) flags.push({ category: 'air_outlets', item: 'Symbol counts not priced', flag: C.symDropped.join('; ') + ' — counted from drawn symbols on a sheet whose device tags are readable (grid bubbles / legend art); the tagged rows are priced' });
     // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
     var rigTags = {}; C.rig.forEach(function (x) { rigTags[x.key || norm(x.tag)] = 1; });
     Object.keys(C.sched).forEach(function (tag) {
@@ -829,6 +858,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor,
+  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, symbolRowDropped: symbolRowDropped, devWords: devWords,
     applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();

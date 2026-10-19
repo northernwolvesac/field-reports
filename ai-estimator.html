@@ -14,14 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=464"></script>
-<script src="auth.js?v=464"></script>
-<script src="est-totals.js?v=464"></script>
+<script src="supabase-config.js?v=466"></script>
+<script src="auth.js?v=466"></script>
+<script src="est-totals.js?v=466"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=464"></script>
-<script src="nw-email.js?v=464"></script>
-<script src="est-engine.js?v=464"></script>
-<script src="geo-takeoff.js?v=464"></script>
+<script src="email-utils.js?v=466"></script>
+<script src="nw-email.js?v=466"></script>
+<script src="est-engine.js?v=466"></script>
+<script src="geo-takeoff.js?v=466"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1330,7 +1330,7 @@ var AE = (function() {
   // become length marks at their size labels and its air devices count marks at their tags — lengths and counts from the read, not traced
   var EXISTING_RE = /existing|to remain|not new|demolish|demo\b|relocat|by others|n\.?i\.?c\b|\(e\)/i;
   function readerRuns(p) { var r = p.result || {}; return (r.duct_runs || []).filter(function(x) { return x.size && Number(x.lf) > 0 && !EXISTING_RE.test((x.notes || '') + ' ' + x.size); }); }
-  function readerDevices(p) { var r = p.result || {}; return (r.air_devices || []).filter(function(a) { return a.tag && Number(a.qty) > 0 && !EXISTING_RE.test(a.notes || ''); }); }
+  function readerDevices(p) { var r = p.result || {}; return (r.air_devices || []).filter(function(a) { return a.tag && Number(a.qty) > 0 && !EXISTING_RE.test(a.notes || '') && !(window.NWEngine && NWEngine.symbolRowDropped && NWEngine.symbolRowDropped(a, p)); }); }
   function scalePtft(res) { var m = /(\d+(?:\/\d+)?)\s*["\u201d]\s*=\s*1\s*['\u2019]/.exec(String((res || {}).scale || '')); if (!m) return 0; var inch = m[1].indexOf('/') > 0 ? Number(m[1].split('/')[0]) / Number(m[1].split('/')[1]) : Number(m[1]); return inch > 0 ? inch * 72 : 0; }
   function runSize(x) { var z = NWEngine.sizeOf ? NWEngine.sizeOf(x.size) : null; if (z) return z.round ? z.w + '"Ø' : z.w + 'x' + z.h; var m = /(\d{1,2})\s*[xX]\s*(\d{1,2})/.exec(String(x.size)); if (m) return m[1] + 'x' + m[2]; var r = /(\d{1,2})/.exec(String(x.size)); return r && (x.shape === 'round' || /["”]?\s*(Ø|ø|dia)/i.test(x.size)) ? r[1] + '"Ø' : null; }
   async function toTakeoff() {
@@ -1441,7 +1441,7 @@ var AE = (function() {
           if (!textItems) { try { textItems = withLabels(await NWGeo.extract(page), p).text; } catch (eT) { textItems = res.ocr_labels || []; } }
           // every OCR word is an anchor too (device tags on an outlined-text sheet are only there), unless a label already sits at that spot
           (res.ocr_words || []).forEach(function(w) { if (!w || !w[0]) return; if (textItems.some(function(t) { return Math.abs((t.x0 + t.x1) / 2 - w[1]) < 4 && Math.abs((t.y0 + t.y1) / 2 - w[2]) < 4; })) return; textItems.push({ str: String(w[0]), x0: w[1], x1: w[1], y0: w[2], y1: w[2], dir: [1, 0], word: true }); });
-          var usedT = {}, strip = 0;
+          var usedT = {}, strip = 0, lastAnchor = {};   // last placed label per duct width — the tapering trunk 24x14 → 24x10 → 24x6 reads as one line of labels
           function anchorsFor(test) { var out = []; (textItems || []).forEach(function(t, i) { if (usedT[i] || !test(String(t.str || ''))) return; usedT[i] = 1; out.push({ x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2, dir: t.dir || [1, 0] }); }); return out; }
           function stripPt() { var y = 60 + 26 * (strip++); return [60, y]; }
           if (!laidDuct && ptft) readerRuns(p).forEach(function(x) { x._sz = runSize(x); });
@@ -1452,7 +1452,11 @@ var AE = (function() {
             var want = sz.toLowerCase().replace(/["”]/g, ''), A = anchorsFor(function(str) { var t = str.toUpperCase().replace(/\s/g, ''); if (/\(E\)/.test(t)) return false;
               if (round) { var mr = /^(?:[A-Z]{1,3})?(\d{1,2})"?(Ø|DIA|RD)/.exec(t); return !!mr && mr[1] + 'ø' === want.replace('"', ''); }
               var m = /(\d{1,2})X(\d{1,2})$/.exec(t); return !!m && (m[1] + 'x' + m[2] === want || m[2] + 'x' + m[1] === want); });
-            if (A.length) { var each = ft / A.length; A.forEach(function(a) { var h = each * ptft / 2; rows.push(mk(l, [V(a.x - a.dir[0] * h, a.y - a.dir[1] * h), V(a.x + a.dir[0] * h, a.y + a.dir[1] * h)], each, ptft, { notes: 'AI read: ' + ft + ' ft of ' + sz + ' on this sheet' + (A.length > 1 ? ', split over ' + A.length + ' size labels' : '') + ' — length from the sheet reader, placed at the label, not traced' })); }); }
+            var wKey = round ? 'r' : dim[0];
+            if (A.length) { var each = ft / A.length; A.forEach(function(a) { var h = each * ptft / 2; rows.push(mk(l, [V(a.x - a.dir[0] * h, a.y - a.dir[1] * h), V(a.x + a.dir[0] * h, a.y + a.dir[1] * h)], each, ptft, { notes: 'AI read: ' + ft + ' ft of ' + sz + ' on this sheet' + (A.length > 1 ? ', split over ' + A.length + ' size labels' : '') + ' — length from the sheet reader, placed at the label, not traced' })); lastAnchor[wKey] = { x: a.x + a.dir[0] * h, y: a.y + a.dir[1] * h, dir: a.dir, sz: sz }; }); }
+            else if (lastAnchor[wKey]) { var la = lastAnchor[wKey], h2 = ft * ptft / 2, cx = la.x + la.dir[0] * (h2 + 6), cy = la.y + la.dir[1] * (h2 + 6);
+              rows.push(mk(l, [V(cx - la.dir[0] * h2, cy - la.dir[1] * h2), V(cx + la.dir[0] * h2, cy + la.dir[1] * h2)], ft, ptft, { notes: 'AI read: ' + ft + ' ft of ' + sz + ' — its own label was not read; placed after the ' + la.sz + ' label of the same trunk' }));
+              lastAnchor[wKey] = { x: cx + la.dir[0] * h2, y: cy + la.dir[1] * h2, dir: la.dir, sz: sz }; }
             else { var sp = stripPt(); rows.push(mk(l, [sp, [sp[0] + ft * ptft, sp[1]]], ft, ptft, { notes: 'AI read: ' + ft + ' ft of ' + sz + ' — length from the sheet reader; no size label found on the sheet to place it at' })); }
           }
           var devs = readerDevices(p);
@@ -1530,6 +1534,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=464"></script>
+<script src="sw-register.js?v=466"></script>
 </body>
 </html>
