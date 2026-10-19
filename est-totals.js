@@ -122,7 +122,7 @@
     }
     if (cat === 'pipework' && /^(ft|lf)$/i.test(unit) && /insulat/i.test(d) && !/bare/i.test(d)) {
       var s = pipeSize(d); if (!s) return null;
-      var svc = /chilled|chw/i.test(d) ? 'chilled water' : /hot water|hhw|heating/i.test(d) ? 'hot water' : /condensate|drain/i.test(d) ? 'condensate' : /refrig|suction|liquid/i.test(d) ? 'refrigerant' : 'piping';
+      var svc = /chilled|chw/i.test(d) ? 'chilled water' : /hot water|hhw|heating/i.test(d) ? 'hot water' : /condensate|drain/i.test(d) ? 'condensate' : /refrig|suction|liquid/i.test(d) ? 'refrigerant' : /pvc/i.test(d) ? 'PVC (condensate)' : /copper/i.test(d) ? 'copper' : /steel|black iron/i.test(d) ? 'steel' : 'piping';
       var thick = /1-1\/2"\s*(insul|thick)/i.test(d) ? '1-1/2"' : /2"\s*(insul|thick)/i.test(d) ? '2"' : '1"';
       return { kind: 'pipe', label: 'Pipe insulation ' + thick + ' — ' + svc + ' ' + ((/(\d+(?:-\d\/\d)?|\d\/\d)"/.exec(d) || ['', '?'])[1]) + '" pipe', unit: 'ft', qtyUnit: 1, mat: nearest(INS_PIPE_FT, s), min: 10 };
     }

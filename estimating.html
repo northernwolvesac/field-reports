@@ -11,22 +11,22 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=479">
+<link rel="stylesheet" href="procore-ui.css?v=480">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=479"></script>
-<script src="auth.js?v=479"></script>
-<script src="est-totals.js?v=479"></script>
-<script src="procore-ui.js?v=479"></script>
-<script src="nw-catalog-picker.js?v=479"></script>
-<script src="nw-duct-weight.js?v=479"></script>
-<script src="nw-proposal.js?v=479"></script>
-<script src="bid-actions.js?v=479"></script>
+<script src="supabase-config.js?v=480"></script>
+<script src="auth.js?v=480"></script>
+<script src="est-totals.js?v=480"></script>
+<script src="procore-ui.js?v=480"></script>
+<script src="nw-catalog-picker.js?v=480"></script>
+<script src="nw-duct-weight.js?v=480"></script>
+<script src="nw-proposal.js?v=480"></script>
+<script src="bid-actions.js?v=480"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=479"></script>
-<script src="nw-email.js?v=479"></script>
+<script src="email-utils.js?v=480"></script>
+<script src="nw-email.js?v=480"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -810,7 +810,7 @@ requireAuth().catch(function(){});
         '<div class="field"><label>Cc</label><input type="text" id="insRfqCc"></div>' +
         '<div class="field"><label>Subject</label><input type="text" id="insRfqSubj"></div>' +
         '<div class="field"><label>Message</label><textarea id="insRfqBody" style="width:100%;min-height:300px;font-family:inherit"></textarea></div>' +
-        '</div><div class="modal-actions"><button type="button" class="pc-btn pc-btn-secondary" onclick="closeModal(\'insRfqModal\')">Cancel</button><button type="button" class="pc-btn pc-btn-primary" id="insRfqSend" onclick="sendInsRfq()">Send e-mail</button></div></div>';
+        '</div><div class="modal-actions"><button type="button" class="pc-btn pc-btn-secondary" onclick="closeInsRfq()">Cancel</button><button type="button" class="pc-btn pc-btn-primary" id="insRfqSend" onclick="sendInsRfq()">Send e-mail</button></div></div>';
       document.body.appendChild(m);
     }
     document.getElementById('insRfqTo').value = INS_SUB.to; document.getElementById('insRfqCc').value = INS_SUB.cc;
@@ -818,6 +818,7 @@ requireAuth().catch(function(){});
     document.getElementById('insRfqBody').value = insRfqBody(t);
     openModal('insRfqModal');
   };
+  window.closeInsRfq = function() { closeModal('insRfqModal'); };
   window.sendInsRfq = async function() {
     var to = document.getElementById('insRfqTo').value.trim(), cc = document.getElementById('insRfqCc').value.trim(), subject = document.getElementById('insRfqSubj').value.trim(), body = document.getElementById('insRfqBody').value;
     if (!/@/.test(to)) { showToast('Type the e-mail address', 'error'); return; }
@@ -826,7 +827,7 @@ requireAuth().catch(function(){});
     try {
       await nwSendBrandedEmail({ to: nwEmailList(to, cc), subject: subject, bodyText: body, reportType: 'Request for Quote', title: 'Request for Quote — insulation', subtitle: currentEst && currentEst.name, senderName: currentUserName || 'Estimating', files: [] });
       await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.insulation_rfqs = (s.es_settings.insulation_rfqs || []).concat([{ to: to, sent_at: new Date().toISOString(), by: currentUserName }]).slice(-10); });
-      closeModal('insRfqModal'); showToast('Quote request sent to ' + to);
+      closeInsRfq(); showToast('Quote request sent to ' + to);
     } catch (e) { showToast('Send failed: ' + (e && (e.text || e.message) || e), 'error'); }
     btn.disabled = false; btn.textContent = 'Send e-mail';
   };
@@ -3713,6 +3714,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=479"></script>
+<script src="sw-register.js?v=480"></script>
 </body>
 </html>
