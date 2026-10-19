@@ -38,3 +38,5 @@
 - `Restroom Air Outlets - Breakdown by Floor.pdf` (4 pages: summary + per floor before / after) by `build_breakdown.py`.
 - `Vanity wall connection - 29th floor before-after.png` - circled connection point, before / after.
 - `source/` - the clouded 10/14/2026 sheets.
+- 10/19: RFQ draft to Brendan Jackson (Siemens) for the 6th FSD (24x8, 30.12B) saved in Ruslan's Gmail drafts,
+  cc Christino / Andrei - Ruslan to send. Asks: price on the same basis as the 5 FSDs, actuator type, lead time.
