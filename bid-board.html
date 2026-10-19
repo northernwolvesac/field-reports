@@ -13,13 +13,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=379">
+<link rel="stylesheet" href="procore-ui.css?v=461">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=379"></script>
-<script src="auth.js?v=379"></script>
-<script src="est-totals.js?v=379"></script>
-<script src="procore-ui.js?v=379"></script>
-<script src="bid-actions.js?v=379"></script>
+<script src="supabase-config.js?v=461"></script>
+<script src="auth.js?v=461"></script>
+<script src="est-totals.js?v=461"></script>
+<script src="procore-ui.js?v=461"></script>
+<script src="bid-actions.js?v=461"></script>
 <style>
   /* ═══════ Title row (PC.renderTitleRow) + helpers emitted by procore-ui.js ═══════
      Duplicated here as fallbacks so the page renders even if procore-ui.css lags. */
@@ -524,7 +524,7 @@ requireAuth().catch(function(){});
     var q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
     var estFilter = document.getElementById('estimatorFilter').value;
     var rows = estimates.filter(function(e) {
-      if ((e.bid_stage || 'estimating') !== currentStage) return false;
+      if (!q && (e.bid_stage || 'estimating') !== currentStage) return false;   // a search looks across every stage
       if (estFilter && e.estimator_name !== estFilter) return false;
       if (q) {
         var hay = [(e.name||''), (e.project_address||''), (e.client_name||''), (e.requester_company||''),
@@ -550,7 +550,8 @@ requireAuth().catch(function(){});
   function projectName(e) { return e.project_id ? (projectNameById[e.project_id] || '') : ''; }
 
   function renderTable() {
-    var isInvitationStage = currentStage === 'invitation';
+    var qNow = (document.getElementById('searchInput').value || '').trim();
+    var isInvitationStage = currentStage === 'invitation' && !qNow;   // cross-stage search results show their own stage pill
     var thCtx = document.getElementById('thContext');
     thCtx.firstChild.nodeValue = isInvitationStage ? 'Invitation Date' : 'Total Sales';
     var sortValueOpt = document.querySelector('#sortSelect option[value="value"]');
@@ -571,7 +572,7 @@ requireAuth().catch(function(){});
       empty.style.display = '';
       var q = (document.getElementById('searchInput').value || '').trim();
       document.getElementById('bbEmptyHint').textContent = q
-        ? 'No ' + STAGE_LABEL[currentStage] + ' projects match "' + q + '".'
+        ? 'No projects in any stage match "' + q + '".'
         : (canEdit ? 'Use Create New Project to start a new bid, or pick another stage above.' : 'Pick another stage above.');
       count.textContent = '0 projects';
       body.innerHTML = '';
@@ -583,7 +584,7 @@ requireAuth().catch(function(){});
     more.style.display = rows.length > shown ? '' : 'none';
     count.textContent = (rows.length > visible.length ? 'Showing 1-' + visible.length + ' of ' : '') +
       rows.length + ' project' + (rows.length === 1 ? '' : 's') +
-      (rows.length > visible.length ? '' : ' in ' + STAGE_LABEL[currentStage]);
+      (rows.length > visible.length ? '' : (qNow ? ' across all stages' : ' in ' + STAGE_LABEL[currentStage]));
 
     body.innerHTML = visible.map(function(e) { return rowHtml(e, isInvitationStage); }).join('');
 
@@ -917,6 +918,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=379"></script>
+<script src="sw-register.js?v=461"></script>
 </body>
 </html>
