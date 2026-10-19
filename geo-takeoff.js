@@ -250,7 +250,7 @@
   var M_SIZE_RE = /^\s*(?:(?:T\.?D\.?|[SREO]\.?\/?A\.?)\s+)?(\d{1,2})\s*["”]?\s*[xX×]\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|F\.?O\.?)?(?:\s*\(.*\))?\s*(?:UP|DN|DOWN|(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24})?\s*$/;
   // a round runout labelled with the diffuser it feeds ("6"ø D-2", Warby) is a duct label too
   var M_ROUND_RE = /^\s*(\d{1,2})\s*["”]?\s*(?:Ø|ø|⌀|∅|DIA\.?|RD)\s*(?:\(.*\))?\s*(?:(?:[SREO]\.?\s*\/?\s*A\.?)\b.{0,24}|[A-Z]{1,3}-[A-Z0-9]{1,2})?\s*$/i;
-  var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}\s*(?:\(.*\))?\s*$/;
+  var M_PIPE_RE = /^\s*(?:\d{1,2}\s*-\s*)?(?:\d+\/\d+|\d+)\s*["”]\s*[A-Z]{0,6}(?:\s*[\/&]\s*[A-Z]{1,4})?\s*(?:\(.*\))?\s*$/;   // "2" CHWS/R", "3/4" HWS&R" are pipe labels too (OGCP 5200)
   var M_SCALE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
   var KW_OCR = /^(EXIST\w*|REMAIN\w*|PERFORM\w*|SCOPE|OUT|NOT|NIC|MATCH\w*|DRAWING|DRAWN|DWG|UP|DN|DOWN)$/i, KW_PHRASE = /NO WORK|OUT OF SCOPE|NO\w* IN (SCOPE|CONTRACT)|N\.?I\.?C\b/i;   // the reader hands back a cell as one or two words ("NO IN SCOPE" = NOT IN SCOPE)
   function kwWord(t) { return String(t || '').toUpperCase().replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ').trim().split(' ')[0] || ''; }   // "REMAIN," / "DRAWING'B'" → the word
@@ -1683,7 +1683,7 @@
 
     // ─── pipes: single lines; sizes from labels (beside the line or on a leader), carried through the network ───
     var PSIZE = /(^|[^\d\/.\-])(\d{1,2}\s*-\s*\d\/\d|\d{1,2}\s+\d\/\d|\d\/\d|\d{1,3}(?:\.\d)?)\s*["”]\s*(?:Ø|ø|∅|DIA\.?)?(?!\s*[xX×]\s*\d)/;
-    var PSVC = /\b(CHWS\/R|CHWS|CHWR|CWS&R|CWS\/R|CWS|CWR|HWS\/R|HWS|HWR|HHWS|HHWR|CD|RS&R|RS\/RL|RS|RL|RLS|CW)\b/;
+    var PSVC = /\b(CHWS\/R|CHWS|CHWR|CWS&R|CWS\/R|CWS|CWR|HWS\/R|HWS|HWR|HHWS|HHWR|DTWS\/R|DTWS|DTWR|DTS|DTR|CPD|CD|RS&R|RS\/RL|RS|RL|RLS|CW)\b/;   // DTWS/R: dual-temperature water (Esquire M-202B)
     function pipeSizeIn(raw) {
       raw = raw.replace(/\s+/g, ' ').trim();
       var m = /^(\d{1,2})\s*-\s*(\d)\/(\d)$/.exec(raw) || /^(\d{1,2}) (\d)\/(\d)$/.exec(raw);
@@ -1710,6 +1710,7 @@
         if (rest && !PSVC.test(rest) && !/^(PROVIDE|NEW|TO|\s)*$/.test(rest)) return;
         var v = pipeSizeIn(mm[2]); if (!(v > 0 && v <= 16)) return;
         var sv = PSVC.exec(txt);
+        if (v >= 5 && !sv) return;   // a bare 10" / 16" on a plan is a round duct (Footlocker M-100: 300 ft of "pipe"); mains that size carry their service (CHWS, CWS)
         labs.push({ txt: txt, d: v, svc: sv ? sv[1] : null, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, dir: t.dir || [1, 0], bbox: [t.x0, t.y0, t.x1, t.y1], block: t.block || [t.x0, t.y0, t.x1, t.y1] });
       });
       if (labs.length < 2) return { error: 'fewer than 2 pipe size labels', ptft: ptft };
@@ -1723,8 +1724,11 @@
         if (!st.dash && st.w <= 1.0 && Math.max.apply(null, c) <= 0.3 && L > 3) leaders.push([x1, y1, x2, y2]);
         if (L >= 0.3 * ptft) { var sg = norm([x1, y1, x2, y2]); sg.push(st.key); segs.push(sg); }
       }
+      // a sparse piping plan (≤ 8 labels) writes its sizes a little further off the line — Esquire M-202B: "1-1/4" DTWS" 24-36 pt (2-2.7 ft at
+      // 3/16") from 0.3-pt dashed runs; a busy plan keeps the tight tolerance so a label does not reach the next pipe over
+      var nearTol = labs.length <= 8 ? Math.max(2.8 * ptft, 20) : Math.max(1.3 * ptft, 20);
       function near(l, S) {
-        var tol = Math.max(1.3 * ptft, 20), dx = l.dir[0], dy = l.dir[1], hits = [];
+        var tol = nearTol, dx = l.dir[0], dy = l.dir[1], hits = [];
         S.forEach(function (s, i) {
           if (Math.abs(s[4] * dx + s[5] * dy) < 0.97) return;
           var ex = l.cx - s[0], ey = l.cy - s[1], along = ex * s[4] + ey * s[5], perp = Math.abs(-ex * s[5] + ey * s[4]);
@@ -1745,7 +1749,13 @@
       var votes = {};
       // filled bars of any thickness are one pen (a dash-dot pipe line keeps its thick dashes and thinner corner pieces in different fill keys)
       function fam(key) { return /^fill\|/.test(key) ? 'fill' : key; }
-      labs.forEach(function (l) { var h = near(l, segs); if (h.length) votes[fam(segs[h[0][1]][8])] = (votes[fam(segs[h[0][1]][8])] || 0) + 1; });
+      labs.forEach(function (l) {
+        var h = near(l, segs); if (h.length) { votes[fam(segs[h[0][1]][8])] = (votes[fam(segs[h[0][1]][8])] || 0) + 1; return; }
+        // a label on a leader (Esquire M-202B: every "1-1/4" DTWR" points down a thin line to its pipe) votes for the pen its leader lands on
+        var ends = leaderEnds(l, leaders).concat(leaderEnds({ bbox: l.block }, leaders)), bi = null, bd = 4;
+        ends.forEach(function (pt) { segs.forEach(function (s) { var dd = ptSeg(pt[0], pt[1], s); if (dd <= bd && !(Math.abs(s[4] * l.dir[0] + s[5] * l.dir[1]) >= 0.97 && s[6] < 0.5 * ptft)) { bi = s; bd = dd; } }); });
+        if (bi) votes[fam(bi[8])] = (votes[fam(bi[8])] || 0) + 1;
+      });
       var top = 0; for (var vk in votes) top = Math.max(top, votes[vk]);
       if (!top) return { error: 'no pipe lines next to the size labels', ptft: ptft, labels: labs.length };
       // (D.pipeKeep2: keep any pen two labels point at — tried for the 645 Madison loop that changes pen mid-way; it mostly adds wall lines, off)
@@ -1873,7 +1883,7 @@
       // the length is counted once per line here; the engine flags it so the estimator doubles it when the pair is priced per pipe
       var sr = /\bS\s*[\/&]\s*R\b|SUPPLY\s*(AND|&|\/|\+)\s*RETURN|\b(CHW|CW|HW|HHW|CHWS|CWS|HWS|GLY\w*)\s*[\/&]\s*R\b/i.test(D.fullText);
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }), sr: sr || undefined,
-        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes,
+        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep,
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry
