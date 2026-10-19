@@ -9,14 +9,15 @@
 <title>Compare takeoffs — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=464"></script>
-<script src="auth.js?v=464"></script>
-<script src="est-totals.js?v=464"></script>
+<script src="supabase-config.js?v=465"></script>
+<script src="auth.js?v=465"></script>
+<script src="est-totals.js?v=465"></script>
 <style>
   body { padding-bottom: 40px; }
   .cp-wrap { max-width: 1380px; margin: 0 auto; }
   .cp-body { padding: 16px; }
-  .card { background: var(--nw-card); border: 1px solid var(--nw-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .card { display: block; background: var(--nw-card); border: 1px solid var(--nw-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; width: auto; max-width: none; }
+  .card > * { width: 100%; }
   .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color: var(--nw-muted); }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   input[type=text] { padding: 8px 10px; border: 1px solid var(--nw-border); border-radius: 8px; font-size: 13px; background: #fff; }
@@ -227,6 +228,6 @@ var CP = (function() {
   return { pick: pick, search: search, go: go, closeModal: closeModal, keyOf: keyOf };
 })();
 </script>
-<script src="sw-register.js?v=464"></script>
+<script src="sw-register.js?v=465"></script>
 </body>
 </html>
