@@ -14,14 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=466"></script>
-<script src="auth.js?v=466"></script>
-<script src="est-totals.js?v=466"></script>
+<script src="supabase-config.js?v=467"></script>
+<script src="auth.js?v=467"></script>
+<script src="est-totals.js?v=467"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=466"></script>
-<script src="nw-email.js?v=466"></script>
-<script src="est-engine.js?v=466"></script>
-<script src="geo-takeoff.js?v=466"></script>
+<script src="email-utils.js?v=467"></script>
+<script src="nw-email.js?v=467"></script>
+<script src="est-engine.js?v=467"></script>
+<script src="geo-takeoff.js?v=467"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1485,6 +1485,16 @@ var AE = (function() {
       // once the Takeoff page syncs its layers into the estimate — the engine keeps services, equipment, disconnects and the rest
       var owned = {}; layers.forEach(function(l) { owned[l.category] = 1; }); var ownedCats = Object.keys(owned).filter(function(c) { return /^(ductwork|pipework|air_outlets)$/.test(c); });
       if (ownedCats.length) { try { await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estId).is('layer_id', null).in('category', ownedCats); } catch (eD) {} }
+      // AI-made layers that got no mark this time (a device row the engine now drops, a size no longer read) go, with their synced line —
+      // unless the estimator drew something on them by hand
+      var usedLayer = {}; rows.forEach(function(r) { usedLayer[r.layer_id] = 1; });
+      var stale = layers.filter(function(l) { return /from the AI Estimator/.test(l.notes || '') && !usedLayer[l.id]; }).map(function(l) { return l.id; });
+      if (stale.length) { try {
+        var hand = await supabaseClient.from('estimate_measurements').select('layer_id').in('layer_id', stale).neq('label', 'auto');
+        var keep = {}; (hand.data || []).forEach(function(m) { keep[m.layer_id] = 1; });
+        var gone = stale.filter(function(id) { return !keep[id]; });
+        if (gone.length) { await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estId).in('layer_id', gone); await supabaseClient.from('estimate_takeoff_layers').delete().in('id', gone); layers = layers.filter(function(l) { return gone.indexOf(l.id) < 0; }); }
+      } catch (eS) {} }
       var nCnt = rows.filter(function(r) { return r.tool_type === 'count'; }).length;
       toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + ' on ' + list.length + ' plans, ' + made + ' layers — opening the takeoff');
       setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
@@ -1534,6 +1544,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=466"></script>
+<script src="sw-register.js?v=467"></script>
 </body>
 </html>
