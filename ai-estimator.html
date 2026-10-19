@@ -14,14 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=468"></script>
-<script src="auth.js?v=468"></script>
-<script src="est-totals.js?v=468"></script>
+<script src="supabase-config.js?v=478"></script>
+<script src="auth.js?v=478"></script>
+<script src="est-org.js?v=478"></script>
+<script src="est-totals.js?v=478"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=468"></script>
-<script src="nw-email.js?v=468"></script>
-<script src="est-engine.js?v=468"></script>
-<script src="geo-takeoff.js?v=468"></script>
+<script src="email-utils.js?v=478"></script>
+<script src="nw-email.js?v=478"></script>
+<script src="est-engine.js?v=478"></script>
+<script src="geo-takeoff.js?v=478"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -95,8 +96,11 @@ var AE = (function() {
   async function init() {
     var u = (await supabaseClient.auth.getUser()).data.user;
     var p = u && ((typeof getAuthProfile === 'function' && await getAuthProfile()) || (await supabaseClient.from('profiles').select('role, full_name').eq('id', u.id).maybeSingle()).data);
-    if (!p || OFFICE.indexOf(p.role) < 0) { $('main').innerHTML = '<div class="card">🔒 The AI Estimator is for the office team.</div>'; return; }
+    // multi-tenant: a member of an estimating organisation gets in whatever the field-app role; NWAC office roles are NWAC members
+    var org = window.NWOrg ? await NWOrg.load() : null;
+    if (!p || (!org && OFFICE.indexOf(p.role) < 0)) { $('main').innerHTML = '<div class="card">🔒 The AI Estimator is for members of an estimating organisation.' + (p ? ' Ask your administrator for an invite.' : '') + '</div>'; return; }
     me = { id: u.id, name: p.full_name || u.email };
+    var hc = document.querySelector('.header-content'); if (hc && window.NWOrg) { var sw = document.createElement('div'); sw.className = 'muted'; sw.style.cssText = 'font-size:12px;margin-top:2px'; sw.innerHTML = NWOrg.switcher() + (NWOrg.isAdmin() || (p.role === 'admin') ? ' · <a href="est-orgs.html">organisations</a>' : ''); hc.appendChild(sw); }
     var qs = new URLSearchParams(location.search), sid = qs.get('s');
     if (sid) openSession(sid).then(function() { if (qs.get('import')) importFromEstimate(); }); else listSessions();
   }
@@ -134,7 +138,9 @@ var AE = (function() {
   // ─── sessions list ──────────────────────────────────────────────────
   async function listSessions() {
     $('hTitle').textContent = 'AI Estimator'; $('backBtn').href = 'estimating.html';
-    var r = await supabaseClient.from('ai_est_sessions').select('id, name, location, status, created_at, estimate_id').order('created_at', { ascending: false });
+    var q0 = supabaseClient.from('ai_est_sessions').select('id, name, location, status, created_at, estimate_id').order('created_at', { ascending: false });
+    if (window.NWOrg && NWOrg.id()) q0 = q0.eq('org_id', NWOrg.id());   // one organisation at a time (RLS keeps the others out anyway)
+    var r = await q0;
     var rows = (r.data || []).map(function(s) {
       return '<tr class="click" onclick="location.href=\'ai-estimator.html?s=' + s.id + '\'"><td><b>' + esc(s.name) + '</b><div class="muted">' + esc(s.location || '') + '</div></td>' +
         '<td><span class="st">' + esc(s.status) + '</span></td><td class="muted">' + esc(s.created_at.slice(0, 10)) + '</td><td>' + (s.estimate_id ? '📐 estimate' : '') + '</td></tr>';
@@ -175,7 +181,7 @@ var AE = (function() {
 
   async function create() {
     var name = $('nName').value.trim(); if (!name) { toast('Enter the bid name'); return; }
-    var r = await supabaseClient.from('ai_est_sessions').insert({ name: name, location: $('nLoc').value.trim() || null, floors: Number($('nFloors').value) || null, model: $('nModel').value }).select('id').single();
+    var r = await supabaseClient.from('ai_est_sessions').insert((window.NWOrg ? NWOrg.stamp : function(x) { return x; })({ name: name, location: $('nLoc').value.trim() || null, floors: Number($('nFloors').value) || null, model: $('nModel').value })).select('id').single();
     if (r.error) { toast(r.error.message); return; }
     location.href = 'ai-estimator.html?s=' + r.data.id;
   }
@@ -1548,6 +1554,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=468"></script>
+<script src="sw-register.js?v=478"></script>
 </body>
 </html>

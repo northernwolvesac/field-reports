@@ -10,8 +10,9 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=444"></script>
-<script src="auth.js?v=444"></script>
-<script src="est-engine.js?v=444"></script>
+<script src="auth.js?v=478"></script>
+<script src="est-org.js?v=478"></script>
+<script src="est-engine.js?v=478"></script>
 <style>
   body { padding-bottom: 40px; }
   .ab-wrap { max-width: 1380px; margin: 0 auto; }
@@ -96,6 +97,7 @@ var AB = (function() {
     try {
       var u = await sb.auth.getUser(), p = await sb.from('profiles').select('role,full_name').eq('id', u.data.user.id).maybeSingle();
       me.name = (p.data && p.data.full_name) || ''; me.canEdit = !!(p.data && /^(admin|manager|lead_pm|project_manager|apm|estimator)$/.test(p.data.role || ''));
+      if (window.NWOrg) { var org = await NWOrg.load(); if (org && /^(owner|admin|estimator)$/.test(org.role)) me.canEdit = true; var hc = document.querySelector('.header-content'); if (hc && org) { var sw = document.createElement('div'); sw.className = 'muted'; sw.style.cssText = 'font-size:12px;margin-top:2px'; sw.innerHTML = NWOrg.switcher(); hc.appendChild(sw); } }
       if (window.initAuthUI) { try { initAuthUI(); } catch (e) {} }
     } catch (e) { console.warn(e); }
     try { var ks = await caches.keys(); var k = ks.filter(function(x) { return /^nw-field-v\d+$/.test(x); }).sort(function(a, b) { return verNum(b) - verNum(a); })[0]; appVer = k ? 'v' + verNum(k) : null; } catch (e) {}
@@ -103,7 +105,9 @@ var AB = (function() {
     await load(); render();
   }
   async function load() {
-    var b = await sb.from('est_ai_bench').select('*').order('sort_order').order('name');
+    var bq = sb.from('est_ai_bench').select('*').order('sort_order').order('name');
+    if (window.NWOrg && NWOrg.id()) bq = bq.eq('org_id', NWOrg.id());   // the benchmark of the organisation being viewed
+    var b = await bq;
     if (b.error) { schemaOk = !/est_ai_bench|42P01|does not exist|schema cache/i.test(b.error.message); if (schemaOk) toast(b.error.message); bench = []; runs = []; return; }
     bench = b.data || [];
     var r = await sb.from('est_ai_bench_runs').select('*').order('at', { ascending: false });

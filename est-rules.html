@@ -12,8 +12,9 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="supabase-config.js?v=462"></script>
-<script src="auth.js?v=462"></script>
+<script src="supabase-config.js?v=478"></script>
+<script src="auth.js?v=478"></script>
+<script src="est-org.js?v=478"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 14px; }
@@ -151,11 +152,14 @@ requireAuth().catch(function(){});
     var me = await supabaseClient.auth.getUser();
     var prof = me.data && me.data.user ? await supabaseClient.from('profiles').select('role').eq('id', me.data.user.id).maybeSingle() : null;
     var role = prof && prof.data ? prof.data.role : '';
-    canEdit = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'].indexOf(role) >= 0;
-    canLib = canEdit || role === 'estimator';
+    var org = window.NWOrg ? await NWOrg.load() : null;   // multi-tenant: the organisation's own rules and library
+    canEdit = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'].indexOf(role) >= 0 || !!(org && /^(owner|admin)$/.test(org.role));
+    canLib = canEdit || role === 'estimator' || !!(org && org.role === 'estimator');
+    var hc = document.querySelector('.header-content'); if (hc && org && !document.getElementById('orgSw')) { var sw = document.createElement('div'); sw.id = 'orgSw'; sw.className = 'muted'; sw.style.cssText = 'font-size:12px;margin-top:2px'; sw.innerHTML = NWOrg.switcher(); hc.appendChild(sw); }
     $('btnNew').hidden = !(canEdit && document.querySelector('.tab.on').getAttribute('data-tab') === 'rules');
     $('btnUpload').hidden = !canLib; $('btnNote').hidden = !canLib;
-    var r = await supabaseClient.from('est_rules').select('*').order('sort').order('created_at');
+    var rq = supabaseClient.from('est_rules').select('*').order('sort').order('created_at'); if (window.NWOrg && NWOrg.id()) rq = rq.eq('org_id', NWOrg.id());
+    var r = await rq;
     if (r.error) $('list').innerHTML = '<div class="empty">Rules table missing — run est-rules-schema.sql.<br><span class="muted">' + esc(r.error.message) + '</span></div>';
     else { rules = r.data || []; renderRules(); }
     await loadDocs(); await loadRecent(); renderChips();
@@ -191,7 +195,7 @@ requireAuth().catch(function(){});
     if (t === 'add_line') params.amount = Number($('rAmount').value || 0);
     if (t === 'pct_add') params.pct = Number($('rPct').value || 0);
     var row = { name: name, rule_type: t, match_text: $('rMatch').value.trim() || null, match_category: $('rCat').value || null, params: params, notes: $('rNotes').value.trim() || null, active: $('rActive').checked, updated_at: new Date().toISOString() };
-    var r = editing ? await supabaseClient.from('est_rules').update(row).eq('id', editing.id) : await supabaseClient.from('est_rules').insert(row);
+    var r = editing ? await supabaseClient.from('est_rules').update(row).eq('id', editing.id) : await supabaseClient.from('est_rules').insert(window.NWOrg ? NWOrg.stamp(row) : row);
     if (r.error) { alert('Save failed: ' + r.error.message); return; }
     $('mb').classList.remove('on'); load();
   }
@@ -208,7 +212,8 @@ requireAuth().catch(function(){});
 
   // ── library ──
   async function loadDocs() {
-    var r = await supabaseClient.from('est_kb_docs').select('*').order('org').order('title');
+    var dq = supabaseClient.from('est_kb_docs').select('*').order('org').order('title'); if (window.NWOrg && NWOrg.id()) dq = dq.eq('org_id', NWOrg.id());
+    var r = await dq;
     if (r.error) { $('docs').innerHTML = '<div class="empty">Library tables missing — run est-kb-schema.sql.<br><span class="muted">' + esc(r.error.message) + '</span></div>'; return; }
     docs = r.data || []; renderDocs();
   }
@@ -244,7 +249,7 @@ requireAuth().catch(function(){});
     try {
       var buf = await file.arrayBuffer();
       var pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
-      var ins = await supabaseClient.from('est_kb_docs').insert({ title: title, org: org, kind: 'pdf', pages: pdf.numPages, notes: file.name }).select('id').single();
+      var ins = await supabaseClient.from('est_kb_docs').insert((window.NWOrg ? NWOrg.stamp : function(x) { return x; })({ title: title, org: org, kind: 'pdf', pages: pdf.numPages, notes: file.name })).select('id').single();
       if (ins.error) throw new Error(ins.error.message);
       var docId = ins.data.id, path = docId + '.pdf';
       var up = await supabaseClient.storage.from('est-kb').upload(path, file, { contentType: 'application/pdf', upsert: true });
@@ -264,7 +269,7 @@ requireAuth().catch(function(){});
   }
   async function saveNote() {
     var title = $('nName').value.trim(), text = $('nText').value.trim(); if (!title || !text) { alert('Title and text are required'); return; }
-    var ins = await supabaseClient.from('est_kb_docs').insert({ title: title, org: $('nOrg').value, kind: 'note', pages: null }).select('id').single();
+    var ins = await supabaseClient.from('est_kb_docs').insert((window.NWOrg ? NWOrg.stamp : function(x) { return x; })({ title: title, org: $('nOrg').value, kind: 'note', pages: null })).select('id').single();
     if (ins.error) { alert(ins.error.message); return; }
     // headings = short lines without a period → section names for the passages that follow
     var rows = [], section = null, n = 0, buf = [];
@@ -314,6 +319,6 @@ requireAuth().catch(function(){});
   load();
 })();
 </script>
-<script src="sw-register.js?v=462"></script>
+<script src="sw-register.js?v=478"></script>
 </body>
 </html>

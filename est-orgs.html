@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0696D7">
+<title>Organisations — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=478"></script>
+<script src="auth.js?v=478"></script>
+<script src="est-org.js?v=478"></script>
+<style>
+  body { padding-bottom: 40px; }
+  .og-wrap { max-width: 1100px; margin: 0 auto; }
+  .og-body { padding: 16px; }
+  .card { display: block; width: auto; max-width: none; background: var(--nw-card); border: 1px solid var(--nw-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .card > * { width: 100%; }
+  .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color: var(--nw-muted); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type=text], input[type=email], select { padding: 8px 10px; border: 1px solid var(--nw-border); border-radius: 8px; font-size: 13px; background: #fff; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--nw-border); background: #fff; font-weight: 700; font-size: 12px; cursor: pointer; color: var(--nw-text); }
+  .btn.primary { background: var(--nw-text); color: #fff; border-color: var(--nw-text); }
+  .btn.sm { padding: 3px 8px; font-size: 11px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .muted { color: var(--nw-muted); font-size: 12px; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.t th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--nw-muted); border-bottom: 1px solid var(--nw-border); padding: 6px; }
+  table.t td { padding: 6px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  .chip { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 6px; background: #f1f5f9; color: #475569; font-weight: 700; }
+  .chip.owner { background: #0f172a; color: #fff; } .chip.admin { background: #e0f2fe; color: #075985; }
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 300; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="og-wrap">
+  <div class="header">
+    <a href="ai-estimator.html" class="back-btn">&#8592;</a>
+    <div class="header-content"><h1>Organisations</h1></div>
+    <div class="profile-circle" id="profileCircle">--</div>
+  </div>
+  <div class="og-body" id="main"><div class="muted">Loading…</div></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+requireAuth().catch(function(){});
+// ═══════════════════════════════════════════════════════════════════════
+// Organisations of the estimating product (roadmap item 8). An org owner / admin manages members and invites; the global
+// admin (profiles.role = admin) creates organisations and can copy NWAC's library (rules, catalog, norms, knowledge notes)
+// into a new one. Every product row carries org_id and RLS keeps organisations apart (est-multi-tenant.sql).
+// ═══════════════════════════════════════════════════════════════════════
+var OG = (function() {
+  'use strict';
+  var $ = function(id) { return document.getElementById(id); };
+  var sb = window.supabaseClient, me = null, globalAdmin = false, orgs = [], members = {}, invites = {}, profiles = {}, cost = {};
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
+  function slugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
+
+  async function load() {
+    var u = await sb.auth.getUser(); me = u.data && u.data.user; if (!me) return;
+    var p = await sb.from('profiles').select('role,full_name').eq('id', me.id).maybeSingle(); globalAdmin = !!(p.data && p.data.role === 'admin');
+    await NWOrg.load();
+    var o = await sb.from('est_orgs').select('*').order('name'); orgs = o.data || [];
+    var m = await sb.from('est_org_members').select('org_id,user_id,role,created_at'); members = {}; (m.data || []).forEach(function(x) { (members[x.org_id] = members[x.org_id] || []).push(x); });
+    var iv = await sb.from('est_org_invites').select('*').is('claimed_at', null); invites = {}; (iv.data || []).forEach(function(x) { (invites[x.org_id] = invites[x.org_id] || []).push(x); });
+    var ids = []; Object.keys(members).forEach(function(k) { members[k].forEach(function(x) { ids.push(x.user_id); }); });
+    if (ids.length) { var pr = await sb.from('profiles').select('id,full_name,email,role').in('id', ids); profiles = {}; (pr.data || []).forEach(function(x) { profiles[x.id] = x; }); }
+    try { var c = await sb.from('est_org_cost').select('*'); cost = {}; (c.data || []).forEach(function(x) { var k = x.org_id; cost[k] = cost[k] || { pages: 0, cost: 0 }; cost[k].pages += Number(x.pages || 0); cost[k].cost += Number(x.cost || 0); }); } catch (e) {}
+  }
+  function canManage(o) { var mm = (members[o.id] || []).find(function(x) { return x.user_id === me.id; }); return globalAdmin || !!(mm && /^(owner|admin)$/.test(mm.role)); }
+  function render() {
+    var html = '';
+    if (globalAdmin) html += '<div class="card"><h3>New organisation</h3><div class="row"><input type="text" id="newName" placeholder="Company name" style="min-width:260px"><label class="muted"><input type="checkbox" id="newCopy" checked> copy NWAC\'s rules, catalog, norms and knowledge notes</label><button class="btn primary" onclick="OG.create()">Create</button></div><p class="muted">A design partner gets its own organisation: its sessions, benchmark, rules and library are invisible to every other organisation. Invite its estimators by e-mail below; they sign in to the app as usual.</p></div>';
+    if (!orgs.length) html += '<div class="card muted">You are not a member of any organisation.</div>';
+    orgs.forEach(function(o) {
+      var mm = members[o.id] || [], iv = invites[o.id] || [], mg = canManage(o), c = cost[o.id];
+      html += '<div class="card"><div class="row" style="justify-content:space-between"><div><b style="font-size:15px">' + esc(o.name) + '</b> <span class="muted">· ' + esc(o.slug) + ' · ' + mm.length + ' member' + (mm.length === 1 ? '' : 's') + (c ? ' · AI reads ' + c.pages + ' sheets, $' + c.cost.toFixed(2) : '') + '</span></div>' +
+        (NWOrg.id() !== o.id ? '<button class="btn sm" onclick="NWOrg.set(\'' + o.id + '\')">Work in this organisation</button>' : '<span class="chip">current</span>') + '</div>' +
+        '<table class="t" style="margin-top:8px"><thead><tr><th>Member</th><th>E-mail</th><th>Role</th><th>Since</th><th></th></tr></thead><tbody>' +
+        mm.map(function(x) { var pf = profiles[x.user_id] || {}; return '<tr><td>' + esc(pf.full_name || '—') + '</td><td class="muted">' + esc(pf.email || '') + '</td><td><span class="chip ' + esc(x.role) + '">' + esc(x.role) + '</span></td><td class="muted">' + String(x.created_at).slice(0, 10) + '</td><td style="text-align:right">' + (mg && x.user_id !== me.id ? '<button class="btn sm" onclick="OG.setRole(\'' + o.id + '\',\'' + x.user_id + '\')">Role</button> <button class="btn sm" onclick="OG.remove(\'' + o.id + '\',\'' + x.user_id + '\')">Remove</button>' : '') + '</td></tr>'; }).join('') +
+        iv.map(function(x) { return '<tr><td class="muted">invited</td><td class="muted">' + esc(x.email) + '</td><td><span class="chip">' + esc(x.role) + '</span></td><td class="muted">' + String(x.created_at).slice(0, 10) + '</td><td style="text-align:right">' + (mg ? '<button class="btn sm" onclick="OG.uninvite(\'' + x.id + '\')">Cancel</button>' : '') + '</td></tr>'; }).join('') +
+        '</tbody></table>' +
+        (mg ? '<div class="row" style="margin-top:10px"><input type="email" id="inv-' + o.id + '" placeholder="estimator@company.com" style="min-width:240px"><select id="invr-' + o.id + '"><option value="estimator">estimator</option><option value="admin">admin</option><option value="viewer">viewer</option></select><button class="btn" onclick="OG.invite(\'' + o.id + '\')">Add / invite</button>' +
+          (globalAdmin && o.slug !== 'nwac' ? '<button class="btn" onclick="OG.copyLib(\'' + o.id + '\')" title="Copy NWAC\'s rules, catalog, norms and knowledge notes into this organisation">Copy NWAC library</button>' : '') + '</div>' : '') + '</div>';
+    });
+    $('main').innerHTML = html;
+  }
+  async function create() {
+    var name = ($('newName').value || '').trim(); if (!name) { toast('Name?'); return; }
+    var r = await sb.from('est_orgs').insert({ name: name, slug: slugify(name) || ('org-' + Date.now()), created_by: me.id }).select().single();
+    if (r.error) { toast(r.error.message); return; }
+    if ($('newCopy').checked) { var c = await sb.rpc('est_copy_library', { src: '11111111-1111-4111-8111-111111111111', dst: r.data.id }); if (c.error) toast('Library copy: ' + c.error.message); else toast('Created — library copied: ' + JSON.stringify(c.data)); }
+    else toast('Created');
+    await load(); render();
+  }
+  async function invite(orgId) {
+    var email = ($('inv-' + orgId).value || '').trim().toLowerCase(), role = $('invr-' + orgId).value; if (!email) { toast('E-mail?'); return; }
+    var pf = await sb.from('profiles').select('id').ilike('email', email).maybeSingle();
+    var r = pf.data ? await sb.from('est_org_members').upsert({ org_id: orgId, user_id: pf.data.id, role: role }) : await sb.from('est_org_invites').upsert({ org_id: orgId, email: email, role: role, invited_by: me.id }, { onConflict: 'org_id,email' });
+    if (r.error) { toast(r.error.message); return; }
+    toast(pf.data ? 'Added as ' + role : 'Invited — the membership starts on their first visit'); await load(); render();
+  }
+  async function setRole(orgId, userId) {
+    var role = prompt('Role: owner, admin, estimator or viewer', 'estimator'); if (!role || !/^(owner|admin|estimator|viewer)$/.test(role)) return;
+    var r = await sb.from('est_org_members').update({ role: role }).eq('org_id', orgId).eq('user_id', userId); if (r.error) { toast(r.error.message); return; } await load(); render();
+  }
+  async function remove(orgId, userId) { if (!confirm('Remove this member from the organisation?')) return; var r = await sb.from('est_org_members').delete().eq('org_id', orgId).eq('user_id', userId); if (r.error) { toast(r.error.message); return; } await load(); render(); }
+  async function uninvite(id) { var r = await sb.from('est_org_invites').delete().eq('id', id); if (r.error) { toast(r.error.message); return; } await load(); render(); }
+  async function copyLib(orgId) { if (!confirm('Copy NWAC\'s rules, catalog, norms and knowledge notes into this organisation? Existing rows stay.')) return; var c = await sb.rpc('est_copy_library', { src: '11111111-1111-4111-8111-111111111111', dst: orgId }); if (c.error) toast(c.error.message); else toast('Copied: ' + JSON.stringify(c.data)); }
+  (async function() { try { await load(); render(); } catch (e) { $('main').innerHTML = '<div class="card">' + esc(e.message || e) + '</div>'; } })();
+  return { create: create, invite: invite, setRole: setRole, remove: remove, uninvite: uninvite, copyLib: copyLib };
+})();
+</script>
+<script src="sw-register.js?v=478"></script>
+</body>
+</html>

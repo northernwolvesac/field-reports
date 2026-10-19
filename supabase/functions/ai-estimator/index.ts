@@ -377,7 +377,11 @@ Deno.serve(async (req: Request) => {
     const { data: u } = await db.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
     if (!u || !u.user) return json({ ok: false, error: "Please sign in" }, 401);
     const { data: prof } = await db.from("profiles").select("role").eq("id", u.user.id).single();
-    if (!prof || OFFICE.indexOf(prof.role) < 0) return json({ ok: false, error: "Office roles only" }, 403);
+    // multi-tenant (roadmap item 8): a member of any organisation may call it — RLS scopes every read and write to that org's rows;
+    // NWAC office roles are members of the NWAC org, other orgs' users carry whatever profile role they signed up with
+    let member = false;
+    try { const { count } = await db.from("est_org_members").select("org_id", { count: "exact", head: true }).eq("user_id", u.user.id); member = (count || 0) > 0; } catch (_) { member = false; }
+    if (!member && (!prof || OFFICE.indexOf(prof.role) < 0)) return json({ ok: false, error: "Not a member of an estimating organisation" }, 403);
 
     const body = await req.json();
     if (body.action === "sheet") return json(await runPage(db, body, "sheet"));
