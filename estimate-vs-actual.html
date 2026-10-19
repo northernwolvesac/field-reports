@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>Estimate vs Actual — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=475"></script>
+<script src="auth.js?v=475"></script>
+<script src="nw-duct-weight.js?v=475"></script>
+<script src="est-totals.js?v=475"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 40px; }
+  .wrap { max-width: none; margin: 0; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0 10px; }
+  .tools input, .tools select { padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-family: inherit; }
+  .tools input[type=text] { flex: 1; min-width: 200px; }
+  .tools input[type=number] { width: 86px; }
+  .tools label.chk { font-size: 13px; color: #374151; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tools .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; }
+  .btn { padding: 10px 14px; font-size: 14px; font-weight: 700; border-radius: 10px; cursor: pointer; border: 1px solid #111318; background: #111318; color: #fff; text-decoration: none; white-space: nowrap; font-family: inherit; }
+  .btn.light { background: #fff; color: #111318; border-color: #d1d5db; }
+  .tools .btn { width: auto; flex: 0 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; }
+  .card .k { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; }
+  .card .v { font-size: 20px; font-weight: 800; color: #111318; margin-top: 2px; white-space: nowrap; }
+  .card .s { font-size: 11px; color: #6b7280; margin-top: 2px; }
+  .card.over .v { color: #b91c1c; } .card.under .v { color: #166534; }
+  .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin: 0 0 14px; }
+  .panel h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #4b5563; }
+  .cal { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .cal .c { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
+  .cal .c .k { font-size: 11px; color: #6b7280; } .cal .c .v { font-size: 18px; font-weight: 800; } .cal .c .s { font-size: 11px; color: #6b7280; }
+  .cal .c.over .v { color: #b91c1c; } .cal .c.under .v { color: #166534; }
+  .tblwrap { overflow: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 1500px; }
+  th { position: sticky; top: 0; background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; padding: 8px 8px; text-align: right; border-bottom: 1px solid #e5e7eb; white-space: nowrap; cursor: pointer; user-select: none; z-index: 2; }
+  th.l, td.l { text-align: left; }
+  th.grp { background: #e5e7eb; color: #111318; text-align: center; cursor: default; border-left: 2px solid #fff; }
+  th.sorted::after { content: ' ▾'; color: #0696D7; } th.sorted.asc::after { content: ' ▴'; }
+  td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; text-align: right; white-space: nowrap; color: #111318; }
+  td.l { white-space: normal; min-width: 200px; }
+  td.b, th.b { border-left: 2px solid #e5e7eb; }
+  td .nm { font-weight: 700; } td .sub { display: block; font-size: 11px; color: #6b7280; }
+  td.neg { color: #b91c1c; font-weight: 700; } td.pos { color: #166534; font-weight: 700; }
+  td.muted, .muted { color: #9ca3af; }
+  tr.tot td { background: #f9fafb; font-weight: 800; border-top: 2px solid #111318; }
+  tr.excl td { color: #9ca3af; } tr.excl td .nm { color: #6b7280; }
+  tr.det td { background: #fafafa; white-space: normal; text-align: left; font-size: 12px; color: #374151; padding: 8px 12px 10px; }
+  .pill { font-size: 10px; font-weight: 800; letter-spacing: .06em; border-radius: 999px; padding: 2px 7px; text-transform: uppercase; display: inline-block; }
+  .pill.active { background: #dcfce7; color: #166534; } .pill.completed { background: #f3f4f6; color: #374151; } .pill.on-hold { background: #fef3c7; color: #92400e; }
+  .pill.partial { background: #fef3c7; color: #92400e; } .pill.early { background: #e0f2fe; color: #0369a1; } .pill.ok { background: #dcfce7; color: #166534; }
+  .bar { display: inline-block; width: 54px; height: 6px; background: #e5e7eb; border-radius: 3px; vertical-align: middle; margin-left: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #0696D7; }
+  .months { display: flex; gap: 4px; align-items: flex-end; height: 56px; margin: 6px 0 2px; }
+  .months div { flex: 0 0 34px; background: #0696D7; border-radius: 3px 3px 0 0; position: relative; min-height: 2px; }
+  .months div span { position: absolute; top: 100%; left: 0; right: 0; font-size: 9px; color: #6b7280; text-align: center; white-space: nowrap; }
+  .months div b { position: absolute; bottom: 100%; left: 0; right: 0; font-size: 9px; color: #374151; text-align: center; }
+  .note { font-size: 11.5px; color: #6b7280; margin: 10px 0 0; line-height: 1.5; }
+  .blocked { text-align: center; padding: 60px 20px; color: #4b5563; }
+  .empty { text-align: center; padding: 40px 20px; color: #6b7280; }
+  a.pl { color: #0696D7; text-decoration: none; }
+  .warn { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; margin: 0 0 12px; line-height: 1.45; }
+  @media print { .top, .tools, .noprint { display: none !important; } body { background: #fff; } .tblwrap { overflow: visible; border: 0; } table { min-width: 0; font-size: 9px; } @page { size: landscape; margin: 8mm; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="index.html" class="back">←</a>
+  <div class="ttl"><b>Estimate vs Actual</b><span>Estimated labor hours and material against the Mason payroll journal and project costs</span></div>
+  <img src="logo-header.png?v=258" alt="Northern Wolves AC" style="height:34px;width:auto">
+</div>
+<div class="wrap" id="main" style="display:none">
+  <div class="tools">
+    <span class="lbl">Loaded cost / man-hour</span><input type="number" id="rate" min="20" max="200" step="1" title="Converts the payroll dollars (W-2 + payroll taxes + 1099) into man-hours">
+    <span class="lbl">Min % complete</span><input type="number" id="minPct" min="0" max="100" step="5" value="50" title="Projects below this completion are shown but not used in the calibration">
+    <select id="fStatus"><option value="all">All projects</option><option value="active">Active</option><option value="completed">Completed</option></select>
+    <input type="text" id="q" placeholder="Search project, estimate, job #…">
+    <label class="chk"><input type="checkbox" id="incPartial"> include jobs that started before the journal</label>
+    <button class="btn light" id="btnCsv" type="button">Export CSV</button>
+    <button class="btn" id="btnPrint" type="button">Print / PDF</button>
+  </div>
+  <div class="warn noprint" id="dataWarn" style="display:none"></div>
+  <div class="cards" id="cards"></div>
+  <div class="panel" id="calPanel">
+    <h3>Calibration by category <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400" id="calSub"></span></h3>
+    <div class="cal" id="cal"></div>
+    <div class="note" id="calNote"></div>
+  </div>
+  <div class="tblwrap" id="tblwrap"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  <p class="note">
+    <b>Estimate</b> = the estimate linked to the project on the Bid Board (In progress / Accepted first); hours and material are computed with the same engine as the estimate page (labor factors, waste, group multipliers), optional lines excluded.
+    <b>Actual labor $</b> = Labor Cost W-2 + payroll taxes + 1099 from the Mason journal (Labor Costs page) for the pay dates shown; <b>actual hours</b> = actual $ ÷ loaded cost per man-hour (set above).
+    <b>% complete</b> = billed ÷ revised contract from the latest pay application, otherwise the PM % from the Workload Planner.
+    <b>Projected</b> = actual ÷ % complete (only when ≥ 25 % complete); <b>variance</b> = projected − estimate (red = the job needs more hours than estimated).
+    Jobs whose first payroll is the first journal payroll, or whose start date is before it, carry labor that is not in the journal — they are flagged <i>partial</i> and left out of the calibration unless included.
+    <b>Materials spent</b> comes from Projects → Costs (vendor invoices, as of the date shown).
+    The calibration fits projected hours = Σ factor × estimated hours per category over the comparable jobs (non-negative least squares); a factor of 1.20 means the field needs 20 % more hours than the estimate for that category. Treat it as indicative until there are 10+ comparable jobs.
+  </p>
+</div>
+<div class="blocked" id="blocked" style="display:none">This report is available to the office team only.</div>
+
+<script>
+(function() {
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var CATS = [['ductwork', 'Duct'], ['pipework', 'Pipe'], ['equipment_install', 'Equip. install'], ['air_outlets', 'Outlets'], ['other', 'Other']];
+  var rows = [], sortKey = 'varH', sortAsc = false, data = null, journalStart = null, journalEnd = null, open = {};
+  var $ = function(id) { return document.getElementById(id); };
+  var money = function(n) { n = Number(n || 0); var s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); return (n < 0 ? '(' + s + ')' : s); };
+  var hrs = function(n) { return (n == null || !isFinite(n)) ? '—' : Math.round(n).toLocaleString('en-US'); };
+  var pct = function(n) { return (n != null && isFinite(n)) ? (n * 100).toFixed(0) + '%' : '—'; };
+  var esc = function(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; };
+  var fmtDate = function(s) { if (!s) return ''; var d = new Date(s + (s.length === 10 ? 'T12:00:00' : '')); return isNaN(d) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  var STAGE_RANK = { in_progress: 0, accepted: 1, complete: 2, delayed: 3, estimating: 5, lost: 8, archived: 9 };
+
+  async function fetchAll(table, select, filterFn) {
+    var out = [], from = 0, step = 1000;
+    while (true) {
+      var q = supabaseClient.from(table).select(select).range(from, from + step - 1);
+      if (filterFn) q = filterFn(q);
+      var r = await q; if (r.error) throw new Error(table + ': ' + r.error.message);
+      out = out.concat(r.data || []); if ((r.data || []).length < step) break; from += step;
+    }
+    return out;
+  }
+
+  // ── same retainage math as wip.html ──
+  function relOf(l) { var r = Number((l && l.retainage_release_pct) || 0); return r > 0 ? Math.min(1, r) : 0; }
+  function billedOf(setup, app, lines) {
+    var grandG = 0; lines.forEach(function(li) { if (li.is_parent) return; grandG += Number(li.prev_amount || 0) + Number(li.this_amount || 0) + Number(li.stored_amount || 0); });
+    var L2 = Number(app.co_prev_additions || 0) + Number(app.co_prev_deductions || 0) + Number(app.co_this_additions || 0) + Number(app.co_this_deductions || 0);
+    return { billed: grandG, revised: Number(setup.original_contract_sum || 0) + L2 };
+  }
+
+  async function loadData() {
+    var ests = await fetchAll('estimates', '*', function(q) { return q.not('project_id', 'is', null); });
+    // one estimate per project: In progress / Accepted / Complete first, then the newest
+    var byProject = {};
+    ests.forEach(function(e) {
+      var cur = byProject[e.project_id];
+      var rank = function(x) { return (STAGE_RANK[x.bid_stage] != null ? STAGE_RANK[x.bid_stage] : 6) + (x.status === 'awarded' ? -0.5 : 0); };
+      if (!cur || rank(e) < rank(cur) || (rank(e) === rank(cur) && (e.updated_at || '') > (cur.updated_at || ''))) byProject[e.project_id] = e;
+    });
+    var chosen = Object.keys(byProject).map(function(k) { return byProject[k]; });
+    var countBy = {}; ests.forEach(function(e) { countBy[e.project_id] = (countBy[e.project_id] || 0) + 1; });
+    var ids = chosen.map(function(e) { return e.project_id; });
+    var R = await Promise.all([
+      fetchAll('projects', 'id, project_name, short_code, status, pm_name, percent_complete, start_date, created_at, contract_value', function(q) { return q.in('id', ids); }),
+      fetchAll('labor_costs', 'project_id, kind, amount, pay_date', function(q) { return q.in('project_id', ids); }),
+      fetchAll('project_costs', '*', function(q) { return q.in('project_id', ids); }).catch(function() { return []; }),
+      fetchAll('aia_projects', 'id, project_id, original_contract_sum', function(q) { return q.in('project_id', ids); }).catch(function() { return []; }),
+      Promise.all(chosen.map(function(e) { return fetchAll('estimate_line_items', '*', function(q) { return q.eq('estimate_id', e.id).order('sort_order'); }); }))
+    ]);
+    var setups = R[3], appsBy = {}, linesByApp = {};
+    if (setups.length) {
+      var apps = await fetchAll('aia_applications', 'id, aia_project_id, application_no, application_date, status, co_prev_additions, co_prev_deductions, co_this_additions, co_this_deductions', function(q) { return q.in('aia_project_id', setups.map(function(s) { return s.id; })).neq('status', 'void').neq('status', 'draft'); });
+      apps.forEach(function(a) { var cur = appsBy[a.aia_project_id]; if (!cur || Number(a.application_no) > Number(cur.application_no)) appsBy[a.aia_project_id] = a; });
+      var appIds = Object.keys(appsBy).map(function(k) { return appsBy[k].id; }), chunks = [];
+      for (var i = 0; i < appIds.length; i += 20) chunks.push(appIds.slice(i, i + 20));
+      await Promise.all(chunks.map(async function(chunk) {
+        var lines = await fetchAll('aia_line_items', 'application_id, prev_amount, this_amount, stored_amount, is_parent, retainage_release_pct', function(q) { return q.in('application_id', chunk); });
+        chunk.forEach(function(id) { linesByApp[id] = []; }); lines.forEach(function(l) { linesByApp[l.application_id].push(l); });
+      }));
+    }
+    // journal window = the whole labor_costs table, not just these projects
+    var bounds = await supabaseClient.from('labor_costs').select('pay_date').order('pay_date', { ascending: true }).limit(1);
+    var boundsEnd = await supabaseClient.from('labor_costs').select('pay_date').order('pay_date', { ascending: false }).limit(1);
+    journalStart = bounds.data && bounds.data[0] ? bounds.data[0].pay_date : null;
+    journalEnd = boundsEnd.data && boundsEnd.data[0] ? boundsEnd.data[0].pay_date : null;
+    data = { ests: chosen, countBy: countBy, projects: R[0], labor: R[1], costs: R[2], setups: setups, appsBy: appsBy, linesByApp: linesByApp, lines: R[4] };
+  }
+
+  function build() {
+    var rate = Number($('rate').value) || 60;
+    var pBy = {}; data.projects.forEach(function(p) { pBy[p.id] = p; });
+    var cBy = {}; data.costs.forEach(function(c) { cBy[c.project_id] = c; });
+    var sBy = {}; data.setups.forEach(function(s) { sBy[s.project_id] = s; });
+    var lab = {};
+    data.labor.forEach(function(l) {
+      if (['w2', 'taxes', '1099'].indexOf(l.kind) < 0) return;
+      var o = lab[l.project_id] = lab[l.project_id] || { total: 0, first: null, last: null, months: {} };
+      o.total += Number(l.amount || 0);
+      if (!o.first || l.pay_date < o.first) o.first = l.pay_date; if (!o.last || l.pay_date > o.last) o.last = l.pay_date;
+      var m = String(l.pay_date || '').slice(0, 7); o.months[m] = (o.months[m] || 0) + Number(l.amount || 0);
+    });
+    rows = [];
+    data.ests.forEach(function(e, idx) {
+      var p = pBy[e.project_id]; if (!p) return;
+      var lines = data.lines[idx] || [], t;
+      try { t = nwEstTotals(lines, e); } catch (err) { console.warn('[eva] totals failed for', e.name, err); return; }
+      var cat = { ductwork: 0, pipework: 0, equipment_install: 0, air_outlets: 0, other: 0 }, catRaw = 0;
+      lines.forEach(function(li) {
+        if (li.is_optional) return;
+        var lt; try { lt = nwLineTotals(li, e); } catch (err) { return; }
+        var k = cat.hasOwnProperty(li.category) ? li.category : 'other';
+        cat[k] += lt.totalLaborTime || 0; catRaw += lt.totalLaborTime || 0;
+      });
+      var scale = (catRaw > 0 && t.laborHours > 0) ? t.laborHours / catRaw : 1;
+      Object.keys(cat).forEach(function(k) { cat[k] *= scale; });
+      var L = lab[e.project_id] || null, c = cBy[e.project_id] || null;
+      var setup = sBy[e.project_id], app = setup ? data.appsBy[setup.id] : null, pctSrc = '', pc = null;
+      if (setup && app) { var b = billedOf(setup, app, data.linesByApp[app.id] || []); if (b.revised > 0) { pc = Math.min(1, b.billed / b.revised); pctSrc = 'billing'; } }
+      if (pc == null && p.percent_complete != null && p.percent_complete !== '') { pc = Number(p.percent_complete) / (Number(p.percent_complete) > 1 ? 100 : 1); pctSrc = 'PM'; }
+      if (pc == null && p.status === 'completed') { pc = 1; pctSrc = 'status'; }
+      var partial = false, why = '';
+      if (p.start_date && journalStart && p.start_date < journalStart) { partial = true; why = 'started ' + fmtDate(p.start_date) + ', before the journal'; }
+      else if (L && journalStart && L.first === journalStart && (!p.start_date || p.start_date <= journalStart)) { partial = true; why = 'labor already running on the first journal payroll'; }
+      else if (!p.start_date && L && journalStart && L.first === journalStart) { partial = true; why = 'labor on the first journal payroll, no start date'; }
+      var actual = L ? L.total : 0, actH = actual / rate;
+      var projH = (pc != null && pc >= 0.25 && L) ? actH / pc : null;
+      var estLabor = t.laborHours * (t.laborRate || Number(e.labor_rate) || 60);
+      var r = {
+        id: p.id, estId: e.id, job: p.short_code || '', name: p.project_name, est: e.name, quote: e.quote_number || e.estimate_no || '', stage: e.bid_stage || '', nEst: data.countBy[e.project_id] || 1,
+        status: p.status || 'active', pm: p.pm_name || '', pc: pc, pctSrc: pctSrc,
+        estH: t.laborHours, estLabor: estLabor, estRate: t.laborRate || Number(e.labor_rate) || 60, cat: cat,
+        estMat: (t.materialTotal || 0) + (t.otherMaterial || 0), estServices: t.services || 0, bid: t.bidPrice || 0,
+        actual: actual, actH: actH, first: L ? L.first : null, last: L ? L.last : null, months: L ? L.months : {}, hasLabor: !!L,
+        projH: projH, varH: projH != null ? projH - t.laborHours : null, varPct: (projH != null && t.laborHours > 0) ? projH / t.laborHours - 1 : null,
+        actLaborDollars: actual, varDollars: (projH != null) ? projH * rate - estLabor : null,
+        matSpent: c ? Number(c.materials_spent || 0) : null, matAsOf: c ? c.as_of : null, laborEstMaster: c ? Number(c.labor_est || 0) : null,
+        partial: partial, why: why
+      };
+      rows.push(r);
+    });
+    render();
+  }
+
+  // non-negative least squares by projected gradient (tiny system: ≤ 5 unknowns)
+  function nnls(X, y) {
+    var k = X[0].length, w = [], i, j, it;
+    for (j = 0; j < k; j++) w.push(1);
+    var XtX = [], Xty = [];
+    for (i = 0; i < k; i++) { XtX.push([]); Xty.push(0); for (j = 0; j < k; j++) XtX[i].push(0); }
+    X.forEach(function(row, n) { for (i = 0; i < k; i++) { Xty[i] += row[i] * y[n]; for (j = 0; j < k; j++) XtX[i][j] += row[i] * row[j]; } });
+    for (it = 0; it < 2000; it++) {
+      for (i = 0; i < k; i++) {
+        if (XtX[i][i] <= 0) { w[i] = 0; continue; }
+        var s = Xty[i]; for (j = 0; j < k; j++) if (j !== i) s -= XtX[i][j] * w[j];
+        w[i] = Math.max(0, s / XtX[i][i]);
+      }
+    }
+    var ss = 0, st = 0, mean = y.reduce(function(a, b) { return a + b; }, 0) / (y.length || 1);
+    X.forEach(function(row, n) { var f = 0; for (i = 0; i < k; i++) f += row[i] * w[i]; ss += (y[n] - f) * (y[n] - f); st += (y[n] - mean) * (y[n] - mean); });
+    return { w: w, r2: st > 0 ? 1 - ss / st : null };
+  }
+
+  function comparable(r) { return r.hasLabor && r.projH != null && r.pc != null && r.pc >= (Number($('minPct').value) || 0) / 100 && (!r.partial || $('incPartial').checked) && r.estH > 0; }
+
+  function render() {
+    var q = ($('q').value || '').toLowerCase(), st = $('fStatus').value;
+    var list = rows.filter(function(r) {
+      if (st === 'active' && r.status !== 'active') return false;
+      if (st === 'completed' && r.status !== 'completed') return false;
+      if (q && (r.name + ' ' + r.est + ' ' + r.job + ' ' + r.pm).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    list.sort(function(a, b) {
+      var x = a[sortKey], y = b[sortKey];
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      if (typeof x === 'string') return sortAsc ? x.localeCompare(y) : y.localeCompare(x);
+      return sortAsc ? x - y : y - x;
+    });
+    // ── cards + calibration over the comparable jobs ──
+    var comp = list.filter(comparable), sumEst = 0, sumProj = 0, sumAct = 0, sumEstD = 0;
+    comp.forEach(function(r) { sumEst += r.estH; sumProj += r.projH; sumAct += r.actH; sumEstD += r.estLabor; });
+    var ratio = sumEst > 0 ? sumProj / sumEst : null;
+    var over = comp.filter(function(r) { return r.varPct > 0.1; }).length, under = comp.filter(function(r) { return r.varPct < -0.1; }).length;
+    $('cards').innerHTML =
+      '<div class="card"><div class="k">Comparable jobs</div><div class="v">' + comp.length + '</div><div class="s">of ' + list.length + ' with a linked estimate · ' + over + ' over, ' + under + ' under (±10 %)</div></div>' +
+      '<div class="card"><div class="k">Estimated hours</div><div class="v">' + hrs(sumEst) + '</div><div class="s">$' + money(sumEstD) + ' at the estimate rates</div></div>' +
+      '<div class="card"><div class="k">Projected actual hours</div><div class="v">' + hrs(sumProj) + '</div><div class="s">' + hrs(sumAct) + ' h to date = $' + money(sumAct * (Number($('rate').value) || 60)) + '</div></div>' +
+      '<div class="card ' + (ratio == null ? '' : ratio > 1.1 ? 'over' : ratio < 0.9 ? 'under' : '') + '"><div class="k">Field ÷ estimate</div><div class="v">' + (ratio == null ? '—' : ratio.toFixed(2)) + '</div><div class="s">' + (ratio == null ? 'no comparable jobs yet' : ratio > 1 ? 'the field needs ' + ((ratio - 1) * 100).toFixed(0) + ' % more hours' : 'the field uses ' + ((1 - ratio) * 100).toFixed(0) + ' % fewer hours') + '</div></div>' +
+      '<div class="card"><div class="k">Journal window</div><div class="v" style="font-size:14px">' + (journalStart ? fmtDate(journalStart) + ' – ' + fmtDate(journalEnd) : '—') + '</div><div class="s">Mason payroll journal (W-2 + taxes + 1099)</div></div>';
+    var calHtml = '', note = '';
+    if (comp.length >= 4) {
+      var keys = CATS.map(function(c) { return c[0]; }), used = keys.filter(function(k) { return comp.some(function(r) { return r.cat[k] > 0; }); });
+      var fit = nnls(comp.map(function(r) { return used.map(function(k) { return r.cat[k]; }); }), comp.map(function(r) { return r.projH; }));
+      used.forEach(function(k, i) {
+        var lbl = CATS.filter(function(c) { return c[0] === k; })[0][1], f = fit.w[i], estK = 0, n = 0;
+        comp.forEach(function(r) { if (r.cat[k] > 0) { estK += r.cat[k]; n++; } });
+        calHtml += '<div class="c ' + (f > 1.1 ? 'over' : f < 0.9 && f > 0 ? 'under' : '') + '"><div class="k">' + lbl + '</div><div class="v">' + (f > 0 ? '× ' + f.toFixed(2) : '—') + '</div><div class="s">' + hrs(estK) + ' est. h on ' + n + ' job' + (n === 1 ? '' : 's') + (f > 0 ? ' · ' + (f > 1 ? '+' : '') + ((f - 1) * 100).toFixed(0) + ' %' : ' · not separable') + '</div></div>';
+      });
+      note = 'Fit over ' + comp.length + ' comparable jobs' + (fit.r2 != null ? ', R² ' + fit.r2.toFixed(2) : '') + '. A category shows "not separable" when the fit cannot attribute hours to it with these jobs. ' + (comp.length < 10 ? 'Fewer than 10 jobs — indicative only.' : '');
+    } else { note = 'Needs at least 4 comparable jobs (' + comp.length + ' now). Lower "Min % complete" or include partial jobs to see a first fit.'; }
+    $('cal').innerHTML = calHtml; $('calNote').textContent = note; $('calSub').textContent = comp.length ? '— projected hours = Σ factor × estimated hours' : '';
+    // ── table ──
+    var cols = [
+      ['name', 'Project / estimate', 'l'], ['status', 'Status', 'l'], ['pc', '% complete'],
+      ['estH', 'Est. hours', 'b'], ['cat.ductwork', 'Duct'], ['cat.pipework', 'Pipe'], ['cat.equipment_install', 'Equip. inst.'], ['cat.air_outlets', 'Outlets'], ['cat.other', 'Other'], ['estLabor', 'Est. labor $'],
+      ['actual', 'Actual labor $', 'b'], ['actH', 'Actual hours'], ['first', 'Pay dates', 'l'],
+      ['projH', 'Projected hours', 'b'], ['varH', 'Variance h'], ['varPct', 'Variance %'], ['varDollars', 'Variance $'],
+      ['estMat', 'Est. material $', 'b'], ['matSpent', 'Materials spent $'], ['laborEstMaster', 'Labor budget (Costs) $']
+    ];
+    $('thead').innerHTML = '<tr>' + cols.map(function(c) { var k = c[0].replace('cat.', ''); return '<th data-k="' + c[0] + '" class="' + (c[2] || '') + (sortKey === c[0] ? ' sorted' + (sortAsc ? ' asc' : '') : '') + '">' + c[1] + '</th>'; }).join('') + '</tr>';
+    $('thead').querySelectorAll('th[data-k]').forEach(function(th) { th.addEventListener('click', function() { var k = th.getAttribute('data-k'); if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = (k === 'name' || k === 'status' || k === 'first'); } render(); }); });
+    var get = function(r, k) { return k.indexOf('cat.') === 0 ? r.cat[k.slice(4)] : r[k]; };
+    rows.forEach(function(r) { r['cat.ductwork'] = r.cat.ductwork; r['cat.pipework'] = r.cat.pipework; r['cat.equipment_install'] = r.cat.equipment_install; r['cat.air_outlets'] = r.cat.air_outlets; r['cat.other'] = r.cat.other; });
+    if (!list.length) { $('tbody').innerHTML = '<tr><td class="empty" colspan="' + cols.length + '">No projects with a linked estimate match.</td></tr>'; return; }
+    var html = '', sums = { estH: 0, estLabor: 0, actual: 0, actH: 0, projH: 0, varH: 0, estMat: 0, matSpent: 0 };
+    list.forEach(function(r) {
+      var isComp = comparable(r);
+      if (isComp) { sums.estH += r.estH; sums.estLabor += r.estLabor; sums.actual += r.actual; sums.actH += r.actH; sums.projH += r.projH; sums.varH += r.varH; sums.estMat += r.estMat; sums.matSpent += r.matSpent || 0; }
+      var flags = (r.partial ? '<span class="pill partial" title="' + esc(r.why) + '">partial</span> ' : '') + (!r.hasLabor ? '<span class="pill early">no labor yet</span> ' : '') + (r.hasLabor && r.projH == null ? '<span class="pill early">&lt; 25 %</span> ' : '') + (isComp ? '<span class="pill ok">in fit</span>' : '');
+      html += '<tr class="' + (isComp ? '' : 'excl') + '" data-id="' + r.id + '">' +
+        '<td class="l"><span class="nm">' + esc((r.job ? r.job + ' · ' : '') + r.name) + '</span><span class="sub"><a class="pl" href="estimating.html?est=' + r.estId + '">' + esc(r.est) + '</a>' + (r.quote ? ' · Q' + esc(String(r.quote)) : '') + (r.nEst > 1 ? ' · ' + r.nEst + ' estimates' : '') + ' · ' + esc(r.stage.replace('_', ' ')) + '</span><span class="sub">' + flags + '</span></td>' +
+        '<td class="l"><span class="pill ' + esc(r.status) + '">' + esc(r.status) + '</span>' + (r.pm ? '<span class="sub">' + esc(r.pm) + '</span>' : '') + '</td>' +
+        '<td>' + pct(r.pc) + (r.pc != null ? '<span class="bar"><i style="width:' + Math.round(Math.min(1, r.pc) * 100) + '%"></i></span>' : '') + (r.pctSrc ? '<span class="sub">' + r.pctSrc + '</span>' : '') + '</td>' +
+        '<td class="b"><b>' + hrs(r.estH) + '</b><span class="sub">$' + r.estRate + '/h</span></td>' +
+        CATS.map(function(c) { return '<td class="' + (r.cat[c[0]] > 0 ? '' : 'muted') + '">' + hrs(r.cat[c[0]]) + '</td>'; }).join('') +
+        '<td>' + money(r.estLabor) + '</td>' +
+        '<td class="b">' + (r.hasLabor ? money(r.actual) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + (r.hasLabor ? hrs(r.actH) : '<span class="muted">—</span>') + '</td>' +
+        '<td class="l" style="min-width:0;white-space:nowrap">' + (r.first ? '<a class="pl" href="#" data-months="' + r.id + '">' + fmtDate(r.first).replace(', 2026', '') + ' – ' + fmtDate(r.last).replace(', 2026', '') + '</a>' : '<span class="muted">—</span>') + '</td>' +
+        '<td class="b">' + hrs(r.projH) + '</td>' +
+        '<td class="' + (r.varH == null ? 'muted' : r.varH > 0 ? 'neg' : 'pos') + '">' + (r.varH == null ? '—' : (r.varH > 0 ? '+' : '') + hrs(r.varH)) + '</td>' +
+        '<td class="' + (r.varPct == null ? 'muted' : r.varPct > 0.1 ? 'neg' : r.varPct < -0.1 ? 'pos' : '') + '">' + (r.varPct == null ? '—' : (r.varPct > 0 ? '+' : '') + (r.varPct * 100).toFixed(0) + '%') + '</td>' +
+        '<td class="' + (r.varDollars == null ? 'muted' : r.varDollars > 0 ? 'neg' : 'pos') + '">' + (r.varDollars == null ? '—' : (r.varDollars > 0 ? '+' : '') + money(r.varDollars)) + '</td>' +
+        '<td class="b">' + money(r.estMat) + '</td>' +
+        '<td>' + (r.matSpent != null ? money(r.matSpent) + (r.matAsOf ? '<span class="sub">as of ' + fmtDate(r.matAsOf) + '</span>' : '') : '<span class="muted">—</span>') + '</td>' +
+        '<td class="' + (r.laborEstMaster ? '' : 'muted') + '">' + (r.laborEstMaster ? money(r.laborEstMaster) : '—') + '</td>' +
+        '</tr>';
+      if (open[r.id]) {
+        var ms = Object.keys(r.months).sort(), max = Math.max.apply(null, ms.map(function(m) { return r.months[m]; }).concat([1]));
+        html += '<tr class="det"><td colspan="' + cols.length + '"><b>Payroll by month</b> (W-2 + taxes + 1099)' + (r.why ? ' · <span class="pill partial">partial</span> ' + esc(r.why) : '') +
+          '<div class="months">' + ms.map(function(m) { return '<div style="height:' + Math.max(2, Math.round(r.months[m] / max * 44)) + 'px" title="' + m + ': $' + money(r.months[m]) + '"><b>' + Math.round(r.months[m] / 1000) + 'k</b><span>' + m.slice(5) + '/' + m.slice(2, 4) + '</span></div>'; }).join('') + '</div><br>' +
+          'Estimate: ' + hrs(r.estH) + ' h · bid $' + money(r.bid) + ' · material $' + money(r.estMat) + ' · services $' + money(r.estServices) + '.' +
+          (r.laborEstMaster ? ' Labor budget on Projects → Costs: $' + money(r.laborEstMaster) + ' (= ' + hrs(r.laborEstMaster / (Number($('rate').value) || 60)) + ' h at the loaded rate).' : '') +
+          '</td></tr>';
+      }
+    });
+    html += '<tr class="tot"><td class="l">Comparable jobs (in fit)</td><td></td><td></td><td class="b">' + hrs(sums.estH) + '</td><td colspan="5"></td><td>' + money(sums.estLabor) + '</td><td class="b">' + money(sums.actual) + '</td><td>' + hrs(sums.actH) + '</td><td></td><td class="b">' + hrs(sums.projH) + '</td><td class="' + (sums.varH > 0 ? 'neg' : 'pos') + '">' + (sums.varH > 0 ? '+' : '') + hrs(sums.varH) + '</td><td>' + (sums.estH ? ((sums.projH / sums.estH - 1) * 100).toFixed(0) + '%' : '—') + '</td><td></td><td class="b">' + money(sums.estMat) + '</td><td>' + money(sums.matSpent) + '</td><td></td></tr>';
+    $('tbody').innerHTML = html;
+    $('tbody').querySelectorAll('a[data-months]').forEach(function(a) { a.addEventListener('click', function(ev) { ev.preventDefault(); var id = a.getAttribute('data-months'); open[id] = !open[id]; render(); }); });
+  }
+
+  function exportCsv() {
+    var head = ['Job', 'Project', 'Estimate', 'Stage', 'Status', 'PM', '% complete', 'Est hours', 'Duct h', 'Pipe h', 'Equip install h', 'Outlets h', 'Other h', 'Est rate', 'Est labor $', 'Actual labor $', 'Actual hours', 'First pay', 'Last pay', 'Projected hours', 'Variance h', 'Variance %', 'Est material $', 'Materials spent $', 'Labor budget $', 'Partial', 'In fit'];
+    var out = [head.join(',')];
+    rows.forEach(function(r) {
+      out.push([r.job, r.name, r.est, r.stage, r.status, r.pm, r.pc != null ? (r.pc * 100).toFixed(0) : '', r.estH.toFixed(1), r.cat.ductwork.toFixed(1), r.cat.pipework.toFixed(1), r.cat.equipment_install.toFixed(1), r.cat.air_outlets.toFixed(1), r.cat.other.toFixed(1), r.estRate, r.estLabor.toFixed(0), r.actual.toFixed(0), r.actH.toFixed(1), r.first || '', r.last || '', r.projH != null ? r.projH.toFixed(1) : '', r.varH != null ? r.varH.toFixed(1) : '', r.varPct != null ? (r.varPct * 100).toFixed(0) : '', r.estMat.toFixed(0), r.matSpent != null ? r.matSpent.toFixed(0) : '', r.laborEstMaster != null ? r.laborEstMaster.toFixed(0) : '', r.partial ? 'yes' : '', comparable(r) ? 'yes' : '']
+        .map(function(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','));
+    });
+    var blob = new Blob(['﻿' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'Estimate vs Actual ' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  async function init() {
+    await requireAuth();
+    var prof = null; try { prof = await getAuthProfile(); } catch (e) {}
+    if (!prof || OFFICE_ROLES.indexOf(prof.role) < 0) { $('blocked').style.display = 'block'; return; }
+    $('main').style.display = 'block';
+    var savedRate = null; try { savedRate = localStorage.getItem('nw_eva_rate'); } catch (e) {}
+    $('rate').value = savedRate || 60;
+    $('tbody').innerHTML = '<tr><td class="empty" colspan="20">Loading estimates, payroll journal and project costs…</td></tr>';
+    try { await loadData(); build(); } catch (e) { $('tbody').innerHTML = '<tr><td class="empty" colspan="20">' + esc(e.message) + '</td></tr>'; return; }
+    if (!data.labor.length) { $('dataWarn').style.display = ''; $('dataWarn').textContent = 'No payroll journal rows are linked to these projects yet — import Mason\'s journal on the Labor Costs page and map the project names.'; }
+    $('rate').addEventListener('change', function() { try { localStorage.setItem('nw_eva_rate', $('rate').value); } catch (e) {} build(); });
+    ['minPct', 'incPartial', 'fStatus'].forEach(function(id) { $(id).addEventListener('change', render); });
+    $('q').addEventListener('input', render);
+    $('btnCsv').addEventListener('click', exportCsv);
+    $('btnPrint').addEventListener('click', function() { window.print(); });
+  }
+  init().catch(function(e) { console.error(e); });
+})();
+</script>
+<script src="sw-register.js?v=475"></script>
+</body>
+</html>
