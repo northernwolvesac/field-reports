@@ -14,14 +14,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=460"></script>
-<script src="auth.js?v=460"></script>
-<script src="est-totals.js?v=460"></script>
+<script src="supabase-config.js?v=464"></script>
+<script src="auth.js?v=464"></script>
+<script src="est-totals.js?v=464"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=460"></script>
-<script src="nw-email.js?v=460"></script>
-<script src="est-engine.js?v=460"></script>
-<script src="geo-takeoff.js?v=460"></script>
+<script src="email-utils.js?v=464"></script>
+<script src="nw-email.js?v=464"></script>
+<script src="est-engine.js?v=464"></script>
+<script src="geo-takeoff.js?v=464"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1530,6 +1530,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=460"></script>
+<script src="sw-register.js?v=464"></script>
 </body>
 </html>
