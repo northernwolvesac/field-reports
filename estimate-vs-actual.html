@@ -11,10 +11,10 @@
 <title>Estimate vs Actual — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=476"></script>
-<script src="auth.js?v=476"></script>
-<script src="nw-duct-weight.js?v=476"></script>
-<script src="est-totals.js?v=476"></script>
+<script src="supabase-config.js?v=477"></script>
+<script src="auth.js?v=477"></script>
+<script src="nw-duct-weight.js?v=477"></script>
+<script src="est-totals.js?v=477"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 40px; }
   .wrap { max-width: none; margin: 0; padding: 0 14px; }
@@ -106,6 +106,7 @@
     <b>Projected</b> = actual ÷ % complete (only when ≥ 25 % complete); <b>variance</b> = projected − estimate (red = the job costs more than estimated).
     Jobs whose first payroll is the first journal payroll, or whose start date is before it, carry labor that is not in the journal — they are flagged <i>partial</i> and left out of the calibration unless included; an estimate with fewer than 5 lines or under 20 % of the labor budget is a <i>thin estimate</i> and is never used.
     <b>Materials spent</b> comes from Projects → Costs (vendor invoices, as of the date shown).
+    <b>Total cost</b> = labor + subs + material on both sides — the safest comparison, because a scope the estimate carries as material or services (controls, insulation, crane) is often paid as a subcontractor and lands in "subs spent".
     The calibration fits projected hours = Σ factor × estimated hours per category over the comparable jobs (non-negative least squares); a factor of 1.20 means the field needs 20 % more hours than the estimate for that category. Treat it as indicative until there are 10+ comparable jobs.
   </p>
 </div>
@@ -236,6 +237,12 @@
         matSpent: c ? Number(c.materials_spent || 0) : null, matAsOf: c ? c.as_of : null, laborEstMaster: laborEstMaster,
         partial: partial, why: why, thin: thin, lineCount: lines.length
       };
+      // total cost view: immune to how a cost was classified (labor vs sub vs material) — the most reliable comparison
+      r.estCost = estLabor + estSubs + r.estMat;
+      r.actCost = (hasAct || (c && (Number(c.materials_spent) > 0 || subsSpent > 0))) ? payroll + subsSpent + (r.matSpent || 0) : null;
+      r.projCost = (r.actCost != null && pc != null && pc >= 0.25) ? r.actCost / pc : null;
+      r.varCost = r.projCost != null ? r.projCost - r.estCost : null;
+      r.varCostPct = (r.projCost != null && r.estCost > 0) ? r.projCost / r.estCost - 1 : null;
       rows.push(r);
     });
     render();
@@ -277,12 +284,13 @@
       return sortAsc ? x - y : y - x;
     });
     // ── cards + calibration over the comparable jobs ──
-    var comp = list.filter(comparable), sumEst = 0, sumProj = 0, sumAct = 0, sumEstD = 0, sumMatEst = 0, sumMatAct = 0, nMat = 0;
-    comp.forEach(function(r) { sumEst += r.estTotalH; sumProj += r.projH; sumAct += r.actH; sumEstD += r.estTotal; if (r.pc >= 0.9 && r.matSpent > 0) { sumMatEst += r.estMat; sumMatAct += r.matSpent; nMat++; } });
-    var ratio = sumEst > 0 ? sumProj / sumEst : null, matRatio = sumMatEst > 0 ? sumMatAct / sumMatEst : null;
-    var over = comp.filter(function(r) { return r.varPct > 0.1; }).length, under = comp.filter(function(r) { return r.varPct < -0.1; }).length;
+    var comp = list.filter(comparable), sumEst = 0, sumProj = 0, sumAct = 0, sumEstD = 0, sumMatEst = 0, sumMatAct = 0, nMat = 0, sumCostEst = 0, sumCostProj = 0, nCost = 0;
+    comp.forEach(function(r) { sumEst += r.estTotalH; sumProj += r.projH; sumAct += r.actH; sumEstD += r.estTotal; if (r.pc >= 0.9 && r.matSpent > 0) { sumMatEst += r.estMat; sumMatAct += r.matSpent; nMat++; } if (r.projCost != null && r.matSpent > 0) { sumCostEst += r.estCost; sumCostProj += r.projCost; nCost++; } });
+    var ratio = sumEst > 0 ? sumProj / sumEst : null, matRatio = sumMatEst > 0 ? sumMatAct / sumMatEst : null, costRatio = sumCostEst > 0 ? sumCostProj / sumCostEst : null;
+    var over = comp.filter(function(r) { return r.varCostPct > 0.1; }).length, under = comp.filter(function(r) { return r.varCostPct < -0.1; }).length;
     $('cards').innerHTML =
-      '<div class="card"><div class="k">Comparable jobs</div><div class="v">' + comp.length + '</div><div class="s">of ' + list.length + ' with a linked estimate · ' + over + ' over, ' + under + ' under (±10 %)</div></div>' +
+      '<div class="card"><div class="k">Comparable jobs</div><div class="v">' + comp.length + '</div><div class="s">of ' + list.length + ' with a linked estimate · total cost: ' + over + ' over, ' + under + ' under (±10 %)</div></div>' +
+      '<div class="card ' + (costRatio == null ? '' : costRatio > 1.1 ? 'over' : costRatio < 0.9 ? 'under' : '') + '"><div class="k">Total cost ÷ estimate</div><div class="v">' + (costRatio == null ? '—' : costRatio.toFixed(2)) + '</div><div class="s">' + (costRatio == null ? 'needs jobs with material invoices' : nCost + ' job' + (nCost === 1 ? '' : 's') + ' · projected $' + money(sumCostProj) + ' vs $' + money(sumCostEst) + ' (labor + subs + material)') + '</div></div>' +
       '<div class="card"><div class="k">Estimated labor' + ($('incSubs').checked ? ' + subs' : '') + '</div><div class="v">$' + money(sumEstD) + '</div><div class="s">' + hrs(sumEst) + ' h at the loaded rate</div></div>' +
       '<div class="card"><div class="k">Projected actual</div><div class="v">$' + money(sumProj * (Number($('rate').value) || 60)) + '</div><div class="s">' + hrs(sumProj) + ' h · $' + money(sumAct * (Number($('rate').value) || 60)) + ' to date</div></div>' +
       '<div class="card ' + (ratio == null ? '' : ratio > 1.1 ? 'over' : ratio < 0.9 ? 'under' : '') + '"><div class="k">Field ÷ estimate</div><div class="v">' + (ratio == null ? '—' : ratio.toFixed(2)) + '</div><div class="s">' + (ratio == null ? 'no comparable jobs yet' : ratio > 1 ? 'the field costs ' + ((ratio - 1) * 100).toFixed(0) + ' % more than estimated' : 'the field costs ' + ((1 - ratio) * 100).toFixed(0) + ' % less than estimated') + '</div></div>' +
@@ -298,6 +306,7 @@
         calHtml += '<div class="c ' + (f > 1.1 ? 'over' : f < 0.9 && f > 0 ? 'under' : '') + '"><div class="k">' + lbl + '</div><div class="v">' + (f > 0 ? '× ' + f.toFixed(2) : '—') + '</div><div class="s">' + hrs(estK) + ' est. h on ' + n + ' job' + (n === 1 ? '' : 's') + (f > 0 ? ' · ' + (f > 1 ? '+' : '') + ((f - 1) * 100).toFixed(0) + ' %' : ' · not separable') + '</div></div>';
       });
       note = 'Fit over ' + comp.length + ' comparable jobs' + (fit.r2 != null ? ', R² ' + fit.r2.toFixed(2) : '') + '. A category shows "not separable" when the fit cannot attribute hours to it with these jobs. ' + (comp.length < 10 ? 'Fewer than 10 jobs — indicative only.' : '');
+      if (fit.r2 == null || fit.r2 < 0.3) { calHtml = ''; note = 'No reliable per-category fit yet (' + comp.length + ' jobs, R² ' + (fit.r2 == null ? '—' : fit.r2.toFixed(2)) + '): the payroll journal does not split hours by duct / pipe / equipment, so the split can only be inferred across jobs, and these jobs do not separate it. Use the overall ratios above; the per-category factors will appear once the fit explains at least 30 % of the variance.'; }
     } else { note = 'Needs at least 4 comparable jobs (' + comp.length + ' now). Lower "Min % complete" or include partial jobs to see a first fit.'; }
     $('cal').innerHTML = calHtml; $('calNote').textContent = note; $('calSub').textContent = comp.length ? '— projected hours = Σ factor × estimated hours' : '';
     // ── table ──
@@ -306,17 +315,18 @@
       ['estH', 'Est. hours', 'b'], ['cat.ductwork', 'Duct'], ['cat.pipework', 'Pipe'], ['cat.equipment_install', 'Equip. inst.'], ['cat.air_outlets', 'Outlets'], ['cat.other', 'Other'], ['estLabor', 'Est. labor $'], ['estServices', 'Est. subs / services $'],
       ['payroll', 'Payroll $', 'b'], ['subsSpent', 'Subs spent $'], ['actual', 'Actual $'], ['actH', 'Actual hours'], ['first', 'Pay dates', 'l'],
       ['projH', 'Projected hours', 'b'], ['varH', 'Variance h'], ['varPct', 'Variance %'], ['varDollars', 'Variance $'],
-      ['estMat', 'Est. material $', 'b'], ['matSpent', 'Materials spent $'], ['laborEstMaster', 'Labor budget (Costs) $']
+      ['estMat', 'Est. material $', 'b'], ['matSpent', 'Materials spent $'], ['laborEstMaster', 'Labor budget (Costs) $'],
+      ['estCost', 'Est. total cost $', 'b'], ['actCost', 'Actual cost to date $'], ['projCost', 'Projected cost $'], ['varCostPct', 'Total cost var. %']
     ];
     $('thead').innerHTML = '<tr>' + cols.map(function(c) { var k = c[0].replace('cat.', ''); return '<th data-k="' + c[0] + '" class="' + (c[2] || '') + (sortKey === c[0] ? ' sorted' + (sortAsc ? ' asc' : '') : '') + '">' + c[1] + '</th>'; }).join('') + '</tr>';
     $('thead').querySelectorAll('th[data-k]').forEach(function(th) { th.addEventListener('click', function() { var k = th.getAttribute('data-k'); if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = (k === 'name' || k === 'status' || k === 'first'); } render(); }); });
     var get = function(r, k) { return k.indexOf('cat.') === 0 ? r.cat[k.slice(4)] : r[k]; };
     rows.forEach(function(r) { r['cat.ductwork'] = r.cat.ductwork; r['cat.pipework'] = r.cat.pipework; r['cat.equipment_install'] = r.cat.equipment_install; r['cat.air_outlets'] = r.cat.air_outlets; r['cat.other'] = r.cat.other; });
     if (!list.length) { $('tbody').innerHTML = '<tr><td class="empty" colspan="' + cols.length + '">No projects with a linked estimate match.</td></tr>'; return; }
-    var html = '', sums = { estH: 0, estTotalH: 0, estLabor: 0, estServices: 0, payroll: 0, subsSpent: 0, actual: 0, actH: 0, projH: 0, varH: 0, estMat: 0, matSpent: 0 };
+    var html = '', sums = { estH: 0, estTotalH: 0, estLabor: 0, estServices: 0, payroll: 0, subsSpent: 0, actual: 0, actH: 0, projH: 0, varH: 0, estMat: 0, matSpent: 0, estCost: 0, actCost: 0, projCost: 0 };
     list.forEach(function(r) {
       var isComp = comparable(r);
-      if (isComp) { sums.estH += r.estH; sums.estTotalH += r.estTotalH; sums.estLabor += r.estLabor; sums.estServices += r.estServices; sums.payroll += r.payroll; sums.subsSpent += r.subsSpent; sums.actual += r.actual; sums.actH += r.actH; sums.projH += r.projH; sums.varH += r.varH; sums.estMat += r.estMat; sums.matSpent += r.matSpent || 0; }
+      if (isComp) { sums.estH += r.estH; sums.estTotalH += r.estTotalH; sums.estLabor += r.estLabor; sums.estServices += r.estServices; sums.payroll += r.payroll; sums.subsSpent += r.subsSpent; sums.actual += r.actual; sums.actH += r.actH; sums.projH += r.projH; sums.varH += r.varH; sums.estMat += r.estMat; sums.matSpent += r.matSpent || 0; if (r.projCost != null && r.matSpent > 0) { sums.estCost += r.estCost; sums.actCost += r.actCost; sums.projCost += r.projCost; } }
       var flags = (r.thin ? '<span class="pill partial" title="' + r.lineCount + ' lines — the estimate does not cover the job">thin estimate</span> ' : '') + (r.partial ? '<span class="pill partial" title="' + esc(r.why) + '">partial</span> ' : '') + (!r.hasLabor ? '<span class="pill early">no labor yet</span> ' : '') + (r.hasLabor && r.projH == null ? '<span class="pill early">&lt; 25 %</span> ' : '') + (isComp ? '<span class="pill ok">in fit</span>' : '');
       html += '<tr class="' + (isComp ? '' : 'excl') + '" data-id="' + r.id + '">' +
         '<td class="l"><span class="nm">' + esc((r.job ? r.job + ' · ' : '') + r.name) + '</span><span class="sub"><a class="pl" href="estimating.html?est=' + r.estId + '">' + esc(r.est) + '</a>' + (r.quote ? ' · Q' + esc(String(r.quote)) : '') + (r.nEst > 1 ? ' · ' + r.nEst + ' estimates' : '') + ' · ' + esc(r.stage.replace('_', ' ')) + '</span><span class="sub">' + flags + '</span></td>' +
@@ -338,6 +348,10 @@
         '<td class="b">' + money(r.estMat) + '</td>' +
         '<td>' + (r.matSpent != null ? money(r.matSpent) + (r.matAsOf ? '<span class="sub">as of ' + fmtDate(r.matAsOf) + '</span>' : '') : '<span class="muted">—</span>') + '</td>' +
         '<td class="' + (r.laborEstMaster ? '' : 'muted') + '">' + (r.laborEstMaster ? money(r.laborEstMaster) : '—') + '</td>' +
+        '<td class="b">' + money(r.estCost) + '</td>' +
+        '<td>' + (r.actCost != null ? money(r.actCost) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + (r.projCost != null ? '<b>' + money(r.projCost) + '</b>' : '<span class="muted">—</span>') + '</td>' +
+        '<td class="' + (r.varCostPct == null ? 'muted' : r.varCostPct > 0.1 ? 'neg' : r.varCostPct < -0.1 ? 'pos' : '') + '">' + (r.varCostPct == null ? '—' : (r.varCostPct > 0 ? '+' : '') + (r.varCostPct * 100).toFixed(0) + '%' + '<span class="sub">' + (r.varCost > 0 ? '+' : '') + money(r.varCost) + '</span>') + '</td>' +
         '</tr>';
       if (open[r.id]) {
         var ms = Object.keys(r.months).sort(), max = Math.max.apply(null, ms.map(function(m) { return r.months[m]; }).concat([1]));
@@ -348,16 +362,16 @@
           '</td></tr>';
       }
     });
-    html += '<tr class="tot"><td class="l">Comparable jobs (in fit)</td><td></td><td></td><td class="b">' + hrs(sums.estH) + '</td><td colspan="5"></td><td>' + money(sums.estLabor) + '</td><td>' + money(sums.estServices) + '</td><td class="b">' + money(sums.payroll) + '</td><td>' + money(sums.subsSpent) + '</td><td>' + money(sums.actual) + '</td><td>' + hrs(sums.actH) + '</td><td></td><td class="b">' + hrs(sums.projH) + '</td><td class="' + (sums.varH > 0 ? 'neg' : 'pos') + '">' + (sums.varH > 0 ? '+' : '') + hrs(sums.varH) + '</td><td>' + (sums.estTotalH ? ((sums.projH / sums.estTotalH - 1) * 100).toFixed(0) + '%' : '—') + '</td><td class="' + (sums.projH * (Number($('rate').value) || 60) - sums.estLabor - sums.estServices > 0 ? 'neg' : 'pos') + '">' + money(sums.projH * (Number($('rate').value) || 60) - sums.estLabor - ($('incSubs').checked ? sums.estServices : 0)) + '</td><td class="b">' + money(sums.estMat) + '</td><td>' + money(sums.matSpent) + '</td><td></td></tr>';
+    html += '<tr class="tot"><td class="l">Comparable jobs (in fit)</td><td></td><td></td><td class="b">' + hrs(sums.estH) + '</td><td colspan="5"></td><td>' + money(sums.estLabor) + '</td><td>' + money(sums.estServices) + '</td><td class="b">' + money(sums.payroll) + '</td><td>' + money(sums.subsSpent) + '</td><td>' + money(sums.actual) + '</td><td>' + hrs(sums.actH) + '</td><td></td><td class="b">' + hrs(sums.projH) + '</td><td class="' + (sums.varH > 0 ? 'neg' : 'pos') + '">' + (sums.varH > 0 ? '+' : '') + hrs(sums.varH) + '</td><td>' + (sums.estTotalH ? ((sums.projH / sums.estTotalH - 1) * 100).toFixed(0) + '%' : '—') + '</td><td class="' + (sums.projH * (Number($('rate').value) || 60) - sums.estLabor - sums.estServices > 0 ? 'neg' : 'pos') + '">' + money(sums.projH * (Number($('rate').value) || 60) - sums.estLabor - ($('incSubs').checked ? sums.estServices : 0)) + '</td><td class="b">' + money(sums.estMat) + '</td><td>' + money(sums.matSpent) + '</td><td></td><td class="b">' + money(sums.estCost) + '</td><td>' + money(sums.actCost) + '</td><td>' + money(sums.projCost) + '</td><td class="' + (sums.projCost > sums.estCost ? 'neg' : 'pos') + '">' + (sums.estCost ? ((sums.projCost / sums.estCost - 1) * 100).toFixed(0) + '%' : '—') + '</td></tr>';
     $('tbody').innerHTML = html;
     $('tbody').querySelectorAll('a[data-months]').forEach(function(a) { a.addEventListener('click', function(ev) { ev.preventDefault(); var id = a.getAttribute('data-months'); open[id] = !open[id]; render(); }); });
   }
 
   function exportCsv() {
-    var head = ['Job', 'Project', 'Estimate', 'Stage', 'Status', 'PM', '% complete', 'Est hours', 'Duct h', 'Pipe h', 'Equip install h', 'Outlets h', 'Other h', 'Est rate', 'Est labor $', 'Est subs/services $', 'Payroll $', 'Subs spent $', 'Actual $', 'Actual hours', 'First pay', 'Last pay', 'Projected hours', 'Variance h', 'Variance %', 'Variance $', 'Est material $', 'Materials spent $', 'Labor budget $', 'Partial', 'Thin estimate', 'In fit'];
+    var head = ['Job', 'Project', 'Estimate', 'Stage', 'Status', 'PM', '% complete', 'Est hours', 'Duct h', 'Pipe h', 'Equip install h', 'Outlets h', 'Other h', 'Est rate', 'Est labor $', 'Est subs/services $', 'Payroll $', 'Subs spent $', 'Actual $', 'Actual hours', 'First pay', 'Last pay', 'Projected hours', 'Variance h', 'Variance %', 'Variance $', 'Est material $', 'Materials spent $', 'Labor budget $', 'Est total cost $', 'Actual cost to date $', 'Projected cost $', 'Total cost var %', 'Partial', 'Thin estimate', 'In fit'];
     var out = [head.join(',')];
     rows.forEach(function(r) {
-      out.push([r.job, r.name, r.est, r.stage, r.status, r.pm, r.pc != null ? (r.pc * 100).toFixed(0) : '', r.estH.toFixed(1), r.cat.ductwork.toFixed(1), r.cat.pipework.toFixed(1), r.cat.equipment_install.toFixed(1), r.cat.air_outlets.toFixed(1), r.cat.other.toFixed(1), r.estRate, r.estLabor.toFixed(0), r.estServices.toFixed(0), r.payroll.toFixed(0), r.subsSpent.toFixed(0), r.actual.toFixed(0), r.actH.toFixed(1), r.first || '', r.last || '', r.projH != null ? r.projH.toFixed(1) : '', r.varH != null ? r.varH.toFixed(1) : '', r.varPct != null ? (r.varPct * 100).toFixed(0) : '', r.varDollars != null ? r.varDollars.toFixed(0) : '', r.estMat.toFixed(0), r.matSpent != null ? r.matSpent.toFixed(0) : '', r.laborEstMaster != null ? r.laborEstMaster.toFixed(0) : '', r.partial ? 'yes' : '', r.thin ? 'yes' : '', comparable(r) ? 'yes' : '']
+      out.push([r.job, r.name, r.est, r.stage, r.status, r.pm, r.pc != null ? (r.pc * 100).toFixed(0) : '', r.estH.toFixed(1), r.cat.ductwork.toFixed(1), r.cat.pipework.toFixed(1), r.cat.equipment_install.toFixed(1), r.cat.air_outlets.toFixed(1), r.cat.other.toFixed(1), r.estRate, r.estLabor.toFixed(0), r.estServices.toFixed(0), r.payroll.toFixed(0), r.subsSpent.toFixed(0), r.actual.toFixed(0), r.actH.toFixed(1), r.first || '', r.last || '', r.projH != null ? r.projH.toFixed(1) : '', r.varH != null ? r.varH.toFixed(1) : '', r.varPct != null ? (r.varPct * 100).toFixed(0) : '', r.varDollars != null ? r.varDollars.toFixed(0) : '', r.estMat.toFixed(0), r.matSpent != null ? r.matSpent.toFixed(0) : '', r.laborEstMaster != null ? r.laborEstMaster.toFixed(0) : '', r.estCost.toFixed(0), r.actCost != null ? r.actCost.toFixed(0) : '', r.projCost != null ? r.projCost.toFixed(0) : '', r.varCostPct != null ? (r.varCostPct * 100).toFixed(0) : '', r.partial ? 'yes' : '', r.thin ? 'yes' : '', comparable(r) ? 'yes' : '']
         .map(function(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','));
     });
     var blob = new Blob(['﻿' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
@@ -384,6 +398,6 @@
   init().catch(function(e) { console.error(e); });
 })();
 </script>
-<script src="sw-register.js?v=476"></script>
+<script src="sw-register.js?v=477"></script>
 </body>
 </html>
