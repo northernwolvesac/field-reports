@@ -976,7 +976,7 @@
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
-        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), fill_bars: fillBars(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
     }
@@ -1279,6 +1279,34 @@
       lens.sort(function (a, b) { return b - a; });
       var hist = {}; lens.forEach(function (l) { var kk = String(Math.round(l * 2) / 2); hist[kk] = (hist[kk] || 0) + 1; });
       return { n: lens.length, ft: Math.round(lens.reduce(function (a, b) { return a + b; }, 0) * 10) / 10, lens: hist, list: lens.slice(0, 80) };
+    }
+    // coloured filled bars (CENTRALE: the registers on the pink return mains are pink bars 3-4" wide, 1-6 ft long, drawn in fragments):
+    // same-colour fragments that share their cross-axis extent and touch end-to-end are one bar; per colour n / ft / mean length.
+    // The engine uses the MEAN length per unit with the reader's own unit count (fragments and twin strips double the raw count)
+    function fillBars(D, ptft) {
+      var fills = D.fills || []; if (!fills.length || !ptft) return null;
+      function colName(c) { var r = c[0], g = c[1], b = c[2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn < 40) return mx > 200 ? 'white' : mx > 110 ? 'gray' : 'black'; if (b >= r && b >= g) return g > 180 && r < 150 ? 'cyan' : (r > 150 ? 'purple' : 'blue'); if (g >= r && g >= b) return r > 200 ? 'yellow' : 'green'; return g > 150 ? (b > 120 ? 'pink' : 'orange') : (b > 120 ? 'pink' : 'red'); }
+      var byCol = {};
+      fills.forEach(function (f) { var c = colName([f[4], f[5], f[6]]); if (c === 'white' || c === 'gray' || c === 'black') return; (byCol[c] = byCol[c] || []).push([f[0], f[1], f[2], f[3]]); });
+      var out = {}, GAP = 1.5;
+      Object.keys(byCol).forEach(function (col) {
+        var boxes = byCol[col]; if (boxes.length > 1500) boxes = boxes.slice(0, 1500);
+        var merged = true, guard = 0;
+        while (merged && guard++ < 4000) { merged = false;
+          for (var i = 0; i < boxes.length && !merged; i++) for (var j = i + 1; j < boxes.length; j++) {
+            var a = boxes[i], b = boxes[j];
+            var sameY = Math.abs(a[1] - b[1]) <= 1.5 && Math.abs(a[3] - b[3]) <= 1.5, sameX = Math.abs(a[0] - b[0]) <= 1.5 && Math.abs(a[2] - b[2]) <= 1.5;
+            var touchX = a[0] <= b[2] + GAP && b[0] <= a[2] + GAP, touchY = a[1] <= b[3] + GAP && b[1] <= a[3] + GAP;
+            if ((sameY && touchX) || (sameX && touchY)) { boxes[i] = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]; boxes.splice(j, 1); merged = true; break; }
+          }
+        }
+        var n = 0, ft = 0, wsum = 0, lens = {};
+        boxes.forEach(function (bx) { var w = bx[2] - bx[0], h = bx[3] - bx[1], L = Math.max(w, h), W = Math.min(w, h);
+          if (!(L >= 1.0 * ptft && L <= 10 * ptft && W <= 1.2 * ptft && L >= 2.5 * W)) return;   // registers up to ~12" deep; squares and duct fills fail the 2.5:1 aspect
+          n++; ft += L / ptft; wsum += W / ptft; var k = String(Math.round(L / ptft * 2) / 2); lens[k] = (lens[k] || 0) + 1; });
+        if (n >= 3) out[col] = { n: n, ft: Math.round(ft * 10) / 10, mean_ft: Math.round(ft / n * 100) / 100, w_ft: Math.round(wsum / n * 100) / 100, lens: lens };
+      });
+      return Object.keys(out).length ? out : null;
     }
     function linearBands(D, ptft) {
       var n = D.segs.length / 5, segs = [];

@@ -229,6 +229,17 @@
   // from the text (CD x4, CG x4): the tags are the truth there, a symbol family that never appears as a printed tag is grid bubbles,
   // column marks or legend art, not outlets (414 W 14th: Vladimir 8 outlets, the reader 8 + 24 "A"). Untagged sheets keep their
   // symbol counts (that is what the glyph census is for).
+  // a symbol row the reader named by its look as a coloured BAR ("pink bar register/grille (main duct drops)", CENTRALE) is a run of
+  // slot / linear diffuser, not n outlets: the drawing's fill census gives the mean bar length of that colour → linear feet
+  var COLOUR_RE = /\b(pink|blue|green|yellow|orange|red|cyan|purple|magenta|gray|grey)\b/i;
+  function colourBar(a, p) {
+    if (!a || String(a.basis || '').toLowerCase() !== 'symbols') return null;
+    var s = String(a.tag || '') + ' ' + String(a.notes || ''), fb = p && p.result && p.result.geo && p.result.geo.fill_bars;
+    if (!fb || !/\bbar\b/i.test(s)) return null;
+    var m = COLOUR_RE.exec(String(a.tag || '')) || COLOUR_RE.exec(s); if (!m) return null;
+    var col = m[1].toLowerCase().replace('grey', 'gray').replace('magenta', 'pink'), f = fb[col];
+    return f && f.mean_ft >= 1 ? { colour: col, mean_ft: f.mean_ft, n_drawn: f.n, ft_drawn: f.ft } : null;
+  }
   function symbolRowDropped(a, p) {
     if (!a || String(a.basis || '').toLowerCase() !== 'symbols') return false;
     // only a row named by a bare code (A, A2, TD, RD-B) can be grid bubbles; a row the reader named by its look ("blue square-X ceiling
@@ -259,7 +270,7 @@
     }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var symDropped = [];
+    var symDropped = [], colourBars = [];
     var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
@@ -347,7 +358,7 @@
           Object.keys(dtags).forEach(function (t) { if (t !== '(cfm only)') tagN += Number(dtags[t] || 0); });
           (r.air_devices || []).forEach(function (a) {
             if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) { aiCfm += Number(a.qty || 0); return; }   // a bare '(cfm only)' row; 'blue square-X diffuser (cfm only)' is a real symbol row
-            if (notAirDevice(a) || symbolRowDropped(a, p)) return;
+            if (notAirDevice(a) || symbolRowDropped(a, p) || colourBar(a, p)) return;   // a coloured-bar row is linear feet, not outlets
             if (/diffuser|grille|register|linear|louver/.test(String(a.type || '').toLowerCase())) aiN += Number(a.qty || 0);   // TD transfer ducts / dampers (type other) carry no cfm tag
           });
           devCheck.push({ sheet: sh, ai: aiN, tags: tagN, cfmOnly: cfmOnly || aiCfm, hasTags: !!(p.tag_counts && p.tag_counts.devices) });
@@ -388,6 +399,8 @@
           if (notAirDevice(a)) return;                                             // sprinkler heads, thermostats, GB … are not outlets   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
           if (symbolRowDropped(a, p)) { symDropped.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0) + ' (' + String(a.type || 'device') + ')'); return; }
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
+          var cb = colourBar(a, p);   // "pink bar register" with pink bars measured on the sheet → linear, qty × mean drawn length
+          if (cb && /register|grille|diffuser|linear|slot|other/.test(atype)) { atype = 'linear'; if (!alf) alf = Math.round(Number(a.qty || 0) * cb.mean_ft * 10) / 10; a = Object.assign({}, a, { size: a.size || (cb.mean_ft + ' ft ' + cb.colour + ' bar') }); colourBars.push(sh + ': ' + a.qty + ' × ' + cb.colour + ' bar → ' + alf + ' ft (' + cb.n_drawn + ' bars drawn, mean ' + cb.mean_ft + ' ft)'); }
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
             if (atype === 'linear' && !alf && sd.len) alf = Number(a.qty || 0) * sd.len;
@@ -546,7 +559,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      symDropped: symDropped,
+      symDropped: symDropped, colourBars: colourBars,
       rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
@@ -859,6 +872,7 @@
     if (Object.keys(C.duct).length || Object.keys(C.devices).length)
       add('services', 'Man-lift / scaffolding', 1, 'ea', STD.lift, 0, 'NWAC Procore rate — $2,500, carried on 203 of 1,142 duct jobs',
         { is_firm: false, flag: 'keep for ceiling work above 12 ft or over fixtures / furniture — drop when a ladder does it' });
+    if ((C.colourBars || []).length) flags.push({ category: 'air devices', item: 'Coloured-bar registers priced as linear diffuser', flag: C.colourBars.join('; ') + ' — the unit count is the reader\'s, the length per unit is the mean bar drawn in that colour; check the slot lengths' });
     if ((C.symDropped || []).length) flags.push({ category: 'air_outlets', item: 'Symbol counts not priced', flag: C.symDropped.join('; ') + ' — counted from drawn symbols on a sheet whose device tags are readable (grid bubbles / legend art); the tagged rows are priced' });
     // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
     var rigTags = {}; C.rig.forEach(function (x) { rigTags[x.key || norm(x.tag)] = 1; });
