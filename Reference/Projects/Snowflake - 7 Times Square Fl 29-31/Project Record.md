@@ -110,4 +110,6 @@ delivered, factory will not take them back); all mains stay, price only the add 
 Folder `Reference/Change Orders/2026-10 Snowflake Bathroom Air Outlets/`. All six restrooms: 2 continuous linear
 supply diffusers C (Titus FL-15-HT) approx. 17 LF each, 4 LF active, approx. 45 LF new 12x8, 2 connections to existing,
 2 cable operated VD; 30th also a 24x8 FSD at Food Prep 30.12B. Quantity breakdown issued to Ruslan, no pricing.
-Open: diffuser length (arch), second connection supply or exhaust, FSD wiring by others, anything installed.
+10/19: price per drawing (~17 LF each), same pricing basis as the perimeter CO. Siemens covers pneumatic tubing
+for 5 FSDs only - the new 30th floor FSD needs a Siemens add; access doors excluded by Siemens. Field check sent to
+Christino 10/19 (installed work, ceilings, entry 12x8 stub, vanity wet wall connection - likely toilet exhaust riser).

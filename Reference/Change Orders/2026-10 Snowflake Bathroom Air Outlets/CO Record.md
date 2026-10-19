@@ -19,12 +19,22 @@
 | 31st | 2 | 4 / 68 | 16 / 52 | ~90 | 4 | 4 | - |
 | Total | 6 | 12 / 204 | 48 / 156 | ~270 | 12 | 12 | 1 |
 
-## Open items before pricing
-1. Linear diffuser length: price the drawn approx. 17 LF each or wait for the architect.
-2. Second point of connection at the vanity wall: which existing duct, and supply or exhaust (note says "supply/exhaust").
-3. FSD wiring / FA interface by others?
-4. Anything already installed (removal) or all new?
+## Decisions / status (10/19/2026)
+1. Diffuser length: price per drawing, approx. 17 LF each (Ruslan).
+2. Pricing basis same as the perimeter LD CO: diffusers $90/LF, mechanic $125/MH, foreman $155/hr, air balancing and
+   shop drawings per floor (Ruslan). Amounts for TAB / shop drawings / foreman hours / MH per diffuser to confirm.
+3. Vanity wall connection to C(250): new 12x8 starts at a "point of connection to existing work" inside the vanity
+   wet wall; nothing shown there on Bulletin 3 or the new sheet - reads as a riser / chase, likely base building toilet
+   exhaust (C(250) exhaust vs C(200) supply). Screenshot `Vanity wall connection - 29th floor before-after.png` sent to
+   Ruslan; asked Christino to check in the field.
+4. FSD 30th: Siemens proposal 10559656 covers 5 FSDs - "Siemens to furnish pneumatic labor to connect pneumatic tubing
+   to new FSDs and existing Fire Alarm contacts"; access doors excluded (excl. 19), FA shutdown wiring excluded (15).
+   The added 24x8 FSD is a 6th damper - Siemens needs to add it (their CO). Our scope: furnish and install the FSD
+   (pneumatic actuator to match) and its duct access door.
+5. 10/19 email to Christino (field check): ductwork installed in the restrooms? ceilings closed? existing 12x8 stub at
+   entry? what is in the vanity wet wall? 30th 24x8 duct installed / access? Waiting on his answer.
 
 ## Files
 - `Restroom Air Outlets - Breakdown by Floor.pdf` (4 pages: summary + per floor before / after) by `build_breakdown.py`.
+- `Vanity wall connection - 29th floor before-after.png` - circled connection point, before / after.
 - `source/` - the clouded 10/14/2026 sheets.
