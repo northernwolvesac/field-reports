@@ -195,11 +195,12 @@
     (rules || []).forEach(function (rule) {
       if (!rule || rule.active === false) return;
       var mt = String(rule.match_text || '').trim().toLowerCase(), mc = String(rule.match_category || '').trim();
-      if (!mt && !mc) return;
+      var alts = mt ? mt.split('|').map(function (a) { return a.trim(); }).filter(Boolean) : [];   // "coil|wshp|fan coil" = any of them
+      if (!alts.length && !mc) return;
       var hits = [];
       (lines || []).forEach(function (li, i) {
         if (!li || li.is_optional || !perLine[i]) return;
-        if (mt && String(li.description || '').toLowerCase().indexOf(mt) < 0) return;
+        if (alts.length) { var d = String(li.description || '').toLowerCase(); if (!alts.some(function (a) { return d.indexOf(a) >= 0; })) return; }
         if (mc && String(li.category || '') !== mc) return;
         hits.push(perLine[i]);
       });
