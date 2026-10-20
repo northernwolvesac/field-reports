@@ -1859,6 +1859,73 @@
         var kk = pipeLabel(size[i][0]) + (size[i][1] === 'CD' ? ' CD' : '');
         sizes[kk] = (sizes[kk] || 0) + S[i][6] / ptft; total += S[i][6] / ptft;
       });
+      // ─── dashed rows: a pipe drawn as a row of short strokes in a pen the vote cannot keep (645 Madison: the condenser-water return is a
+      // gray dashed line beside the solid supply — 1–3 ft dashes, 26 labels, 247 ft of labelled rows the network never saw). Collinear
+      // axis-aligned dashes are chained across regular gaps; a row counts when a size label sits within 2.5 ft of it (written along it or
+      // across it — 645 writes its sizes vertically beside horizontal rows, up to 6 ft past the row's end), the row's pen is not one the
+      // network keeps (L'Catteron's 2" rows in the kept 0.54 pen: the label's own dash is sized, the rest is not more pipe), the network has
+      // not sized half its strokes already, and it is not one of three or more parallel rows (a hatch or ceiling grid, Sage M-210)
+      var dashedFt = 0, dashedRows = 0, sizedKey = {};
+      function segKey(a, b, c2, d) { return Math.round(Math.min(a, c2)) + ',' + Math.round(Math.min(b, d)) + ',' + Math.round(Math.max(a, c2)) + ',' + Math.round(Math.max(b, d)); }
+      sizedIdx.forEach(function (i) { sizedKey[segKey(S[i][0], S[i][1], S[i][2], S[i][3])] = 1; });
+      if (D.pipeDashed !== false) (function () {
+        var ds = [], nn = D.segs.length / 5;
+        for (var i = 0; i < nn; i++) {
+          if (rectSide[i]) continue;
+          var o = i * 5, st = D.styles[D.segs[o + 4]], c = st.col, x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3];
+          var dx = x2 - x1, dy = y2 - y1, L = hyp(dx, dy) / ptft;
+          if (L < 0.3 || L > 4 || Math.max.apply(null, c) > 0.6) continue;          // short strokes in a dark or mid-gray pen
+          var horiz = Math.abs(dy) < 0.6, vert = Math.abs(dx) < 0.6; if (!horiz && !vert) continue;
+          if (keep.indexOf(fam(st.key)) >= 0) continue;                                  // a kept pen's dashes belong to the network
+          ds.push({ x0: Math.min(x1, x2), x1: Math.max(x1, x2), y0: Math.min(y1, y2), y1: Math.max(y1, y2), L: L, h: horiz, k: segKey(x1, y1, x2, y2) });
+        }
+        var lat = 0.25 * ptft, tol = Math.max(2.5 * ptft, 20), rows = [];
+        [true, false].forEach(function (h) {
+          var items = ds.filter(function (d) { return d.h === h; }).sort(function (a, b) { return h ? (a.y0 - b.y0) || (a.x0 - b.x0) : (a.x0 - b.x0) || (a.y0 - b.y0); });
+          var used = new Array(items.length);
+          for (var i = 0; i < items.length; i++) {
+            if (used[i]) continue;
+            var a = items[i], row = [a], last = a; used[i] = true;
+            for (var j = i + 1; j < items.length; j++) {
+              if (used[j]) continue; var b = items[j];
+              var off = h ? b.y0 - a.y0 : b.x0 - a.x0;
+              if (off > lat) break; if (Math.abs(off) > lat) continue;
+              var gap = h ? b.x0 - last.x1 : b.y0 - last.y1;
+              if (gap < -0.2 * ptft || gap > Math.max(3 * ptft, 3 * last.L * ptft)) continue;
+              row.push(b); used[j] = true; last = b;
+            }
+            if (row.length < 5) continue;
+            var f = row[0], l = row[row.length - 1], len = (h ? l.x1 - f.x0 : l.y1 - f.y0) / ptft;
+            if (len < 6) continue;
+            var sizedN = 0, sizedL = 0; row.forEach(function (d) { if (sizedKey[d.k]) { sizedN++; sizedL += d.L; } });
+            if (sizedN * 2 >= row.length) continue;                                                  // the network has the row already
+            len -= sizedL;
+            var c0 = h ? f.x0 : f.y0, c1 = h ? l.x1 : l.y1, line = h ? f.y0 : f.x0;
+            // a sized piece on the very same line (within 0.1 ft, overlapping half the row) is this row drawn twice; a return 0.25 ft
+            // beside its supply is a second pipe and stays
+            var dup = sizedIdx.some(function (si) {
+              var s = S[si]; if (Math.abs(h ? s[4] : s[5]) < 0.97) return false;
+              var sl = h ? s[1] : s[0]; if (Math.abs(sl - line) > 0.1 * ptft) return false;
+              var lo = Math.max(c0, Math.min(h ? s[0] : s[1], h ? s[2] : s[3])), hi = Math.min(c1, Math.max(h ? s[0] : s[1], h ? s[2] : s[3]));
+              return hi - lo >= 0.5 * (c1 - c0);
+            });
+            if (dup) continue;
+            var best = null, bd = 1e9;
+            labs.forEach(function (lb) {
+              var along = h ? lb.cx : lb.cy, perp = Math.abs((h ? lb.cy : lb.cx) - line);
+              if (along < c0 - 6 * ptft || along > c1 + 6 * ptft || perp > tol) return;
+              if (perp < bd) { bd = perp; best = lb; }
+            });
+            if (!best) continue;
+            rows.push({ h: h, line: line, c0: c0, c1: c1, len: len, kk: pipeLabel(best.d) + (best.svc === 'CD' ? ' CD' : '') });
+          }
+        });
+        rows.forEach(function (r) {
+          var fam2 = rows.filter(function (q) { if (q === r || q.h !== r.h || Math.abs(q.line - r.line) > 2 * ptft) return false; var lo = Math.max(r.c0, q.c0), hi = Math.min(r.c1, q.c1); return hi - lo >= 0.5 * Math.min(r.c1 - r.c0, q.c1 - q.c0); }).length;
+          if (fam2 >= 2) return;                                                                     // three or more parallel rows: a hatch
+          sizes[r.kk] = Math.round(((sizes[r.kk] || 0) + r.len) * 10) / 10; total += r.len; dashedFt += r.len; dashedRows++;
+        });
+      })();
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
       // pairs vs single lines: supply and return drawn as two parallel lines (L'Catteron CHWS/R, 0.25–2.5 ft apart, overlapping) are both
       // measured already; a lone line standing for both ("CONDENSER WATER SUPPLY AND RETURN" on one symbol, 645 Madison) is counted once
@@ -1883,7 +1950,7 @@
       // the length is counted once per line here; the engine flags it so the estimator doubles it when the pair is priced per pipe
       var sr = /\bS\s*[\/&]\s*R\b|SUPPLY\s*(AND|&|\/|\+)\s*RETURN|\b(CHW|CW|HW|HHW|CHWS|CWS|HWS|GLY\w*)\s*[\/&]\s*R\b/i.test(D.fullText);
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }), sr: sr || undefined,
-        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep,
+        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep, dashed_ft: Math.round(dashedFt * 10) / 10, dashed_rows: dashedRows,
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry
