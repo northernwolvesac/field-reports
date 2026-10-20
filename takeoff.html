@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=447">
+<link rel="stylesheet" href="procore-ui.css?v=503">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=447"></script>
-<script src="auth.js?v=447"></script>
-<script src="est-totals.js?v=471"></script>
-<script src="procore-ui.js?v=447"></script>
+<script src="supabase-config.js?v=503"></script>
+<script src="auth.js?v=503"></script>
+<script src="est-totals.js?v=503"></script>
+<script src="procore-ui.js?v=503"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=447"></script>
-<script src="est-drawings.js?v=447"></script>
-<script src="nw-catalog-picker.js?v=447"></script>
-<script src="nw-duct-weight.js?v=447"></script>
-<script src="geo-takeoff.js?v=497"></script>
-<script src="est-engine.js?v=497"></script>
+<script src="bid-actions.js?v=503"></script>
+<script src="est-drawings.js?v=503"></script>
+<script src="nw-catalog-picker.js?v=503"></script>
+<script src="nw-duct-weight.js?v=503"></script>
+<script src="geo-takeoff.js?v=503"></script>
+<script src="est-engine.js?v=503"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -1205,6 +1205,25 @@ requireAuth().catch(function(){});
     thumbBusy = false;
   }
   var openSeq = 0, renderTask = null, renderSeq = 0;
+  // ── a save that fails because the drawing row is gone (the file was deleted / replaced in Documents while this tab was open):
+  // reload the file list, reopen the same sheet (by sheet number, else the same page position) and tell the user — Bani 2026-10-20 ──
+  var staleBusy = false;
+  async function staleDrawing(err) {
+    var msg = String(err && err.message || err || '');
+    if (!/drawing_id_fkey|estimate_drawings/i.test(msg)) return false;
+    if (staleBusy) return true; staleBusy = true;
+    try {
+      var cur = plans[planIdx] || null, sheet = cur && cur.sheet, pos = planIdx, oldName = cur && cur.drawing && cur.drawing.filename;
+      await loadDrawings();
+      var i = -1;
+      if (sheet) i = plans.findIndex(function(q) { return q.sheet && String(q.sheet).toUpperCase() === String(sheet).toUpperCase(); });
+      if (i < 0 && cur) i = plans.findIndex(function(q) { return q.page === cur.page && q.drawing && q.drawing.page_count === cur.drawing.page_count; });
+      if (i < 0) i = Math.min(Math.max(pos, 0), plans.length - 1);
+      if (i >= 0) await openPlan(i);
+      toast('The file "' + (oldName || '') + '" was replaced or deleted in Documents while Takeoff was open — files reloaded' + (i >= 0 ? ', same sheet reopened. Please draw the last mark again.' : '. Pick a page to continue.'), 'error');
+    } finally { staleBusy = false; }
+    return true;
+  }
   async function openPlan(i) {
     if (i < 0 || i >= plans.length) return;
     var my = ++openSeq;
@@ -1381,7 +1400,7 @@ requireAuth().catch(function(){});
     var p = plans[planIdx];
     var row = { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'scale', points: [[0, 0]], label: preset.label + (auto ? ' (auto)' : ''), computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: preset.ppf, color: '#dc2626', notes: (auto ? 'Read from the sheet' : 'Picked') + ': ' + preset.label };
     var r = await sb.from('estimate_measurements').insert(row).select().single();
-    if (r.error) { toast(r.error.message, 'error'); return; }
+    if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data);
     await recomputeScaled(preset.ppf); loadScale(); redraw(); renderAll(); scheduleSync();
     if (!auto) { toast('Scale ' + preset.label, 'success'); if (scaleScopeNext) await copyScaleToSheets(preset.ppf, preset.label, scaleScopeNext); scaleScopeNext = ''; }
@@ -1407,7 +1426,7 @@ requireAuth().catch(function(){});
     var ft = Number(s); if (!(ft > 0) || draft.length < 2) { toast('Enter the distance in feet', 'error'); draft = []; setTool('select'); return; }
     var ppf = dist(draft[0], draft[1]) / ft, p = plans[planIdx];
     var r = await sb.from('estimate_measurements').insert({ drawing_id: p.drawing.id, page_number: p.page, tool_type: 'scale', points: draft.slice(), label: 'Custom (' + ft + ' ft)', computed_value: ft, computed_unit: 'ft', scale_pixels_per_foot: ppf, color: '#dc2626' }).select().single();
-    if (r.error) { toast(r.error.message, 'error'); return; }
+    if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data); draft = [];
     await recomputeScaled(ppf); loadScale(); setTool('select'); redraw(); renderAll(); scheduleSync();
     if (scaleScopeNext) { await copyScaleToSheets(ppf, 'Custom (' + ft + ' ft)', scaleScopeNext); scaleScopeNext = ''; }
@@ -1630,14 +1649,14 @@ requireAuth().catch(function(){});
     if (m.deduct === undefined) delete m.deduct;
     if (!schemaOk) { delete m.layer_id; delete m.drops; delete m.mark_no; delete m.deduct; m.layer_category = (l && l.category) || 'ductwork'; }
     var r = await sb.from('estimate_measurements').insert(m).select().single();
-    if (r.error) { toast('Save failed: ' + r.error.message, 'error'); return; }
+    if (r.error) { if (await staleDrawing(r.error)) return; toast('Save failed: ' + r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll(); scheduleSync();
   }
   async function saveAnnot(m) {
     var p = plans[planIdx];
     var row = Object.assign({ drawing_id: p.drawing.id, page_number: p.page, computed_value: 0, computed_unit: null, layer_id: null, layer_category: null, scale_pixels_per_foot: scalePpf }, m);
     var r = await sb.from('estimate_measurements').insert(row).select().single();
-    if (r.error) { toast(r.error.message, 'error'); return; }
+    if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll();
   }
   function openStamp() {
@@ -1673,7 +1692,7 @@ requireAuth().catch(function(){});
     var path = draft.slice(); draft = []; hover = null; if (dlg) dlg.close();
     var p = plans[planIdx], rows = pts.map(function(q) { return { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'count', points: [q], computed_value: 1, computed_unit: 'ea', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: scalePpf, mark_no: nextMarkNo(l), label: 'spaced ' + sp + ' ft' }; });
     var r = await sb.from('estimate_measurements').insert(rows).select();
-    if (r.error) { toast(r.error.message, 'error'); redraw(); return; }
+    if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); redraw(); return; }
     allMeas = allMeas.concat(r.data); meas = meas.concat(r.data); r.data.forEach(function(m) { pushUndo({ type: 'add', id: m.id }); });
     toast(r.data.length + ' marks placed every ' + sp + ' ft (' + (polyLen(path) / scalePpf).toFixed(0) + ' ft path)', 'success'); renderAll(); scheduleSync();
   }
@@ -1716,7 +1735,7 @@ requireAuth().catch(function(){});
       dlg.close();
       if (!m) {
         var pg = plans[planIdx], r = await sb.from('estimate_measurements').insert({ drawing_id: pg.drawing.id, page_number: pg.page, tool_type: 'note', points: [o.point], label: t, computed_value: 0, computed_unit: null, color: '#f59e0b', notes: 'note|' + JSON.stringify(fs) }).select().single();
-        if (r.error) { toast(r.error.message, 'error'); return; }
+        if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); return; }
         allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id }); renderAll(); return;
       }
       await patchMark(m, { label: t || null, notes: kind + '|' + JSON.stringify(fs), color: isNote ? m.color : color });
@@ -2647,6 +2666,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=447"></script>
+<script src="sw-register.js?v=503"></script>
 </body>
 </html>
