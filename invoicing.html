@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=424"></script>
-<script src="nw-drive.js?v=424"></script>
-<script src="auth.js?v=424"></script>
-<script src="labor-rates.js?v=424"></script>
+<script src="supabase-config.js?v=494"></script>
+<script src="nw-drive.js?v=494"></script>
+<script src="auth.js?v=494"></script>
+<script src="labor-rates.js?v=494"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -457,6 +457,11 @@
           <label style="font-weight:400;display:flex;gap:8px;align-items:flex-start;margin-top:4px;font-size:13px"><input type="checkbox" id="sSeparate" style="margin-top:3px"> <span><b>Sub-prime contracts</b> — the client issues a separate PO for every change order; each PO is billed on its own invoices with its own contract amount, previous invoices and balance (BOSS / JRM).</span></label>
         </div>
       </div>
+      <div class="field"><label>Client POs on the base contract</label>
+        <div class="field-hint">When the client splits the base contract into several purchase orders (BOSS: 40-163569 + 40-165095), list them here — each PO is billed on its own invoices with its own previous invoices and balance. Leave empty when the base contract is one PO.</div>
+        <table class="pc-table" style="margin-top:6px"><thead><tr><th>PO number</th><th class="num">Amount</th><th>Description</th><th></th></tr></thead><tbody id="sPosBody"></tbody></table>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:6px"><button type="button" class="btn-secondary" id="sPosAdd">＋ Add PO</button><span class="field-hint" id="sPosHint" style="margin:0"></span></div>
+      </div>
     </div>
     <div class="row">
       <div class="field" style="flex:0 0 150px"><label>Contract #</label><input type="text" id="sContractNumber" placeholder="e.g. 11010174"></div>
@@ -867,6 +872,9 @@ requireAuth().catch(function(){});
     document.getElementById('smCancel').addEventListener('click', function() { closeModal('simpleModal'); });
     document.getElementById('smCreate').addEventListener('click', createSimpleInvoice);
     document.getElementById('smBill').addEventListener('change', smBillChanged);
+    document.getElementById('sPosAdd').addEventListener('click', function() { var l = readPosRows() || []; l.push({ po: '', amount: 0, title: '' }); renderPosRows(l, true); });
+    document.getElementById('sPosBody').addEventListener('input', posHint);
+    document.getElementById('sPosBody').addEventListener('click', function(e) { var b = e.target.closest('[data-po-del]'); if (!b) return; var l = readPosRows(true); l.splice(Number(b.getAttribute('data-po-del')), 1); renderPosRows(l, true); });
     document.querySelectorAll('input[name="sBillType"]').forEach(function(r) { r.addEventListener('change', applyBillType); });
     // Line item modal
     document.getElementById('lCancel').addEventListener('click', function() { closeModal('lineModal'); });
@@ -947,6 +955,7 @@ requireAuth().catch(function(){});
       document.querySelector('input[name="sBillType"][value="' + (d.form_variant === 'simple' ? 'simple' : 'aia') + '"]').checked = true;
       document.getElementById('sInvPrefix').value    = d.invoice_prefix || '';
       document.getElementById('sSeparate').checked   = d.billing_mode === 'separate';
+      renderPosRows(clientPos(d));
       document.getElementById('sProjectNo').value    = d.project_no || '';
       document.getElementById('sContractNo').value   = d.contract_no || '';
       document.getElementById('sProjectAddr').value  = d.project_address || '';
@@ -980,6 +989,7 @@ requireAuth().catch(function(){});
       document.querySelector('input[name="sBillType"][value="aia"]').checked = true;
       document.getElementById('sInvPrefix').value    = '';
       document.getElementById('sSeparate').checked   = false;
+      renderPosRows([]);
       document.getElementById('sProjectNo').value    = '';
       document.getElementById('sContractNo').value   = '';
       document.getElementById('sProjectAddr').value  = '';
@@ -1041,6 +1051,7 @@ requireAuth().catch(function(){});
       form_variant:          (document.querySelector('input[name="sBillType"]:checked') || {}).value === 'simple' ? 'simple' : (document.getElementById('sVariant').value || 'owner'),
       invoice_prefix:        document.getElementById('sInvPrefix').value.trim().replace(/[-\s]+$/, '') || null,
       billing_mode:          document.getElementById('sSeparate').checked ? 'separate' : 'combined',
+      client_pos:            readPosRows(),
       project_no:            document.getElementById('sProjectNo').value.trim() || null,
       contract_no:           document.getElementById('sContractNo').value.trim() || null,
       project_address:       document.getElementById('sProjectAddr').value.trim() || null,
@@ -1061,7 +1072,7 @@ requireAuth().catch(function(){});
       contract_termination_date:     document.getElementById('sTermination').value || null
     };
     if (patch.form_variant === 'simple') { patch.retainage_rate = 0; patch.retainage_rate_stored = 0; }
-    else { patch.billing_mode = 'combined'; }
+    else { patch.billing_mode = 'combined'; patch.client_pos = null; }
     if (!patch.project_id || !patch.original_contract_sum) {
       showToast('Project and Contract Sum are required', 'error'); return;
     }
@@ -1074,8 +1085,8 @@ requireAuth().catch(function(){});
       patch.created_by = currentUserId;
       res = await supabaseClient.from('aia_projects').insert(patch).select().single();
     }
-    if (res.error && /billing_mode|invoice_prefix/.test(res.error.message || '')) {   // sub-prime-contracts.sql not applied yet
-      delete patch.billing_mode; delete patch.invoice_prefix;
+    if (res.error && /billing_mode|invoice_prefix|client_pos/.test(res.error.message || '')) {   // sub-prime-contracts.sql / client_pos column not applied yet
+      delete patch.billing_mode; delete patch.invoice_prefix; delete patch.client_pos;
       res = editingSetupId ? await supabaseClient.from('aia_projects').update(patch).eq('id', editingSetupId) : await supabaseClient.from('aia_projects').insert(patch).select().single();
       if (!res.error) showToast('Saved without the sub-prime / prefix settings — run sub-prime-contracts.sql in Supabase', 'error');
     }
@@ -1221,6 +1232,43 @@ requireAuth().catch(function(){});
   // bill-against options of the open contract: the base contract + (sub-prime contracts) every approved CO with its client PO
   var simpleSubs = [], simpleSeparate = false;
   function subKey(id) { return id || 'base'; }
+  // client POs of the base contract (aia_projects.client_pos JSONB [{po, amount, title}]) — BOSS / JRM split one contract into several POs
+  function clientPos(s) {
+    var l = s && s.client_pos; if (typeof l === 'string') { try { l = JSON.parse(l); } catch (e) { l = null; } }
+    return Array.isArray(l) ? l.filter(function(p) { return p && String(p.po || '').trim(); }).map(function(p) { return { po: String(p.po).trim(), amount: Number(p.amount || 0), title: String(p.title || '').trim() }; }) : [];
+  }
+  // every unit that is billed on its own invoices: the base contract (or each client PO of it) + (sub-prime mode) each approved CO with its PO
+  function subContracts(s, cos) {
+    var pos = clientPos(s), subs = [];
+    if (pos.length) pos.forEach(function(p) { subs.push({ key: 'po:' + p.po.toLowerCase(), kind: 'po', id: null, po: p.po, amount: p.amount, title: p.title || 'Contract work', name: 'PO ' + p.po + (p.title ? ' — ' + p.title : '') }); });
+    else subs.push({ key: 'base', kind: 'base', id: null, po: s.contract_number || s.contract_no || '', amount: Number(s.original_contract_sum || 0), title: 'Contract work', name: 'Base contract' });
+    if (s.billing_mode === 'separate') (cos || []).filter(function(c) { return c.status === 'approved'; }).forEach(function(c) { subs.push({ key: 'co:' + c.id, kind: 'co', id: c.id, po: c.po_number || '', amount: Number(c.amount || 0), title: c.title, name: 'CO #' + c.number + ' — ' + c.title, co: c }); });
+    return subs;
+  }
+  function poSubOf(s, a) { if (!a || a.bill_co_id) return null; var pos = clientPos(s); if (!pos.length) return null; var k = String(a.po_number || '').trim().toLowerCase(); return pos.filter(function(p) { return p.po.toLowerCase() === k; })[0] || pos[0]; }
+  function subKeyOf(s, a) { if (a.bill_co_id) return 'co:' + a.bill_co_id; var p = poSubOf(s, a); return p ? 'po:' + p.po.toLowerCase() : 'base'; }
+  function renderPosRows(list, keepFocus) {
+    var body = document.getElementById('sPosBody'); if (!body) return;
+    body.innerHTML = (list || []).map(function(p, i) {
+      return '<tr><td><input type="text" data-po-no value="' + escHtml(p.po || '') + '" placeholder="40-163569" style="width:140px"></td>' +
+        '<td class="num"><input type="number" step="0.01" data-po-amt value="' + (p.amount ? Number(p.amount) : '') + '" placeholder="150000" style="width:130px;text-align:right"></td>' +
+        '<td><input type="text" data-po-title value="' + escHtml(p.title || '') + '" placeholder="e.g. Phase 1 — mechanical" style="width:100%"></td>' +
+        '<td class="ctr"><button type="button" class="del-btn" data-po-del="' + i + '" title="Remove">✕</button></td></tr>';
+    }).join('');
+    posHint();
+    if (keepFocus) { var last = body.querySelector('tr:last-child [data-po-no]'); if (last && !last.value) last.focus(); }
+  }
+  function readPosRows(raw) {
+    var rows = Array.from(document.querySelectorAll('#sPosBody tr')).map(function(tr) { return { po: tr.querySelector('[data-po-no]').value.trim(), amount: Number(tr.querySelector('[data-po-amt]').value || 0), title: tr.querySelector('[data-po-title]').value.trim() }; });
+    if (raw) return rows;
+    rows = rows.filter(function(p) { return p.po; });
+    return rows.length ? rows : null;
+  }
+  function posHint() {
+    var h = document.getElementById('sPosHint'); if (!h) return;
+    var rows = readPosRows(true), sum = rows.reduce(function(a, p) { return a + p.amount; }, 0), c = Number(document.getElementById('sContractSum').value || 0);
+    h.textContent = rows.length ? 'POs total ' + fmtMoney(sum) + (c ? (Math.abs(sum - c) < 0.005 ? ' = contract sum' : ' vs contract sum ' + fmtMoney(c) + ' — they should match') : '') : '';
+  }
   async function openSimpleModal(aiaProjectId) {
     simpleProjectId = aiaProjectId;
     var s = (await supabaseClient.from('aia_projects').select('*, project:projects(short_code)').eq('id', aiaProjectId).maybeSingle()).data || {};
@@ -1230,21 +1278,21 @@ requireAuth().catch(function(){});
     if (apps.length) {
       var li = (await supabaseClient.from('aia_line_items').select('application_id, this_amount').in('application_id', apps.map(function(a) { return a.id; }))).data || [];
       var byApp = {}; li.forEach(function(l) { byApp[l.application_id] = (byApp[l.application_id] || 0) + Number(l.this_amount || 0); });
-      apps.forEach(function(a) { var k = subKey(a.bill_co_id); billed[k] = (billed[k] || 0) + (byApp[a.id] || 0); });
+      apps.forEach(function(a) { var k = subKeyOf(s, a); billed[k] = (billed[k] || 0) + (byApp[a.id] || 0); });
     }
     var last = apps[0], nextNo = last ? last.application_no + 1 : 1;
     var prevInv = last ? String(last.invoice_no || '') : '', m = /^(.*?)(\d+)$/.exec(prevInv);
     var prefix = String(s.invoice_prefix || (s.project && s.project.short_code) || '').replace(/[-\s]+$/, '');
     var nextInv = m ? m[1] + String(parseInt(m[2], 10) + 1).padStart(m[2].length, '0') : (prefix ? prefix + '-' : '') + String(nextNo).padStart(2, '0');
     simpleSeparate = s.billing_mode === 'separate';
-    simpleSubs = [{ id: null, label: 'Base contract' + (s.contract_number ? ' — PO ' + s.contract_number : '') + ' · ' + fmtMoney(s.original_contract_sum), po: s.contract_number || s.contract_no || '', amount: Number(s.original_contract_sum || 0), title: 'Contract work', billed: billed.base || 0 }];
-    if (simpleSeparate) cos.forEach(function(c) { simpleSubs.push({ id: c.id, label: 'CO #' + c.number + ' — ' + c.title + (c.po_number ? ' — PO ' + c.po_number : '') + ' · ' + fmtMoney(c.amount), po: c.po_number || '', amount: Number(c.amount || 0), title: c.title, billed: billed[c.id] || 0, co: c }); });
+    simpleSubs = subContracts(s, cos).map(function(x) { x.label = x.name + (x.kind === 'co' && x.po ? ' — PO ' + x.po : '') + ' · ' + fmtMoney(x.amount); x.billed = billed[x.key] || 0; return x; });
+    var multi = simpleSubs.length > 1;
     document.getElementById('smBill').innerHTML = simpleSubs.map(function(o, i) { return '<option value="' + i + '">' + escHtml(o.label) + '</option>'; }).join('');
-    // default: the base contract while it has a balance, otherwise the first PO that still has one
-    var def = 0; if (simpleSeparate) simpleSubs.some(function(o, i) { if (o.amount - o.billed > 0.005) { def = i; return true; } return false; });
+    // default: the first PO / contract that still has a balance
+    var def = 0; if (multi) simpleSubs.some(function(o, i) { if (o.amount - o.billed > 0.005) { def = i; return true; } return false; });
     document.getElementById('smBill').value = String(def);
-    document.getElementById('smBillWrap').style.display = simpleSeparate ? '' : 'none';
-    document.getElementById('smCoWrap').style.display = simpleSeparate ? 'none' : '';
+    document.getElementById('smBillWrap').style.display = multi ? '' : 'none';
+    document.getElementById('smCoWrap').style.display = (simpleSeparate || clientPos(s).length) ? 'none' : '';
     document.getElementById('smTitle').textContent = 'New Invoice ' + nextInv;
     document.getElementById('smNo').value = nextNo;
     document.getElementById('smInv').value = nextInv;
@@ -1260,9 +1308,9 @@ requireAuth().catch(function(){});
   function smBillChanged() {
     var o = simpleSubs[parseInt(document.getElementById('smBill').value, 10) || 0] || simpleSubs[0]; if (!o) return;
     document.getElementById('smPo').value = o.po || '';
-    document.getElementById('smMemo').value = o.id ? o.title : 'Contract work';
+    document.getElementById('smMemo').value = o.kind === 'co' ? o.title : (o.title || 'Contract work');
     var bal = o.amount - o.billed;
-    document.getElementById('smBalanceHint').textContent = (simpleSeparate ? 'This PO: ' : 'Contract: ') + fmtMoney(o.amount) + ' · invoiced ' + fmtMoney(o.billed) + ' · balance ' + fmtMoney(bal) + (bal > 0 ? ' — leave blank for the full balance' : '');
+    document.getElementById('smBalanceHint').textContent = (o.kind === 'base' ? 'Contract: ' : 'This PO: ') + fmtMoney(o.amount) + ' · invoiced ' + fmtMoney(o.billed) + ' · balance ' + fmtMoney(bal) + (bal > 0 ? ' — leave blank for the full balance' : '');
   }
 
   async function createSimpleInvoice() {
@@ -1272,22 +1320,24 @@ requireAuth().catch(function(){});
     var sub = simpleSubs[parseInt(document.getElementById('smBill').value, 10) || 0] || simpleSubs[0];
     var amtRaw = document.getElementById('smAmount').value;
     var amt = amtRaw === '' ? Math.round((sub.amount - sub.billed) * 100) / 100 : Number(amtRaw);
-    var co = !simpleSeparate && document.getElementById('smCo').checked;
+    var co = !simpleSeparate && sub.kind === 'base' && document.getElementById('smCo').checked;
     var memo = document.getElementById('smMemo').value.trim() || 'Contract work', po = document.getElementById('smPo').value.trim();
     if (!appNo || !inv || !date || !to || !isFinite(amt) || !amt) { showToast('Invoice #, dates and amount are required', 'error'); return; }
     var btn = document.getElementById('smCreate'); btn.disabled = true; btn.textContent = 'Creating…';
     var setupRes = await supabaseClient.from('aia_projects').select('*').eq('id', simpleProjectId).maybeSingle();
     // previous invoices: within the same sub-contract (PO) when billing separately, otherwise every earlier invoice
     var pq = supabaseClient.from('aia_applications').select('*').eq('aia_project_id', simpleProjectId).lt('application_no', appNo).order('application_no', { ascending: false });
-    if (simpleSeparate) pq = sub.id ? pq.eq('bill_co_id', sub.id) : pq.is('bill_co_id', null);
+    if (sub.kind === 'co') pq = pq.eq('bill_co_id', sub.id);
+    else if (sub.kind === 'po') pq = pq.is('bill_co_id', null).ilike('po_number', sub.po);
+    else if (simpleSeparate) pq = pq.is('bill_co_id', null);
     var prior = await pq.limit(1).maybeSingle();
     var prevCum = 0, coPrevAdd = 0, coPrevDed = 0;
     if (prior && prior.data) {
-      if (simpleSeparate && sub.id) prior.data.bill_co = sub.co;
+      if (sub.kind === 'co') prior.data.bill_co = sub.co;
       var pl = await supabaseClient.from('aia_line_items').select('*').eq('application_id', prior.data.id);
       var pt = computeTotalsFor(setupRes.data || {}, prior.data, pl.data || []).lines;
       prevCum = pt.L4;
-      if (!simpleSeparate) {
+      if (sub.kind === 'base' && !simpleSeparate) {
         coPrevAdd = Number(prior.data.co_prev_additions || 0) + Number(prior.data.co_this_additions || 0);
         coPrevDed = Number(prior.data.co_prev_deductions || 0) + Number(prior.data.co_this_deductions || 0);
       }
@@ -1297,10 +1347,10 @@ requireAuth().catch(function(){});
       previous_certificates: prevCum, co_prev_additions: coPrevAdd, co_prev_deductions: coPrevDed,
       co_this_additions: co && amt > 0 ? amt : 0, co_this_deductions: co && amt < 0 ? amt : 0,
       status: document.getElementById('smStatus').value || 'draft', po_number: po || null, memo: memo, retainage_rate: 0, created_by: currentUserId };
-    if (simpleSeparate) row.bill_co_id = sub.id;
+    if (sub.kind === 'co') row.bill_co_id = sub.id;
     var ins = await supabaseClient.from('aia_applications').insert(row).select().single();
     if (ins.error) { btn.disabled = false; btn.textContent = 'Create invoice'; showToast('Create failed: ' + ins.error.message, 'error'); return; }
-    var base = simpleSeparate ? sub.amount : Number((setupRes.data || {}).original_contract_sum || 0), lines = [];
+    var base = sub.kind === 'base' ? Number((setupRes.data || {}).original_contract_sum || 0) : sub.amount, lines = [];
     if (prevCum) lines.push({ application_id: ins.data.id, item_no: '1', description: 'Previous invoices', scheduled_value: base, prev_amount: prevCum, this_amount: 0, stored_amount: 0, is_change_order: false, sort_order: 1 });
     lines.push({ application_id: ins.data.id, item_no: String(lines.length + 1), description: memo, scheduled_value: co ? amt : base, prev_amount: 0, this_amount: amt, stored_amount: 0, is_change_order: co, sort_order: lines.length + 1 });
     await supabaseClient.from('aia_line_items').insert(lines);
@@ -1316,7 +1366,7 @@ requireAuth().catch(function(){});
   function simplePoLabel(s, a) { return a.po_number || (a.bill_co && a.bill_co.po_number) || s.contract_number || s.contract_no || ''; }
   function simpleAmountRows(t, s, a) {
     var L = t.lines, rate = effRate(s, a), po = simplePoLabel(s, a), sub = a.bill_co;
-    var rows = [['ORIGINAL CONTRACT AMOUNT' + (sub && po ? ' PO' + po : '') + ':', L.L1, 'gap']];
+    var rows = [['ORIGINAL CONTRACT AMOUNT' + ((sub || poSubOf(s, a)) && po ? ' PO' + po : '') + ':', L.L1, 'gap']];
     if (L.L2) rows.push(['CHANGE ORDERS TO DATE:', L.L2, 'gap']);
     rows.push(['ADJUSTED CONTRACT AMOUNT:', L.L3, 'gap'], ['AMOUNT COMPLETED TO DATE:', L.L4, 'gap']);
     if (rate) rows.push(['LESS RETAINAGE (' + (rate * 100).toFixed(2) + '%):', L.L5t, 'gap']);
@@ -1324,10 +1374,10 @@ requireAuth().catch(function(){});
     return rows;
   }
   function renderSimpleCard(t, invNo) {
-    var s = currentSetup, a = currentApp, sub = a.bill_co;
+    var s = currentSetup, a = currentApp, sub = a.bill_co, poSub = poSubOf(s, a);
     var job = [['JOB NAME:', simpleJobName(s), 'big'], ['JOB LOCATION:', simpleAddress(s), 'big'], ['PO Number:', simplePoLabel(s, a), ''], ['JOB Number:', s.job_number || '', ''], ['CONTRACT DATED:', mdyShort(s.contract_date) || '', '']];
     if (a.memo && a.memo !== 'Contract work') job.push(['DESCRIPTION:', a.memo, '']);
-    return '<div class="inv-card"><div class="inv-card-h"><h3>Invoice' + (sub ? ' — sub-prime contract CO #' + escHtml(sub.number) : '') + '</h3>' + (canEdit ? '<button class="btn-secondary pc-edit" id="editSimpleBtn">Edit</button>' : '') + '</div>' +
+    return '<div class="inv-card"><div class="inv-card-h"><h3>Invoice' + (sub ? ' — sub-prime contract CO #' + escHtml(sub.number) : poSub ? ' — client PO ' + escHtml(poSub.po) : '') + '</h3>' + (canEdit ? '<button class="btn-secondary pc-edit" id="editSimpleBtn">Edit</button>' : '') + '</div>' +
       '<div class="sinv">' +
         '<div class="sinv-top"><div><b>TO:</b>&nbsp; ' + escHtml(s.client_name || '') + (s.client_attn ? '<br><b>ATTN.:</b>&nbsp; ' + escHtml(s.client_attn) : '') + '<br>' + escHtml(s.client_address || '').replace(/\n/g, '<br>') + '</div>' +
           '<div class="sinv-dates">' + mdyShort(a.application_date) + '<br>' + mdyShort(a.period_to) + '</div></div>' +
@@ -1335,7 +1385,7 @@ requireAuth().catch(function(){});
         '<table class="sinv-job">' + job.filter(function(r) { return r[1]; }).map(function(r) { return '<tr><td>' + r[0] + '</td><td class="' + r[2] + '">' + escHtml(r[1]) + '</td></tr>'; }).join('') + '</table>' +
         '<table class="sinv-amt">' + simpleAmountRows(t, s, a).map(function(r) { return '<tr class="' + r[2] + '"><td>' + escHtml(r[0]) + '</td><td class="d">$</td><td class="n">' + fmtMoney(r[1]).replace(/^\$/, '').replace(/^-\$/, '-') + '</td></tr>'; }).join('') + '</table>' +
         '<div class="sinv-sign"><div class="ln"></div><b>NORTHERN WOLVES, Inc.</b></div>' +
-        (sub ? '<div class="sinv-sub">Bills change order #' + escHtml(sub.number) + ' — ' + escHtml(sub.title) + ' (' + fmtMoney(sub.amount) + ')' + (sub.po_number ? ', client PO ' + escHtml(sub.po_number) : '') + '. Previous invoices and the balance count this PO only.</div>' : '') +
+        (sub ? '<div class="sinv-sub">Bills change order #' + escHtml(sub.number) + ' — ' + escHtml(sub.title) + ' (' + fmtMoney(sub.amount) + ')' + (sub.po_number ? ', client PO ' + escHtml(sub.po_number) : '') + '. Previous invoices and the balance count this PO only.</div>' : poSub ? '<div class="sinv-sub">Bills client PO ' + escHtml(poSub.po) + ' (' + fmtMoney(poSub.amount) + ')' + (poSub.title ? ' — ' + escHtml(poSub.title) : '') + ' of the base contract. Previous invoices and the balance count this PO only.</div>' : '') +
       '</div></div>';
   }
 
@@ -1905,9 +1955,9 @@ requireAuth().catch(function(){});
     var grandCompleted = totalCompleted + totalCoCompleted;
     var grandStored    = totalStored    + totalCoStored;
 
-    var sub = app.bill_co_id ? (app.bill_co || null) : null;
-    var line1 = sub ? Number(sub.amount || 0) : Number(setup.original_contract_sum || 0);
-    var coNet = sub ? 0 : Number(app.co_prev_additions || 0)
+    var sub = app.bill_co_id ? (app.bill_co || null) : null, poSub = sub ? null : poSubOf(setup, app);
+    var line1 = sub ? Number(sub.amount || 0) : poSub ? poSub.amount : Number(setup.original_contract_sum || 0);
+    var coNet = (sub || poSub) ? 0 : Number(app.co_prev_additions || 0)
               + Number(app.co_prev_deductions || 0)
               + Number(app.co_this_additions || 0)
               + Number(app.co_this_deductions || 0);
@@ -2197,7 +2247,7 @@ requireAuth().catch(function(){});
       r.invoiced = computeTotalsFor(setup, latest, linesByApp[latest.id] || []).lines.L6;
     }
     // sub-prime contracts: every PO has its own running total — the contract's invoiced amount is the sum of all invoices
-    if ((apps || []).some(function(a) { return a.bill_co_id; })) r.invoiced = apps.reduce(function(acc, a) { return acc + computeTotalsFor(setup, a, linesByApp[a.id] || []).lines.L8; }, 0);
+    if (clientPos(setup).length || (apps || []).some(function(a) { return a.bill_co_id; })) r.invoiced = apps.reduce(function(acc, a) { return acc + computeTotalsFor(setup, a, linesByApp[a.id] || []).lines.L8; }, 0);
     r.revised = r.original + r.approvedCO;
     r.pendingRevised = r.revised + r.pendingCO;
     r.remaining = r.revised - r.payments;
@@ -2553,25 +2603,24 @@ requireAuth().catch(function(){});
   function renderSimpleInvoicesTab(b) {
     var s = b.setup, separate = s.billing_mode === 'separate';
     var tot = {}; b.apps.forEach(function(a) { tot[a.id] = computeTotalsFor(s, a, b.linesByApp[a.id] || []).lines; });
-    var subs = [{ id: null, name: 'Base contract', po: s.contract_number || s.contract_no || '', amount: Number(s.original_contract_sum || 0) }];
-    if (separate) b.cos.filter(function(c) { return c.status === 'approved'; }).forEach(function(c) { subs.push({ id: c.id, name: 'CO #' + c.number + ' — ' + c.title, po: c.po_number || '', amount: Number(c.amount || 0) }); });
+    var subs = subContracts(s, b.cos), showSubs = subs.length > 1, subName = {}; subs.forEach(function(x) { subName[x.key] = x.name; });
     var summary = '';
-    if (separate) {
+    if (showSubs) {
       var sumRows = subs.map(function(x) {
-        var mine = b.apps.filter(function(a) { return (a.bill_co_id || null) === x.id; }), inv = mine.reduce(function(acc, a) { return acc + tot[a.id].L8; }, 0);
+        var mine = b.apps.filter(function(a) { return subKeyOf(s, a) === x.key; }), inv = mine.reduce(function(acc, a) { return acc + tot[a.id].L8; }, 0);
         return '<tr><td>' + escHtml(x.name) + '</td><td>' + escHtml(x.po || '--') + '</td><td class="num">' + fmtMoney(x.amount) + '</td><td class="num">' + fmtMoney(inv) + '</td><td class="num"><b>' + fmtMoney(x.amount - inv) + '</b></td><td class="ctr">' + mine.length + '</td></tr>';
       }).join('');
       var totalAmt = subs.reduce(function(acc, x) { return acc + x.amount; }, 0), totalInv = b.apps.reduce(function(acc, a) { return acc + tot[a.id].L8; }, 0);
       summary = '<h3 class="pc-sub-h">Sub-prime contracts (client POs)</h3><div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Contract / change order</th><th>Client PO</th><th class="num">Amount</th><th class="num">Invoiced</th><th class="num">Balance</th><th class="ctr">Invoices</th></tr></thead>' +
         '<tbody>' + sumRows + '</tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num"><b>' + fmtMoney(totalAmt) + '</b></td><td class="num"><b>' + fmtMoney(totalInv) + '</b></td><td class="num"><b>' + fmtMoney(totalAmt - totalInv) + '</b></td><td></td></tr></tfoot></table></div>' +
-        '<div class="pc-note" style="margin:0 16px 12px">A change order becomes a sub-prime contract once it is <b>Approved</b> with its <b>Client PO number</b> (Change Orders tab). Each new invoice picks which PO it bills.</div>';
+        '<div class="pc-note" style="margin:0 16px 12px">Client POs of the base contract are listed on the contract setup (Edit); a change order becomes its own PO once it is <b>Approved</b> with its <b>Client PO number</b> (Change Orders tab, sub-prime mode). Each new invoice picks which PO it bills.</div>';
     }
     var rows = b.apps.slice().sort(function(x, y) { return y.application_no - x.application_no; }).map(function(a) {
       var t = tot[a.id], sub = a.bill_co;
       return '<tr data-app="' + a.id + '">' +
         '<td><a href="invoicing.html?app=' + a.id + '" class="pc-link"><b>' + escHtml(a.invoice_no || String(a.application_no)) + '</b></a></td>' +
         '<td>' + mdy2(a.application_date) + '</td><td>' + mdy2(a.period_to) + '</td>' +
-        (separate ? '<td>' + (sub ? 'CO #' + escHtml(sub.number) : 'Base contract') + '</td>' : '') +
+        (showSubs ? '<td>' + escHtml(subName[subKeyOf(s, a)] || 'Base contract') + '</td>' : '') +
         '<td>' + escHtml(a.po_number || (sub && sub.po_number) || s.contract_number || '--') + '</td>' +
         '<td class="pc-title-cell">' + escHtml(a.memo || '') + '</td>' +
         '<td class="num"><b>' + fmtMoney(t.L8) + '</b></td><td class="num">' + fmtMoney(t.L4) + '</td><td class="num">' + fmtMoney(t.L9) + '</td>' +
@@ -2581,7 +2630,7 @@ requireAuth().catch(function(){});
       '</tr>';
     }).join('');
     return '<div class="pc-section-h"><h2>Invoices</h2>' + (canEdit ? '<button class="btn-create" id="invAdd">＋ New Invoice</button>' : '') + '</div>' + summary +
-      '<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Invoice #</th><th>Date</th><th>Period to</th>' + (separate ? '<th>Bills</th>' : '') + '<th>Client PO</th><th>Description</th>' +
+      '<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Invoice #</th><th>Date</th><th>Period to</th>' + (showSubs ? '<th>Bills</th>' : '') + '<th>Client PO</th><th>Description</th>' +
         '<th class="num">Amount this invoice</th><th class="num">Completed to date</th><th class="num">Balance to finish</th><th>Status</th><th></th>' + (canEdit ? '<th></th>' : '') + '</tr></thead>' +
         '<tbody>' + (rows || '<tr><td colspan="12" class="pc-empty">No invoices yet — press ＋ New Invoice.</td></tr>') + '</tbody></table></div>';
   }
@@ -3467,6 +3516,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=424"></script>
+<script src="sw-register.js?v=494"></script>
 </body>
 </html>
