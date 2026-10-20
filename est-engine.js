@@ -287,7 +287,7 @@
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var symDropped = [], colourBars = [], noLenEa = [], unitMounted = [];
-    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
+    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
     var schedDev = {};
@@ -569,6 +569,17 @@
             if (srFt) srDoubled.push({ sheet: sh, ft: Math.round(srFt) });
             else if (wet && (r.geo_pipe.sr || (r.geo_pipe.single_ft || 0) > 0.5 * (r.geo_pipe.total_ft || 1))) srSingle.push({ sheet: sh, ft: Math.round(wet), single: Math.round(r.geo_pipe.single_ft || 0) });
           }
+          // vertical pipe: every UP / DN pipe size label on the plan is a run to the next floor (geo_pipe.riser_sizes, 12 ft per UP/DN,
+          // 6 ft per lone UP or DN, × 2 for an S/R label) — on top of the plan lengths, measured or read, and counted even when the
+          // sheet's lines could not be measured (fewer than 2 labels)
+          if (takeoffSheet && !coarseDup && r.geo_pipe && r.geo_pipe.riser_sizes) {
+            Object.keys(r.geo_pipe.riser_sizes).forEach(function (key) {
+              var cd = / CD$/.test(key), sz = key.replace(/ CD$/, ''), k = (cd ? 'CD' : '') + '|' + sz + '|';
+              var o = pipe[k] = pipe[k] || { service: cd ? 'CD' : '', size: sz, material: '', lf: 0, sheets: [], geo: true };
+              o.lf += r.geo_pipe.riser_sizes[key]; o.riser_ft = (o.riser_ft || 0) + r.geo_pipe.riser_sizes[key]; o.sheets.push(sh);
+            });
+            pipeRisers.n += r.geo_pipe.riser_n || 0; pipeRisers.ft += r.geo_pipe.riser_ft || 0; pipeRisers.sheets.push(sh + ' (' + (r.geo_pipe.riser_n || 0) + ')');
+          }
           if (takeoffSheet && !(r.geo_pipe && r.geo_pipe.total_ft > 0)) (r.pipe_runs || []).forEach(function (x) {
             var k = (x.service || '') + '|' + (x.size || '') + '|' + (x.material || '');
             var o = pipe[k] = pipe[k] || { service: x.service || '', size: x.size || '', material: x.material || '', lf: 0, sheets: [] };
@@ -595,7 +606,7 @@
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
-      rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── reviewer decisions (Takeoff → AI review tab, table est_ai_corrections) ──────────────────────────────
@@ -777,6 +788,8 @@
       flags.push({ category: 'pipework', item: 'Supply + return on one line', flag: 'session choice "one line = supply + return": the water pipe measured on the plans is counted twice — ' + C.srDoubled.map(function (d) { return d.sheet + ' +' + d.ft + ' ft'; }).join(', ') + ' (condensate once)' });
     else if (C.srSingle && C.srSingle.length)
       flags.push({ category: 'pipework', item: 'Supply + return on one line?', flag: 'water pipe counted once per drawn line on ' + C.srSingle.map(function (d) { return d.sheet + ' (' + d.ft + ' ft' + (d.single ? ', ' + d.single + ' ft with no parallel partner' : '') + ')'; }).join(', ') + ' — if the legend draws supply and return as ONE line (645 Madison: Procore carried 2x), set "Pipe lines" to count twice and price again' });
+    if (C.pipeRisers && C.pipeRisers.n)
+      flags.push({ category: 'pipework', item: 'Pipe risers (UP / DN)', flag: C.pipeRisers.n + ' UP / DN pipe label' + (C.pipeRisers.n === 1 ? '' : 's') + ' on the plans = ' + Math.round(C.pipeRisers.ft) + ' ft of vertical pipe added (12 ft per UP/DN, 6 ft per lone UP or DN, both pipes for an S/R label) on ' + C.pipeRisers.sheets.join(', ') + ' — check the floor height and that the riser diagram is not measured as well' });
     if (C.pipeFloors.length >= 2 && !C.risers.length)
       flags.push({ category: 'pipework', item: 'Pipe risers', flag: 'piping on ' + C.pipeFloors.length + ' floors but no water riser diagram measured — vertical pipe between floors is not in this estimate' });
     if (Object.keys(C.duct).length && !C.geoCheck.some(function (g) { return g.what !== 'Pipe'; }))

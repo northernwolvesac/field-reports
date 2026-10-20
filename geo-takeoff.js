@@ -1707,13 +1707,35 @@
         if (/[Øø∅]|\bDIA\b/i.test(txt) && !PSVC.test(txt) && txt.indexOf('/') < 0) return;      // 8"Ø is a round duct, not an 8-inch pipe
         var mm = PSIZE.exec(txt); if (!mm) return;
         var rest = (txt.slice(0, mm.index) + txt.slice(mm.index + mm[0].length)).trim();
-        if (rest && !PSVC.test(rest) && !/^(PROVIDE|NEW|TO|\s)*$/.test(rest)) return;
+        if (rest && !PSVC.test(rest) && !/^(PROVIDE|NEW|TO|UP|DN|DOWN|\s)*$/.test(rest)) return;   // "1" UP" / "3/4" DN" are size labels with a riser mark
         var v = pipeSizeIn(mm[2]); if (!(v > 0 && v <= 16)) return;
         var sv = PSVC.exec(txt);
         if (v >= 5 && !sv) return;   // a bare 10" / 16" on a plan is a round duct (Footlocker M-100: 300 ft of "pipe"); mains that size carry their service (CHWS, CWS)
         labs.push({ txt: txt, d: v, svc: sv ? sv[1] : null, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, dir: t.dir || [1, 0], bbox: [t.x0, t.y0, t.x1, t.y1], block: t.block || [t.x0, t.y0, t.x1, t.y1] });
       });
-      if (labs.length < 2) return { error: 'fewer than 2 pipe size labels', ptft: ptft };
+      // risers: a pipe size label marked UP / DN (in its text, or an UP / DN word read beside it — the same row within 70 pt, or the next
+      // line of the block) is a vertical run to the next floor, the duct rule: RISER_FT (12 ft) for UP/DN, half for a lone UP or DN; a
+      // "CWS/R UP" label rises both pipes of the pair (× 2); condensate keeps its CD key
+      var RISER_FT = D.riserFt || 12, updn = (D.text || []).filter(function (t) { return t.kw && /^(UP|DN|DOWN)$/i.test(t.str); });
+      var pipeRiser = { sizes: {}, n: 0, ft: 0 }, BOTH = /UP\W{0,3}(DN|DOWN)|(DN|DOWN)\W{0,3}UP/i;
+      labs.forEach(function (l) {
+        var hitU = null, bb = l.block || l.bbox, hit = /\b(UP|DN|DOWN)\b/i.test(l.txt) || updn.some(function (u) {
+          var ux = (u.x0 + u.x1) / 2, uy = (u.y0 + u.y1) / 2, vert = (bb[3] - bb[1]) > (bb[2] - bb[0]);
+          var inRow = vert ? (ux >= bb[0] - 8 && ux <= bb[2] + 8) : (uy >= bb[1] - 8 && uy <= bb[3] + 8);
+          var gap = vert ? Math.max(bb[1] - uy, uy - bb[3]) : Math.max(bb[0] - ux, ux - bb[2]);
+          if (inRow && gap <= 70) { hitU = u; return true; }
+          var tl = vert ? bb[2] - bb[0] : bb[3] - bb[1], tu = vert ? u.x1 - u.x0 : u.y1 - u.y0;
+          var off = vert ? Math.abs(ux - (bb[0] + bb[2]) / 2) : Math.abs(uy - (bb[1] + bb[3]) / 2);
+          var ovl = vert ? Math.min(bb[3], u.y1) - Math.max(bb[1], u.y0) : Math.min(bb[2], u.x1) - Math.max(bb[0], u.x0);
+          if (off <= Math.max(12, 1.8 * Math.max(tl, tu)) && ovl >= -10) { hitU = u; return true; }
+          return false;
+        });
+        if (!hit) return;
+        var full = BOTH.test(l.txt) || (hitU && BOTH.test(hitU.cell || '')), pair = /\/\s*R\b|S\s*&\s*R\b/i.test(l.txt) ? 2 : 1;
+        var ft = (full ? RISER_FT : RISER_FT / 2) * pair, k = pipeLabel(l.d) + (l.svc === 'CD' ? ' CD' : '');
+        l.riser = true; pipeRiser.n++; pipeRiser.ft += ft; pipeRiser.sizes[k] = (pipeRiser.sizes[k] || 0) + ft;
+      });
+      if (labs.length < 2) return { error: 'fewer than 2 pipe size labels', ptft: ptft, riser_sizes: pipeRiser.n ? pipeRiser.sizes : undefined, riser_n: pipeRiser.n || undefined, riser_ft: pipeRiser.ft || undefined };
       var n = D.segs.length / 5, segs = [], leaders = [], rectSide = {};
       (D.rectSeg || []).forEach(function (k) { rectSide[k] = 1; });   // duct-section boxes: walls for ducts only, never pipe
       for (var i = 0; i < n; i++) {
@@ -1757,7 +1779,7 @@
         if (bi) votes[fam(bi[8])] = (votes[fam(bi[8])] || 0) + 1;
       });
       var top = 0; for (var vk in votes) top = Math.max(top, votes[vk]);
-      if (!top) return { error: 'no pipe lines next to the size labels', ptft: ptft, labels: labs.length };
+      if (!top) return { error: 'no pipe lines next to the size labels', ptft: ptft, labels: labs.length, riser_sizes: pipeRiser.n ? pipeRiser.sizes : undefined, riser_n: pipeRiser.n || undefined, riser_ft: pipeRiser.ft || undefined };
       // (D.pipeKeep2: keep any pen two labels point at — tried for the 645 Madison loop that changes pen mid-way; it mostly adds wall lines, off)
       var keep = Object.keys(votes).filter(function (kk) { return votes[kk] >= (D.pipeKeep2 === true ? 2 : Math.max(2, 0.25 * top)) || votes[kk] === top; });
       var S = segs.filter(function (s) { return keep.indexOf(fam(s[8])) >= 0; });
@@ -1958,7 +1980,7 @@
       // the length is counted once per line here; the engine flags it so the estimator doubles it when the pair is priced per pipe
       var sr = /\bS\s*[\/&]\s*R\b|SUPPLY\s*(AND|&|\/|\+)\s*RETURN|\b(CHW|CW|HW|HHW|CHWS|CWS|HWS|GLY\w*)\s*[\/&]\s*R\b/i.test(D.fullText);
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }), sr: sr || undefined,
-        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep, dashed_ft: Math.round(dashedFt * 10) / 10, dashed_rows: dashedRows, dashed_cd_ft: Math.round(dashedCdFt * 10) / 10, dashed_dbg: D.pipeDashedDebug ? D._dd : undefined,
+        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep, dashed_ft: Math.round(dashedFt * 10) / 10, dashed_rows: dashedRows, dashed_cd_ft: Math.round(dashedCdFt * 10) / 10, riser_sizes: pipeRiser.n ? pipeRiser.sizes : undefined, riser_n: pipeRiser.n || undefined, riser_ft: pipeRiser.ft || undefined, dashed_dbg: D.pipeDashedDebug ? D._dd : undefined,
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry
