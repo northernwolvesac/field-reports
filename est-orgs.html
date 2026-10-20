@@ -9,10 +9,13 @@
 <title>Organisations — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=484"></script>
-<script src="auth.js?v=484"></script>
-<script src="est-org.js?v=484"></script>
-<script src="est-engine.js?v=497"></script>
+<script src="supabase-config.js?v=499"></script>
+<script src="auth.js?v=499"></script>
+<script src="est-org.js?v=499"></script>
+<script src="est-engine.js?v=499"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="email-utils.js?v=499"></script>
+<script src="nw-email.js?v=499"></script>
 <style>
   body { padding-bottom: 40px; }
   .og-wrap { max-width: 1100px; margin: 0 auto; }
@@ -66,7 +69,7 @@ var OG = (function() {
 
   async function load() {
     var u = await sb.auth.getUser(); me = u.data && u.data.user; if (!me) return;
-    var p = await sb.from('profiles').select('role,full_name').eq('id', me.id).maybeSingle(); globalAdmin = !!(p.data && p.data.role === 'admin');
+    var p = await sb.from('profiles').select('role,full_name').eq('id', me.id).maybeSingle(); globalAdmin = !!(p.data && p.data.role === 'admin'); me.name = (p.data && p.data.full_name) || me.email;
     await NWOrg.load();
     var o = await sb.from('est_orgs').select('*').order('name'); orgs = o.data || [];
     var m = await sb.from('est_org_members').select('org_id,user_id,role,created_at'); members = {}; (m.data || []).forEach(function(x) { (members[x.org_id] = members[x.org_id] || []).push(x); });
@@ -86,7 +89,7 @@ var OG = (function() {
         (NWOrg.id() !== o.id ? '<button class="btn sm" onclick="NWOrg.set(\'' + o.id + '\')">Work in this organisation</button>' : '<span class="chip">current</span>') + '</div>' +
         '<table class="t" style="margin-top:8px"><thead><tr><th>Member</th><th>E-mail</th><th>Role</th><th>Since</th><th></th></tr></thead><tbody>' +
         mm.map(function(x) { var pf = profiles[x.user_id] || {}; return '<tr><td>' + esc(pf.full_name || '—') + '</td><td class="muted">' + esc(pf.email || '') + '</td><td><span class="chip ' + esc(x.role) + '">' + esc(x.role) + '</span></td><td class="muted">' + String(x.created_at).slice(0, 10) + '</td><td style="text-align:right">' + (mg && x.user_id !== me.id ? '<button class="btn sm" onclick="OG.setRole(\'' + o.id + '\',\'' + x.user_id + '\')">Role</button> <button class="btn sm" onclick="OG.remove(\'' + o.id + '\',\'' + x.user_id + '\')">Remove</button>' : '') + '</td></tr>'; }).join('') +
-        iv.map(function(x) { return '<tr><td class="muted">invited</td><td class="muted">' + esc(x.email) + '</td><td><span class="chip">' + esc(x.role) + '</span></td><td class="muted">' + String(x.created_at).slice(0, 10) + '</td><td style="text-align:right">' + (mg ? '<button class="btn sm" onclick="OG.uninvite(\'' + x.id + '\')">Cancel</button>' : '') + '</td></tr>'; }).join('') +
+        iv.map(function(x) { return '<tr><td class="muted">invited</td><td class="muted">' + esc(x.email) + '</td><td><span class="chip">' + esc(x.role) + '</span></td><td class="muted">' + String(x.created_at).slice(0, 10) + '</td><td style="text-align:right">' + (mg ? '<button class="btn sm" onclick="OG.sendInvite(\'' + o.id + '\',\'' + esc(x.email) + '\',\'' + esc(x.role) + '\')" title="E-mail the invitation (again)">✉ Send</button> <button class="btn sm" onclick="OG.uninvite(\'' + x.id + '\')">Cancel</button>' : '') + '</td></tr>'; }).join('') +
         '</tbody></table>' +
         (mg ? '<div class="row" style="margin-top:10px"><input type="email" id="inv-' + o.id + '" placeholder="estimator@company.com" style="min-width:240px"><select id="invr-' + o.id + '"><option value="estimator">estimator</option><option value="admin">admin</option><option value="viewer">viewer</option></select><button class="btn" onclick="OG.invite(\'' + o.id + '\')">Add / invite</button>' +
           (globalAdmin && o.slug !== 'nwac' ? '<button class="btn" onclick="OG.copyLib(\'' + o.id + '\')" title="Copy NWAC\'s rules, catalog, norms and knowledge notes into this organisation">Copy NWAC library</button>' : '') + '</div>' : '') +
@@ -153,6 +156,27 @@ var OG = (function() {
     var r = pf.data ? await sb.from('est_org_members').upsert({ org_id: orgId, user_id: pf.data.id, role: role }) : await sb.from('est_org_invites').upsert({ org_id: orgId, email: email, role: role, invited_by: me.id }, { onConflict: 'org_id,email' });
     if (r.error) { toast(r.error.message); return; }
     toast(pf.data ? 'Added as ' + role : 'Invited — the membership starts on their first visit'); await load(); render();
+    if (!pf.data) { var org = orgs.find(function(x) { return x.id === orgId; }); if (org && confirm('E-mail the invitation to ' + email + ' now?\n\nThey get the sign-up link; the invitation is claimed when they sign in with this address.')) await sendInvite(orgId, email, role); }
+  }
+  // The invitation e-mail (branded, through EmailJS): what the product is, which organisation invited them, and the two steps —
+  // create the account on login.html with THIS e-mail address, sign in; est_claim_invites turns the account into a member (and a partner
+  // outside NWAC) on the first visit. The sender's name and the organisation go in the body; the link is a button.
+  async function sendInvite(orgId, email, role) {
+    var org = orgs.find(function(x) { return x.id === orgId; }); if (!org) return;
+    if (!window.nwSendBrandedEmail || !window.NWEmail) { toast('E-mail helper did not load — reload the page'); return; }
+    var link = location.origin + location.pathname.replace(/[^\/]*$/, '') + 'login.html';
+    var body = 'Hello,\n\n' + (me.name || 'A colleague') + ' invited you to the AI Estimator of ' + org.name + ' as ' + role + '. ' +
+      'It reads mechanical drawings and specs, measures ducts, pipes and air outlets, and builds a priced breakdown for you to review.\n\n' +
+      'To get in:\n' +
+      '1. Open ' + link + ' and choose Sign Up — use this e-mail address (' + email + '), the invitation is tied to it.\n' +
+      '2. Sign in. Your account joins ' + org.name + ' on the first visit and the AI Estimator opens.\n\n' +
+      'Reply to this e-mail if anything does not work.\n\nBest regards,\n' + (me.name || '') + '\n' + org.name;
+    try {
+      await nwSendBrandedEmail({ to: email, subject: 'Invitation to the AI Estimator — ' + org.name, bodyText: body, reportType: 'Invitation', title: 'AI Estimator invitation', subtitle: org.name,
+        senderName: me.name || '', files: [{ label: 'Create your account', url: link, primary: true, plain: 'Sign up' }] });
+      await sb.from('est_org_invites').update({ invited_by: me.id }).eq('org_id', orgId).ilike('email', email);
+      toast('Invitation e-mailed to ' + email);
+    } catch (e) { toast('E-mail failed: ' + (e && (e.text || e.message) || e)); }
   }
   async function setRole(orgId, userId) {
     var role = prompt('Role: owner, admin, estimator or viewer', 'estimator'); if (!role || !/^(owner|admin|estimator|viewer)$/.test(role)) return;
@@ -162,9 +186,9 @@ var OG = (function() {
   async function uninvite(id) { var r = await sb.from('est_org_invites').delete().eq('id', id); if (r.error) { toast(r.error.message); return; } await load(); render(); }
   async function copyLib(orgId) { if (!confirm('Copy NWAC\'s rules, catalog, norms and knowledge notes into this organisation? Existing rows stay.')) return; var c = await sb.rpc('est_copy_library', { src: '11111111-1111-4111-8111-111111111111', dst: orgId }); if (c.error) toast(c.error.message); else toast('Copied: ' + JSON.stringify(c.data)); }
   (async function() { try { await load(); render(); } catch (e) { $('main').innerHTML = '<div class="card">' + esc(e.message || e) + '</div>'; } })();
-  return { create: create, invite: invite, setRole: setRole, remove: remove, uninvite: uninvite, copyLib: copyLib, saveSettings: saveSettings };
+  return { create: create, invite: invite, sendInvite: sendInvite, setRole: setRole, remove: remove, uninvite: uninvite, copyLib: copyLib, saveSettings: saveSettings };
 })();
 </script>
-<script src="sw-register.js?v=484"></script>
+<script src="sw-register.js?v=499"></script>
 </body>
 </html>
