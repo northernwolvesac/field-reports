@@ -31,6 +31,7 @@
       // Sync profile to localStorage for backward compatibility
       syncProfile(session.user);
       estimatorGuard();
+      partnerGuard();
       return session;
     } catch (err) {
       if (err.message !== 'Not authenticated') {
@@ -120,6 +121,20 @@
     var p = await getAuthProfile();
     return !!(p && p.role === 'estimator');
   }
+  // 'partner': a design partner's account (est-partner-role.sql) — the AI estimating product only, no NWAC data; everything else
+  // bounces to the AI Estimator (the database policies list no NWAC table for this role)
+  var PARTNER_PAGES = ['index.html', 'ai-estimator.html', 'ai-benchmark.html', 'est-rules.html', 'est-orgs.html', 'login.html', 'install.html'];
+  function partnerGuard() {
+    getAuthProfile().then(function(p) {
+      if (!p || p.role !== 'partner') return;
+      var page = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+      if (PARTNER_PAGES.indexOf(page) < 0) location.replace('ai-estimator.html');
+    }).catch(function() {});
+  }
+  async function isPartner() {
+    var p = await getAuthProfile();
+    return !!(p && p.role === 'partner');
+  }
 
   async function isManager() {
     var p = await getAuthProfile();
@@ -205,7 +220,7 @@
     if (emailEl) emailEl.textContent = profile.email || '';
 
     // estimators have no AI Support / general tools: hide the shortcut in the header
-    if (profile.role === 'estimator') {
+    if (profile.role === 'estimator' || profile.role === 'partner') {
       var sup = document.querySelector('.nav-ic[href="support.html"]');
       if (sup) sup.style.display = 'none';
     }
@@ -238,6 +253,7 @@
   window.isLimited = isLimited;
   window.isAdmin = isAdmin;
   window.isEstimator = isEstimator;
+  window.isPartner = isPartner;
   window.autoFillTechName = autoFillTechName;
   window.logout = logout;
   window.requireRole = requireRole;

@@ -14,15 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=478"></script>
-<script src="auth.js?v=478"></script>
-<script src="est-org.js?v=478"></script>
-<script src="est-totals.js?v=478"></script>
+<script src="supabase-config.js?v=483"></script>
+<script src="auth.js?v=483"></script>
+<script src="est-org.js?v=483"></script>
+<script src="est-totals.js?v=483"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=478"></script>
-<script src="nw-email.js?v=478"></script>
-<script src="est-engine.js?v=478"></script>
-<script src="geo-takeoff.js?v=478"></script>
+<script src="email-utils.js?v=483"></script>
+<script src="nw-email.js?v=483"></script>
+<script src="est-engine.js?v=483"></script>
+<script src="geo-takeoff.js?v=483"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -211,6 +211,9 @@ var AE = (function() {
     return r.error ? [] : (r.data || []).filter(function(x) { return !x.parent_estimate_id; });
   }
   function estLabel(x) { return x.name + ' (' + (x.quote_number ? 'Q' + x.quote_number + ', ' : '') + (x.line_count || 0) + ' lines' + (x.total_sales ? ', ' + money(x.total_sales) : '') + ', ' + (x.status || '') + (x.estimator_name ? ', ' + x.estimator_name : '') + ', ' + String(x.created_at).slice(0, 10) + ')'; }
+  // the Bid Board, estimates and the Takeoff belong to NWAC's field app: only an organisation with settings.bid_board (NWAC) gets the
+  // Create estimate / Open in Takeoff / Compare / Link actions; a design-partner org works with the AI estimate on this page alone
+  function bidBoardOrg() { var o = window.NWOrg ? NWOrg.current() : null; return !o || o.slug === 'nwac' || !!(o.settings && o.settings.bid_board); }
   var linkMode = 'link';   // 'link' = tie the session to the picked estimate; 'compare' = open the compare page against it
   function linkEstimate(mode) {
     linkMode = mode === 'compare' ? 'compare' : 'link';
@@ -254,7 +257,7 @@ var AE = (function() {
       '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
       ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + (res.run && res.run.finished_at ? ' · last run ' + res.run.read + ' sheet' + (res.run.read === 1 ? '' : 's') + ' in ' + Math.max(1, Math.round(res.run.secs / 60)) + ' min, $' + Number(res.run.cost || 0).toFixed(2) + (res.run.retries ? ', ' + res.run.retries + ' retr' + (res.run.retries === 1 ? 'y' : 'ies') : '') + (res.run.failed ? ', <span class="flag">' + res.run.failed + ' failed</span>' : '') : '') + (res.run && res.run.active && !running && res.run.heartbeat && Date.now() - new Date(res.run.heartbeat).getTime() < 120000 ? ' · <span class="flag">reading in another tab' + (res.run.by ? ' (' + esc(res.run.by) + ')' : '') + '</span>' : '') + '</div></div>' +
       '<div class="row"><label title="Shop drawings and T&amp;B are counted per plan sheet with new work; type a number here to override">SD/T&amp;B sheets<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
-      (session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a><button class="btn" onclick="AE.linkEstimate(\'compare\')" title="Put the AI takeoff side by side with the estimator\'s own estimate of this job">⇄ Compare</button>' : '<button class="btn" onclick="AE.linkEstimate()" title="Tie this session to an estimate that already exists on the Bid Board">🔗 Link estimate</button>') + '</div></div>' +
+      (!bidBoardOrg() ? '' : session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a><button class="btn" onclick="AE.linkEstimate(\'compare\')" title="Put the AI takeoff side by side with the estimator\'s own estimate of this job">⇄ Compare</button>' : '<button class="btn" onclick="AE.linkEstimate()" title="Tie this session to an estimate that already exists on the Bid Board">🔗 Link estimate</button>') + '</div></div>' +
       (estimateGone ? '<div class="muted" style="margin-top:6px">⚠ The estimate this session was linked to no longer exists (deleted on the Bid Board). Link the session to the right estimate, or “Create estimate” makes a new one.</div>' : '') + '</div>' +
 
       '<div class="card"><h3>1 · Bid documents</h3>' +
@@ -281,8 +284,8 @@ var AE = (function() {
       '<label class="muted" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="highRise" ' + (res.highRise ? 'checked' : '') + '> Roof above 10th floor (crane)</label>' +
       '<button class="btn primary" onclick="AE.price()" ' + (done ? '' : 'disabled') + '>💲 Price it</button>' +
       '<button class="btn" onclick="AE.review()" ' + (done ? '' : 'disabled') + '>🔎 AI scope review</button>' +
-      '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button>' +
-      '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { return p.status === 'done'; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust (without measurements: just the plans, to trace or auto-measure there)">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button></div></div>' +
+      (bidBoardOrg() ? '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button>' : '') +
+      (bidBoardOrg() ? '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { return p.status === 'done'; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust (without measurements: just the plans, to trace or auto-measure there)">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button>' : '') + '</div></div>' +
       renderDuctSpec(res) + renderCorrections() +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
       '<div id="revOut">' + renderReview(res) + '</div></div>' + renderSpecQa();
@@ -1554,6 +1557,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=478"></script>
+<script src="sw-register.js?v=483"></script>
 </body>
 </html>
