@@ -280,7 +280,7 @@
     }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var symDropped = [], colourBars = [];
+    var symDropped = [], colourBars = [], noLenEa = [];
     var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
@@ -409,11 +409,11 @@
           if (notAirDevice(a)) return;                                             // sprinkler heads, thermostats, GB … are not outlets   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
           if (symbolRowDropped(a, p)) { symDropped.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0) + ' (' + String(a.type || 'device') + ')'); return; }
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
-          var cb = colourBar(a, p);   // "pink bar register" with pink bars measured on the sheet → linear, qty × mean drawn length
-          if (cb && /register|grille|diffuser|linear|slot|other/.test(atype)) { atype = 'linear'; if (!alf) alf = Math.round(Number(a.qty || 0) * cb.mean_ft * 10) / 10; a = Object.assign({}, a, { size: a.size || (cb.mean_ft + ' ft ' + cb.colour + ' bar') }); colourBars.push(sh + ': ' + a.qty + ' × ' + cb.colour + ' bar → ' + alf + ' ft (' + cb.n_drawn + ' bars drawn, mean ' + cb.mean_ft + ' ft)'); }
+          var cb = colourBar(a, p), lenKnown = alf > 0;   // "pink bar register" with pink bars measured on the sheet → linear, qty × mean drawn length
+          if (cb && /register|grille|diffuser|linear|slot|other/.test(atype)) { lenKnown = true; atype = 'linear'; if (!alf) alf = Math.round(Number(a.qty || 0) * cb.mean_ft * 10) / 10; a = Object.assign({}, a, { size: a.size || (cb.mean_ft + ' ft ' + cb.colour + ' bar') }); colourBars.push(sh + ': ' + a.qty + ' × ' + cb.colour + ' bar → ' + alf + ' ft (' + cb.n_drawn + ' bars drawn, mean ' + cb.mean_ft + ' ft)'); }
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
-            if (atype === 'linear' && !alf && sd.len) alf = Number(a.qty || 0) * sd.len;
+            if (atype === 'linear' && sd.len) { lenKnown = true; if (!alf) alf = Number(a.qty || 0) * sd.len; }
           }
           // slot runs measured on the sheet (geo.linear, per tag family: April's "D (200) TYP. 5" rows of dashes) beat the reader's guess
           // and the schedule's slot length; the family's feet are credited once per sheet
@@ -425,7 +425,7 @@
             var famRows = r.geo.linear[fam].n || 0, famSecs = 0;
             (r.air_devices || []).forEach(function (a2) { var f2 = /^([A-Z]{1,3})/i.exec(String(a2.tag || '').trim()); if (f2 && f2[1].toUpperCase() === fam && !notAirDevice(a2)) famSecs += Number(a2.qty || 0); });
             var famFt = r.geo.linear[fam].ft; if (famRows > famSecs && famSecs >= 3) famFt = Math.round(famFt * famSecs / famRows * 10) / 10;
-            alf = linGeoUsed[lk] ? 0 : famFt; linGeoUsed[lk] = 1;
+            alf = linGeoUsed[lk] ? 0 : famFt; linGeoUsed[lk] = 1; lenKnown = true;
             var lg = linGeoSheets[sh] = linGeoSheets[sh] || { ft: 0, runs: 0, sections: 0, fams: [] };
             if (alf) { lg.ft += alf; lg.runs += r.geo.linear[fam].n || 0; lg.fams.push(fam); }
             lg.sections += Number(a.qty || 0);
@@ -435,15 +435,18 @@
             var sk = sh + '|slots', coverAll = r.geo.slots.n >= 0.7 * linSecs, lensK = sd && sd.len ? String(Math.round(sd.len * 2) / 2) : '';
             var covered = coverAll || !!(lensK && r.geo.slots.lens[lensK]);   // this family's schedule length is one of the drawn lengths → its glyphs are in the census
             var sg = slotSheets[sh] = slotSheets[sh] || { ft: r.geo.slots.ft, n: r.geo.slots.n, lens: r.geo.slots.lens, sections: 0, fams: [], coverAll: coverAll, kept: [] };
-            if (norm(a.tag) === slotCreditTag && !slotUsed[sk]) { alf = r.geo.slots.ft; slotUsed[sk] = 1; }
-            else if (covered) alf = 0;                        // already inside the drawn feet
+            if (norm(a.tag) === slotCreditTag && !slotUsed[sk]) { alf = r.geo.slots.ft; slotUsed[sk] = 1; lenKnown = true; }
+            else if (covered) { alf = 0; lenKnown = true; }   // already inside the drawn feet
             else if (alf) sg.kept.push((fam || a.tag) + ' ' + Math.round(alf) + ' ft');
             sg.sections += Number(a.qty || 0); if (sg.fams.indexOf(fam || a.tag) < 0) sg.fams.push(fam || a.tag);
           }
           if (atype === 'linear' && !alf && !(sd && sd.len) && barFt > 0 && !barUsed) {   // the sheet's plain-bar slots, once, to the first length-less linear row
-            alf = Math.round(barFt * 10) / 10; barUsed = true;
+            alf = Math.round(barFt * 10) / 10; barUsed = true; lenKnown = true;
             var bs = slotSheets[sh + '|bars'] = { ft: alf, n: barN, bars: true, sections: noLenSecs, fams: [a.tag], kept: [] };
           }
+          // a slot diffuser with no length anywhere — none drawn, none scheduled ("continuous"), no slot glyphs or bars on the sheet — is a
+          // unit, not a run: April Tax B (Titus FL-HT-15, 0-50 cfm, 4 on M-501) is 4 of Kastriot's 33 diffusers, not 16 ft of linear
+          if (atype === 'linear' && !alf && !lenKnown) { atype = 'diffuser'; noLenEa.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0)); a = Object.assign({}, a, { notes: (a.notes ? a.notes + ' — ' : '') + 'slot diffuser with no length drawn or scheduled: counted each' }); }
           var k = atype + '|' + norm(a.tag) + '|' + (a.tag ? '' : (a.size || ''));
           var d = devices[k] = devices[k] || { type: atype, tag: a.tag || '', size: a.size || (sd && sd.type === 'linear' && sd.len ? sd.len + ' ft slot' : ''), notes: a.notes || '', qty: 0, lf: 0, sheets: [], per: {} };
           var fl = String(r.floor || sh), f = d.per[fl] = d.per[fl] || {}, ft = f[type] = f[type] || { q: 0, lf: 0 };
@@ -574,7 +577,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      symDropped: symDropped, colourBars: colourBars,
+      symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa,
       rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
@@ -903,6 +906,7 @@
     if (Object.keys(C.duct).length || Object.keys(C.devices).length)
       add('services', 'Man-lift / scaffolding', 1, 'ea', STD.lift, 0, 'NWAC Procore rate — $' + STD.lift.toLocaleString() + ', carried on 203 of 1,142 duct jobs',
         { is_firm: false, flag: 'keep for ceiling work above 12 ft or over fixtures / furniture — drop when a ladder does it' });
+    if ((C.noLenEa || []).length) flags.push({ category: 'air devices', item: 'Slot diffusers counted each', flag: C.noLenEa.join('; ') + ' — no length drawn on the plan or in the schedule, so each tag is one unit; measure them on the shop drawing if they are runs' });
     if ((C.colourBars || []).length) flags.push({ category: 'air devices', item: 'Coloured-bar registers priced as linear diffuser', flag: C.colourBars.join('; ') + ' — the unit count is the reader\'s, the length per unit is the mean bar drawn in that colour; check the slot lengths' });
     if ((C.symDropped || []).length) flags.push({ category: 'air_outlets', item: 'Symbol counts not priced', flag: C.symDropped.join('; ') + ' — counted from drawn symbols on a sheet whose device tags are readable (grid bubbles / legend art); the tagged rows are priced' });
     // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
