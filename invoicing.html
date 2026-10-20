@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=494"></script>
-<script src="nw-drive.js?v=494"></script>
-<script src="auth.js?v=494"></script>
-<script src="labor-rates.js?v=494"></script>
+<script src="supabase-config.js?v=498"></script>
+<script src="nw-drive.js?v=498"></script>
+<script src="auth.js?v=498"></script>
+<script src="labor-rates.js?v=498"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -1323,6 +1323,7 @@ requireAuth().catch(function(){});
     var co = !simpleSeparate && sub.kind === 'base' && document.getElementById('smCo').checked;
     var memo = document.getElementById('smMemo').value.trim() || 'Contract work', po = document.getElementById('smPo').value.trim();
     if (!appNo || !inv || !date || !to || !isFinite(amt) || !amt) { showToast('Invoice #, dates and amount are required', 'error'); return; }
+    if (sub.kind === 'co' && !po) { showToast('Type the client PO number for this change order (JRM issues a separate PO per change order)', 'error'); return; }
     var btn = document.getElementById('smCreate'); btn.disabled = true; btn.textContent = 'Creating…';
     var setupRes = await supabaseClient.from('aia_projects').select('*').eq('id', simpleProjectId).maybeSingle();
     // previous invoices: within the same sub-contract (PO) when billing separately, otherwise every earlier invoice
@@ -1347,7 +1348,7 @@ requireAuth().catch(function(){});
       previous_certificates: prevCum, co_prev_additions: coPrevAdd, co_prev_deductions: coPrevDed,
       co_this_additions: co && amt > 0 ? amt : 0, co_this_deductions: co && amt < 0 ? amt : 0,
       status: document.getElementById('smStatus').value || 'draft', po_number: po || null, memo: memo, retainage_rate: 0, created_by: currentUserId };
-    if (sub.kind === 'co') row.bill_co_id = sub.id;
+    if (sub.kind === 'co') { row.bill_co_id = sub.id; if (po && (sub.co || {}).po_number !== po) await supabaseClient.from('aia_change_orders').update({ po_number: po }).eq('id', sub.id); }   // the CO keeps its PO for the next invoice / summary
     var ins = await supabaseClient.from('aia_applications').insert(row).select().single();
     if (ins.error) { btn.disabled = false; btn.textContent = 'Create invoice'; showToast('Create failed: ' + ins.error.message, 'error'); return; }
     var base = sub.kind === 'base' ? Number((setupRes.data || {}).original_contract_sum || 0) : sub.amount, lines = [];
@@ -1363,7 +1364,8 @@ requireAuth().catch(function(){});
   function simpleJobName(setup) { return setup.title || setup.contract_for || (setup.project && setup.project.project_name) || ''; }
   function simpleAddress(setup) { return String(setup.project_address || '').split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean).join(', '); }
 
-  function simplePoLabel(s, a) { return a.po_number || (a.bill_co && a.bill_co.po_number) || s.contract_number || s.contract_no || ''; }
+  // a change-order invoice prints the CO's own client PO (never the base contract number); a client-PO invoice prints its PO
+  function simplePoLabel(s, a) { if (a.bill_co_id) return a.po_number || (a.bill_co && a.bill_co.po_number) || ''; var p = poSubOf(s, a); if (p) return a.po_number || p.po; return a.po_number || s.contract_number || s.contract_no || ''; }
   function simpleAmountRows(t, s, a) {
     var L = t.lines, rate = effRate(s, a), po = simplePoLabel(s, a), sub = a.bill_co;
     var rows = [['ORIGINAL CONTRACT AMOUNT' + ((sub || poSubOf(s, a)) && po ? ' PO' + po : '') + ':', L.L1, 'gap']];
@@ -3516,6 +3518,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=494"></script>
+<script src="sw-register.js?v=498"></script>
 </body>
 </html>
