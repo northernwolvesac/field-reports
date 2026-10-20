@@ -412,7 +412,10 @@
           var cb = colourBar(a, p), lenKnown = alf > 0;   // "pink bar register" with pink bars measured on the sheet → linear, qty × mean drawn length
           if (cb && /register|grille|diffuser|linear|slot|other/.test(atype)) { lenKnown = true; atype = 'linear'; if (!alf) alf = Math.round(Number(a.qty || 0) * cb.mean_ft * 10) / 10; a = Object.assign({}, a, { size: a.size || (cb.mean_ft + ' ft ' + cb.colour + ' bar') }); colourBars.push(sh + ': ' + a.qty + ' × ' + cb.colour + ' bar → ' + alf + ' ft (' + cb.n_drawn + ' bars drawn, mean ' + cb.mean_ft + ' ft)'); }
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
-            if (sd.type === 'linear' || atype === 'other' || /diffuser|grille|register/.test(atype)) atype = sd.type;
+            // the schedule names what a tag is: a scheduled diffuser / grille read on the plan as a damper box, louver or "other" is still that
+            // outlet (BOSS M-100: B1 / B2 "motorized damper boxes" are the 12x12 / 24x24 Titus OMNI diffusers of the schedule); a linear read
+            // stays linear, and VAV / fan-powered boxes are never renamed by an air-device schedule
+            if (sd.type === 'linear' || !/^(linear|vav|fpb)$/.test(atype)) atype = sd.type;
             if (atype === 'linear' && sd.len) { lenKnown = true; if (!alf) alf = Number(a.qty || 0) * sd.len; }
           }
           // slot runs measured on the sheet (geo.linear, per tag family: April's "D (200) TYP. 5" rows of dashes) beat the reader's guess
