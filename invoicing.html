@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=500"></script>
-<script src="nw-drive.js?v=500"></script>
-<script src="auth.js?v=500"></script>
-<script src="labor-rates.js?v=500"></script>
+<script src="supabase-config.js?v=501"></script>
+<script src="nw-drive.js?v=501"></script>
+<script src="auth.js?v=501"></script>
+<script src="labor-rates.js?v=501"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -1492,13 +1492,39 @@ requireAuth().catch(function(){});
     });
     await supabaseClient.from('aia_applications').update(sum).eq('id', appId);
 
-    var existing = await supabaseClient.from('aia_line_items').select('item_no, budget_code, sort_order').eq('application_id', appId);
-    var have = {}, maxNo = 0, maxSort = 0;
-    (existing.data || []).forEach(function(l) {
-      if (l.budget_code) have[l.budget_code.toUpperCase()] = true;
+    var existing = await supabaseClient.from('aia_line_items').select('*').eq('application_id', appId);
+    var have = {}, maxNo = 0, maxSort = 0, all = existing.data || [];
+    all.forEach(function(l) {
+      if (l.budget_code) have[l.budget_code.toUpperCase()] = l;
       var n = parseInt(String(l.item_no), 10); if (n > maxNo) maxNo = n;
       if (l.sort_order > maxSort) maxSort = l.sort_order;
     });
+    // ── existing CO groups follow the change order as it stands now (amount / breakdown edited after the invoice was made) ──
+    var updated = 0, removed = 0, upd = [], del = [], ins = [];
+    function coItems(c) { return Array.isArray(c.line_items) && c.line_items.length ? c.line_items : [{ description: c.title, amount: c.amount }]; }
+    cos.forEach(function(c) {
+      var grp = have[('PCCO#' + c.number).toUpperCase()]; if (!grp) return;
+      var n = String(grp.item_no), leaves = all.filter(function(l) { return l.parent_item_no === n + '.1' && !l.is_parent; }), items = coItems(c), used = {}, changed = false;
+      items.forEach(function(it) {
+        var desc = String(it.description || '').toUpperCase().trim(), amt = Number(it.amount || 0);
+        var hit = leaves.filter(function(l) { return !used[l.id] && String(l.description || '').toUpperCase().trim() === desc; })[0];
+        if (hit) { used[hit.id] = true; if (Math.abs(Number(hit.scheduled_value || 0) - amt) > 0.005) { upd.push({ id: hit.id, scheduled_value: amt }); changed = true; } }
+        else { ins.push(Object.assign({ application_id: appId, prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true }, { item_no: n + '.1.' + (leaves.length + ins.filter(function(r) { return r.parent_item_no === n + '.1'; }).length + 1), budget_code: null, description: desc, scheduled_value: amt, is_parent: false, parent_item_no: n + '.1', sort_order: ++maxSort })); changed = true; }
+      });
+      leaves.forEach(function(l) { if (used[l.id]) return; if (!Number(l.prev_amount) && !Number(l.this_amount) && !Number(l.stored_amount)) { del.push(l.id); changed = true; } });   // a line already billed stays
+      all.filter(function(l) { return l.is_parent && (l.item_no === n || l.item_no === n + '.1') && l.description !== c.title; }).forEach(function(l) { upd.push({ id: l.id, description: c.title }); changed = true; });
+      if (changed) updated++;
+    });
+    // a CO that is no longer approved (voided / back to pending) leaves the invoice when nothing on it was billed yet
+    var approvedCodes = {}; cos.forEach(function(c) { approvedCodes[('PCCO#' + c.number).toUpperCase()] = true; });
+    all.filter(function(l) { return l.is_parent && l.budget_code && /^PCCO#/i.test(l.budget_code) && !approvedCodes[l.budget_code.toUpperCase()]; }).forEach(function(grp) {
+      var n = String(grp.item_no), members = all.filter(function(l) { return l.item_no === n || l.parent_item_no === n || l.parent_item_no === n + '.1'; });
+      if (members.some(function(l) { return Number(l.prev_amount) || Number(l.this_amount) || Number(l.stored_amount); })) return;
+      members.forEach(function(l) { del.push(l.id); }); removed++;
+    });
+    for (var i = 0; i < upd.length; i++) await supabaseClient.from('aia_line_items').update(upd[i].scheduled_value != null ? { scheduled_value: upd[i].scheduled_value } : { description: upd[i].description }).eq('id', upd[i].id);
+    if (del.length) await supabaseClient.from('aia_line_items').delete().in('id', del);
+    if (ins.length) await supabaseClient.from('aia_line_items').insert(ins);
     var rows = [];
     cos.forEach(function(c) {
       var pcco = 'PCCO#' + c.number;
@@ -1515,13 +1541,14 @@ requireAuth().catch(function(){});
       });
     });
     if (rows.length) await supabaseClient.from('aia_line_items').insert(rows);
-    return { added: rows.filter(function(r) { return r.item_no.split('.').length === 1; }).length, total: cos.length };
+    return { added: rows.filter(function(r) { return r.item_no.split('.').length === 1; }).length, updated: updated, removed: removed, total: cos.length };
   }
 
   async function pullApprovedCOs() {
     if (!canEdit) return;
     var r = await syncInvoiceChangeOrders(currentApp.id, currentSetup.id, currentApp.period_from, currentApp.period_to);
-    showToast(r.added ? ('✅ Added ' + r.added + ' approved change order(s)') : 'No new approved change orders for this billing period', r.added ? 'success' : '');
+    var parts = []; if (r.added) parts.push('added ' + r.added); if (r.updated) parts.push('updated ' + r.updated); if (r.removed) parts.push('removed ' + r.removed);
+    showToast(parts.length ? ('✅ Change orders: ' + parts.join(', ')) : 'Change orders already match the approved list for this billing period', parts.length ? 'success' : '');
     renderApplication(currentApp.id);
   }
 
@@ -1685,7 +1712,7 @@ requireAuth().catch(function(){});
           ? '<span class="field-hint" style="margin-right:auto">Enter <b>This Period</b> and <b>Stored</b> amounts (or a % complete). Parent rows roll up automatically.</span>' +
             '<button class="btn-cancel" id="linesCancel">Cancel</button><button class="btn-create" id="linesSave">Save</button>'
           : '<button class="btn-secondary" id="relRet" title="Release retainage on all or selected lines">⤴ Release retainage</button>' +
-            '<button class="btn-secondary" id="pullCOs" title="Add approved change orders whose approval date is within this billing period">↻ Pull approved COs</button>' +
+            '<button class="btn-secondary" id="pullCOs" title="Add approved change orders whose approval date is on/before this billing period, refresh the amounts and breakdown of the ones already here, drop voided ones that were never billed">↻ Sync approved COs</button>' +
             '<button class="btn-secondary" data-addline="contract">+ Contract Line</button>' +
             '<button class="btn-secondary" data-addline="co">+ Change Order Line</button>' +
             '<button class="btn-create" id="linesEdit">Edit</button>') : '') +
@@ -3521,6 +3548,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=500"></script>
+<script src="sw-register.js?v=501"></script>
 </body>
 </html>
