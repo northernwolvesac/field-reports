@@ -280,7 +280,7 @@
     }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
-    var symDropped = [], colourBars = [], noLenEa = [];
+    var symDropped = [], colourBars = [], noLenEa = [], unitMounted = [];
     var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
@@ -408,6 +408,11 @@
           if (/cfm[- ]only/i.test(String(a.tag || '')) && p.tag_counts && p.tag_counts.devices && Object.keys(p.tag_counts.devices).reduce(function (s0, k0) { return s0 + (k0 === '(cfm only)' ? 0 : Number(p.tag_counts.devices[k0]) || 0); }, 0) >= 3) return;
           if (notAirDevice(a)) return;                                             // sprinkler heads, thermostats, GB … are not outlets   // census rows for cfm bubbles with no device symbol (duct taps, notes) — a check, not an outlet
           if (symbolRowDropped(a, p)) { symDropped.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0) + ' (' + String(a.type || 'device') + ')'); return; }
+          // a grille drawn at the unit itself (the discharge / return grille of a ducted split or fan coil plenum) comes with the unit's plenum
+          // kit, not as an air outlet: Matchaful "two SG(525) 30x6 at AC units" are the 2 of 14 that Kastriot's 12 leave out
+          if (/grille|register|diffuser/.test(String(a.type || '')) && /at (the )?(ac|a\/c|fcu|fan[- ]?coils?|idus?|ahus?|units?)|unit[- ]mounted|on (the )?(ac |fan[- ]?coil )?units?|plenum (grille|kit)/i.test(String(a.notes || '') + ' ' + String(a.size || ''))) {
+            unitMounted.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0) + (a.size ? ' ' + a.size : '')); return;
+          }
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           var cb = colourBar(a, p), lenKnown = alf > 0;   // "pink bar register" with pink bars measured on the sheet → linear, qty × mean drawn length
           if (cb && /register|grille|diffuser|linear|slot|other/.test(atype)) { lenKnown = true; atype = 'linear'; if (!alf) alf = Math.round(Number(a.qty || 0) * cb.mean_ft * 10) / 10; a = Object.assign({}, a, { size: a.size || (cb.mean_ft + ' ft ' + cb.colour + ' bar') }); colourBars.push(sh + ': ' + a.qty + ' × ' + cb.colour + ' bar → ' + alf + ' ft (' + cb.n_drawn + ' bars drawn, mean ' + cb.mean_ft + ' ft)'); }
@@ -580,7 +585,7 @@
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
-      symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa,
+      symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
       rig: rig, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
@@ -911,6 +916,7 @@
         { is_firm: false, flag: 'keep for ceiling work above 12 ft or over fixtures / furniture — drop when a ladder does it' });
     if ((C.noLenEa || []).length) flags.push({ category: 'air devices', item: 'Slot diffusers counted each', flag: C.noLenEa.join('; ') + ' — no length drawn on the plan or in the schedule, so each tag is one unit; measure them on the shop drawing if they are runs' });
     if ((C.colourBars || []).length) flags.push({ category: 'air devices', item: 'Coloured-bar registers priced as linear diffuser', flag: C.colourBars.join('; ') + ' — the unit count is the reader\'s, the length per unit is the mean bar drawn in that colour; check the slot lengths' });
+    if ((C.unitMounted || []).length) flags.push({ category: 'air_outlets', item: 'Unit-mounted grilles not counted', flag: C.unitMounted.join('; ') + ' — drawn at the unit itself (plenum discharge / return), so they come with the unit; add them as outlets if the plan shows separate ducted grilles' });
     if ((C.symDropped || []).length) flags.push({ category: 'air_outlets', item: 'Symbol counts not priced', flag: C.symDropped.join('; ') + ' — counted from drawn symbols on a sheet whose device tags are readable (grid bubbles / legend art); the tagged rows are priced' });
     // heavy scheduled units the sheet readers did not list under rigging: roof ≥ 400 lb, indoor ≥ 800 lb
     var rigTags = {}; C.rig.forEach(function (x) { rigTags[x.key || norm(x.tag)] = 1; });
