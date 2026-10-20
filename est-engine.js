@@ -410,7 +410,7 @@
           if (symbolRowDropped(a, p)) { symDropped.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0) + ' (' + String(a.type || 'device') + ')'); return; }
           // a grille drawn at the unit itself (the discharge / return grille of a ducted split or fan coil plenum) comes with the unit's plenum
           // kit, not as an air outlet: Matchaful "two SG(525) 30x6 at AC units" are the 2 of 14 that Kastriot's 12 leave out
-          if (/grille|register|diffuser/.test(String(a.type || '')) && /at (the )?(ac|a\/c|fcu|fan[- ]?coils?|idus?|ahus?|units?)|unit[- ]mounted|on (the )?(ac |fan[- ]?coil )?units?|plenum (grille|kit)/i.test(String(a.notes || '') + ' ' + String(a.size || ''))) {
+          if (/grille|register|diffuser/.test(String(a.type || '')) && /\bat (the )?(ac|a\/c|fcu|fan[- ]?coils?|idus?|ahus?|units?)\b|unit[- ]mounted|\bon (the )?(ac |fan[- ]?coil )?units?\b|plenum (grille|kit)/i.test(String(a.notes || '') + ' ' + String(a.size || ''))) {
             unitMounted.push(sh + ': ' + (a.tag || '?') + ' ×' + (a.qty || 0) + (a.size ? ' ' + a.size : '')); return;
           }
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
