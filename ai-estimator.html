@@ -14,15 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=483"></script>
-<script src="auth.js?v=483"></script>
-<script src="est-org.js?v=483"></script>
-<script src="est-totals.js?v=483"></script>
+<script src="supabase-config.js?v=484"></script>
+<script src="auth.js?v=484"></script>
+<script src="est-org.js?v=484"></script>
+<script src="est-totals.js?v=484"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=483"></script>
-<script src="nw-email.js?v=483"></script>
-<script src="est-engine.js?v=483"></script>
-<script src="geo-takeoff.js?v=483"></script>
+<script src="email-utils.js?v=484"></script>
+<script src="nw-email.js?v=484"></script>
+<script src="est-engine.js?v=484"></script>
+<script src="geo-takeoff.js?v=484"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1236,7 +1236,7 @@ var AE = (function() {
     var n = await loadNorms();
     // sheets read before the text-layer freeze existed: apply it now (and keep it)
     pages.forEach(function(p) { if (p.status === 'done' && freezeDevices(p)) supabaseClient.from('ai_est_pages').update({ result: p.result }).eq('id', p.id).then(function() {}); });
-    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr, equipmentPrices: (session.result || {}).equipment_prices || {} });
+    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr, equipmentPrices: (session.result || {}).equipment_prices || {}, settings: orgSettings() });
     var res = Object.assign({}, session.result || {}, {
       engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
@@ -1246,7 +1246,11 @@ var AE = (function() {
     if (!n.length) toast('Priced with the fallback duct/pipe formula — Procore rate table not loaded yet');
   }
   var CAT_LABEL = { disconnects: '1 · Disconnects', equipment: '2 · Equipment', ductwork: '3 · Ductwork', pipework: '4 · Pipework', equipment_install: '5 · Equipment install', air_outlets: '6 · Air outlets install', services: '7 · Services' };
-  function lineAmt(l) { return l.quantity * l.unit_material_cost + l.quantity * l.unit_labor_hours * 60; }
+  // the organisation's estimating settings (est_orgs.settings, edited on est-orgs.html) — labor rate, markups, tax, duct family, services rates
+  function orgSettings() { var o = window.NWOrg ? NWOrg.current() : null; return (o && o.settings) || {}; }
+  function laborRate() { var e = (session.result || {}).engine; return (e && e.totals && e.totals.rates && e.totals.rates.labor) || Number(orgSettings().labor_rate) || 60; }
+  function pctLabel(v, dflt) { var x = (v == null ? dflt : Number(v)) * 100; return (Math.round(x * 1000) / 1000) + '%'; }
+  function lineAmt(l) { return l.quantity * l.unit_material_cost + l.quantity * l.unit_labor_hours * laborRate(); }
   function renderEngine(e) {
     var h = '<table class="t" style="margin-top:10px"><tr><th>Item</th><th class="n">Qty</th><th class="n hide-m">Material</th><th class="n hide-m">Hours</th><th class="n">Amount</th></tr>';
     Object.keys(CAT_LABEL).forEach(function(c) {
@@ -1262,8 +1266,8 @@ var AE = (function() {
     });
     var t = e.totals || {};
     h += '</table><div class="grid2" style="margin-top:14px"><div><table class="t">' +
-      [['Equipment / Material', t.materialTotal], ['Labor (' + (t.laborHours || 0).toFixed(1) + ' hrs @ $60)', t.labor], ['Wet-tap', t.wetTap], ['Services', t.services],
-        ['Base subtotal', t.baseSubtotal], ['Overhead (' + Math.round(((t.rates || {}).overhead || 0) * 100) + '%)', t.overhead], ['Miscellaneous (2%)', t.miscellaneous], ['Sales tax (8.875%, material only)', t.tax]]
+      [['Equipment / Material', t.materialTotal], ['Labor (' + (t.laborHours || 0).toFixed(1) + ' hrs @ $' + ((t.rates || {}).labor || laborRate()) + ')', t.labor], ['Wet-tap', t.wetTap], ['Services', t.services],
+        ['Base subtotal', t.baseSubtotal], ['Overhead (' + Math.round(((t.rates || {}).overhead || 0) * 100) + '%)', t.overhead], ['Miscellaneous (' + pctLabel((t.rates || {}).misc, 0.02) + ')', t.miscellaneous], ['Sales tax (' + pctLabel((t.rates || {}).tax, 0.08875) + ', material only)', t.tax]]
         .map(function(r) { return '<tr><td>' + r[0] + '</td><td class="n">' + money(r[1]) + '</td></tr>'; }).join('') +
       '<tr class="cat"><td>PROJECT TOTAL</td><td class="n">' + money(t.bidPrice) + '</td></tr></table>' +
       '<p class="muted">Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' NWAC Procore rates' : 'fallback formula (Procore rate table not loaded yet)') + '. Shop drawings / T&B: ' + e.floors + ' plan sheet' + (e.floors > 1 ? 's' : '') + (e.sdBasis ? ' — ' + esc(e.sdBasis) : '') + (e.pipeSheets ? '; piping ' + e.pipeSheets : '') + '.</p></div><div>' +
@@ -1527,9 +1531,9 @@ var AE = (function() {
       if (session.estimate_id === estId && !confirm('Replace the ' + (cur.data.line_count || 0) + ' line items' + (cur.data.total_sales ? ' (' + money(cur.data.total_sales) + ')' : '') + ' of “' + cur.data.name + '” with this AI breakdown?')) return;
     }
     if (!estId) {
-      var r = await supabaseClient.from('estimates').insert({ name: /\(AI\)\s*$/i.test(session.name) ? session.name : session.name + ' (AI)', project_address: session.location, estimator_name: 'AI Estimator (' + me.name + ')', status: 'draft',
-        is_ofci: !!(session.result || {}).ofci, overhead_pct: (session.result || {}).ofci ? 0.30 : 0.20,
-        exclusions: (v.exclusions || []).join('\n') || null, notes: 'Built by the AI Estimator (session ' + session.id + '). Check every BUDGET line and flag before sending.' }).select('id').single();
+      var r = await supabaseClient.from('estimates').insert(Object.assign({ name: /\(AI\)\s*$/i.test(session.name) ? session.name : session.name + ' (AI)', project_address: session.location, estimator_name: 'AI Estimator (' + me.name + ')', status: 'draft',
+        is_ofci: !!(session.result || {}).ofci, overhead_pct: (session.result || {}).ofci ? 0.30 : 0.20 }, NWEngine.estimateRow(orgSettings(), !!(session.result || {}).ofci), {
+        exclusions: (v.exclusions || []).join('\n') || null, notes: 'Built by the AI Estimator (session ' + session.id + '). Check every BUDGET line and flag before sending.' })).select('id').single();
       if (r.error) { toast(r.error.message); return; }
       estId = r.data.id;
     }
@@ -1557,6 +1561,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=483"></script>
+<script src="sw-register.js?v=484"></script>
 </body>
 </html>

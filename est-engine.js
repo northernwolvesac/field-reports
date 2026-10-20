@@ -4,6 +4,15 @@
 // Every line carries `basis` (where the number comes from) and `flag` (what a person must check).
 (function () {
   var LABOR_RATE = 60;
+  // Per-organisation estimating settings (est_orgs.settings, edited on est-orgs.html) — an empty value keeps the NWAC standard:
+  //   labor_rate ($/h), overhead_pct / misc_pct / tax_rate (fractions, 0.2 = 20 %), ofci_overhead_pct (overhead when OFCI),
+  //   duct_family (DUCT_FAMILIES key used when no spec was read), duct_sd / pipe_sd / tab / lift (services $ per plan sheet / per job)
+  function orgSettings(s) {
+    s = s || {};
+    function n(v) { var x = Number(v); return (v === null || v === undefined || v === '' || !isFinite(x)) ? null : x; }
+    return { labor_rate: n(s.labor_rate), overhead_pct: n(s.overhead_pct), ofci_overhead_pct: n(s.ofci_overhead_pct), misc_pct: n(s.misc_pct), tax_rate: n(s.tax_rate),
+      duct_family: s.duct_family || null, duct_sd: n(s.duct_sd), pipe_sd: n(s.pipe_sd), tab: n(s.tab), lift: n(s.lift) };
+  }
   var GEO_FITTINGS = 1.08;   // elbows, transitions, tees are not straight wall pairs — calibrated on 4 NWAC bids (L'Catteron −17 %, April Tax −14 %, Sage −2 %, Crozier +3 % raw)
 
   // ── Kastriot's standards ─────────────────────────────────────────────
@@ -132,10 +141,11 @@
   };
   // Shape from the specs picks the family. Insulation stays 1" ACL: NWAC Procore history (1,187 jobs) prices 1" ACL even when the spec
   // calls 1-1/2" liner or wrap (Sage, April Tax); 1.5"/2" families appear on only ~50 jobs — so thicker specs raise a note, not a new rate.
-  function familyFor(spec) {
-    if (!spec) return 'rect_lined_1';
+  function familyFor(spec, dflt) {
+    dflt = (dflt && DUCT_FAMILIES[dflt]) ? dflt : 'rect_lined_1';
+    if (!spec) return dflt;
     if (spec.choice && DUCT_FAMILIES[spec.choice]) return spec.choice;
-    return /oval|round|spiral/i.test(spec.shape || '') ? 'oval_lined_1' : 'rect_lined_1';
+    return /oval|round|spiral/i.test(spec.shape || '') ? 'oval_lined_1' : dflt;
   }
   function specNote(spec) {
     if (!spec || spec.choice) return '';
@@ -646,12 +656,28 @@
   function equipment(pages, opts) { opts = opts || {}; var C = collect(opts.corrections ? applyCorrections(pages, opts.corrections) : pages, opts); return { rows: equipmentRows(C, quotedTags(C), opts), quotes: C.quotes }; }
 
   // ── build the breakdown ──────────────────────────────────────────────
+  // the estimate row the totals are computed with (and that toEstimate stamps on the Bid Board estimate): the org's settings or
+  // the NWAC standard — nwEstTotals treats a missing column as "company standard", so only explicit values are passed
+  function estimateRow(settings, ofci) {
+    var OS = orgSettings(settings), row = { labor_rate: OS.labor_rate != null ? OS.labor_rate : LABOR_RATE, is_ofci: !!ofci };
+    var oh = ofci ? (OS.ofci_overhead_pct != null ? OS.ofci_overhead_pct : (OS.overhead_pct != null ? OS.overhead_pct + 0.10 : null)) : OS.overhead_pct;
+    if (oh != null) row.overhead_pct = oh;
+    if (OS.misc_pct != null) row.miscellaneous_pct = OS.misc_pct;
+    if (OS.tax_rate != null) row.tax_rate = OS.tax_rate;
+    return row;
+  }
+  // services rates (shop drawings / T&B per plan sheet, man-lift per job) with the org's overrides
+  function servicesRates(OS) {
+    OS = OS || orgSettings();
+    return Object.assign({}, STD, { ductSD: OS.duct_sd != null ? OS.duct_sd : STD.ductSD, pipeSD: OS.pipe_sd != null ? OS.pipe_sd : STD.pipeSD, tab: OS.tab != null ? OS.tab : STD.tab, lift: OS.lift != null ? OS.lift : STD.lift });
+  }
   function build(pages, opts) {
     opts = opts || {};
     if (opts.corrections) pages = applyCorrections(pages, opts.corrections);
     var R = makeRates(opts.norms), C = collect(pages, opts), lines = [], flags = [], sort = 0;
-    var famKey = familyFor(opts.ductSpec);
-    if (!opts.ductSpec) flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'not read from the specs — priced as rectangular with 1" lining; run 🔍 Duct spec' });
+    var OS = orgSettings(opts.settings), STD = servicesRates(OS);
+    var famKey = familyFor(opts.ductSpec, OS.duct_family);
+    if (!opts.ductSpec) flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'not read from the specs — priced as ' + (DUCT_FAMILIES[famKey].label || famKey) + (OS.duct_family ? " (the organisation's default)" : '') + '; run 🔍 Duct spec' });
     else if (opts.ductSpec.confidence === 'low') flags.push({ category: 'ductwork', item: 'Duct construction', flag: 'spec reading uncertain — ' + DUCT_FAMILIES[famKey].label + '; confirm' });
     if (specNote(opts.ductSpec)) flags.push({ category: 'ductwork', item: 'Duct construction', flag: specNote(opts.ductSpec) });
     function add(cat, d, qty, unit, mat, hrs, basis, extra) {
@@ -865,17 +891,17 @@
       'Standalone Controls — $1,000/VAV + thermostat $500 + wiring $50; 10/day install', { is_firm: false, flag: 'replace with BMS quote if one comes in' });
 
     // 7. Services
-    add('services', 'Ductwork shop drawings — ' + floors + ' plan sheet' + (floors > 1 ? 's' : ''), floors, 'floor', STD.ductSD, 0, 'Standard — $2,500 per plan sheet (' + sdBasis + ')');
+    add('services', 'Ductwork shop drawings — ' + floors + ' plan sheet' + (floors > 1 ? 's' : ''), floors, 'floor', STD.ductSD, 0, 'Standard — $' + STD.ductSD.toLocaleString() + ' per plan sheet (' + sdBasis + ')');
     // piping shop drawings per plan sheet with new piping (pipe plans + enlarged mechanical-room plans; Kastriot 360 Lexington: piping SD on 1 of 3 floors)
     var pipeFl = Number(opts.floors) ? Math.min(floors, C.pipeSheets.length || C.pipeFloors.length || floors) : (C.pipeSheets.length || Math.min(floors, C.pipeFloors.length || floors));
     if (hasPipe) add('services', 'Piping shop drawings — ' + pipeFl + ' plan sheet' + (pipeFl > 1 ? 's' : ''), pipeFl, 'floor', STD.pipeSD, 0,
-      'Standard — $1,300 per plan sheet with new piping' + (C.pipeSheets.length ? ' (' + C.pipeSheets.join(', ') + ')' : C.pipeFloors.length ? ' (levels ' + C.pipeFloors.join(', ') + ')' : ''));
+      'Standard — $' + STD.pipeSD.toLocaleString() + ' per plan sheet with new piping' + (C.pipeSheets.length ? ' (' + C.pipeSheets.join(', ') + ')' : C.pipeFloors.length ? ' (levels ' + C.pipeFloors.join(', ') + ')' : ''));
     if (!C.quotes.some(function (q) { return q.kind === 'tab'; }))
-      add('services', 'Testing & balancing — ' + floors + ' plan sheet' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $2,500 per plan sheet, same count as the ductwork shop drawings');
+      add('services', 'Testing & balancing — ' + floors + ' plan sheet' + (floors > 1 ? 's' : ''), floors, 'floor', STD.tab, 0, 'Standard — $' + STD.tab.toLocaleString() + ' per plan sheet, same count as the ductwork shop drawings');
     // a man-lift / scaffolding line for ceiling work: NWAC carries it on 203 of the 1,142 Procore bids with ductwork shop drawings
     // ($2,500, "Man-lift, scafoldings"); 414 W 14th (Vladimir) has it — the estimator decides, so it is not firm
     if (Object.keys(C.duct).length || Object.keys(C.devices).length)
-      add('services', 'Man-lift / scaffolding', 1, 'ea', STD.lift, 0, 'NWAC Procore rate — $2,500, carried on 203 of 1,142 duct jobs',
+      add('services', 'Man-lift / scaffolding', 1, 'ea', STD.lift, 0, 'NWAC Procore rate — $' + STD.lift.toLocaleString() + ', carried on 203 of 1,142 duct jobs',
         { is_firm: false, flag: 'keep for ceiling work above 12 ft or over fixtures / furniture — drop when a ladder does it' });
     if ((C.colourBars || []).length) flags.push({ category: 'air devices', item: 'Coloured-bar registers priced as linear diffuser', flag: C.colourBars.join('; ') + ' — the unit count is the reader\'s, the length per unit is the mean bar drawn in that colour; check the slot lengths' });
     if ((C.symDropped || []).length) flags.push({ category: 'air_outlets', item: 'Symbol counts not priced', flag: C.symDropped.join('; ') + ' — counted from drawn symbols on a sheet whose device tags are readable (grid bubbles / legend art); the tagged rows are priced' });
@@ -893,7 +919,8 @@
     if (C.rig.some(function (x) { return x.weight_lb >= 10000; })) flags.push({ category: 'services', item: 'Rigging', flag: 'unit over 10,000 lb — confirm crane size and street permits with the rigger' });
     rigging(C.rig, !!opts.highRise).forEach(function (r) { add('services', r.d, 1, 'ls', r.amt, 0, 'Rigging Standards — ' + r.basis, { flag: r.flag || null }); });
 
-    var totals = window.nwEstTotals ? window.nwEstTotals(lines, { labor_rate: LABOR_RATE, is_ofci: !!opts.ofci }) : null;
+    var estRow = estimateRow(opts.settings, !!opts.ofci);
+    var totals = window.nwEstTotals ? window.nwEstTotals(lines, estRow) : null;
     if (C.skipped.length) flags.push({ category: 'takeoff', item: 'Not added to quantities', flag: 'duct/pipe/air devices on ' + C.skipped.join(', ') + ' — these sheets repeat the floor plans; check that nothing shown only there is missing' });
     var seenNote = {}, uniqNotes = C.notes.filter(function (n) {
       var k = String(n.text || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 70);
@@ -929,6 +956,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, symbolRowDropped: symbolRowDropped, devWords: devWords,
+  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
     applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();
