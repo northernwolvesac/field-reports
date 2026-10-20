@@ -1865,7 +1865,7 @@
       // across it — 645 writes its sizes vertically beside horizontal rows, up to 6 ft past the row's end), the row's pen is not one the
       // network keeps (L'Catteron's 2" rows in the kept 0.54 pen: the label's own dash is sized, the rest is not more pipe), the network has
       // not sized half its strokes already, and it is not one of three or more parallel rows (a hatch or ceiling grid, Sage M-210)
-      var dashedFt = 0, dashedRows = 0, sizedKey = {};
+      var dashedFt = 0, dashedRows = 0, dashedCdFt = 0, sizedKey = {};
       function segKey(a, b, c2, d) { return Math.round(Math.min(a, c2)) + ',' + Math.round(Math.min(b, d)) + ',' + Math.round(Math.max(a, c2)) + ',' + Math.round(Math.max(b, d)); }
       sizedIdx.forEach(function (i) { sizedKey[segKey(S[i][0], S[i][1], S[i][2], S[i][3])] = 1; });
       if (D.pipeDashed !== false) (function () {
@@ -1879,7 +1879,7 @@
           if (keep.indexOf(fam(st.key)) >= 0) continue;                                  // a kept pen's dashes belong to the network
           ds.push({ x0: Math.min(x1, x2), x1: Math.max(x1, x2), y0: Math.min(y1, y2), y1: Math.max(y1, y2), L: L, h: horiz, k: segKey(x1, y1, x2, y2) });
         }
-        var lat = 0.25 * ptft, tol = Math.max(2.5 * ptft, 20), rows = [];
+        var lat = 0.25 * ptft, tol = Math.max(1.5 * ptft, 20), rows = [];   // 1.5 ft: Sage M-210's rows 1.8-2.4 ft off their labels were not Kastriot's pipe
         [true, false].forEach(function (h) {
           var items = ds.filter(function (d) { return d.h === h; }).sort(function (a, b) { return h ? (a.y0 - b.y0) || (a.x0 - b.x0) : (a.x0 - b.x0) || (a.y0 - b.y0); });
           var used = new Array(items.length);
@@ -1917,12 +1917,20 @@
               if (perp < bd) { bd = perp; best = lb; }
             });
             if (!best) continue;
+            // the dashed line is the return of a solid supply: a sized network piece runs beside it (within 3 ft, over 30 % of the row) —
+            // a labelled dashed row on its own (Sage M-210: 109 ft of 1-1/2" beside nothing) is a drain pitch, an existing line or a note leader
+            var comp = 0; sizedIdx.forEach(function (si) { var s = S[si]; if (Math.abs(h ? s[4] : s[5]) < 0.97) return; var sl = h ? s[1] : s[0]; if (Math.abs(sl - line) > 3 * ptft || Math.abs(sl - line) < 0.1 * ptft) return; var lo = Math.max(c0, Math.min(h ? s[0] : s[1], h ? s[2] : s[3])), hi = Math.min(c1, Math.max(h ? s[0] : s[1], h ? s[2] : s[3])); if (hi > lo) comp += hi - lo; });
+            if (D.pipeDashedAlone !== true && comp < 0.3 * (c1 - c0)) continue;
             rows.push({ h: h, line: line, c0: c0, c1: c1, len: len, kk: pipeLabel(best.d) + (best.svc === 'CD' ? ' CD' : '') });
           }
         });
         rows.forEach(function (r) {
           var fam2 = rows.filter(function (q) { if (q === r || q.h !== r.h || Math.abs(q.line - r.line) > 2 * ptft) return false; var lo = Math.max(r.c0, q.c0), hi = Math.min(r.c1, q.c1); return hi - lo >= 0.5 * Math.min(r.c1 - r.c0, q.c1 - q.c0); }).length;
+          if (D.pipeDashedDebug) (D._dd = D._dd || []).push({ h: r.h, len: Math.round(r.len * 10) / 10, kk: r.kk, line: Math.round(r.line), c0: Math.round(r.c0), c1: Math.round(r.c1), fam: fam2 });
           if (fam2 >= 2) return;                                                                     // three or more parallel rows: a hatch
+          // a dashed condensate row is reported, not counted: Procore takeoffs carry CD only when it is drawn as a run in the pipe pen
+          // (L'Catteron 3/4" CD 139 ft) - Sage M-210's dashed 1" / 1-1/4" CD rows (270 ft) are in no takeoff line
+          if (/ CD$/.test(r.kk)) { dashedCdFt += r.len; return; }
           sizes[r.kk] = Math.round(((sizes[r.kk] || 0) + r.len) * 10) / 10; total += r.len; dashedFt += r.len; dashedRows++;
         });
       })();
@@ -1950,7 +1958,7 @@
       // the length is counted once per line here; the engine flags it so the estimator doubles it when the pair is priced per pipe
       var sr = /\bS\s*[\/&]\s*R\b|SUPPLY\s*(AND|&|\/|\+)\s*RETURN|\b(CHW|CW|HW|HHW|CHWS|CWS|HWS|GLY\w*)\s*[\/&]\s*R\b/i.test(D.fullText);
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }), sr: sr || undefined,
-        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep, dashed_ft: Math.round(dashedFt * 10) / 10, dashed_rows: dashedRows,
+        paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep, dashed_ft: Math.round(dashedFt * 10) / 10, dashed_rows: dashedRows, dashed_cd_ft: Math.round(dashedCdFt * 10) / 10, dashed_dbg: D.pipeDashedDebug ? D._dd : undefined,
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }
     // ─── risers: vertical pipe on a riser diagram. The diagram is not to scale sideways, but its floor lines carry
