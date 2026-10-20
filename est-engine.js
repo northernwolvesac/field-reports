@@ -248,7 +248,13 @@
     if (!fb || !/\bbar\b/i.test(s)) return null;
     var m = COLOUR_RE.exec(String(a.tag || '')) || COLOUR_RE.exec(s); if (!m) return null;
     var col = m[1].toLowerCase().replace('grey', 'gray').replace('magenta', 'pink'), f = fb[col];
-    return f && f.mean_ft >= 1 ? { colour: col, mean_ft: f.mean_ft, n_drawn: f.n, ft_drawn: f.ft } : null;
+    if (!f || !(f.mean_ft >= 1)) return null;
+    // the row's units take the longest bars of the colour (CENTRALE: 21 registers among 44 pink bars — the 21 longest average 2.95 ft,
+    // the mean of all 44 is 2.33; Kastriot's takeoff 58.8 ft = 2.8 ft each); fewer bars than units → the rest get the mean bar
+    var qty = Number(a.qty || 0), ft = 0, left = qty, bins = Object.keys(f.lens || {}).map(Number).filter(function (v) { return v > 0; }).sort(function (x, y) { return y - x; });
+    bins.forEach(function (v) { if (left <= 0) return; var n = Math.min(left, Number(f.lens[String(v)]) || 0); ft += n * v; left -= n; });
+    if (left > 0) ft += left * f.mean_ft;
+    return { colour: col, mean_ft: f.mean_ft, n_drawn: f.n, ft_drawn: f.ft, ft: qty > 0 && bins.length ? Math.round(ft * 10) / 10 : Math.round(qty * f.mean_ft * 10) / 10, top_mean: qty > 0 && bins.length ? Math.round(ft / qty * 100) / 100 : f.mean_ft };
   }
   function symbolRowDropped(a, p) {
     if (!a || String(a.basis || '').toLowerCase() !== 'symbols') return false;
@@ -386,7 +392,7 @@
         // plain-bar slots (geo.bar_slots): the sheet's thin un-X-ed rectangles go to the linear rows that have no length at all — no schedule
         // length, no reader feet, no X-ed glyph of their length (BOSS R1/R2 "1 in slot, see plan", Esquire "C varies") — capped at twice
         // their section count (the longest bars first); dampers share the shape, so rows with a length never take them
-        var noLenSecs = 0, barFt = 0, barUsed = false, barN = 0;
+        var noLenSecs = 0, barFt = 0, barUsed = false, barN = 0, barScaled = 0;
         if (takeoffSheet && r.geo && r.geo.bar_slots && r.geo.bar_slots.n) (r.air_devices || []).forEach(function (a) {
           var t1 = String(a.type || '').toLowerCase(), sd1 = schedDev[norm(a.tag)];
           if (notAirDevice(a) || !(t1 === 'linear' || (sd1 && sd1.type === 'linear'))) return;
@@ -399,6 +405,9 @@
           var bl = r.geo.bar_slots.list || [], cap = noLenSecs;   // one bar per length-less section, the longest first (Esquire M-102B: 6 "C" sections among 50 bars → the six 13-14 ft slots)
           barN = Math.min(bl.length, cap); barFt = bl.slice(0, barN).reduce(function (s0, v) { return s0 + v; }, 0);
           if (!bl.length) { barN = r.geo.bar_slots.n; barFt = r.geo.bar_slots.ft; }
+          // fewer bars drawn than the tags count (BOSS M-101: 10 R2 tags, 5 bars — the rest sit under a note or a duct): the tag count is
+          // the reader's, so the undrawn sections get the mean drawn bar
+          if (barN > 0 && barN < cap) { barFt = Math.round(barFt / barN * cap * 10) / 10; barScaled = cap; }
         }
         if (takeoffSheet) (r.air_devices || []).forEach(function (a) {
           if (/^\(?\s*cfm only\s*\)?$/i.test(String(a.tag || '').trim())) return;   // a bare '(cfm only)' row is an upper bound, reported as a check, never priced; symbol rows named '… (cfm only)' are counted
@@ -415,7 +424,7 @@
           }
           var atype = String(a.type || 'other').toLowerCase(), alf = Number(a.linear_ft || 0), sd = schedDev[norm(a.tag)];
           var cb = colourBar(a, p), lenKnown = alf > 0;   // "pink bar register" with pink bars measured on the sheet → linear, qty × mean drawn length
-          if (cb && /register|grille|diffuser|linear|slot|other/.test(atype)) { lenKnown = true; atype = 'linear'; if (!alf) alf = Math.round(Number(a.qty || 0) * cb.mean_ft * 10) / 10; a = Object.assign({}, a, { size: a.size || (cb.mean_ft + ' ft ' + cb.colour + ' bar') }); colourBars.push(sh + ': ' + a.qty + ' × ' + cb.colour + ' bar → ' + alf + ' ft (' + cb.n_drawn + ' bars drawn, mean ' + cb.mean_ft + ' ft)'); }
+          if (cb && /register|grille|diffuser|linear|slot|other/.test(atype)) { lenKnown = true; atype = 'linear'; if (!alf) alf = cb.ft; a = Object.assign({}, a, { size: a.size || (cb.mean_ft + ' ft ' + cb.colour + ' bar') }); colourBars.push(sh + ': ' + a.qty + ' × ' + cb.colour + ' bar → ' + alf + ' ft (' + cb.n_drawn + ' bars drawn, mean ' + cb.mean_ft + ' ft)'); }
           if (sd && /diffuser|grille|register|linear|louver/.test(sd.type)) {
             // the schedule names what a tag is: a scheduled diffuser / grille read on the plan as a damper box, louver or "other" is still that
             // outlet (BOSS M-100: B1 / B2 "motorized damper boxes" are the 12x12 / 24x24 Titus OMNI diffusers of the schedule); a linear read
@@ -450,7 +459,7 @@
           }
           if (atype === 'linear' && !alf && !(sd && sd.len) && barFt > 0 && !barUsed) {   // the sheet's plain-bar slots, once, to the first length-less linear row
             alf = Math.round(barFt * 10) / 10; barUsed = true; lenKnown = true;
-            var bs = slotSheets[sh + '|bars'] = { ft: alf, n: barN, bars: true, sections: noLenSecs, fams: [a.tag], kept: [] };
+            var bs = slotSheets[sh + '|bars'] = { ft: alf, n: barN, bars: true, sections: noLenSecs, fams: [a.tag], kept: [], scaled: barScaled };
           }
           // a slot diffuser with no length anywhere — none drawn, none scheduled ("continuous"), no slot glyphs or bars on the sheet — is a
           // unit, not a run: April Tax B (Titus FL-HT-15, 0-50 cfm, 4 on M-501) is 4 of Kastriot's 33 diffusers, not 16 ft of linear
