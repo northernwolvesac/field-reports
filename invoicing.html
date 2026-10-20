@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=498"></script>
-<script src="nw-drive.js?v=498"></script>
-<script src="auth.js?v=498"></script>
-<script src="labor-rates.js?v=498"></script>
+<script src="supabase-config.js?v=500"></script>
+<script src="nw-drive.js?v=500"></script>
+<script src="auth.js?v=500"></script>
+<script src="labor-rates.js?v=500"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -1379,12 +1379,14 @@ requireAuth().catch(function(){});
     var s = currentSetup, a = currentApp, sub = a.bill_co, poSub = poSubOf(s, a);
     var job = [['JOB NAME:', simpleJobName(s), 'big'], ['JOB LOCATION:', simpleAddress(s), 'big'], ['PO Number:', simplePoLabel(s, a), ''], ['JOB Number:', s.job_number || '', ''], ['CONTRACT DATED:', mdyShort(s.contract_date) || '', '']];
     if (a.memo && a.memo !== 'Contract work') job.push(['DESCRIPTION:', a.memo, '']);
+    var poMissing = (sub || poSub) && !simplePoLabel(s, a);
     return '<div class="inv-card"><div class="inv-card-h"><h3>Invoice' + (sub ? ' — sub-prime contract CO #' + escHtml(sub.number) : poSub ? ' — client PO ' + escHtml(poSub.po) : '') + '</h3>' + (canEdit ? '<button class="btn-secondary pc-edit" id="editSimpleBtn">Edit</button>' : '') + '</div>' +
       '<div class="sinv">' +
         '<div class="sinv-top"><div><b>TO:</b>&nbsp; ' + escHtml(s.client_name || '') + (s.client_attn ? '<br><b>ATTN.:</b>&nbsp; ' + escHtml(s.client_attn) : '') + '<br>' + escHtml(s.client_address || '').replace(/\n/g, '<br>') + '</div>' +
           '<div class="sinv-dates">' + mdyShort(a.application_date) + '<br>' + mdyShort(a.period_to) + '</div></div>' +
         '<div class="sinv-no">INVOICE No.: ' + escHtml(invNo) + '</div>' +
         '<table class="sinv-job">' + job.filter(function(r) { return r[1]; }).map(function(r) { return '<tr><td>' + r[0] + '</td><td class="' + r[2] + '">' + escHtml(r[1]) + '</td></tr>'; }).join('') + '</table>' +
+        (poMissing ? '<div class="pc-note" style="margin:4px 0 10px;color:#b45309">No client PO number on this ' + (sub ? 'change order' : 'invoice') + ' yet — press <b>Edit</b> and type the PO JRM issued' + (sub ? ' (it is saved on the change order too)' : '') + '. It prints as PO Number.</div>' : '') +
         '<table class="sinv-amt">' + simpleAmountRows(t, s, a).map(function(r) { return '<tr class="' + r[2] + '"><td>' + escHtml(r[0]) + '</td><td class="d">$</td><td class="n">' + fmtMoney(r[1]).replace(/^\$/, '').replace(/^-\$/, '-') + '</td></tr>'; }).join('') + '</table>' +
         '<div class="sinv-sign"><div class="ln"></div><b>NORTHERN WOLVES, Inc.</b></div>' +
         (sub ? '<div class="sinv-sub">Bills change order #' + escHtml(sub.number) + ' — ' + escHtml(sub.title) + ' (' + fmtMoney(sub.amount) + ')' + (sub.po_number ? ', client PO ' + escHtml(sub.po_number) : '') + '. Previous invoices and the balance count this PO only.</div>' : poSub ? '<div class="sinv-sub">Bills client PO ' + escHtml(poSub.po) + ' (' + fmtMoney(poSub.amount) + ')' + (poSub.title ? ' — ' + escHtml(poSub.title) : '') + ' of the base contract. Previous invoices and the balance count this PO only.</div>' : '') +
@@ -1401,6 +1403,7 @@ requireAuth().catch(function(){});
     var prev = prompt('Less previous invoices ($):', currentApp.previous_certificates || 0); if (prev === null) return;
     var r = await supabaseClient.from('aia_applications').update({ invoice_no: inv.trim() || null, application_date: date || null, period_to: to, po_number: po.trim() || null, memo: memo.trim() || null, previous_certificates: Number(prev) || 0 }).eq('id', currentApp.id);
     if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return; }
+    if (currentApp.bill_co_id && po.trim()) await supabaseClient.from('aia_change_orders').update({ po_number: po.trim() }).eq('id', currentApp.bill_co_id);   // the CO keeps its client PO
     showToast('✅ Invoice updated', 'success'); renderApplication(currentApp.id);
   }
 
@@ -3518,6 +3521,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=498"></script>
+<script src="sw-register.js?v=500"></script>
 </body>
 </html>
