@@ -14,15 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=484"></script>
-<script src="auth.js?v=484"></script>
-<script src="est-org.js?v=484"></script>
-<script src="est-totals.js?v=484"></script>
+<script src="supabase-config.js?v=485"></script>
+<script src="auth.js?v=485"></script>
+<script src="est-org.js?v=485"></script>
+<script src="est-totals.js?v=485"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=484"></script>
-<script src="nw-email.js?v=484"></script>
-<script src="est-engine.js?v=484"></script>
-<script src="geo-takeoff.js?v=484"></script>
+<script src="email-utils.js?v=485"></script>
+<script src="nw-email.js?v=485"></script>
+<script src="est-engine.js?v=485"></script>
+<script src="geo-takeoff.js?v=485"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -285,6 +285,8 @@ var AE = (function() {
       '<button class="btn primary" onclick="AE.price()" ' + (done ? '' : 'disabled') + '>💲 Price it</button>' +
       '<button class="btn" onclick="AE.review()" ' + (done ? '' : 'disabled') + '>🔎 AI scope review</button>' +
       (bidBoardOrg() ? '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button>' : '') +
+      '<button class="btn" onclick="AE.exportPdf()" ' + (res.engine ? '' : 'disabled') + ' title="The priced breakdown, totals, checks and scope review as a PDF">⬇ PDF</button>' +
+      '<button class="btn" onclick="AE.exportCsv()" ' + (res.engine ? '' : 'disabled') + ' title="Every line with quantities, unit costs and amounts — opens in Excel">⬇ CSV</button>' +
       (bidBoardOrg() ? '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { return p.status === 'done'; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust (without measurements: just the plans, to trace or auto-measure there)">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button>' : '') + '</div></div>' +
       renderDuctSpec(res) + renderCorrections() +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
@@ -1277,6 +1279,87 @@ var AE = (function() {
     return h;
   }
 
+  // ─── Export (PDF / CSV) — the AI estimate as a document: a partner org has no Bid Board, so this is what leaves the page ──
+  function loadScript(src) { return new Promise(function(res, rej) { if (document.querySelector('script[src="' + src + '"]')) return res(); var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function() { rej(new Error('Could not load ' + src)); }; document.head.appendChild(s); }); }
+  function exportRows() {
+    var e = ((session.result || {}).engine) || {}, lr = laborRate(), rows = [];
+    Object.keys(CAT_LABEL).forEach(function(c) {
+      (e.lines || []).filter(function(l) { return l.category === c; }).forEach(function(l) {
+        rows.push({ category: CAT_LABEL[c].replace(/^\d+ · /, ''), description: l.description, quantity: +l.quantity, unit: l.unit || '', unit_material: +l.unit_material_cost || 0, unit_hours: +l.unit_labor_hours || 0,
+          material: l.quantity * (+l.unit_material_cost || 0), hours: l.quantity * (+l.unit_labor_hours || 0), labor: l.quantity * (+l.unit_labor_hours || 0) * lr, amount: lineAmt(l), firm: l.is_firm === false ? 'BUDGET' : 'firm', basis: l.basis || '', flag: l.flag || '' });
+      });
+    });
+    return rows;
+  }
+  function totalRows() {
+    var t = ((session.result || {}).engine || {}).totals || {}, r = t.rates || {};
+    return [['Equipment / Material', t.materialTotal], ['Labor (' + (t.laborHours || 0).toFixed(1) + ' hrs @ $' + (r.labor || laborRate()) + ')', t.labor], ['Wet-tap', t.wetTap], ['Services', t.services],
+      ['Base subtotal', t.baseSubtotal], ['Overhead (' + Math.round((r.overhead || 0) * 100) + '%)', t.overhead], ['Miscellaneous (' + pctLabel(r.misc, 0.02) + ')', t.miscellaneous],
+      ['Sales tax (' + pctLabel(r.tax, 0.08875) + ', material only)', t.tax], ['PROJECT TOTAL', t.bidPrice]];
+  }
+  function fileStem() { return (session.name || 'estimate').replace(/[\\/:*?"<>|]+/g, ' ').trim() + ' — AI estimate ' + new Date().toISOString().slice(0, 10); }
+  function saveBlob(blob, name) { var u = URL.createObjectURL(blob), l = document.createElement('a'); l.href = u; l.download = name; document.body.appendChild(l); l.click(); setTimeout(function() { document.body.removeChild(l); URL.revokeObjectURL(u); }, 2000); }
+  function exportCsv() {
+    var rows = exportRows(); if (!rows.length) { toast('Price it first'); return; }
+    function q(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    var head = ['Category', 'Item', 'Qty', 'Unit', 'Unit material $', 'Unit labor h', 'Material $', 'Labor h', 'Labor $', 'Amount $', 'Firm / budget', 'Basis', 'Check'];
+    var out = [head.join(',')].concat(rows.map(function(r) { return [r.category, r.description, r.quantity, r.unit, r.unit_material.toFixed(2), r.unit_hours.toFixed(3), r.material.toFixed(2), r.hours.toFixed(2), r.labor.toFixed(2), r.amount.toFixed(2), r.firm, r.basis, r.flag].map(q).join(','); }));
+    out.push(''); totalRows().forEach(function(t) { out.push([q(t[0]), '', '', '', '', '', '', '', '', Number(t[1] || 0).toFixed(2)].join(',')); });
+    var org = window.NWOrg && NWOrg.current(); out.push(''); out.push(q((session.name || '') + (session.location ? ' — ' + session.location : '') + ' · AI estimate of ' + new Date().toLocaleDateString('en-US') + (org ? ' · ' + org.name : '')));
+    saveBlob(new Blob(['\ufeff' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), fileStem() + '.csv');
+  }
+  async function exportPdf() {
+    var rows = exportRows(); if (!rows.length) { toast('Price it first'); return; }
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+    } catch (err) { toast(err.message); return; }
+    var e = (session.result || {}).engine || {}, org = window.NWOrg && NWOrg.current(), v = unpack((session.result || {}).review || {}) || {};
+    var doc = new jspdf.jsPDF({ unit: 'pt', format: 'letter' }), W = doc.internal.pageSize.getWidth(), M = 40, y = M;
+    function money0(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(session.name || 'AI estimate', M, y); y += 18;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+    doc.text([(session.location || ''), 'AI estimate · ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + (org ? ' · ' + org.name : '') + ' · ' + (me && me.name ? me.name : '')].filter(Boolean).join('\n'), M, y);
+    y += 26; doc.setTextColor(0);
+    var body = [], cat = '';
+    rows.forEach(function(r) {
+      if (r.category !== cat) { cat = r.category; body.push([{ content: cat.toUpperCase(), colSpan: 5, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }]); }
+      body.push([r.description + (r.firm === 'BUDGET' ? '  [BUDGET]' : '') + (r.basis ? '\n' + r.basis : '') + (r.flag ? '\n! ' + r.flag : ''), r.quantity.toLocaleString('en-US', { maximumFractionDigits: 1 }) + ' ' + r.unit, money0(r.material), r.hours.toFixed(1), money0(r.amount)]);
+    });
+    doc.autoTable({ startY: y, margin: { left: M, right: M }, head: [['Item', 'Qty', 'Material', 'Hours', 'Amount']], body: body, theme: 'grid', styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak', lineColor: [226, 232, 240], lineWidth: 0.5 },
+      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' }, columnStyles: { 0: { cellWidth: W - 2 * M - 230 }, 1: { cellWidth: 70, halign: 'right' }, 2: { cellWidth: 60, halign: 'right' }, 3: { cellWidth: 40, halign: 'right' }, 4: { cellWidth: 60, halign: 'right' } },
+      didParseCell: function(d) { if (d.section === 'body' && d.column.index === 0 && d.cell.raw && typeof d.cell.raw === 'string' && /\n/.test(d.cell.raw)) d.cell.styles.textColor = [15, 23, 42]; } });
+    y = doc.lastAutoTable.finalY + 16;
+    var tr = totalRows().map(function(t) { return [t[0], money0(t[1])]; });
+    doc.autoTable({ startY: y, margin: { left: W - M - 300, right: M }, tableWidth: 300, body: tr, theme: 'plain', styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+      didParseCell: function(d) { if (d.row.index === tr.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = 11; d.cell.styles.fillColor = [241, 245, 249]; } } });
+    y = doc.lastAutoTable.finalY + 14;
+    doc.setFontSize(8); doc.setTextColor(90);
+    doc.text(doc.splitTextToSize('Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' historical unit rates' : 'fallback formula') + '. Shop drawings / T&B: ' + e.floors + ' plan sheet' + (e.floors > 1 ? 's' : '') + (e.sdBasis ? ' — ' + e.sdBasis : '') + (e.pipeSheets ? '; piping ' + e.pipeSheets : '') + '.' +
+      (e.ductCheck ? ' Duct footage check: ' + e.ductCheck.measured_ft + ' ft measured for ' + e.ductCheck.outlets + ' air devices; history says ' + e.ductCheck.expected_ft[0] + '–' + e.ductCheck.expected_ft[2] + ' ft (median ' + e.ductCheck.expected_ft[1] + ').' : ''), W - 2 * M), M, y);
+    y += 24; doc.setTextColor(0);
+    function section(title, items) {
+      if (!items || !items.length) return;
+      if (y > doc.internal.pageSize.getHeight() - 80) { doc.addPage(); y = M; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(title + ' (' + items.length + ')', M, y); y += 4;
+      doc.autoTable({ startY: y, margin: { left: M, right: M }, body: items.map(function(s) { return ['•', s]; }), theme: 'plain', styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' }, columnStyles: { 0: { cellWidth: 12 } } });
+      y = doc.lastAutoTable.finalY + 12; doc.setFont('helvetica', 'normal');
+    }
+    function arr(x) { return Array.isArray(x) ? x.filter(Boolean) : x ? [x] : []; }
+    section('To check before this goes out', (e.flags || []).map(function(f) { return f.item + ' — ' + f.flag; }));
+    if (v.summary) { if (y > doc.internal.pageSize.getHeight() - 80) { doc.addPage(); y = M; } doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('AI scope review', M, y); y += 12; doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); var sl = doc.splitTextToSize(String(v.summary), W - 2 * M); doc.text(sl, M, y); y += sl.length * 10 + 8; }
+    section('Missing quotes', arr(v.missing_quotes).map(function(x) { return (x.item || '') + ' ' + (x.tags || []).join(', ') + (x.suggested_vendor ? ' → ' + x.suggested_vendor : '') + (x.why ? ' — ' + x.why : ''); }));
+    section('Quote gaps', arr(v.quote_gaps).map(function(x) { return (x.vendor || '') + ': ' + (x.gap || '') + (x.impact ? ' — ' + x.impact : ''); }));
+    section('Hidden scope in notes', arr(v.hidden_scope).map(function(x) { return (x.source || '') + ': ' + (x.item || '') + (x.how_to_price ? ' — ' + x.how_to_price : ''); }));
+    section('Count mismatches', arr(v.count_mismatches).map(function(x) { return (x.tag || '') + ' schedule ' + (x.schedule || '') + ' vs drawings ' + (x.drawings || '') + (x.note ? ' — ' + x.note : ''); }));
+    section('Draft RFIs', arr(v.rfis).map(function(x) { return (x.question || '') + (x.sheet ? ' (' + x.sheet + ')' : ''); }));
+    section('Proposal exclusions', arr(v.exclusions).map(String));
+    section('Risks', arr(v.risks).map(function(x) { return (x.severity || '') + ': ' + (x.risk || ''); }));
+    var n = doc.internal.getNumberOfPages();
+    for (var i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(120); doc.text((org ? org.name + ' · ' : '') + 'AI estimate — every BUDGET line and check is to be confirmed by the estimator · page ' + i + ' of ' + n, M, doc.internal.pageSize.getHeight() - 20); }
+    doc.save(fileStem() + '.pdf');
+  }
+
   // ─── AI scope review ────────────────────────────────────────────────
   async function review() {
     var C = NWEngine.collect(NWEngine.applyCorrections(pages, corrections), { pipeSr: !!(session.result || {}).pipe_sr });
@@ -1558,9 +1641,9 @@ var AE = (function() {
     toast('Estimate ready ✓' + (skippedCats.length ? ' — ' + skippedCats.join(', ').replace(/_/g, ' ') + ' stay with the takeoff' : '')); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=484"></script>
+<script src="sw-register.js?v=485"></script>
 </body>
 </html>
