@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=501"></script>
-<script src="nw-drive.js?v=501"></script>
-<script src="auth.js?v=501"></script>
-<script src="labor-rates.js?v=501"></script>
+<script src="supabase-config.js?v=502"></script>
+<script src="nw-drive.js?v=502"></script>
+<script src="auth.js?v=502"></script>
+<script src="labor-rates.js?v=502"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -1501,7 +1501,13 @@ requireAuth().catch(function(){});
     });
     // ── existing CO groups follow the change order as it stands now (amount / breakdown edited after the invoice was made) ──
     var updated = 0, removed = 0, upd = [], del = [], ins = [];
-    function coItems(c) { return Array.isArray(c.line_items) && c.line_items.length ? c.line_items : [{ description: c.title, amount: c.amount }]; }
+    // the CO's breakdown, forced to add up to the CO amount (an amount edited after the breakdown was written puts the difference on the last line)
+    function coItems(c) {
+      var items = (Array.isArray(c.line_items) && c.line_items.length ? c.line_items : [{ description: c.title, amount: c.amount }]).map(function(it) { return { description: it.description, amount: Number(it.amount || 0) }; });
+      var sum = items.reduce(function(a, it) { return a + it.amount; }, 0), diff = Math.round((Number(c.amount || 0) - sum) * 100) / 100;
+      if (Math.abs(diff) > 0.005) items[items.length - 1].amount = Math.round((items[items.length - 1].amount + diff) * 100) / 100;
+      return items;
+    }
     cos.forEach(function(c) {
       var grp = have[('PCCO#' + c.number).toUpperCase()]; if (!grp) return;
       var n = String(grp.item_no), leaves = all.filter(function(l) { return l.parent_item_no === n + '.1' && !l.is_parent; }), items = coItems(c), used = {}, changed = false;
@@ -1534,7 +1540,7 @@ requireAuth().catch(function(){});
       var base = { application_id: appId, prev_amount: 0, this_amount: 0, stored_amount: 0, is_change_order: true };
       rows.push(Object.assign({}, base, { item_no: n, budget_code: pcco, description: c.title, scheduled_value: 0, is_parent: true, parent_item_no: null, sort_order: ++maxSort }));
       rows.push(Object.assign({}, base, { item_no: n + '.1', budget_code: pco, description: c.title, scheduled_value: 0, is_parent: true, parent_item_no: n, sort_order: ++maxSort }));
-      var items = Array.isArray(c.line_items) && c.line_items.length ? c.line_items : [{ description: c.title, amount: c.amount }];
+      var items = coItems(c);
       items.forEach(function(it, i) {
         rows.push(Object.assign({}, base, { item_no: n + '.1.' + (i + 1), budget_code: null, description: String(it.description || '').toUpperCase(),
           scheduled_value: Number(it.amount || 0), is_parent: false, parent_item_no: n + '.1', sort_order: ++maxSort }));
@@ -3548,6 +3554,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=501"></script>
+<script src="sw-register.js?v=502"></script>
 </body>
 </html>
