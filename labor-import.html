@@ -35,7 +35,7 @@
   <div class="card" id="blocked">Labor costs are managed by the office (admin / manager / lead PM).</div>
   <div class="card" id="howCard">
     <h3>Import a Mason payroll journal</h3>
-    <p>Pick the QuickBooks journal CSV Mason sends after each payroll (<i>Northern_Wolves_QBO_Payroll_JEs_….csv</i>: Journal No., Journal Date, Account Name, Debits, Credits, Description, Name). Only the project lines are read — Labor Cost (W-2), Payroll Taxes (Labor W-2), Labor Cost (1099NEC), Reimbursable Expenses — and the project is the <b>Name</b> column. Payrolls already imported are skipped, so the same file can be loaded twice.</p>
+    <p>Pick the QuickBooks journal CSV Mason sends after each payroll (<i>Northern_Wolves_QBO_Payroll_JEs_….csv</i>: Journal No., Journal Date, Account Name, Debits, Credits, Description, Name). Only the project lines are read — Labor Cost (W-2), Payroll Taxes (Labor W-2), Labor Cost (1099NEC), Reimbursable Expenses — and the project is the <b>Name</b> column. Payrolls already imported are skipped, so the same file can be loaded twice. Labor to date in the WIP is Mason's total, except on projects whose labor was set in the WIP review (labor before Mason, owner estimates): those keep the reviewed figure and add only the payrolls dated after it.</p>
     <input type="file" id="file" accept=".csv,text/csv">
     <div id="preview" class="muted" style="margin-top:8px"></div>
   </div>
@@ -157,14 +157,36 @@ requireAuth().catch(function(){});
     $('log').textContent += '\nDone.';
     btn.disabled = false; loadTotals();
   });
-  // project_costs.labor_spent (WIP) = everything Mason paid on the project
+  // project_costs.labor_spent (WIP) = everything Mason paid on the project, except where the office reviewed the labor
+  // (labor_base, e.g. labor before Mason or the owner's estimate): that figure plus only the Mason payrolls dated after labor_base_through.
+  // Recomputed from scratch on every import; only rows whose labor or date changes are written.
+  function laborUpdates(payroll, costs) {
+    var cost = {}, by = {}, now = new Date().toISOString();
+    var hasBase = function(c) { return !!(c && c.labor_base != null && c.labor_base_through); };
+    costs.forEach(function(c) { cost[c.project_id] = c; if (hasBase(c)) by[c.project_id] = { sum: 0, last: '' }; });
+    payroll.forEach(function(r) {
+      var c = cost[r.project_id];
+      if (hasBase(c) && r.pay_date <= c.labor_base_through) return;   // already inside the reviewed figure
+      var b = by[r.project_id] = by[r.project_id] || { sum: 0, last: '' };
+      b.sum += Number(r.amount || 0); if (r.pay_date > b.last) b.last = r.pay_date;
+    });
+    return Object.keys(by).map(function(pid) {
+      var c = cost[pid], b = by[pid], base = hasBase(c);
+      var spent = Math.round(((base ? Number(c.labor_base) : 0) + b.sum) * 100) / 100;
+      var asOf = base ? ((c.as_of || '') > b.last ? c.as_of : (b.last || c.as_of || null)) : b.last;
+      if (c && Math.abs(Number(c.labor_spent || 0) - spent) < 0.005 && (c.as_of || null) === asOf) return null;   // unchanged
+      return { project_id: pid, labor_spent: spent, as_of: asOf, source: base ? (c.source || 'wip-review') : 'mason', updated_at: now, base: base };
+    }).filter(Boolean);
+  }
   async function refreshProjectCosts() {
     var all = await fetchAll('id, project_id, amount, pay_date', function(q) { return q.not('project_id', 'is', null); });
-    var sum = {}, last = {};
-    all.forEach(function(r) { sum[r.project_id] = (sum[r.project_id] || 0) + Number(r.amount || 0); if (!last[r.project_id] || r.pay_date > last[r.project_id]) last[r.project_id] = r.pay_date; });
-    var up = Object.keys(sum).map(function(pid) { return { project_id: pid, labor_spent: Math.round(sum[pid] * 100) / 100, as_of: last[pid], source: 'mason', updated_at: new Date().toISOString() }; });
+    // without labor_base the reviewed labor cannot be told apart from payroll, so nothing is overwritten
+    var pc = await supabaseClient.from('project_costs').select('project_id, labor_spent, labor_base, labor_base_through, as_of, source');
+    if (pc.error) { $('log').textContent += '\nproject_costs not refreshed (' + pc.error.message + '). Run project-costs-labor-base.sql first so the reviewed labor is kept.'; return; }
+    var up = laborUpdates(all, pc.data || []), kept = up.filter(function(u) { return u.base; }).length;
+    up = up.map(function(u) { return { project_id: u.project_id, labor_spent: u.labor_spent, as_of: u.as_of, source: u.source, updated_at: u.updated_at }; });
     for (var i = 0; i < up.length; i += 100) { var r = await supabaseClient.from('project_costs').upsert(up.slice(i, i + 100), { onConflict: 'project_id' }); if (r.error) $('log').textContent += '\nproject_costs: ' + r.error.message; }
-    $('log').textContent += '\n' + up.length + ' projects updated in WIP.';
+    $('log').textContent += '\n' + up.length + ' projects updated in WIP' + (kept ? ' (' + kept + ' keep the reviewed labor and add only later payrolls)' : '') + '.';
   }
   async function loadTotals() {
     var all = await fetchAll('id, project_id, mason_name, kind, amount, pay_date');

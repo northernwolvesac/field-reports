@@ -101,11 +101,13 @@
   <div class="scrollbar noprint" id="scrollbar"><button type="button" id="scrollL" title="Scroll left">&#9664;</button><div class="track" id="scrollTrack"><div id="scrollSpacer"></div></div><span class="hint" id="scrollHint"></span><button type="button" id="scrollR" title="Scroll right">&#9654;</button></div>
   <div class="tblwrap" id="tblwrap"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
   <p class="note">
-    <b>Revised contract</b> = original + change orders (G702 line 3 of the latest application; without applications: original + approved COs).
+    <b>Revised contract</b> = original + approved change orders (Prime Contracts → Change Orders, approved on or before the as-of date, billed or not; credits reduce it). When the latest application carries a different CO total, it shows under the change orders as "pay app".
     <b>Billed to date</b> = G702 line 4 of the latest application dated on or before the as-of date (drafts excluded unless checked); <b>backlog under contract</b> = revised − billed.
-    <b>Est. total cost / cost to date</b> come from Projects → Costs (labor by hand, materials and subs from vendor invoices); <b>% complete</b> = cost to date ÷ est. total cost;
-    <b>earned revenue</b> = revised × % complete; <b>overbillings</b> = billings in excess of earned revenue (billed − earned, a liability); <b>underbillings</b> = earned revenue in excess of billings (an asset); <b>backlog (lender format)</b> = revised contract − earned revenue;
-    <b>est. gross profit</b> = revised − est. total cost; <b>GP to date</b> = earned − cost to date. Projects without cost data fall back to the PM % complete from the Workload Planner (marked "PM %").
+    <b>Cost budget and cost to date</b> come from Projects → Costs (labor, materials and subs). The budget covers the original contract; approved COs add cost at the same cost ratio (<b>CO cost</b> = approved COs × budget ÷ original contract, only when the budget is below the original contract).
+    <b>% complete</b> = cost to date ÷ cost budget (capped at 150%); <b>est. total cost</b> = the budget, or the cost to date when that is higher; <b>cost to complete</b> = est. total cost − cost to date.
+    Jobs set to 100% complete in the Workload Planner are finished (marked "done"): earned = revised contract, cost to complete 0, est. total cost = cost to date.
+    <b>Earned revenue</b> = revised × % complete (max 100%); <b>overbillings</b> = billings in excess of earned revenue (billed − earned, a liability); <b>underbillings</b> = earned revenue in excess of billings (an asset); <b>backlog (lender format)</b> = revised contract − earned revenue;
+    <b>est. gross profit</b> = revised − est. total cost; <b>GP to date</b> = earned − cost to date. Projects without a cost budget fall back to the PM % complete from the Workload Planner (marked "PM %").
     <b>Paid</b> = payments dated on or before the as-of date; <b>A/R</b> = net billed (less retainage) − paid.
   </p>
   <div class="print-foot" id="printFoot"></div>
@@ -159,7 +161,7 @@
       fetchAll('aia_projects', '*'),
       fetchAll('aia_applications', '*', function(q) { return q.neq('status', 'void'); }),
       fetchAll('aia_payments', 'aia_project_id, amount, date_paid'),
-      fetchAll('aia_change_orders', 'aia_project_id, amount, status'),
+      fetchAll('aia_change_orders', 'aia_project_id, amount, status, approved_date'),
       fetchAll('project_costs', '*').catch(function(e) { console.warn('[wip] project_costs unavailable:', e.message); return []; })
     ]);
     data = { projects: R[0], setups: R[1], apps: R[2], pays: R[3], cos: R[4], costs: R[5], linesByApp: {} };
@@ -189,7 +191,8 @@
     });
     await ensureLines(Object.keys(appsBy).map(function(k) { return appsBy[k].id; }));
     var paidBy = {}; data.pays.forEach(function(p) { if ((p.date_paid || '') <= asOf) paidBy[p.aia_project_id] = (paidBy[p.aia_project_id] || 0) + Number(p.amount || 0); });
-    var coBy = {}; data.cos.forEach(function(c) { if (c.status === 'approved') coBy[c.aia_project_id] = (coBy[c.aia_project_id] || 0) + Number(c.amount || 0); });
+    // approved change orders (credits are negative amounts), billed or not; COs approved after the as-of date are left out
+    var coBy = {}; data.cos.forEach(function(c) { if (c.status === 'approved' && (c.approved_date || '') <= asOf) coBy[c.aia_project_id] = (coBy[c.aia_project_id] || 0) + Number(c.amount || 0); });
 
     rows = []; pmSet = {};
     data.projects.forEach(function(p) {
@@ -197,25 +200,35 @@
       var r = { id: p.id, aiaId: s ? s.id : null, job: p.short_code || (s && (s.job_number || s.project_no)) || '', name: p.project_name, customer: s ? (s.client_name || p.gc_name || '') : (p.gc_name || ''),
                 pm: p.pm_name || '', status: p.status || 'active', setup: !!s, appNo: app ? app.application_no : null, appDate: app ? app.application_date : null,
                 finish: p.target_completion_date || p.estimated_completion || (s && (s.substantial_completion_date || s.estimated_completion_date)) || '' };
+      // revised contract = original + approved change orders (same as Prime Contracts); billing comes from the latest pay application
       if (s) {
-        if (app) { var t = totalsFor(s, app, data.linesByApp[app.id] || []); r.original = t.L1; r.cos = t.L2; r.revised = t.L3; r.billed = t.L4; r.retainage = t.L5t; r.net = t.L6; }
-        else { r.original = Number(s.original_contract_sum || 0); r.cos = coBy[s.id] || 0; r.revised = r.original + r.cos; r.billed = 0; r.retainage = 0; r.net = 0; }
+        r.original = Number(s.original_contract_sum || 0); r.cos = coBy[s.id] || 0; r.revised = r.original + r.cos;
+        if (app) { var t = totalsFor(s, app, data.linesByApp[app.id] || []); r.cosOnApp = t.L2; r.billed = t.L4; r.retainage = t.L5t; r.net = t.L6; }
+        else { r.cosOnApp = null; r.billed = 0; r.retainage = 0; r.net = 0; }
         r.paid = paidBy[s.id] || 0;
-      } else { r.original = Number(p.contract_value || 0); r.cos = 0; r.revised = r.original; r.billed = 0; r.retainage = 0; r.net = 0; r.paid = 0; }
+      } else { r.original = Number(p.contract_value || 0); r.cos = 0; r.cosOnApp = null; r.revised = r.original; r.billed = 0; r.retainage = 0; r.net = 0; r.paid = 0; }
       r.ar = r.net - r.paid; r.backlog = r.revised - r.billed; r.pctBilled = r.revised ? r.billed / r.revised : null;
-      // cost side
-      var cEst = c ? Number(c.labor_est || 0) + Number(c.materials_est || 0) + Number(c.subs_est || 0) : 0;
-      if (c && cEst > 0) {
-        r.hasCost = true; r.costAsOf = c.as_of || '';
-        r.estCost = Number(c.labor_est || 0) + Number(c.materials_est || 0) + Number(c.subs_est || 0);
-        r.costToDate = Number(c.labor_spent || 0) + Number(c.materials_spent || 0) + Number(c.subs_spent || 0);
-        r.costToComplete = r.estCost - r.costToDate;
-        r.pctComplete = r.estCost ? Math.min(1.5, r.costToDate / r.estCost) : null; r.basis = 'cost';
+      // cost side (office WIP rules, Scripts/build_wip.py)
+      var pmPct = (p.percent_complete != null && p.percent_complete !== '') ? Number(p.percent_complete) / (Number(p.percent_complete) > 1 ? 100 : 1) : null;
+      var finished = pmPct != null && pmPct >= 0.9999;   // percent_complete 100: the job is done
+      var b0 = c ? Number(c.labor_est || 0) + Number(c.materials_est || 0) + Number(c.subs_est || 0) : 0;
+      // budgets cover the original contract; approved COs get cost at the original cost ratio (not when the budget already exceeds the contract)
+      r.coCost = (b0 > 0 && r.original > 0 && b0 < r.original) ? r.cos * b0 / r.original : 0;
+      r.budget = b0 > 0 ? b0 + r.coCost : null;
+      r.costToDate = c ? Number(c.labor_spent || 0) + Number(c.materials_spent || 0) + Number(c.subs_spent || 0) : null;
+      r.costAsOf = c ? (c.as_of || '') : '';
+      if (finished) {
+        // finished: earned = revised contract, nothing left to spend, GP on actual cost (not budget)
+        r.pctComplete = 1; r.basis = 'done'; r.hasCost = !!c && (b0 > 0 || r.costToDate > 0);
+        r.estCost = r.hasCost ? r.costToDate : null; r.costToComplete = r.hasCost ? 0 : null;
+      } else if (r.budget) {
+        // cost-to-cost; the estimate at completion never drops below what is already spent
+        r.pctComplete = Math.min(1.5, r.costToDate / r.budget); r.basis = 'cost'; r.hasCost = true;
+        r.estCost = Math.max(r.budget, r.costToDate); r.costToComplete = r.estCost - r.costToDate;
       } else {
-        // no estimate yet (or no cost row): spent may still be known, but % complete / GP need a budget
-        r.hasCost = false; r.estCost = null; r.costToDate = c ? Number(c.labor_spent || 0) + Number(c.materials_spent || 0) + Number(c.subs_spent || 0) : null; r.costToComplete = null;
-        var pmPct = (p.percent_complete != null && p.percent_complete !== '') ? Number(p.percent_complete) / (Number(p.percent_complete) > 1 ? 100 : 1) : null;
-        r.pctComplete = pmPct; r.basis = pmPct != null ? 'pm' : '';
+        // no budget yet (or no cost row): spent may still be known, but % complete comes from the PM and GP needs a budget
+        r.pctComplete = pmPct; r.basis = pmPct != null ? 'pm' : ''; r.hasCost = false;
+        r.estCost = null; r.costToComplete = null;
       }
       r.earned = r.pctComplete != null ? r.revised * Math.min(1, r.pctComplete) : null;
       r.overUnder = r.earned != null ? r.billed - r.earned : null;
@@ -290,7 +303,7 @@
     if (noCost) { dw.style.display = ''; dw.innerHTML = '<b>' + noCost + ' of ' + list.length + ' projects have no cost data.</b> Their % complete is the PM estimate (marked “PM %”) and their cost / gross-profit columns are blank, so the totals understate cost and GP. Enter the costs in Projects → Costs before this report goes to the lender.'; } else dw.style.display = 'none';
     $('printTitleText').textContent = 'Northern Wolves AC — Work-in-Progress Schedule';
     $('printTitleSub').textContent = 'As of ' + fmtDate($('asOf').value) + ' · ' + $('fStatus').options[$('fStatus').selectedIndex].text + ' · prepared ' + fmtDate(new Date().toISOString().slice(0, 10));
-    $('printFoot').innerHTML = '<b>Basis of presentation.</b> Percentage-of-completion, cost-to-cost method: % complete = cost to date ÷ estimated total cost; earned revenue = revised contract × % complete; overbillings = billings in excess of earned revenue; underbillings = earned revenue in excess of billings; backlog = revised contract − earned revenue. Estimated total costs, costs to complete and gross profit are management estimates and have not been audited or reviewed.'
+    $('printFoot').innerHTML = '<b>Basis of presentation.</b> Percentage-of-completion, cost-to-cost method: % complete = cost to date ÷ cost budget (the original budget plus approved change orders at the original cost ratio); finished jobs are 100% complete at their actual cost; earned revenue = revised contract × % complete; overbillings = billings in excess of earned revenue; underbillings = earned revenue in excess of billings; backlog = revised contract − earned revenue. Estimated total costs, costs to complete and gross profit are management estimates and have not been audited or reviewed.'
       + (noCost ? ' Projects marked “PM %” have no job-cost data; their % complete is management’s estimate of completion and their cost and gross-profit figures are not shown.' : '')
       + '<div class="sig"><span>Prepared by</span><span>Title</span><span>Date</span></div>';
     $('sub').textContent = 'As of ' + fmtDate($('asOf').value) + ' · ' + list.length + ' projects · backlog ' + money(all.backlog) + ' · over ' + money(all.over) + ' / under ' + money(all.under) + ' billed';
@@ -316,7 +329,12 @@
       case 'pctBilled': return pctCell(r.pctBilled, c);
       case 'backlog': return cell(r.backlog, (c + (r.backlog > 0 ? ' pos' : '')).trim());
       case 'costToComplete': return cell(r.costToComplete, (c + (r.costToComplete != null && r.costToComplete < 0 ? ' neg' : '')).trim());
-      case 'pctComplete': return pctCell(r.pctComplete, c, r.basis === 'pm' ? ' <span class="muted" style="font-size:10px">PM %</span>' : '');
+      case 'cos': return cell(r.cos, c).replace('</td>', r.cosOnApp != null && Math.abs(r.cosOnApp - r.cos) >= 1 ? '<span class="sub" title="Change orders on the latest pay application (G702 line 2)">pay app ' + money(r.cosOnApp) + '</span></td>' : '</td>');
+      case 'estCost':
+        var bnote = r.coCost ? 'incl. CO cost ' + money(r.coCost) : '';
+        if (r.budget != null && r.estCost != null && Math.abs(r.estCost - r.budget) >= 1) bnote = 'budget ' + money(r.budget) + (r.coCost ? ' incl. CO' : '');
+        return cell(r.estCost, c).replace('</td>', bnote ? '<span class="sub">' + bnote + '</span></td>' : '</td>');
+      case 'pctComplete': return pctCell(r.pctComplete, c, r.basis === 'pm' ? ' <span class="muted" style="font-size:10px">PM %</span>' : r.basis === 'done' ? ' <span class="muted" style="font-size:10px">done</span>' : '');
       case 'over': case 'under': return cell(r.earned == null ? null : nz(r[k]), c);
       case 'gpPct': return '<td class="' + c + '">' + (r.gpPct != null ? (r.gpPct * 100).toFixed(1) + '%' : '<span class="muted">—</span>') + '</td>';
       case 'finish': return '<td class="l' + (b ? ' b' : '') + '">' + fmtDate(r.finish) + '</td>';
@@ -341,11 +359,11 @@
   }
 
   function exportCsv() {
-    var list = filtered(), head = ['Job #', 'Project', 'Customer', 'PM', 'Status', 'Original Contract', 'Change Orders', 'Revised Contract', 'Billed to Date', '% Billed', 'Backlog Under Contract', 'Est. Total Cost', 'Cost to Date', 'Cost to Complete', '% Complete', '% Basis', 'Earned Revenue', 'Over/(Under) Billed', 'Overbillings', 'Underbillings', 'Backlog (Revised - Earned)', 'Est. Gross Profit', 'GP %', 'GP to Date', 'Retainage Held', 'Paid to Date', 'A/R Open', 'Est. Finish', 'Latest App #', 'App Date', 'Costs as of', 'Contract Setup'];
+    var list = filtered(), head = ['Job #', 'Project', 'Customer', 'PM', 'Status', 'Original Contract', 'Approved Change Orders', 'COs on Latest App', 'Revised Contract', 'Billed to Date', '% Billed', 'Backlog Under Contract', 'Cost Budget (incl. CO cost)', 'CO Cost', 'Est. Total Cost', 'Cost to Date', 'Cost to Complete', '% Complete', '% Basis', 'Earned Revenue', 'Over/(Under) Billed', 'Overbillings', 'Underbillings', 'Backlog (Revised - Earned)', 'Est. Gross Profit', 'GP %', 'GP to Date', 'Retainage Held', 'Paid to Date', 'A/R Open', 'Est. Finish', 'Latest App #', 'App Date', 'Costs as of', 'Contract Setup'];
     var esc2 = function(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var num = function(v) { return v == null ? '' : Number(v).toFixed(2); }, pc = function(v) { return v == null ? '' : (v * 100).toFixed(1); };
     var out = [head.join(',')];
-    list.forEach(function(r) { out.push([r.job, r.name, r.customer, r.pm, r.status, num(r.original), num(r.cos), num(r.revised), num(r.billed), pc(r.pctBilled), num(r.backlog), num(r.estCost), num(r.costToDate), num(r.costToComplete), pc(r.pctComplete), r.basis, num(r.earned), num(r.overUnder), num(r.over), num(r.under), num(r.backlogEarned), num(r.estGP), pc(r.gpPct), num(r.gpToDate), num(r.retainage), num(r.paid), num(r.ar), r.finish || '', r.appNo || '', r.appDate || '', r.costAsOf || '', r.setup ? 'yes' : 'no'].map(esc2).join(',')); });
+    list.forEach(function(r) { out.push([r.job, r.name, r.customer, r.pm, r.status, num(r.original), num(r.cos), num(r.cosOnApp), num(r.revised), num(r.billed), pc(r.pctBilled), num(r.backlog), num(r.budget), num(r.budget != null ? r.coCost : null), num(r.estCost), num(r.costToDate), num(r.costToComplete), pc(r.pctComplete), r.basis, num(r.earned), num(r.overUnder), num(r.over), num(r.under), num(r.backlogEarned), num(r.estGP), pc(r.gpPct), num(r.gpToDate), num(r.retainage), num(r.paid), num(r.ar), r.finish || '', r.appNo || '', r.appDate || '', r.costAsOf || '', r.setup ? 'yes' : 'no'].map(esc2).join(',')); });
     var blob = new Blob(['﻿' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'WIP Report ' + $('asOf').value + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
