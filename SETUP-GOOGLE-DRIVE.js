@@ -1,5 +1,5 @@
 // =====================================================
-// GOOGLE APPS SCRIPT - Google Drive Integration (v3.13)
+// GOOGLE APPS SCRIPT - Google Drive Integration (v3.14)
 // =====================================================
 // Deploy this as a Web App in Google Apps Script
 //
@@ -288,7 +288,7 @@ function fileData(fileId) {
 
 // ---------- v3.10: purchase orders — a general "Purchase Orders" folder at the root + copies of files ----------
 // Root-level folders that are NOT projects (never listed as projects, never get the project template)
-var NON_PROJECT_FOLDERS = ['Purchase Orders', 'PO'];
+var NON_PROJECT_FOLDERS = ['Purchase Orders', 'PO', 'Subcontractors & Vendors'];   // v3.14: + the subs & vendors compliance folder
 function isNonProject(name) { var n = normName(name); return NON_PROJECT_FOLDERS.some(function(f) { return normName(f) === n; }); }
 // get-or-create a plain folder directly under the root (no template sub-folders, no field access)
 function rootFolder(name) {
@@ -304,6 +304,13 @@ function uploadToFolder(folderId, fileName, base64Data, mimeType) {
   var file = folder.createFile(blob);
   var info = fileInfo(file, '', ''); info.folderId = folder.getId(); info.folderName = folder.getName();
   return { success: true, file: info, folderId: folder.getId() };
+}
+// v3.14: get-or-create a plain child folder inside a folder by id (Subcontractors & Vendors / <company>)
+function subFolder(parentId, name) {
+  var parent = DriveApp.getFolderById(parentId), n = normName(name), all = parent.getFolders();
+  while (all.hasNext()) { var f = all.next(); if (normName(f.getName()) === n) return { success: true, folder: { id: f.getId(), name: f.getName(), url: f.getUrl() } }; }
+  var nf = parent.createFolder(name);
+  return { success: true, folder: { id: nf.getId(), name: nf.getName(), url: nf.getUrl() }, created: true };
 }
 // copy an existing Drive file into another folder (same bytes, new id)
 function copyFile(fileId, targetFolderId, newName) {
@@ -600,7 +607,7 @@ function listAccess(fileId) { return { success: true, permissions: listPermissio
 
 // ---------- Web App entry points ----------
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.13' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', service: 'NW Drive Proxy', version: '3.14' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 function doPost(e) {
@@ -608,7 +615,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.record || body.action === 'sendNotification') { if (typeof notificationsDoPost === 'function') return notificationsDoPost(e); }
     var result;
-    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.13', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
+    if (body.action === 'ping') return ContentService.createTextOutput(JSON.stringify({ success: true, version: '3.14', root: FJOBS_FOLDER_ID })).setMimeType(ContentService.MimeType.JSON);
     var caller = (body.adminKey && body.adminKey === ADMIN_KEY) ? { id: 'admin-key', email: 'ruslan@northernwolvesac.com', role: 'admin', full: true } : callerFromToken(body.token);
     if (!caller) return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Not signed in (Drive access requires an app login)', auth: false })).setMimeType(ContentService.MimeType.JSON);
     ACTIVE_FOLDERS = caller.limited ? LIMITED_FOLDERS : FIELD_FOLDERS;
@@ -659,6 +666,7 @@ function doPost(e) {
       case 'forget':          result = forgetProject(body.projectId); break;
       case 'root_folder':     result = rootFolder(body.name); break;
       case 'upload_to_folder': result = uploadToFolder(body.folderId, body.fileName, body.fileData, body.mimeType); break;
+      case 'sub_folder':      result = subFolder(body.folderId, body.name); break;
       case 'copy_file':       result = copyFile(body.fileId, body.targetFolderId, body.newName); break;
       case 'migrate_project': result = migrateProject(body.legacyFolderId, body.projectId, body.projectName, body.targetFolderId); break;
       default:                result = { success: false, error: 'Unknown action: ' + body.action };

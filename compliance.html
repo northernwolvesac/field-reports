@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>Subs &amp; Vendors Compliance — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css?v=522">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=522"></script>
+<script src="auth.js?v=522"></script>
+<script src="nw-drive.js?v=522"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="email-utils.js?v=522"></script>
+<script src="nw-email.js?v=522"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 60px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+  .card:hover { border-color: #9ca3af; } .card.on { border-color: #111318; box-shadow: inset 0 0 0 1px #111318; }
+  .card b { display: block; font-size: 22px; color: #111318; font-variant-numeric: tabular-nums; } .card span { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; }
+  .card.red b { color: #b91c1c; } .card.amb b { color: #b45309; } .card.grn b { color: #15803d; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+  .tools input[type=search], .tools select { padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-family: inherit; }
+  .tools input[type=search] { flex: 1; min-width: 200px; }
+  .tools label { font-size: 13px; color: #374151; display: flex; gap: 6px; align-items: center; }
+  .btn { padding: 9px 13px; font-size: 13px; font-weight: 700; border-radius: 9px; cursor: pointer; border: 1px solid #111318; background: #111318; color: #fff; text-decoration: none; white-space: nowrap; font-family: inherit; }
+  .btn.light { background: #fff; color: #111318; border-color: #d1d5db; }
+  .btn.red { background: #fff; color: #b91c1c; border-color: #fecaca; }
+  .btn.sm { padding: 5px 9px; font-size: 12px; border-radius: 7px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .grid-h, .prow { display: grid; grid-template-columns: minmax(200px, 1.6fr) 1.15fr .8fr .8fr 1.1fr 150px; gap: 10px; align-items: center; }
+  .grid-h { padding: 0 12px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; }
+  .prow { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 7px; background: #fff; font-size: 13px; cursor: pointer; }
+  .prow:hover { border-color: #9ca3af; }
+  .prow.inactive { opacity: .55; }
+  .prow .nm b { display: block; color: #111318; font-size: 14px; } .prow .nm span { font-size: 11px; color: #6b7280; }
+  .prow .ct { font-size: 12px; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prow .acts { display: flex; gap: 6px; justify-content: flex-end; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+  .chip small { font-weight: 500; opacity: .85; margin-left: 3px; }
+  .c-ok { background: #dcfce7; color: #166534; } .c-exp { background: #fee2e2; color: #b91c1c; } .c-soon { background: #fef3c7; color: #92400e; }
+  .c-miss { background: #fff1f2; color: #be123c; border: 1px dashed #fda4af; } .c-rev { background: #e0f2fe; color: #0369a1; } .c-na { background: #f3f4f6; color: #9ca3af; } .c-rej { background: #fee2e2; color: #991b1b; }
+  .sum { font-size: 12px; color: #6b7280; margin: 0 0 8px; }
+  .empty, .blocked { text-align: center; padding: 50px 20px; color: #6b7280; }
+  /* drawer */
+  .dr-bg { position: fixed; inset: 0; background: rgba(17,19,24,.35); display: none; z-index: 40; }
+  .dr-bg.show { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 100%); background: #fff; z-index: 41; transform: translateX(100%); transition: transform .2s; display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.12); }
+  .drawer.show { transform: none; }
+  .dr-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px; border-bottom: 1px solid #e5e7eb; }
+  .dr-head h2 { margin: 0; font-size: 19px; flex: 1; } .dr-head h2 small { display: block; font-size: 12px; color: #6b7280; font-weight: 400; margin-top: 3px; }
+  .dr-head .x { border: none; background: none; font-size: 24px; cursor: pointer; line-height: 1; color: #6b7280; }
+  .dr-body { flex: 1; overflow: auto; padding: 14px 18px 30px; }
+  .sec { margin: 4px 0 18px; } .sec h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; } .sec h3 .sp { flex: 1; }
+  .status3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .status3 > div { border: 1px solid #e5e7eb; border-radius: 9px; padding: 9px 10px; font-size: 12px; } .status3 > div b { display: block; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+  .doc { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; }
+  .doc.sup { opacity: .55; }
+  .doc .l1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .doc .l1 b { font-size: 13px; } .doc .l1 .sp { flex: 1; }
+  .doc .l2 { font-size: 12px; color: #4b5563; margin-top: 5px; line-height: 1.5; }
+  .doc .def { font-size: 12px; color: #b91c1c; margin-top: 5px; } .doc .good { font-size: 12px; color: #15803d; margin-top: 5px; }
+  .doc .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .doc a { color: #0696D7; font-weight: 700; text-decoration: none; font-size: 12px; }
+  .f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .fld label { display: block; font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+  .fld input, .fld select, .fld textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; background: #fff; }
+  .fld textarea { min-height: 60px; resize: vertical; }
+  .fld.full { grid-column: 1 / -1; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; } .checks label { display: flex; gap: 5px; align-items: center; }
+  .log { font-size: 12px; color: #4b5563; } .log div { padding: 4px 0; border-bottom: 1px solid #f3f4f6; }
+  /* modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(17,19,24,.45); display: none; align-items: flex-start; justify-content: center; z-index: 60; padding: 24px 16px; overflow: auto; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 640px; padding: 18px; box-sizing: border-box; }
+  .modal h3 { margin: 0 0 12px; font-size: 17px; }
+  .modal .mact { display: flex; gap: 10px; margin-top: 14px; justify-content: flex-end; }
+  .ai-st { font-size: 12px; color: #0369a1; margin: 6px 0; min-height: 16px; }
+  .drop { border: 2px dashed #d1d5db; border-radius: 10px; padding: 14px; text-align: center; font-size: 13px; color: #6b7280; cursor: pointer; margin-bottom: 10px; }
+  .drop.has { border-color: #111318; color: #111318; }
+  .reqs { font-size: 12px; color: #4b5563; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; line-height: 1.6; }
+  @media (max-width: 860px) {
+    .grid-h { display: none; }
+    .prow { grid-template-columns: 1fr 1fr 1fr; } .prow .nm { grid-column: 1 / -1; } .prow .ct { grid-column: 1 / -1; } .prow .acts { grid-column: 1 / -1; justify-content: flex-start; }
+    .status3, .f2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="index.html" class="back">←</a>
+  <div class="ttl"><b>Subs &amp; Vendors — COI / MSA / W-9</b><span id="sub">Insurance certificates and agreements of every company working for Northern Wolves</span></div>
+  <img src="logo-header.png?v=258" alt="Northern Wolves AC" style="height:34px;width:auto">
+</div>
+<div class="wrap" id="main" style="display:none">
+  <div class="cards" id="cards"></div>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Search company, trade, contact, e-mail…">
+    <select id="fKind"><option value="">Subs + vendors</option><option value="subcontractor">Subcontractors</option><option value="vendor">Vendors</option><option value="consultant">Consultants</option><option value="other">Other</option></select>
+    <label><input type="checkbox" id="fInactive"> show inactive</label>
+    <a class="btn light" href="#" id="btnSettings">⚙ Requirements</a>
+    <a class="btn light" href="#" id="btnFolder" target="_blank" style="display:none">Drive folder ↗</a>
+    <a class="btn" href="#" id="btnNew">+ Company</a>
+  </div>
+  <div class="sum" id="sum"></div>
+  <div class="grid-h"><div>Company</div><div>COI</div><div>MSA</div><div>W-9</div><div>Contact</div><div style="text-align:right">Actions</div></div>
+  <div id="list"></div>
+  <div class="empty" id="empty" style="display:none">Nothing matches.</div>
+</div>
+<div class="blocked" id="blocked" style="display:none"></div>
+
+<!-- company drawer -->
+<div class="dr-bg" id="drBg"></div>
+<div class="drawer" id="drawer">
+  <div class="dr-head"><h2 id="drTitle"></h2><button class="x" id="drClose" title="Close">×</button></div>
+  <div class="dr-body" id="drBody"></div>
+</div>
+
+<!-- upload / edit document -->
+<div class="modal-bg" id="docModal"><div class="modal">
+  <h3 id="docTitle">Add document</h3>
+  <div class="f2">
+    <div class="fld"><label>Document</label><select id="dType">
+      <option value="coi">Certificate of insurance (COI)</option><option value="msa">Master Subcontract Agreement (MSA)</option><option value="w9">W-9</option>
+      <option value="workers_comp">Workers' comp certificate (C-105.2 / U-26.3)</option><option value="disability">Disability / PFL certificate (DB-120.1)</option>
+      <option value="license">License</option><option value="other">Other</option></select></div>
+    <div class="fld"><label>Status</label><select id="dStatus"><option value="received">Received — to review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="superseded">Superseded</option></select></div>
+  </div>
+  <div style="height:10px"></div>
+  <div class="drop" id="dDrop">Drop the PDF here or tap to choose a file<input type="file" id="dFile" accept="application/pdf,image/*" style="display:none"></div>
+  <div class="ai-st" id="dAi"></div>
+  <div class="f2">
+    <div class="fld full"><label>Title / note</label><input id="dTitleIn" placeholder="e.g. ACORD 25 2026-2027, signed MSA"></div>
+    <div class="fld cx-coi cx-exp"><label>Effective</label><input type="date" id="dEff"></div>
+    <div class="fld cx-exp"><label>Expires (first policy to lapse)</label><input type="date" id="dExp"></div>
+    <div class="fld cx-sign"><label>Signed / dated</label><input type="date" id="dSigned"></div>
+    <div class="fld cx-coi"><label>Insurer(s)</label><input id="dInsurer"></div>
+    <div class="fld cx-coi full"><label>Policies (type · number · expiry)</label><input id="dPolicies" placeholder="GL ABC123 05/01/2027; AUTO …; UMB …; WC …"></div>
+    <div class="fld cx-coi"><label>GL each occurrence $</label><input id="dGlOcc" inputmode="decimal"></div>
+    <div class="fld cx-coi"><label>GL aggregate $</label><input id="dGlAgg" inputmode="decimal"></div>
+    <div class="fld cx-coi"><label>Auto (combined single) $</label><input id="dAuto" inputmode="decimal"></div>
+    <div class="fld cx-coi"><label>Umbrella / excess $</label><input id="dUmb" inputmode="decimal"></div>
+    <div class="fld cx-coi full"><label>Endorsements</label><div class="checks">
+      <label><input type="checkbox" id="dWc"> Workers' comp</label><label><input type="checkbox" id="dDbl"> NY disability (DBL/PFL)</label>
+      <label><input type="checkbox" id="dAi2"> Additional insured</label><label><input type="checkbox" id="dWos"> Waiver of subrogation</label>
+      <label><input type="checkbox" id="dPnc"> Primary &amp; non-contributory</label><label><input type="checkbox" id="dHolder"> Holder = Northern Wolves</label></div></div>
+    <div class="fld full"><label>Review notes</label><textarea id="dNotes" placeholder="What is missing / why it was rejected"></textarea></div>
+  </div>
+  <div class="mact"><button class="btn light" id="dCancel">Cancel</button><button class="btn" id="dSave">Save</button></div>
+</div></div>
+
+<!-- request update e-mail -->
+<div class="modal-bg" id="reqModal"><div class="modal">
+  <h3>Request documents</h3>
+  <div class="f2">
+    <div class="fld full"><label>To</label><input id="rTo" placeholder="name@company.com, broker@agency.com"></div>
+    <div class="fld full"><label>Subject</label><input id="rSubj"></div>
+    <div class="fld full"><label>Message</label><textarea id="rBody" style="min-height:300px"></textarea></div>
+  </div>
+  <div style="font-size:12px;color:#6b7280;margin-top:6px">Sent from Northern Wolves (hello@). Replies come back to <b id="rReply"></b>.</div>
+  <div class="mact"><button class="btn light" id="rCancel">Cancel</button><button class="btn" id="rSend">Send</button></div>
+</div></div>
+
+<!-- add company -->
+<div class="modal-bg" id="newModal"><div class="modal">
+  <h3>New company</h3>
+  <div class="f2">
+    <div class="fld full"><label>Company name</label><input id="nName"></div>
+    <div class="fld"><label>Type</label><select id="nKind"><option value="subcontractor">Subcontractor</option><option value="vendor">Vendor</option><option value="consultant">Consultant</option><option value="other">Other</option></select></div>
+    <div class="fld"><label>Trade</label><input id="nTrade" placeholder="sheet metal, insulation, controls…"></div>
+    <div class="fld"><label>Contact</label><input id="nContact"></div>
+    <div class="fld"><label>E-mail</label><input id="nEmail" type="email"></div>
+  </div>
+  <div class="mact"><button class="btn light" id="nCancel">Cancel</button><button class="btn" id="nSave">Add</button></div>
+</div></div>
+
+<!-- requirements / settings -->
+<div class="modal-bg" id="setModal"><div class="modal">
+  <h3>Insurance requirements &amp; reminders</h3>
+  <div class="f2">
+    <div class="fld full"><label>Reminders go to (comma separated)</label><input id="sNotify"></div>
+    <div class="fld"><label>Remind days before expiry</label><input id="sLead" type="number" min="1" max="120"></div>
+    <div class="fld"></div>
+    <div class="fld"><label>GL each occurrence $</label><input id="sGlOcc" inputmode="decimal"></div>
+    <div class="fld"><label>GL aggregate $</label><input id="sGlAgg" inputmode="decimal"></div>
+    <div class="fld"><label>Auto $</label><input id="sAuto" inputmode="decimal"></div>
+    <div class="fld"><label>Umbrella / excess $</label><input id="sUmb" inputmode="decimal"></div>
+    <div class="fld full"><label>Required</label><div class="checks">
+      <label><input type="checkbox" id="sWc"> Workers' comp</label><label><input type="checkbox" id="sDbl"> NY disability (DBL/PFL)</label>
+      <label><input type="checkbox" id="sAi"> Additional insured</label><label><input type="checkbox" id="sWos"> Waiver of subrogation</label>
+      <label><input type="checkbox" id="sPnc"> Primary &amp; non-contributory</label></div></div>
+    <div class="fld full"><label>Certificate holder</label><input id="sHolder"></div>
+    <div class="fld full"><label>Additional insured / notes (printed in requests)</label><textarea id="sNotes"></textarea></div>
+  </div>
+  <div class="mact"><button class="btn light" id="sCancel">Cancel</button><button class="btn" id="sSave">Save</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+(function() {
+  'use strict';
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var ROOT_FOLDER = 'Subcontractors & Vendors';
+  var AI_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyeU93xaAefJ034p8Ix2USh2uuKbeiL-4mIVqhLM9CVMsVpFkLRCZzDzPiADHraKjQ/exec';
+  var TYPE_LABEL = { coi: 'Certificate of insurance', msa: 'Master Subcontract Agreement', w9: 'W-9', workers_comp: "Workers' comp certificate", disability: 'Disability / PFL certificate', license: 'License', other: 'Other document' };
+  var TYPE_SHORT = { coi: 'COI', msa: 'MSA', w9: 'W-9', workers_comp: 'WC', disability: 'DBL', license: 'License', other: 'Doc' };
+  var KIND_LABEL = { subcontractor: 'Subcontractor', vendor: 'Vendor', consultant: 'Consultant', other: 'Other' };
+  var profile = null, parties = [], docs = [], reminders = [], settings = null, req = {}, byParty = {}, cardFilter = '', openId = null;
+  var editDoc = null, docFile = null, docAi = null, reqParty = null;
+  var $ = function(id) { return document.getElementById(id); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function money(v) { if (v == null || v === '') return '—'; v = Number(v) || 0; return '$' + v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function num(v) { if (v == null) return null; v = String(v).replace(/[$,\s]/g, ''); if (!v) return null; var n = Number(v); return isFinite(n) ? n : null; }
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
+  function fmt(d) { if (!d) return ''; var p = String(d).slice(0, 10).split('-'); return p.length === 3 ? p[1] + '/' + p[2] + '/' + p[0] : d; }
+  function iso(dt) { return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
+  var TODAY = iso(new Date());
+  function addDays(n) { var d = new Date(); d.setDate(d.getDate() + n); return iso(d); }
+  function daysTo(d) { return Math.round((new Date(d + 'T12:00:00') - new Date(TODAY + 'T12:00:00')) / 86400000); }
+  function lead() { return (settings && settings.lead_days) || 30; }
+  function show(id, on) { $(id).classList[on ? 'add' : 'remove']('show'); }
+  function myName() { return (profile && (profile.full_name || profile.name)) || ''; }
+
+  init().catch(function(e) { console.error(e); $('blocked').textContent = 'Could not load: ' + (e.message || e); $('blocked').style.display = ''; });
+
+  async function init() {
+    try { profile = await getAuthProfile(); } catch (e) {}
+    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { $('blocked').textContent = 'Subcontractor and vendor documents are managed by the office.'; $('blocked').style.display = ''; return; }
+    if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    await load();
+    var params = new URLSearchParams(location.search);
+    if (params.get('f')) cardFilter = params.get('f');
+    render();
+    $('q').addEventListener('input', render); $('fKind').addEventListener('change', render); $('fInactive').addEventListener('change', render);
+    $('btnNew').addEventListener('click', function(e) { e.preventDefault(); ['nName', 'nTrade', 'nContact', 'nEmail'].forEach(function(k) { $(k).value = ''; }); show('newModal', true); setTimeout(function() { $('nName').focus(); }, 50); });
+    $('nCancel').addEventListener('click', function() { show('newModal', false); });
+    $('nSave').addEventListener('click', addCompany);
+    $('btnSettings').addEventListener('click', function(e) { e.preventDefault(); openSettings(); });
+    $('sCancel').addEventListener('click', function() { show('setModal', false); });
+    $('sSave').addEventListener('click', saveSettings);
+    $('drClose').addEventListener('click', closeDrawer); $('drBg').addEventListener('click', closeDrawer);
+    $('dCancel').addEventListener('click', function() { show('docModal', false); });
+    $('dSave').addEventListener('click', saveDoc);
+    $('dType').addEventListener('change', docTypeUi);
+    $('dDrop').addEventListener('click', function() { $('dFile').click(); });
+    $('dFile').addEventListener('change', function() { if (this.files[0]) pickFile(this.files[0]); });
+    $('dDrop').addEventListener('dragover', function(e) { e.preventDefault(); });
+    $('dDrop').addEventListener('drop', function(e) { e.preventDefault(); if (e.dataTransfer.files[0]) pickFile(e.dataTransfer.files[0]); });
+    $('rCancel').addEventListener('click', function() { show('reqModal', false); });
+    $('rSend').addEventListener('click', sendRequest);
+    $('main').style.display = '';
+    if (params.get('party')) openDrawer(params.get('party'));
+    try { var rf = JSON.parse(sessionStorage.getItem('nw_compliance_root') || 'null'); if (rf && rf.url) { $('btnFolder').href = rf.url; $('btnFolder').style.display = ''; } } catch (e) {}
+  }
+
+  async function load() {
+    var r = await Promise.all([
+      supabaseClient.from('compliance_parties').select('*').order('name'),
+      supabaseClient.from('compliance_docs').select('*').order('created_at', { ascending: false }),
+      supabaseClient.from('compliance_reminders').select('*').order('created_at', { ascending: false }).limit(1000),
+      supabaseClient.from('compliance_settings').select('*').eq('id', 1).maybeSingle()
+    ]);
+    if (r[0].error) {
+      if (/compliance_parties/.test(r[0].error.message)) throw new Error('the compliance tables are not created yet — run compliance-schema.sql in Supabase');
+      throw new Error(r[0].error.message);
+    }
+    parties = r[0].data || []; docs = r[1].data || []; reminders = r[2].data || []; settings = r[3].data || { lead_days: 30, notify_emails: 'karen@northernwolvesac.com', requirements: {} };
+    req = settings.requirements || {};
+    byParty = {}; docs.forEach(function(d) { (byParty[d.party_id] = byParty[d.party_id] || []).push(d); });
+  }
+
+  // ===== status logic =====
+  function valid(d) { return d.status === 'received' || d.status === 'approved'; }
+  function currentDoc(pid, type) {
+    var list = (byParty[pid] || []).filter(function(d) { return d.doc_type === type && valid(d); });
+    list.sort(function(a, b) { return String(b.expiration_date || b.signed_date || b.created_at).localeCompare(String(a.expiration_date || a.signed_date || a.created_at)); });
+    return list[0] || null;
+  }
+  function deficiencies(d) {
+    var out = [];
+    if (!d || d.doc_type !== 'coi') return out;
+    function lim(v, need, label) { if (need > 0 && v != null && Number(v) < need) out.push(label + ' ' + money(v) + ' (need ' + money(need) + ')'); else if (need > 0 && v == null) out.push(label + ' not shown'); }
+    lim(d.gl_occurrence, Number(req.gl_occurrence) || 0, 'GL occurrence');
+    lim(d.gl_aggregate, Number(req.gl_aggregate) || 0, 'GL aggregate');
+    lim(d.auto_limit, Number(req.auto_limit) || 0, 'Auto');
+    lim(d.umbrella_limit, Number(req.umbrella_limit) || 0, 'Umbrella');
+    if (req.wc && d.wc_included === false) out.push("no workers' comp");
+    if (req.dbl && d.dbl_included === false) out.push('no NY disability');
+    if (req.additional_insured && d.additional_insured === false) out.push('no additional insured');
+    if (req.waiver_subrogation && d.waiver_subrogation === false) out.push('no waiver of subrogation');
+    if (req.primary_noncontrib && d.primary_noncontrib === false) out.push('not primary & non-contributory');
+    if (d.holder_ok === false) out.push('certificate holder is not Northern Wolves');
+    return out;
+  }
+  // state of one requirement: { st: ok|soon|exp|miss|rev|rej|na, doc, text }
+  function stateOf(p, type) {
+    var need = type === 'coi' ? p.coi_required : type === 'msa' ? p.msa_required : p.w9_required;
+    var d = currentDoc(p.id, type);
+    if (!d) {
+      var rej = (byParty[p.id] || []).filter(function(x) { return x.doc_type === type && x.status === 'rejected'; })[0];
+      if (!need) return { st: 'na', text: 'not required' };
+      return rej ? { st: 'rej', doc: rej, text: 'rejected' } : { st: 'miss', text: 'missing' };
+    }
+    if (d.expiration_date) {
+      var n = daysTo(d.expiration_date);
+      if (n < 0) return { st: 'exp', doc: d, text: 'expired ' + fmt(d.expiration_date) };
+      if (n <= lead()) return { st: 'soon', doc: d, text: 'expires ' + fmt(d.expiration_date), sub: n + ' d' };
+    }
+    if (d.status === 'received') return { st: 'rev', doc: d, text: 'to review', sub: d.expiration_date ? 'exp ' + fmt(d.expiration_date) : '' };
+    if (type === 'coi') return { st: 'ok', doc: d, text: 'OK', sub: d.expiration_date ? 'exp ' + fmt(d.expiration_date) : '' };
+    return { st: 'ok', doc: d, text: d.signed_date ? 'signed ' + fmt(d.signed_date) : 'on file' };
+  }
+  var CHIP = { ok: 'c-ok', soon: 'c-soon', exp: 'c-exp', miss: 'c-miss', rev: 'c-rev', na: 'c-na', rej: 'c-rej' };
+  function chip(s) { return '<span class="chip ' + CHIP[s.st] + '">' + esc(s.text) + (s.sub ? '<small>' + esc(s.sub) + '</small>' : '') + '</span>'; }
+  var RANK = { exp: 0, rej: 1, miss: 2, soon: 3, rev: 4, ok: 5, na: 6 };
+  function partyRank(p) { var c = stateOf(p, 'coi'), m = stateOf(p, 'msa'), w = stateOf(p, 'w9'); return Math.min(RANK[c.st], RANK[m.st] + 0.5, RANK[w.st] + 0.6); }
+
+  var CARDS = [
+    ['all', 'Companies', ''], ['coi_ok', 'COI OK', 'grn'], ['coi_soon', 'COI expiring', 'amb'], ['coi_exp', 'COI expired', 'red'],
+    ['coi_miss', 'COI missing', 'red'], ['review', 'To review', ''], ['msa_miss', 'MSA missing', 'amb'], ['w9_miss', 'W-9 missing', 'amb'], ['attention', 'Needs attention', 'red']
+  ];
+  function matchCard(p, k) {
+    var c = stateOf(p, 'coi'), m = stateOf(p, 'msa'), w = stateOf(p, 'w9');
+    switch (k) {
+      case 'coi_ok': return c.st === 'ok';
+      case 'coi_soon': return c.st === 'soon';
+      case 'coi_exp': return c.st === 'exp';
+      case 'coi_miss': return c.st === 'miss' || c.st === 'rej';
+      case 'review': return c.st === 'rev' || m.st === 'rev' || w.st === 'rev';
+      case 'msa_miss': return m.st === 'miss' || m.st === 'rej';
+      case 'w9_miss': return w.st === 'miss' || w.st === 'rej';
+      case 'attention': return ['exp', 'soon', 'miss', 'rej', 'rev'].indexOf(c.st) >= 0 || ['miss', 'rej', 'rev'].indexOf(m.st) >= 0 || ['miss', 'rej', 'rev'].indexOf(w.st) >= 0;
+      default: return true;
+    }
+  }
+
+  function render() {
+    var q = ($('q').value || '').trim().toLowerCase(), kind = $('fKind').value, inactive = $('fInactive').checked;
+    var base = parties.filter(function(p) { return (inactive || p.is_active) && (!kind || p.kind === kind); });
+    $('cards').innerHTML = CARDS.map(function(c) {
+      var n = base.filter(function(p) { return matchCard(p, c[0]); }).length;
+      return '<div class="card ' + c[2] + ((cardFilter || 'all') === c[0] ? ' on' : '') + '" data-k="' + c[0] + '"><b>' + n + '</b><span>' + c[1] + '</span></div>';
+    }).join('');
+    $('cards').querySelectorAll('.card').forEach(function(el) { el.addEventListener('click', function() { cardFilter = el.getAttribute('data-k') === 'all' ? '' : el.getAttribute('data-k'); render(); }); });
+    var list = base.filter(function(p) {
+      if (cardFilter && !matchCard(p, cardFilter)) return false;
+      if (!q) return true;
+      return [p.name, p.trade, p.contact_name, p.email, p.cc_emails, p.notes, KIND_LABEL[p.kind]].join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+    list.sort(function(a, b) { return partyRank(a) - partyRank(b) || String(a.name).localeCompare(String(b.name)); });
+    $('sum').textContent = list.length + ' compan' + (list.length === 1 ? 'y' : 'ies') + ' · reminders to ' + (settings.notify_emails || '—') + ' ' + lead() + ' days before a COI expires';
+    $('empty').style.display = list.length ? 'none' : '';
+    $('list').innerHTML = list.map(function(p) {
+      var c = stateOf(p, 'coi'), m = stateOf(p, 'msa'), w = stateOf(p, 'w9');
+      var needs = ['exp', 'soon', 'miss', 'rej'].indexOf(c.st) >= 0 || ['miss', 'rej'].indexOf(m.st) >= 0 || ['miss', 'rej'].indexOf(w.st) >= 0;
+      var last = reminders.filter(function(r) { return r.party_id === p.id && r.kind === 'request_sent'; })[0];
+      var defs = c.doc ? deficiencies(c.doc) : [];
+      return '<div class="prow' + (p.is_active ? '' : ' inactive') + '" data-id="' + p.id + '">' +
+        '<div class="nm"><b>' + esc(p.name) + '</b><span>' + esc(KIND_LABEL[p.kind] || p.kind) + (p.trade ? ' · ' + esc(p.trade) : '') + (p.is_active ? '' : ' · inactive') + '</span></div>' +
+        '<div>' + chip(c) + (defs.length && c.st !== 'exp' ? ' <span class="chip c-rej" title="' + esc(defs.join('; ')) + '">' + defs.length + ' gap' + (defs.length > 1 ? 's' : '') + '</span>' : '') + '</div>' +
+        '<div>' + chip(m) + '</div><div>' + chip(w) + '</div>' +
+        '<div class="ct">' + (p.email ? esc(p.contact_name ? p.contact_name + ' · ' : '') + esc(p.email) : '<span style="color:#be123c">no e-mail</span>') + (last ? '<div style="font-size:10px;color:#6b7280">requested ' + fmt(last.created_at) + '</div>' : '') + '</div>' +
+        '<div class="acts">' + (needs ? '<button class="btn sm light" data-req="' + p.id + '">✉ Request</button>' : '') + '<button class="btn sm" data-up="' + p.id + '">+ Doc</button></div>' +
+      '</div>';
+    }).join('');
+    $('list').querySelectorAll('.prow').forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        var b = e.target.closest('button');
+        if (b && b.getAttribute('data-req')) { e.stopPropagation(); openRequest(b.getAttribute('data-req')); return; }
+        if (b && b.getAttribute('data-up')) { e.stopPropagation(); openDoc(b.getAttribute('data-up'), null); return; }
+        openDrawer(el.getAttribute('data-id'));
+      });
+    });
+  }
+
+  // ===== drawer =====
+  function party(id) { return parties.filter(function(p) { return p.id === id; })[0]; }
+  function closeDrawer() { show('drawer', false); show('drBg', false); openId = null; }
+  function openDrawer(id) {
+    var p = party(id); if (!p) return;
+    openId = id;
+    $('drTitle').innerHTML = esc(p.name) + '<small>' + esc(KIND_LABEL[p.kind] || p.kind) + (p.trade ? ' · ' + esc(p.trade) : '') + (p.drive_folder_url ? ' · <a href="' + esc(p.drive_folder_url) + '" target="_blank" style="color:#0696D7;font-weight:700;text-decoration:none">Drive folder ↗</a>' : '') + '</small>';
+    var c = stateOf(p, 'coi'), m = stateOf(p, 'msa'), w = stateOf(p, 'w9');
+    var pd = (byParty[p.id] || []).slice().sort(function(a, b) { var sa = a.status === 'superseded' ? 1 : 0, sb = b.status === 'superseded' ? 1 : 0; return sa - sb || String(b.created_at).localeCompare(String(a.created_at)); });
+    var log = reminders.filter(function(r) { return r.party_id === p.id; }).slice(0, 12);
+    var h = '';
+    h += '<div class="sec"><div class="status3">' +
+      '<div><b>COI</b>' + chip(c) + '</div><div><b>MSA</b>' + chip(m) + '</div><div><b>W-9</b>' + chip(w) + '</div></div></div>';
+    h += '<div class="sec"><h3>Documents<span class="sp"></span><button class="btn sm light" id="drReq">✉ Request documents</button><button class="btn sm" id="drUp">+ Add document</button></h3>' +
+      (pd.length ? pd.map(docHtml).join('') : '<div style="font-size:13px;color:#6b7280">No documents yet.</div>') + '</div>';
+    h += '<div class="sec"><h3>Company</h3><div class="f2">' +
+      fld('Company name', 'pName', p.name) + sel('Type', 'pKind', p.kind, KIND_LABEL) +
+      fld('Trade', 'pTrade', p.trade) + fld('Contact', 'pContact', p.contact_name) +
+      fld('E-mail (requests go here)', 'pEmail', p.email) + fld('Cc (broker, office…)', 'pCc', p.cc_emails) +
+      fld('Phone', 'pPhone', p.phone) + fld('Address', 'pAddr', p.address) +
+      '<div class="fld full"><label>Required</label><div class="checks">' +
+        '<label><input type="checkbox" id="pCoi"' + (p.coi_required ? ' checked' : '') + '> COI</label>' +
+        '<label><input type="checkbox" id="pMsa"' + (p.msa_required ? ' checked' : '') + '> MSA</label>' +
+        '<label><input type="checkbox" id="pW9"' + (p.w9_required ? ' checked' : '') + '> W-9</label>' +
+        '<label><input type="checkbox" id="pAct"' + (p.is_active ? ' checked' : '') + '> Active</label></div></div>' +
+      '<div class="fld full"><label>Notes</label><textarea id="pNotes">' + esc(p.notes || '') + '</textarea></div>' +
+      '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn" id="pSave">Save company</button><button class="btn red" id="pDel">Delete</button></div></div>';
+    h += '<div class="sec"><h3>Reminders &amp; requests</h3><div class="log">' + (log.length ? log.map(function(r) {
+      var what = r.kind === 'request_sent' ? 'Request sent to ' + esc(r.sent_to || '') : r.kind === 'expiring' ? 'Expiry reminder to ' + esc(r.sent_to || '') + ' (expires ' + fmt(r.for_date) + ')' : 'Expired notice to ' + esc(r.sent_to || '') + ' (' + fmt(r.for_date) + ')';
+      return '<div>' + fmt(r.created_at) + ' · ' + what + (r.sent_by_name ? ' · ' + esc(r.sent_by_name) : '') + '</div>';
+    }).join('') : '<div>None yet.</div>') + '</div></div>';
+    $('drBody').innerHTML = h;
+    $('drUp').addEventListener('click', function() { openDoc(p.id, null); });
+    $('drReq').addEventListener('click', function() { openRequest(p.id); });
+    $('pSave').addEventListener('click', function() { saveParty(p.id); });
+    $('pDel').addEventListener('click', function() { deleteParty(p.id); });
+    $('drBody').querySelectorAll('[data-dact]').forEach(function(b) { b.addEventListener('click', function() { docAction(b.getAttribute('data-dact'), b.getAttribute('data-doc')); }); });
+    show('drawer', true); show('drBg', true);
+  }
+  function fld(label, id, v) { return '<div class="fld"><label>' + label + '</label><input id="' + id + '" value="' + esc(v || '') + '"></div>'; }
+  function sel(label, id, v, opts) { return '<div class="fld"><label>' + label + '</label><select id="' + id + '">' + Object.keys(opts).map(function(k) { return '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>' + opts[k] + '</option>'; }).join('') + '</select></div>'; }
+  function docHtml(d) {
+    var stc = { received: 'c-rev', approved: 'c-ok', rejected: 'c-rej', superseded: 'c-na' }[d.status];
+    var dates = [];
+    if (d.effective_date) dates.push('effective ' + fmt(d.effective_date));
+    if (d.expiration_date) { var n = daysTo(d.expiration_date); dates.push('<b style="color:' + (n < 0 ? '#b91c1c' : n <= lead() ? '#b45309' : '#111318') + '">expires ' + fmt(d.expiration_date) + '</b>' + (d.status !== 'superseded' ? ' (' + (n < 0 ? Math.abs(n) + ' d ago' : 'in ' + n + ' d') + ')' : '')); }
+    if (d.signed_date) dates.push('signed ' + fmt(d.signed_date));
+    var lim = [];
+    if (d.doc_type === 'coi') {
+      if (d.gl_occurrence != null || d.gl_aggregate != null) lim.push('GL ' + money(d.gl_occurrence) + ' / ' + money(d.gl_aggregate));
+      if (d.auto_limit != null) lim.push('Auto ' + money(d.auto_limit));
+      if (d.umbrella_limit != null) lim.push('Umbrella ' + money(d.umbrella_limit));
+      var fl = [['WC', d.wc_included], ['DBL', d.dbl_included], ['AI', d.additional_insured], ['WOS', d.waiver_subrogation], ['P&NC', d.primary_noncontrib], ['Holder', d.holder_ok]]
+        .filter(function(x) { return x[1] != null; }).map(function(x) { return (x[1] ? '✓ ' : '✗ ') + x[0]; });
+      if (fl.length) lim.push(fl.join(' '));
+    }
+    var defs = deficiencies(d);
+    return '<div class="doc' + (d.status === 'superseded' ? ' sup' : '') + '">' +
+      '<div class="l1"><b>' + esc(TYPE_LABEL[d.doc_type] || d.doc_type) + '</b><span class="chip ' + stc + '">' + esc(d.status) + '</span><span class="sp"></span>' +
+        (d.drive_url ? '<a href="' + esc(d.drive_url) + '" target="_blank">Open file ↗</a>' : '<span style="font-size:11px;color:#9ca3af">no file</span>') + '</div>' +
+      '<div class="l2">' + (d.title ? esc(d.title) + '<br>' : '') + dates.join(' · ') + (lim.length ? '<br>' + esc(lim.join(' · ')).replace(/✓/g, '<span style="color:#15803d">✓</span>').replace(/✗/g, '<span style="color:#b91c1c">✗</span>') : '') +
+        (d.insurer ? '<br>' + esc(d.insurer) : '') + (d.policy_numbers ? '<br><span style="color:#6b7280">' + esc(d.policy_numbers) + '</span>' : '') + '</div>' +
+      (d.doc_type === 'coi' && d.status !== 'superseded' ? (defs.length ? '<div class="def">Gaps vs our requirements: ' + esc(defs.join('; ')) + '</div>' : '<div class="good">Meets our requirements (as entered)</div>') : '') +
+      (d.review_notes ? '<div class="l2" style="color:#92400e">' + esc(d.review_notes) + '</div>' : '') +
+      '<div class="l2" style="color:#9ca3af">added ' + fmt(d.created_at) + (d.created_by_name ? ' by ' + esc(d.created_by_name) : '') + (d.reviewed_by_name ? ' · reviewed by ' + esc(d.reviewed_by_name) + ' ' + fmt(d.reviewed_at) : '') + '</div>' +
+      '<div class="acts">' +
+        (d.status !== 'approved' ? '<button class="btn sm" data-dact="approve" data-doc="' + d.id + '">Approve</button>' : '') +
+        (d.status !== 'rejected' ? '<button class="btn sm light" data-dact="reject" data-doc="' + d.id + '">Reject</button>' : '') +
+        '<button class="btn sm light" data-dact="edit" data-doc="' + d.id + '">Edit</button>' +
+        (d.status !== 'superseded' ? '<button class="btn sm light" data-dact="supersede" data-doc="' + d.id + '">Superseded</button>' : '') +
+        '<button class="btn sm red" data-dact="delete" data-doc="' + d.id + '">Delete</button>' +
+      '</div></div>';
+  }
+
+  async function saveParty(id) {
+    var name = $('pName').value.trim(); if (!name) { toast('Company name is required'); return; }
+    var row = { name: name, kind: $('pKind').value, trade: $('pTrade').value.trim() || null, contact_name: $('pContact').value.trim() || null,
+      email: $('pEmail').value.trim() || null, cc_emails: $('pCc').value.trim() || null, phone: $('pPhone').value.trim() || null, address: $('pAddr').value.trim() || null,
+      coi_required: $('pCoi').checked, msa_required: $('pMsa').checked, w9_required: $('pW9').checked, is_active: $('pAct').checked, notes: $('pNotes').value.trim() || null };
+    var u = await supabaseClient.from('compliance_parties').update(row).eq('id', id).select().single();
+    if (u.error) { toast('Could not save: ' + u.error.message); return; }
+    parties = parties.map(function(p) { return p.id === id ? u.data : p; });
+    toast('Saved'); render(); openDrawer(id);
+  }
+  async function deleteParty(id) {
+    var p = party(id), n = (byParty[id] || []).length;
+    if (!confirm('Delete ' + p.name + (n ? ' and its ' + n + ' document record(s)? The files stay in Google Drive.' : '?') + '\nTo keep the history, untick Active instead.')) return;
+    var d = await supabaseClient.from('compliance_parties').delete().eq('id', id);
+    if (d.error) { toast('Could not delete: ' + d.error.message); return; }
+    parties = parties.filter(function(x) { return x.id !== id; }); delete byParty[id];
+    closeDrawer(); render(); toast('Deleted');
+  }
+  async function addCompany() {
+    var name = $('nName').value.trim(); if (!name) { toast('Company name is required'); return; }
+    var kind = $('nKind').value;
+    var row = { name: name, kind: kind, trade: $('nTrade').value.trim() || null, contact_name: $('nContact').value.trim() || null, email: $('nEmail').value.trim() || null, msa_required: kind === 'subcontractor' };
+    var r = await supabaseClient.from('compliance_parties').insert(row).select().single();
+    if (r.error) { toast(/duplicate|unique/i.test(r.error.message) ? name + ' is already on the list' : 'Could not add: ' + r.error.message); return; }
+    parties.push(r.data); parties.sort(function(a, b) { return String(a.name).localeCompare(String(b.name)); });
+    show('newModal', false); render(); openDrawer(r.data.id);
+  }
+
+  async function docAction(act, docId) {
+    var d = docs.filter(function(x) { return x.id === docId; })[0]; if (!d) return;
+    if (act === 'edit') { openDoc(d.party_id, d); return; }
+    var patch = null;
+    if (act === 'approve') {
+      var defs = deficiencies(d);
+      if (defs.length && !confirm('This certificate has gaps vs our requirements:\n- ' + defs.join('\n- ') + '\n\nApprove anyway?')) return;
+      patch = { status: 'approved', reviewed_by: profile.id, reviewed_by_name: myName(), reviewed_at: new Date().toISOString() };
+    } else if (act === 'reject') {
+      var why = prompt('Why is it rejected? (shown on the document and used in the request e-mail)', deficiencies(d).join('; '));
+      if (why == null) return;
+      patch = { status: 'rejected', review_notes: why || null, reviewed_by: profile.id, reviewed_by_name: myName(), reviewed_at: new Date().toISOString() };
+    } else if (act === 'supersede') patch = { status: 'superseded' };
+    else if (act === 'delete') {
+      if (!confirm('Delete this document record? The file stays in Google Drive.')) return;
+      var del = await supabaseClient.from('compliance_docs').delete().eq('id', docId);
+      if (del.error) { toast('Could not delete: ' + del.error.message); return; }
+      docs = docs.filter(function(x) { return x.id !== docId; }); rebuild(); openDrawer(d.party_id); return;
+    }
+    var u = await supabaseClient.from('compliance_docs').update(patch).eq('id', docId).select().single();
+    if (u.error) { toast('Could not update: ' + u.error.message); return; }
+    docs = docs.map(function(x) { return x.id === docId ? u.data : x; }); rebuild(); openDrawer(d.party_id);
+  }
+  function rebuild() { byParty = {}; docs.forEach(function(d) { (byParty[d.party_id] = byParty[d.party_id] || []).push(d); }); render(); }
+
+  // ===== document modal =====
+  function docTypeUi() {
+    var t = $('dType').value, coi = t === 'coi', exp = ['coi', 'workers_comp', 'disability', 'license', 'other'].indexOf(t) >= 0, sign = ['msa', 'w9', 'other', 'license'].indexOf(t) >= 0;
+    document.querySelectorAll('#docModal .cx-coi').forEach(function(el) { el.style.display = coi ? '' : 'none'; });
+    document.querySelectorAll('#docModal .cx-exp').forEach(function(el) { el.style.display = exp || coi ? '' : 'none'; });
+    document.querySelectorAll('#docModal .cx-sign').forEach(function(el) { el.style.display = sign ? '' : 'none'; });
+  }
+  function setB(id, v) { $(id).checked = !!v; $(id).indeterminate = v == null; }
+  function getB(id) { return $(id).indeterminate ? null : $(id).checked; }
+  function openDoc(pid, d) {
+    var p = party(pid); if (!p) return;
+    editDoc = d ? Object.assign({}, d) : { party_id: pid };
+    docFile = null; docAi = null;
+    $('docTitle').textContent = (d ? 'Edit document — ' : 'Add document — ') + p.name;
+    $('dType').value = d ? d.doc_type : (stateOf(p, 'coi').st !== 'ok' && p.coi_required ? 'coi' : stateOf(p, 'msa').st === 'miss' ? 'msa' : stateOf(p, 'w9').st === 'miss' ? 'w9' : 'coi');
+    $('dStatus').value = d ? d.status : 'received';
+    $('dTitleIn').value = d ? d.title || '' : '';
+    $('dEff').value = d ? d.effective_date || '' : ''; $('dExp').value = d ? d.expiration_date || '' : ''; $('dSigned').value = d ? d.signed_date || '' : '';
+    $('dInsurer').value = d ? d.insurer || '' : ''; $('dPolicies').value = d ? d.policy_numbers || '' : '';
+    $('dGlOcc').value = d && d.gl_occurrence != null ? d.gl_occurrence : ''; $('dGlAgg').value = d && d.gl_aggregate != null ? d.gl_aggregate : '';
+    $('dAuto').value = d && d.auto_limit != null ? d.auto_limit : ''; $('dUmb').value = d && d.umbrella_limit != null ? d.umbrella_limit : '';
+    setB('dWc', d ? d.wc_included : null); setB('dDbl', d ? d.dbl_included : null); setB('dAi2', d ? d.additional_insured : null);
+    setB('dWos', d ? d.waiver_subrogation : null); setB('dPnc', d ? d.primary_noncontrib : null); setB('dHolder', d ? d.holder_ok : null);
+    $('dNotes').value = d ? d.review_notes || '' : '';
+    $('dDrop').firstChild.textContent = d && d.file_name ? 'File: ' + d.file_name + ' — drop a new file to replace it' : 'Drop the PDF here or tap to choose a file';
+    $('dDrop').classList.toggle('has', !!(d && d.file_name)); $('dFile').value = '';
+    $('dAi').textContent = d ? '' : 'Tip: drop the ACORD certificate — the AI reads dates, limits and endorsements from it.';
+    docTypeUi(); show('docModal', true);
+  }
+  async function pickFile(f) {
+    if (f.size > 25 * 1024 * 1024) { toast('The file is larger than 25 MB'); return; }
+    docFile = f; $('dDrop').firstChild.textContent = '📄 ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB)'; $('dDrop').classList.add('has');
+    if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) {
+      var text = '';
+      try { text = await pdfText(f); } catch (e) { console.warn('[compliance] pdf text', e); }
+      var t = $('dType').value;
+      if (text.replace(/\s+/g, '').length < 150) { $('dAi').textContent = 'This PDF has no text layer (scan) — fill in the fields by hand.'; return; }
+      if (t === 'coi' || /ACORD|CERTIFICATE OF LIABILITY|CERTIFICATE OF INSURANCE/i.test(text)) { if (t !== 'coi') { $('dType').value = 'coi'; docTypeUi(); } readCoi(text); }
+      else if (/W-?9|Request for Taxpayer/i.test(text) && t !== 'w9') { $('dType').value = 'w9'; docTypeUi(); $('dAi').textContent = 'Looks like a W-9.'; }
+    } else $('dAi').textContent = 'Image file — fill in the fields by hand.';
+  }
+  async function pdfText(f) {
+    if (!window.pdfjsLib) return '';
+    var buf = await f.arrayBuffer(), pdf = await pdfjsLib.getDocument({ data: buf }).promise, out = [];
+    for (var i = 1; i <= Math.min(pdf.numPages, 4); i++) {
+      var pg = await pdf.getPage(i), tc = await pg.getTextContent();
+      out.push(tc.items.map(function(it) { return it.str; }).join(' '));
+      // ACORD forms are often fillable: the filled values live in the form fields, not the page text
+      try { var an = await pg.getAnnotations(); an.forEach(function(a) { if (a.fieldValue && typeof a.fieldValue === 'string') out.push((a.fieldName || '') + ': ' + a.fieldValue); }); } catch (e) {}
+    }
+    return out.join('\n');
+  }
+  async function readCoi(text) {
+    var p = party(editDoc.party_id);
+    $('dAi').textContent = '🤖 Reading the certificate…';
+    var prompt = 'You read a US certificate of liability insurance (usually ACORD 25) for a New York HVAC contractor, Northern Wolves, Inc. ' +
+      'The company that should be the INSURED is "' + p.name + '". Read the text below and answer in plain text lines only, KEY: value, no JSON, no markdown, no quotes. Unknown = blank. Dates as YYYY-MM-DD, money as plain numbers.\n' +
+      'INSURED: <insured name as printed>\nINSURERS: <insurer names, ; separated>\nEFFECTIVE: <earliest policy effective date>\nEXPIRATION: <EARLIEST expiration date of any listed policy>\n' +
+      'GL_EACH_OCCURRENCE: <number>\nGL_AGGREGATE: <general aggregate number>\nAUTO: <combined single limit>\nUMBRELLA: <umbrella / excess each occurrence>\n' +
+      'WORKERS_COMP: yes|no\nNY_DISABILITY: yes|no (DBL / PFL listed)\nADDITIONAL_INSURED: yes|no (ADDL INSD marked Y on general liability, or the description names additional insureds)\n' +
+      'WAIVER_OF_SUBROGATION: yes|no\nPRIMARY_NONCONTRIBUTORY: yes|no (stated in the description)\nHOLDER: <certificate holder as printed>\nHOLDER_IS_NORTHERN_WOLVES: yes|no\n' +
+      'POLICIES: <type number expiry; …>\nNOTE: <one short line: anything the office must check, e.g. insured name differs, project-specific wording>\n\n=== CERTIFICATE TEXT ===\n' + text.slice(0, 12000);
+    try {
+      var sess = (await supabaseClient.auth.getSession()).data.session;
+      var res = await fetch(AI_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'generate_summary', prompt: prompt, token: sess ? sess.access_token : null }) });
+      var out = JSON.parse(await res.text());
+      if (!out.success) throw new Error(out.error || 'AI request failed');
+      var k = {};
+      String(out.summary || '').split(/\r?\n/).forEach(function(l) { var m = /^\s*[-*]?\s*([A-Z_]+)\s*:\s*(.*)$/.exec(l); if (m) k[m[1]] = m[2].trim(); });
+      docAi = k;
+      function yn(v) { return /^y/i.test(v || '') ? true : /^n/i.test(v || '') ? false : null; }
+      function dt(v) { return /^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : ''; }
+      if (dt(k.EFFECTIVE)) $('dEff').value = k.EFFECTIVE;
+      if (dt(k.EXPIRATION)) $('dExp').value = k.EXPIRATION;
+      if (k.INSURERS) $('dInsurer').value = k.INSURERS;
+      if (k.POLICIES) $('dPolicies').value = k.POLICIES;
+      [['GL_EACH_OCCURRENCE', 'dGlOcc'], ['GL_AGGREGATE', 'dGlAgg'], ['AUTO', 'dAuto'], ['UMBRELLA', 'dUmb']].forEach(function(x) { var n = num(k[x[0]]); if (n != null) $(x[1]).value = n; });
+      [['WORKERS_COMP', 'dWc'], ['NY_DISABILITY', 'dDbl'], ['ADDITIONAL_INSURED', 'dAi2'], ['WAIVER_OF_SUBROGATION', 'dWos'], ['PRIMARY_NONCONTRIBUTORY', 'dPnc'], ['HOLDER_IS_NORTHERN_WOLVES', 'dHolder']].forEach(function(x) { var v = yn(k[x[0]]); if (v != null) setB(x[1], v); });
+      if (!$('dTitleIn').value) $('dTitleIn').value = 'COI' + (k.EXPIRATION ? ' exp ' + fmt(k.EXPIRATION) : '');
+      var notes = [];
+      if (k.INSURED && p.name.toLowerCase().split(/\s+/)[0] && k.INSURED.toLowerCase().indexOf(p.name.toLowerCase().split(/\s+/)[0]) < 0) notes.push('Insured on the certificate: ' + k.INSURED);
+      if (k.NOTE) notes.push(k.NOTE);
+      if (notes.length && !$('dNotes').value) $('dNotes').value = notes.join('\n');
+      $('dAi').textContent = '🤖 Read by AI — check the dates and limits before saving.' + (k.INSURED ? ' Insured: ' + k.INSURED : '');
+    } catch (e) { console.warn('[compliance] ai', e); $('dAi').textContent = 'AI could not read it (' + (e.message || e) + ') — fill in by hand.'; }
+  }
+
+  async function rootFolder() {
+    try { var c = JSON.parse(sessionStorage.getItem('nw_compliance_root') || 'null'); if (c && c.id) return c; } catch (e) {}
+    var r = await NWDrive.request({ action: 'root_folder', name: ROOT_FOLDER });
+    try { sessionStorage.setItem('nw_compliance_root', JSON.stringify(r.folder)); } catch (e) {}
+    $('btnFolder').href = r.folder.url; $('btnFolder').style.display = '';
+    return r.folder;
+  }
+  async function partyFolder(p) {
+    if (p.drive_folder_id) return p.drive_folder_id;
+    var root = await rootFolder();
+    var r = await NWDrive.request({ action: 'sub_folder', folderId: root.id, name: p.name.replace(/[\\/:*?"<>|]+/g, '-').trim() });
+    if (!r || !r.folder) throw new Error((r && r.error) || 'Drive folder not created');
+    p.drive_folder_id = r.folder.id; p.drive_folder_url = r.folder.url;
+    await supabaseClient.from('compliance_parties').update({ drive_folder_id: r.folder.id, drive_folder_url: r.folder.url }).eq('id', p.id);
+    return r.folder.id;
+  }
+  function fileNameFor(p, row, f) {
+    var ext = (/\.([a-z0-9]{2,5})$/i.exec(f.name) || [, 'pdf'])[1].toLowerCase();
+    var tag = TYPE_SHORT[row.doc_type] || 'Doc';
+    var when = row.expiration_date ? ' - exp ' + row.expiration_date : row.signed_date ? ' - signed ' + row.signed_date : ' - ' + TODAY;
+    return (p.name + ' - ' + tag + when).replace(/[\\/:*?"<>|]+/g, '-') + '.' + ext;
+  }
+
+  async function saveDoc() {
+    var p = party(editDoc.party_id), t = $('dType').value;
+    var row = { party_id: p.id, doc_type: t, status: $('dStatus').value, title: $('dTitleIn').value.trim() || null,
+      effective_date: $('dEff').value || null, expiration_date: $('dExp').value || null, signed_date: $('dSigned').value || null,
+      insurer: $('dInsurer').value.trim() || null, policy_numbers: $('dPolicies').value.trim() || null,
+      gl_occurrence: num($('dGlOcc').value), gl_aggregate: num($('dGlAgg').value), auto_limit: num($('dAuto').value), umbrella_limit: num($('dUmb').value),
+      wc_included: getB('dWc'), dbl_included: getB('dDbl'), additional_insured: getB('dAi2'), waiver_subrogation: getB('dWos'), primary_noncontrib: getB('dPnc'), holder_ok: getB('dHolder'),
+      review_notes: $('dNotes').value.trim() || null };
+    if (t !== 'coi') ['effective_date', 'insurer', 'policy_numbers', 'gl_occurrence', 'gl_aggregate', 'auto_limit', 'umbrella_limit', 'wc_included', 'dbl_included', 'additional_insured', 'waiver_subrogation', 'primary_noncontrib', 'holder_ok'].forEach(function(k) { if (t !== 'workers_comp' && t !== 'disability' || k !== 'effective_date') row[k] = null; });
+    if (t === 'coi' && !row.expiration_date) { toast('Enter the expiration date — reminders depend on it'); return; }
+    if (!editDoc.id && !docFile && !confirm('Save without a file?')) return;
+    if (row.status === 'approved' && !editDoc.reviewed_at) { row.reviewed_by = profile.id; row.reviewed_by_name = myName(); row.reviewed_at = new Date().toISOString(); }
+    if (docAi) row.ai_extracted = docAi;
+    $('dSave').disabled = true; $('dSave').textContent = docFile ? 'Uploading…' : 'Saving…';
+    try {
+      if (docFile) {
+        var fid = await partyFolder(p), name = fileNameFor(p, row, docFile), b64 = await NWDrive.toBase64(docFile);
+        var up = await NWDrive.request({ action: 'upload_to_folder', folderId: fid, fileName: name, fileData: b64, mimeType: docFile.type || 'application/pdf' });
+        if (!up || !up.file) throw new Error((up && up.error) || 'upload failed');
+        row.file_name = name; row.drive_id = up.file.id; row.drive_url = up.file.viewUrl || up.file.url;
+      }
+      var res;
+      if (editDoc.id) res = await supabaseClient.from('compliance_docs').update(row).eq('id', editDoc.id).select().single();
+      else res = await supabaseClient.from('compliance_docs').insert(Object.assign(row, { created_by: profile.id, created_by_name: myName() })).select().single();
+      if (res.error) throw new Error(res.error.message);
+      docs = docs.filter(function(x) { return x.id !== res.data.id; }); docs.unshift(res.data);
+      // a new COI / MSA / W-9 replaces the older ones of the same kind
+      if (!editDoc.id && valid(res.data) && ['coi', 'msa', 'w9', 'workers_comp', 'disability'].indexOf(t) >= 0) {
+        var older = docs.filter(function(x) { return x.party_id === p.id && x.doc_type === t && x.id !== res.data.id && valid(x) && (!res.data.expiration_date || !x.expiration_date || x.expiration_date <= res.data.expiration_date); });
+        if (older.length) {
+          var ids = older.map(function(x) { return x.id; });
+          var su = await supabaseClient.from('compliance_docs').update({ status: 'superseded' }).in('id', ids);
+          if (!su.error) docs.forEach(function(x) { if (ids.indexOf(x.id) >= 0) x.status = 'superseded'; });
+        }
+      }
+      show('docModal', false); rebuild(); openDrawer(p.id); toast('Saved' + (docFile ? ' — file in Drive / ' + ROOT_FOLDER + ' / ' + p.name : ''));
+    } catch (e) { console.error(e); toast('Could not save: ' + (e.message || e)); }
+    finally { $('dSave').disabled = false; $('dSave').textContent = 'Save'; }
+  }
+
+  // ===== request e-mail =====
+  function reqLines() {
+    var r = [];
+    if (Number(req.gl_occurrence)) r.push('Commercial general liability: ' + money(req.gl_occurrence) + ' each occurrence / ' + money(req.gl_aggregate) + ' general aggregate');
+    if (Number(req.auto_limit)) r.push('Automobile liability: ' + money(req.auto_limit) + ' combined single limit');
+    if (Number(req.umbrella_limit)) r.push('Umbrella / excess liability: ' + money(req.umbrella_limit));
+    if (req.wc || req.dbl) r.push("Workers' compensation" + (req.dbl ? ' and New York disability / paid family leave (DBL/PFL)' : '') + ' — statutory');
+    var e = [];
+    if (req.additional_insured) e.push('additional insured' + (req.primary_noncontrib ? ' on a primary and non-contributory basis' : ''));
+    if (req.waiver_subrogation) e.push('waiver of subrogation');
+    if (e.length) r.push('Endorsements: ' + e.join(', ') + ' in favor of Northern Wolves, Inc. and the parties required by the project contract');
+    if (req.holder) r.push('Certificate holder: ' + req.holder);
+    return r;
+  }
+  function openRequest(pid) {
+    var p = party(pid); if (!p) return;
+    reqParty = p;
+    var c = stateOf(p, 'coi'), m = stateOf(p, 'msa'), w = stateOf(p, 'w9'), items = [];
+    if (c.st === 'exp') items.push('Certificate of insurance — expired on ' + fmt(c.doc.expiration_date) + '. Please send the renewed certificate.');
+    else if (c.st === 'soon') items.push('Certificate of insurance — expires on ' + fmt(c.doc.expiration_date) + '. Please send the renewal certificate before that date.');
+    else if (c.st === 'miss') items.push('Certificate of insurance — we do not have a current certificate on file.');
+    else if (c.st === 'rej') items.push('Certificate of insurance — the certificate we received does not meet our requirements' + (c.doc && c.doc.review_notes ? ': ' + c.doc.review_notes : '') + '.');
+    else if (c.doc && deficiencies(c.doc).length) items.push('Certificate of insurance — please revise: ' + deficiencies(c.doc).join('; ') + '.');
+    if (m.st === 'miss' || m.st === 'rej') items.push('Master Subcontract Agreement — not signed yet. Reply to this e-mail and we will send it for signature.');
+    if (w.st === 'miss' || w.st === 'rej') items.push('Form W-9 — signed, current year.');
+    if (!items.length) items.push('Updated certificate of insurance.');
+    var greet = p.contact_name ? 'Hello ' + p.contact_name.split(/\s+/)[0] + ',' : 'Hello,';
+    var needCoi = c.st !== 'ok' && c.st !== 'na' || (c.doc && deficiencies(c.doc).length);
+    var body = greet + '\n\nNorthern Wolves keeps a current certificate of insurance and signed agreements on file for every subcontractor and vendor working on our projects. To keep ' + p.name + ' active with us, please send:\n\n' +
+      items.map(function(x) { return '- ' + x; }).join('\n') +
+      (needCoi ? '\n\nOur insurance requirements (please forward to your insurance broker):\n' + reqLines().map(function(x) { return '- ' + x; }).join('\n') + (req.notes ? '\n' + req.notes : '') : '') +
+      '\n\nPlease reply to this e-mail with the documents attached.\n\nThank you,\n' + (myName() ? myName() + '\n' : '') + 'Northern Wolves Air Conditioning';
+    $('rTo').value = [p.email, p.cc_emails].filter(Boolean).join(', ');
+    $('rSubj').value = 'Northern Wolves — ' + (c.st === 'exp' || c.st === 'soon' ? 'insurance certificate renewal' : 'insurance & subcontractor documents') + ' — ' + p.name;
+    $('rBody').value = body;
+    $('rReply').textContent = (profile && profile.email) || 'you';
+    show('reqModal', true);
+  }
+  async function sendRequest() {
+    var to = $('rTo').value.trim(); if (!/@/.test(to)) { toast('Enter the e-mail address'); return; }
+    var p = reqParty;
+    $('rSend').disabled = true; $('rSend').textContent = 'Sending…';
+    try {
+      await nwSendBrandedEmail({ to: to, subject: $('rSubj').value.trim(), bodyText: $('rBody').value, reportType: 'Insurance & documents', title: 'Documents request', subtitle: p.name,
+        customerName: p.name, techName: myName(), senderName: myName(), senderEmail: profile.email || '', files: [] });
+      var ins = await supabaseClient.from('compliance_reminders').insert({ party_id: p.id, kind: 'request_sent', sent_to: to, subject: $('rSubj').value.trim(), sent_by: profile.id, sent_by_name: myName() }).select().single();
+      if (!ins.error) reminders.unshift(ins.data);
+      if (!p.email) { var first = to.split(/[,;]/)[0].trim(); await supabaseClient.from('compliance_parties').update({ email: first }).eq('id', p.id); p.email = first; }
+      show('reqModal', false); render(); if (openId === p.id) openDrawer(p.id); toast('Request sent to ' + to);
+    } catch (e) { console.error(e); toast('Could not send: ' + ((e && (e.text || e.message)) || e)); }
+    finally { $('rSend').disabled = false; $('rSend').textContent = 'Send'; }
+  }
+
+  // ===== settings =====
+  function openSettings() {
+    $('sNotify').value = settings.notify_emails || ''; $('sLead').value = lead();
+    $('sGlOcc').value = req.gl_occurrence || ''; $('sGlAgg').value = req.gl_aggregate || ''; $('sAuto').value = req.auto_limit || ''; $('sUmb').value = req.umbrella_limit || '';
+    $('sWc').checked = !!req.wc; $('sDbl').checked = !!req.dbl; $('sAi').checked = !!req.additional_insured; $('sWos').checked = !!req.waiver_subrogation; $('sPnc').checked = !!req.primary_noncontrib;
+    $('sHolder').value = req.holder || ''; $('sNotes').value = req.notes || '';
+    show('setModal', true);
+  }
+  async function saveSettings() {
+    var nr = { gl_occurrence: num($('sGlOcc').value) || 0, gl_aggregate: num($('sGlAgg').value) || 0, auto_limit: num($('sAuto').value) || 0, umbrella_limit: num($('sUmb').value) || 0,
+      wc: $('sWc').checked, dbl: $('sDbl').checked, additional_insured: $('sAi').checked, waiver_subrogation: $('sWos').checked, primary_noncontrib: $('sPnc').checked,
+      holder: $('sHolder').value.trim(), notes: $('sNotes').value.trim() };
+    var row = { id: 1, notify_emails: $('sNotify').value.trim() || 'karen@northernwolvesac.com', lead_days: Math.max(1, Math.min(120, parseInt($('sLead').value, 10) || 30)), requirements: nr, updated_at: new Date().toISOString() };
+    var u = await supabaseClient.from('compliance_settings').upsert(row).select().single();
+    if (u.error) { toast('Could not save: ' + u.error.message); return; }
+    settings = u.data; req = settings.requirements || {};
+    show('setModal', false); render(); toast('Requirements saved');
+  }
+})();
+</script>
+<script src="sw-register.js?v=522"></script>
+</body>
+</html>
