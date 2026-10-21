@@ -14,15 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=485"></script>
-<script src="auth.js?v=485"></script>
-<script src="est-org.js?v=485"></script>
-<script src="est-totals.js?v=485"></script>
+<script src="supabase-config.js?v=508"></script>
+<script src="auth.js?v=508"></script>
+<script src="est-org.js?v=508"></script>
+<script src="est-totals.js?v=508"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=485"></script>
-<script src="nw-email.js?v=485"></script>
-<script src="est-engine.js?v=497"></script>
-<script src="geo-takeoff.js?v=497"></script>
+<script src="email-utils.js?v=508"></script>
+<script src="nw-email.js?v=508"></script>
+<script src="est-engine.js?v=508"></script>
+<script src="geo-takeoff.js?v=508"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -257,6 +257,7 @@ var AE = (function() {
       '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
       ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + (res.run && res.run.finished_at ? ' · last run ' + res.run.read + ' sheet' + (res.run.read === 1 ? '' : 's') + ' in ' + Math.max(1, Math.round(res.run.secs / 60)) + ' min, $' + Number(res.run.cost || 0).toFixed(2) + (res.run.retries ? ', ' + res.run.retries + ' retr' + (res.run.retries === 1 ? 'y' : 'ies') : '') + (res.run.failed ? ', <span class="flag">' + res.run.failed + ' failed</span>' : '') : '') + (res.run && res.run.active && !running && res.run.heartbeat && Date.now() - new Date(res.run.heartbeat).getTime() < 120000 ? ' · <span class="flag">reading in another tab' + (res.run.by ? ' (' + esc(res.run.by) + ')' : '') + '</span>' : '') + '</div></div>' +
       '<div class="row"><label title="Shop drawings and T&amp;B are counted per plan sheet with new work; type a number here to override">SD/T&amp;B sheets<input type="number" id="sFloors" value="' + (session.floors || '') + '" style="width:70px" onchange="AE.saveFloors(this.value)"></label>' +
+      '<label title="Floor-to-floor height: every UP / DN duct or pipe size label on a plan is a vertical run of this height (half of it for a lone UP or DN). Re-run Measure ducts &amp; pipes after changing it">Floor height ft<input type="number" id="sFloorH" min="6" max="40" step="0.5" value="' + (Number(res.floor_height) || 12) + '" style="width:64px" onchange="AE.saveFloorHeight(this.value)"></label>' +
       (!bidBoardOrg() ? '' : session.estimate_id ? '<a class="btn" href="estimating.html?est=' + session.estimate_id + '">📐 Open estimate</a><button class="btn" onclick="AE.linkEstimate(\'compare\')" title="Put the AI takeoff side by side with the estimator\'s own estimate of this job">⇄ Compare</button>' : '<button class="btn" onclick="AE.linkEstimate()" title="Tie this session to an estimate that already exists on the Bid Board">🔗 Link estimate</button>') + '</div></div>' +
       (estimateGone ? '<div class="muted" style="margin-top:6px">⚠ The estimate this session was linked to no longer exists (deleted on the Bid Board). Link the session to the right estimate, or “Create estimate” makes a new one.</div>' : '') + '</div>' +
 
@@ -287,6 +288,7 @@ var AE = (function() {
       (bidBoardOrg() ? '<button class="btn" onclick="AE.toEstimate()" ' + (res.engine ? '' : 'disabled') + '>📐 ' + (session.estimate_id ? 'Update' : 'Create') + ' estimate</button>' : '') +
       '<button class="btn" onclick="AE.exportPdf()" ' + (res.engine ? '' : 'disabled') + ' title="The priced breakdown, totals, checks and scope review as a PDF">⬇ PDF</button>' +
       '<button class="btn" onclick="AE.exportCsv()" ' + (res.engine ? '' : 'disabled') + ' title="Every line with quantities, unit costs and amounts — opens in Excel">⬇ CSV</button>' +
+      '<button class="btn" onclick="AE.exportQuantities()" ' + (done ? '' : 'disabled') + ' title="The takeoff quantities only — duct feet per size, pipe per service and size, air devices, equipment, risers — for Excel">⬇ Quantities</button>' +
       (bidBoardOrg() ? '<button class="btn" onclick="AE.toTakeoff()" ' + (session.estimate_id && !bridging && pages.some(function(p) { return p.status === 'done'; }) ? '' : 'disabled') + ' title="Copy the plans into the estimate\'s Takeoff with the measured ducts, pipes and risers as layers you can check and adjust (without measurements: just the plans, to trace or auto-measure there)">' + (bridging ? '🗺 ' + esc(bridging) : '🗺 Open in Takeoff') + '</button>' : '') + '</div></div>' +
       renderDuctSpec(res) + renderCorrections() +
       '<div id="estOut">' + (res.engine ? renderEngine(res.engine) : '<div class="muted" style="margin-top:8px">Read the sheets, then press “Price it”.</div>') + '</div>' +
@@ -353,6 +355,13 @@ var AE = (function() {
   async function saveFloors(v) {
     session.floors = Number(v) || null;
     await supabaseClient.from('ai_est_sessions').update({ floors: session.floors }).eq('id', session.id);
+  }
+  // floor-to-floor height (ft) for the UP / DN risers — geo-takeoff reads it as D.riserFt (12 ft when unset)
+  async function saveFloorHeight(v) {
+    var h = Number(v); if (!(h >= 6 && h <= 40)) { toast('Floor height: 6–40 ft'); return; }
+    session.result = Object.assign({}, session.result || {}, { floor_height: h });
+    await supabaseClient.from('ai_est_sessions').update({ result: session.result }).eq('id', session.id);
+    toast('Floor height ' + h + ' ft — re-run Measure ducts & pipes for the risers to use it');
   }
 
   // competing quotes on the same scope: only the checked ones go into the price
@@ -576,6 +585,7 @@ var AE = (function() {
         }
         var aiScale = p.result && p.result.scale;
         if (aiScale && !NWGeo.hasScale(data.fullText)) data.fullText += ' SCALE: ' + aiScale;
+        data.riserFt = Number((session.result || {}).floor_height) || 12;   // floor-to-floor height for the UP / DN risers (session card)
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, at: new Date().toISOString() } :
           { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
@@ -1308,6 +1318,30 @@ var AE = (function() {
     var org = window.NWOrg && NWOrg.current(); out.push(''); out.push(q((session.name || '') + (session.location ? ' — ' + session.location : '') + ' · AI estimate of ' + new Date().toLocaleDateString('en-US') + (org ? ' · ' + org.name : '')));
     saveBlob(new Blob(['\ufeff' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), fileStem() + '.csv');
   }
+  // Quantities export — what the plans gave, before any price: duct ft per size (plan + risers), pipe per service / size, air devices
+  // per type / tag (linear slot ft), equipment per tag (schedule vs plans), the sheets each came from. Opens in Excel.
+  function exportQuantities() {
+    var C; try { C = NWEngine.collect(NWEngine.applyCorrections(pages, corrections), { pipeSr: !!(session.result || {}).pipe_sr }); } catch (e) { toast('Collect failed: ' + e.message); return; }
+    function q(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    function row(a) { return a.map(q).join(','); }
+    function uniq(a) { return a.filter(function(x, i) { return a.indexOf(x) === i; }); }
+    var out = [row(['Section', 'Item', 'Size', 'Service / type', 'Qty', 'Unit', 'of which risers', 'Sheets'])];
+    var dk = Object.keys(C.duct || {}).sort(); dk.forEach(function(k) { var d = C.duct[k]; out.push(row(['Ductwork', d.shape === 'round' ? 'Round duct' : 'Rectangular duct', d.size, d.shape, Math.round(d.lf * 10) / 10, 'ft', d.riser_ft ? Math.round(d.riser_ft * 10) / 10 : '', uniq(d.sheets || []).join(' ')])); });
+    var pk = Object.keys(C.pipe || {}).sort(); pk.forEach(function(k) { var p = C.pipe[k]; out.push(row(['Pipework', p.riser ? 'Pipe riser' : 'Pipe', p.size, (p.service || '') + (p.material ? ' ' + p.material : ''), Math.round(p.lf * 10) / 10, 'ft', p.riser_ft ? Math.round(p.riser_ft * 10) / 10 : '', uniq(p.sheets || []).join(' ')])); });
+    Object.keys(C.devices || {}).sort().forEach(function(k) { var d = C.devices[k]; if (d.type === 'linear') out.push(row(['Air devices', 'Linear diffuser ' + (d.tag || ''), d.size || '', 'linear', d.lf ? Math.round(d.lf * 10) / 10 : d.qty, d.lf ? 'ft' : 'ea', '', uniq(d.sheets || []).join(' ')])); else out.push(row(['Air devices', (d.tag || d.type), d.size || '', d.type, d.qty, 'ea', '', uniq(d.sheets || []).join(' ')])); });
+    var eq = {}; Object.keys(C.sched || {}).forEach(function(t) { eq[t] = { sched: C.sched[t].qty, plan: (C.planEq[t] || {}).qty || 0, row: C.sched[t] }; }); Object.keys(C.planEq || {}).forEach(function(t) { if (!eq[t]) eq[t] = { sched: '', plan: C.planEq[t].qty, row: C.planEq[t] }; });
+    Object.keys(eq).sort().forEach(function(t) { var e = eq[t]; out.push(row(['Equipment', e.row.label || t, e.row.model || e.row.size || '', (e.row.type || '') + (e.sched !== '' ? ' · schedule ' + e.sched + ' / plans ' + e.plan : ' · plans only'), Math.max(Number(e.sched) || 0, Number(e.plan) || 0) || 1, 'ea', '', uniq(e.row.sheets || []).join(' ')])); });
+    var ductFt = dk.reduce(function(s, k) { return s + C.duct[k].lf; }, 0), pipeFt = pk.reduce(function(s, k) { return s + C.pipe[k].lf; }, 0);
+    var outlets = 0, linFt = 0; Object.keys(C.devices || {}).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) outlets += d.qty; else if (d.type === 'linear') linFt += d.lf || d.qty * 4; });
+    var reviewed = corrections.filter(function(c) { return c.status && c.status !== 'new'; }).length;
+    out.push(''); out.push(row(['Summary', 'Sheets read', '', '', pages.filter(function(p) { return p.status === 'done'; }).length, 'sheets', '', '']));
+    out.push(row(['Summary', 'Ductwork', '', '', Math.round(ductFt), 'ft', Math.round((C.ductRisers || {}).ft || 0) || '', '']));
+    out.push(row(['Summary', 'Pipework', '', '', Math.round(pipeFt), 'ft', Math.round((C.pipeRisers || {}).ft || 0) || '', '']));
+    out.push(row(['Summary', 'Air outlets', '', '', Math.round(outlets), 'ea', '', ''])); out.push(row(['Summary', 'Linear diffusers', '', '', Math.round(linFt), 'ft', '', '']));
+    out.push(row(['Summary', 'Equipment tags', '', '', Object.keys(eq).length, 'ea', '', ''])); out.push(row(['Summary', 'Review decisions logged', '', '', reviewed, 'items', '', '']));
+    var org = window.NWOrg && NWOrg.current(); out.push(''); out.push(q((session.name || '') + (session.location ? ' — ' + session.location : '') + ' · AI takeoff quantities of ' + new Date().toLocaleDateString('en-US') + (org ? ' · ' + org.name : '')));
+    saveBlob(new Blob(['\ufeff' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), fileStem().replace(' — AI estimate', ' — AI quantities') + '.csv');
+  }
   async function exportPdf() {
     var rows = exportRows(); if (!rows.length) { toast('Price it first'); return; }
     try {
@@ -1641,9 +1675,9 @@ var AE = (function() {
     toast('Estimate ready ✓' + (skippedCats.length ? ' — ' + skippedCats.join(', ').replace(/_/g, ' ') + ' stay with the takeoff' : '')); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=485"></script>
+<script src="sw-register.js?v=508"></script>
 </body>
 </html>
