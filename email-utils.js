@@ -21,6 +21,8 @@ const EMAIL_CONFIG = {
   // Pilot switch: true = only emails whose recipients are ALL @northernwolvesac.com use the branded template (clients keep the plain one).
   // Seen in Gmail on 2026-10-04 (Russ's Snowflake CO test) and switched off — branded for everyone. Flip back to true to roll back.
   EMAILJS_HTML_INTERNAL_ONLY: false,
+  // Visible sender name of every e-mail the app sends (the mailbox is the EmailJS Gmail service: hello@northernwolvesac.com)
+  FROM_NAME: 'Northern Wolves',
 
   // Google Apps Script web app URL (uploads PDF to Drive, returns link)
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzvkMp9DdSa4JUC8CNxLPnGuiYnkMoidltHbQvvUYQPh7ZfLICPWRcRG7iKcbKH-A3c/exec',
@@ -276,7 +278,9 @@ async function nwSendBrandedEmail(o) {
     report_type:   o.reportType || '',
     customer_name: o.customerName || '',
     tech_name:     o.techName || '',
-    from_name:     who.name ? who.name + ' (Northern Wolves)' : 'Northern Wolves Air Conditioning',
+    // From name is the brand only (Russ 2026-10-21). NB: text in parentheses in a From header is an RFC 5322 *comment* and Gmail drops it —
+    // "Ruslan Zhdamarov (Northern Wolves)" arrived as "Ruslan Zhdamarov"; never put the person in parentheses here.
+    from_name:     EMAIL_CONFIG.FROM_NAME || 'Northern Wolves',
     reply_to:      who.email || 'hello@northernwolvesac.com',
     sender_name:   who.name || '',
     sender_email:  who.email || ''
