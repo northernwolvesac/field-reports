@@ -14,15 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=535"></script>
-<script src="auth.js?v=535"></script>
-<script src="est-org.js?v=535"></script>
-<script src="est-totals.js?v=535"></script>
+<script src="supabase-config.js?v=537"></script>
+<script src="auth.js?v=537"></script>
+<script src="est-org.js?v=537"></script>
+<script src="est-totals.js?v=537"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=535"></script>
-<script src="nw-email.js?v=535"></script>
-<script src="est-engine.js?v=535"></script>
-<script src="geo-takeoff.js?v=535"></script>
+<script src="email-utils.js?v=537"></script>
+<script src="nw-email.js?v=537"></script>
+<script src="est-engine.js?v=537"></script>
+<script src="geo-takeoff.js?v=537"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -624,7 +624,7 @@ var AE = (function() {
         data.riserFt = Number((session.result || {}).floor_height) || 12;   // floor-to-floor height for the UP / DN risers (session card)
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, fittings: g.fittings && g.fittings.n_total ? g.fittings : undefined, systems: g.systems || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, fittings: g.fittings && g.fittings.n_total ? g.fittings : undefined, pipe_fittings: g.pipe_fittings && g.pipe_fittings.n_total ? g.pipe_fittings : undefined, systems: g.systems || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
         // refrigerant / water piping drawn on the HVAC plan itself: measured too when the AI saw pipe runs on this sheet, and kept only when the
         // two agree within a factor of 3-4 (duct lines and walls look like pipes to the line follower)
         if (!riser && !pipes && !g.error) {
@@ -635,7 +635,7 @@ var AE = (function() {
             if (aiScale && !NWGeo.hasScale(pdata2.fullText)) pdata2.fullText += ' SCALE: ' + aiScale;
             var gp = await NWGeo.measurePipes(pdata2);
             geoPipe = gp.error ? { error: gp.error, at: new Date().toISOString() }
-              : (gp.total_ft <= 3 * aiPipeFt && gp.total_ft >= aiPipeFt / 4) ? { sizes: gp.sizes, total_ft: gp.total_ft, ptft: gp.ptft, labels: gp.labels, sr: gp.sr, single_ft: gp.single_ft, paired_ft: gp.paired_ft, single_sizes: gp.single_sizes, at: new Date().toISOString() }
+              : (gp.total_ft <= 3 * aiPipeFt && gp.total_ft >= aiPipeFt / 4) ? { sizes: gp.sizes, total_ft: gp.total_ft, ptft: gp.ptft, labels: gp.labels, sr: gp.sr, single_ft: gp.single_ft, paired_ft: gp.paired_ft, single_sizes: gp.single_sizes, pipe_fittings: gp.pipe_fittings && gp.pipe_fittings.n_total ? gp.pipe_fittings : undefined, at: new Date().toISOString() }
               : { error: 'pipes: measured ' + Math.round(gp.total_ft) + ' ft vs the AI\'s ' + Math.round(aiPipeFt) + ' ft — not used', at: new Date().toISOString() };
           }
         }
@@ -1395,6 +1395,7 @@ var AE = (function() {
       (e.ductCheck ? '<p><b>Duct footage check:</b> ' + e.ductCheck.measured_ft + ' ft measured for ' + e.ductCheck.outlets + ' air devices; NWAC history says ' + e.ductCheck.expected_ft[0] + '–' + e.ductCheck.expected_ft[2] + ' ft (median ' + e.ductCheck.expected_ft[1] + ').</p>' : '') +
       (e.ductSystems ? '<p><b>Duct by system:</b> ' + ['SA', 'RA', 'EA', 'OA', 'TA', ''].filter(function(s) { return e.ductSystems[s] >= 0.5; }).map(function(s) { return (s ? ({ SA: 'supply', RA: 'return', EA: 'exhaust', OA: 'outside air', TA: 'transfer' })[s] + ' (' + s + ')' : 'not marked') + ' ' + Math.round(e.ductSystems[s]).toLocaleString('en-US') + ' ft'; }).join(' · ') + ' <span class="muted">— from the S/A · R/A · E/A marks on the size labels and the reader\'s reading; sizes per system in ⬇ Quantities</span></p>' : '') +
       (e.fittings && e.fittings.n_total ? '<p><b>Fittings:</b> ' + e.fittings.n_elbows + ' elbows, ' + e.fittings.n_tees + ' tees, ' + e.fittings.n_transitions + ' transitions <span class="muted">— counted on the measured duct (' + esc((e.fittings.sheets || []).join(', ')) + '); priced within the per-ft rate, sizes in ⬇ Quantities</span></p>' : '') +
+      (e.pipeFittings && e.pipeFittings.n_total ? '<p><b>Pipe fittings &amp; valves:</b> ' + e.pipeFittings.n_valves + ' valves, ' + e.pipeFittings.n_elbows + ' elbows, ' + e.pipeFittings.n_tees + ' tees' + (e.pipeFittings.n_reducers ? ', ' + e.pipeFittings.n_reducers + ' reducers' : '') + (e.pipeFittings.n_crosses ? ', ' + e.pipeFittings.n_crosses + ' crosses' : '') + ' <span class="muted">— counted on the measured piping (' + esc((e.pipeFittings.sheets || []).join(', ')) + '); priced within the per-ft rate, sizes in ⬇ Quantities</span></p>' : '') +
       (e.flags.length ? '<b>To check before this goes out (' + e.flags.length + ')</b><ul class="l">' + e.flags.map(function(f) { return '<li><b>' + esc(f.item) + '</b> — ' + esc(f.flag) + '</li>'; }).join('') + '</ul>' : '') +
       '</div></div>';
     return h;
@@ -1447,6 +1448,8 @@ var AE = (function() {
     Object.keys(eq).sort().forEach(function(t) { var e = eq[t]; out.push(row(['Equipment', e.row.label || t, e.row.model || e.row.size || '', (e.row.type || '') + (e.sched !== '' ? ' · schedule ' + e.sched + ' / plans ' + e.plan : ' · plans only'), Math.max(Number(e.sched) || 0, Number(e.plan) || 0) || 1, 'ea', '', uniq(e.row.sheets || []).join(' ')])); });
     var F = C.fittings || { rows: {} }, FT = { elbow: 'Elbow', tee: 'Tee (main > branch)', transition: 'Transition (from > to)' };
     Object.keys(F.rows || {}).sort(function(a, b) { var A = F.rows[a], B = F.rows[b]; return (A.type > B.type) - (A.type < B.type) || B.count - A.count; }).forEach(function(k) { var f = F.rows[k]; out.push(row(['Fittings', FT[f.type] || f.type, f.size, f.type, f.count, 'ea', '', uniq(f.sheets || []).join(' ')])); });
+    var PF = C.pipeFittings || { rows: {} }, PFT = { valve: 'Valve', elbow: 'Pipe elbow', tee: 'Pipe tee (run > branch)', reducer: 'Pipe reducer (from > to)', cross: 'Pipe cross' }, PFO = { valve: 0, elbow: 1, tee: 2, reducer: 3, cross: 4 };
+    Object.keys(PF.rows || {}).sort(function(a, b) { var A = PF.rows[a], B = PF.rows[b]; return (PFO[A.type] - PFO[B.type]) || B.count - A.count; }).forEach(function(k) { var f = PF.rows[k]; out.push(row(['Pipe fittings', PFT[f.type] || f.type, f.size, f.type, f.count, 'ea', '', uniq(f.sheets || []).join(' ')])); });
     var ductFt = dk.reduce(function(s, k) { return s + C.duct[k].lf; }, 0), pipeFt = pk.reduce(function(s, k) { return s + C.pipe[k].lf; }, 0);
     var outlets = 0, linFt = 0; Object.keys(C.devices || {}).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) outlets += d.qty; else if (d.type === 'linear') linFt += d.lf || d.qty * 4; });
     var reviewed = corrections.filter(function(c) { return c.status && c.status !== 'new'; }).length;
@@ -1455,7 +1458,7 @@ var AE = (function() {
     out.push(row(['Summary', 'Pipework', '', '', Math.round(pipeFt), 'ft', Math.round((C.pipeRisers || {}).ft || 0) || '', '']));
     out.push(row(['Summary', 'Air outlets', '', '', Math.round(outlets), 'ea', '', ''])); out.push(row(['Summary', 'Linear diffusers', '', '', Math.round(linFt), 'ft', '', '']));
     out.push(row(['Summary', 'Equipment tags', '', '', Object.keys(eq).length, 'ea', '', '']));
-    if (F.n_total) out.push(row(['Summary', 'Duct fittings', '', F.n_elbows + ' elbows / ' + F.n_tees + ' tees / ' + F.n_transitions + ' transitions (counted on the measured duct, priced within the per-ft rate)', F.n_total, 'ea', '', ''])); out.push(row(['Summary', 'Review decisions logged', '', '', reviewed, 'items', '', '']));
+    if (F.n_total) out.push(row(['Summary', 'Duct fittings', '', F.n_elbows + ' elbows / ' + F.n_tees + ' tees / ' + F.n_transitions + ' transitions (counted on the measured duct, priced within the per-ft rate)', F.n_total, 'ea', '', ''])); if (PF.n_total) out.push(row(['Summary', 'Pipe fittings & valves', '', PF.n_valves + ' valves / ' + PF.n_elbows + ' elbows / ' + PF.n_tees + ' tees / ' + PF.n_reducers + ' reducers / ' + PF.n_crosses + ' crosses (counted on the measured piping, priced within the per-ft rate)', PF.n_total, 'ea', '', ''])); out.push(row(['Summary', 'Review decisions logged', '', '', reviewed, 'items', '', '']));
     var org = window.NWOrg && NWOrg.current(); out.push(''); out.push(q((session.name || '') + (session.location ? ' — ' + session.location : '') + ' · AI takeoff quantities of ' + new Date().toLocaleDateString('en-US') + (org ? ' · ' + org.name : '')));
     saveBlob(new Blob(['\ufeff' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), fileStem().replace(' — AI estimate', ' — AI quantities') + '.csv');
   }
@@ -1488,7 +1491,8 @@ var AE = (function() {
     doc.setFontSize(8); doc.setTextColor(90);
     doc.text(doc.splitTextToSize('Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' historical unit rates' : 'fallback formula') + '. Shop drawings / T&B: ' + e.floors + ' plan sheet' + (e.floors > 1 ? 's' : '') + (e.sdBasis ? ' — ' + e.sdBasis : '') + (e.pipeSheets ? '; piping ' + e.pipeSheets : '') + '.' +
       (e.ductCheck ? ' Duct footage check: ' + e.ductCheck.measured_ft + ' ft measured for ' + e.ductCheck.outlets + ' air devices; history says ' + e.ductCheck.expected_ft[0] + '–' + e.ductCheck.expected_ft[2] + ' ft (median ' + e.ductCheck.expected_ft[1] + ').' : '') +
-      (e.fittings && e.fittings.n_total ? ' Fittings counted on the measured duct: ' + e.fittings.n_elbows + ' elbows, ' + e.fittings.n_tees + ' tees, ' + e.fittings.n_transitions + ' transitions (within the per-ft rate).' : ''), W - 2 * M), M, y);
+      (e.fittings && e.fittings.n_total ? ' Fittings counted on the measured duct: ' + e.fittings.n_elbows + ' elbows, ' + e.fittings.n_tees + ' tees, ' + e.fittings.n_transitions + ' transitions (within the per-ft rate).' : '') +
+      (e.pipeFittings && e.pipeFittings.n_total ? ' Pipe fittings & valves counted on the measured piping: ' + e.pipeFittings.n_valves + ' valves, ' + e.pipeFittings.n_elbows + ' elbows, ' + e.pipeFittings.n_tees + ' tees (within the per-ft rate).' : ''), W - 2 * M), M, y);
     y += 24; doc.setTextColor(0);
     function section(title, items) {
       if (!items || !items.length) return;
@@ -1796,6 +1800,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=535"></script>
+<script src="sw-register.js?v=537"></script>
 </body>
 </html>

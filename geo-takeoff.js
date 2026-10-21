@@ -2005,6 +2005,130 @@
         var kk = pipeLabel(size[i][0]) + (size[i][1] === 'CD' ? ' CD' : '');
         sizes[kk] = (sizes[kk] || 0) + S[i][6] / ptft; total += S[i][6] / ptft;
       });
+      // ─── pipe fittings + valves census (Takso demo, Russ 2026-10-21). Information only — NWAC prices pipe per ft with the fittings in the
+      // rate — the counts per size + service go to the AI Estimator panel, ⬇ Quantities and the Takeoff review tab. Read off the sized network:
+      //  • a node = sized piece ends within 2.5 pt (+ bar width) of each other, plus any sized piece whose BODY passes through that point
+      //  • directions out of the node (overlapping collinear pieces merged): 2 turning ≥ 45° = elbow (bigger size); 2 opposite with two sizes =
+      //    reducer "big>small"; 3 = tee "run>branch" (the run = the opposite pair); 4+ = cross; 1 = an open end (unit, cap, riser) — not counted
+      //  • a dash-dot pipe's gaps are ends on both sides (k = 1) and count nothing; two pipes crossing without an end at the crossing count nothing
+      //  • valves = the bow-tie: two equal short bars facing each other across 0.9–2.8× their length, each bar end joined by a diagonal toward the
+      //    symbol's centre, no sides joining the bars (that is an X-ed box: a damper / VAV), on (or in the gap of) a sized pipe running along the
+      //    bars' axis. A bow-tie on no sized pipe (the legend) is not counted.
+      var pfit = D.pipeFittings === false ? undefined : (function () {
+        function svcOf(i) { var sv = size[i][1]; return sv && sv !== 'CD' ? ' ' + sv : sv === 'CD' ? ' CD' : ''; }
+        function keyOf(i) { return pipeLabel(size[i][0]) + svcOf(i); }
+        function bigger(i, j) { return size[i][0] >= size[j][0] ? i : j; }
+        var idx = sizedIdx, ends = [], g2 = {}, CELL = 8;
+        idx.forEach(function (i) { var s0 = S[i], tl = 2.5 + Math.min(3, barW(s0));
+          ends.push({ i: i, x: s0[0], y: s0[1], dx: s0[4], dy: s0[5], tl: tl }); ends.push({ i: i, x: s0[2], y: s0[3], dx: -s0[4], dy: -s0[5], tl: tl }); });
+        ends.forEach(function (e, k) { var key = Math.floor(e.x / CELL) + ',' + Math.floor(e.y / CELL); (g2[key] = g2[key] || []).push(k); });
+        var used = {}, items = [], elbows = {}, tees = {}, reducers = {}, crosses = {}, valves = {}, seen = {};
+        function bump(o, k) { o[k] = (o[k] || 0) + 1; }
+        function pt(x, y) { return [Math.round(x * 10) / 10, Math.round(y * 10) / 10]; }
+        var vzones = [];
+        // valves: bow-tie symbols on the sized pipes
+        var nn = D.segs.length / 5, vMin = Math.max(0.12 * ptft, 2.5), vMax = Math.max(1.0 * ptft, 6), bars = [], gb = {}, BC = Math.max(vMax * 3, 12);
+        for (var q = 0; q < nn; q++) {
+          var o = q * 5, c = D.styles[D.segs[o + 4]].col;
+          if (Math.max.apply(null, c) - Math.min.apply(null, c) < 0.05 && c[0] > 0.3) continue;   // gray background
+          var x1 = D.segs[o], y1 = D.segs[o + 1], x2 = D.segs[o + 2], y2 = D.segs[o + 3], L = hyp(x2 - x1, y2 - y1);
+          if (L < 0.8 || L > vMax * 2.2) continue;
+          bars.push({ x1: x1, y1: y1, x2: x2, y2: y2, L: L, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, ux: (x2 - x1) / L, uy: (y2 - y1) / L });
+        }
+        bars.forEach(function (b, k) { var key = Math.floor(b.cx / BC) + ',' + Math.floor(b.cy / BC); (gb[key] = gb[key] || []).push(k); });
+        function nearBars(x, y) { var out = [], gx = Math.floor(x / BC), gy = Math.floor(y / BC); for (var ax = gx - 1; ax <= gx + 1; ax++) for (var ay = gy - 1; ay <= gy + 1; ay++) (gb[ax + ',' + ay] || []).forEach(function (k) { out.push(k); }); return out; }
+        // a segment from point p toward the centre c (a half or whole diagonal): starts within 1 pt of p, points at c, reaches ≥ 40 % of the way
+        function diagFrom(p, c, cand) {
+          var vx = c[0] - p[0], vy = c[1] - p[1], dl = hyp(vx, vy); if (dl < 1) return false; vx /= dl; vy /= dl;
+          return cand.some(function (k) { var b = bars[k], s0, s1;
+            if (hyp(b.x1 - p[0], b.y1 - p[1]) <= 1.0) { s0 = [b.x1, b.y1]; s1 = [b.x2, b.y2]; } else if (hyp(b.x2 - p[0], b.y2 - p[1]) <= 1.0) { s0 = [b.x2, b.y2]; s1 = [b.x1, b.y1]; } else return false;
+            var wx = s1[0] - s0[0], wy = s1[1] - s0[1], wl = hyp(wx, wy); return wl >= 0.4 * dl && (wx * vx + wy * vy) / wl > 0.97; });
+        }
+        function sideFrom(p, p2, cand) {   // a segment joining a bar end straight to the facing bar's end: an X-ed box, not a valve
+          return cand.some(function (k) { var b = bars[k]; return (hyp(b.x1 - p[0], b.y1 - p[1]) <= 1.0 && hyp(b.x2 - p2[0], b.y2 - p2[1]) <= 1.0) || (hyp(b.x2 - p[0], b.y2 - p[1]) <= 1.0 && hyp(b.x1 - p2[0], b.y1 - p2[1]) <= 1.0); });
+        }
+        var vseen = {}, nVal = 0;
+        bars.forEach(function (a, ka) {
+          if (a.L < vMin || a.L > vMax) return;
+          var cand = nearBars(a.cx, a.cy);
+          cand.forEach(function (kb) {
+            if (kb <= ka) return; var b = bars[kb];
+            if (b.L < vMin || b.L > vMax || Math.abs(a.L - b.L) > 0.15 * Math.max(a.L, b.L) || Math.abs(a.ux * b.uy - a.uy * b.ux) > 0.05) return;
+            var vx = b.cx - a.cx, vy = b.cy - a.cy, h = hyp(vx, vy); if (h < 0.9 * a.L || h > 2.8 * a.L) return;
+            if (Math.abs((vx * a.ux + vy * a.uy) / h) > 0.15) return;                  // the bars face each other square on
+            var c = [(a.cx + b.cx) / 2, (a.cy + b.cy) / 2];
+            var a1 = [a.x1, a.y1], a2 = [a.x2, a.y2], b1 = [b.x1, b.y1], b2 = [b.x2, b.y2];
+            if ((b1[0] - b2[0]) * (a1[0] - a2[0]) + (b1[1] - b2[1]) * (a1[1] - a2[1]) < 0) { var tt = b1; b1 = b2; b2 = tt; }   // b1 faces a1
+            if (!(diagFrom(a1, c, cand) && diagFrom(a2, c, cand) && diagFrom(b1, c, cand) && diagFrom(b2, c, cand))) return;
+            if (sideFrom(a1, b1, cand) || sideFrom(a2, b2, cand)) return;
+            var vk = Math.round(c[0] / 2) + ',' + Math.round(c[1] / 2); if (vseen[vk]) return; vseen[vk] = 1;
+            // the pipe it sits on: a sized piece along the symbol's axis through (or ending at) the centre
+            var ux = vx / h, uy = vy / h, best = null, bd = 1e9;
+            idx.forEach(function (i) { var t = S[i]; if (Math.abs(t[4] * ux + t[5] * uy) < 0.97) return;
+              var ex = c[0] - t[0], ey = c[1] - t[1], along = ex * t[4] + ey * t[5], perp = Math.abs(-ex * t[5] + ey * t[4]);
+              if (perp > Math.max(1.5, 0.15 * a.L) || along < -(h + 2) || along > t[6] + h + 2) return;
+              var d0 = along < 0 ? -along : along > t[6] ? along - t[6] : 0; if (perp + d0 < bd) { bd = perp + d0; best = i; } });
+            // a valve on a short branch the labels never sized (a coil connection, L'Catteron FCU-6-5): the kept-pen piece along the axis carries
+            // it, and it takes the size of the first sized run reached through the network from that piece (the run the branch comes off)
+            if (best === null) {
+              var start = -1;
+              S.forEach(function (t, i) { if (start >= 0 || Math.abs(t[4] * ux + t[5] * uy) < 0.97) return; var ex = c[0] - t[0], ey = c[1] - t[1], al = ex * t[4] + ey * t[5];
+                if (Math.abs(-ex * t[5] + ey * t[4]) <= Math.max(1.5, 0.15 * a.L) && al >= -(h + 2) && al <= t[6] + h + 2) start = i; });
+              if (start < 0) return;
+              var seenB = {}, front = [start]; seenB[start] = 1;
+              for (var depth = 0; depth < 4 && best === null && front.length; depth++) {
+                var nxt = [];
+                front.forEach(function (i) { nb(i).forEach(function (j) { if (seenB[j]) return; seenB[j] = 1; if (j in size) { if (best === null) best = j; } else nxt.push(j); }); });
+                front = nxt;
+              }
+              if (best === null) return;
+            }
+            var vk2 = keyOf(best); bump(valves, vk2); nVal++; items.push({ t: 'valve', size: vk2, xy: pt(c[0], c[1]) }); vzones.push([c[0], c[1], Math.max(h, a.L) / 2 + 2.5]);
+          });
+        });
+        // a valve's own bars and diagonals in the pipe pen are not pipe: nodes inside a valve symbol and pieces that are part of one count nothing
+        function inValve(x, y) { return vzones.some(function (z) { return hyp(x - z[0], y - z[1]) <= z[2]; }); }
+        function valvePiece(i) { var t = S[i]; return t[6] <= 2.4 * Math.max(4, vMax) && inValve((t[0] + t[2]) / 2, (t[1] + t[3]) / 2); }
+        ends.forEach(function (e, k) {
+          if (used[k]) return;
+          if (valvePiece(e.i) || inValve(e.x, e.y)) { used[k] = 1; return; }
+          var gx = Math.floor(e.x / CELL), gy = Math.floor(e.y / CELL), memb = [];
+          for (var ax = gx - 1; ax <= gx + 1; ax++) for (var ay = gy - 1; ay <= gy + 1; ay++) (g2[ax + ',' + ay] || []).forEach(function (q) { if (!used[q] && hyp(ends[q].x - e.x, ends[q].y - e.y) <= Math.max(e.tl, ends[q].tl)) memb.push(q); });
+          memb.forEach(function (q) { used[q] = 1; });
+          memb = memb.filter(function (q) { return !valvePiece(ends[q].i); }); if (!memb.length) return;
+          var cx = 0, cy = 0; memb.forEach(function (q) { cx += ends[q].x; cy += ends[q].y; }); cx /= memb.length; cy /= memb.length;
+          var dirs = memb.map(function (q) { return { dx: ends[q].dx, dy: ends[q].dy, i: ends[q].i }; }), inNode = {};
+          memb.forEach(function (q) { inNode[ends[q].i] = 1; });
+          // a piece whose body runs through the node: the node is a tee on it (both directions of that run)
+          idx.forEach(function (j) { if (inNode[j] || valvePiece(j)) return; var t = S[j];
+            if (Math.abs(cx - (t[0] + t[2]) / 2) > t[6] / 2 + 6 || Math.abs(cy - (t[1] + t[3]) / 2) > t[6] / 2 + 6) return;
+            if (ptSeg(cx, cy, t) > e.tl || hyp(cx - t[0], cy - t[1]) <= e.tl || hyp(cx - t[2], cy - t[3]) <= e.tl) return;
+            dirs.push({ dx: t[4], dy: t[5], i: j, body: 1 }); dirs.push({ dx: -t[4], dy: -t[5], i: j, body: 1 }); });
+          var U = [];   // distinct directions (overlapping collinear pieces drawn twice are one direction)
+          dirs.forEach(function (d) { var hit = U.find(function (u) { return u.dx * d.dx + u.dy * d.dy > 0.985; }); if (hit) { if (size[d.i][0] > size[hit.i][0]) hit.i = d.i; } else U.push(d); });
+          var key = Math.round(cx / 3) + ',' + Math.round(cy / 3); if (seen[key]) return; seen[key] = 1;
+          if (U.length === 2) {
+            var dot = U[0].dx * U[1].dx + U[0].dy * U[1].dy;
+            if (dot > -0.7) { var bi = bigger(U[0].i, U[1].i), kk = keyOf(bi); bump(elbows, kk); items.push({ t: 'elbow', size: kk, xy: pt(cx, cy) }); }
+            else if (dot < -0.97 && size[U[0].i][0] !== size[U[1].i][0] && !U[0].body) {
+              var a = bigger(U[0].i, U[1].i), b = a === U[0].i ? U[1].i : U[0].i, rk = keyOf(a) + '>' + pipeLabel(size[b][0]);
+              bump(reducers, rk); items.push({ t: 'reducer', from: keyOf(a), to: pipeLabel(size[b][0]), xy: pt(cx, cy) });
+            }
+          } else if (U.length === 3) {
+            var run = null, br = null;
+            for (var u1 = 0; u1 < 3 && !run; u1++) for (var u2 = u1 + 1; u2 < 3; u2++) if (U[u1].dx * U[u2].dx + U[u1].dy * U[u2].dy < -0.95) { run = [U[u1], U[u2]]; br = U[3 - u1 - u2]; break; }
+            if (!run) { var srt = U.slice().sort(function (p, q) { return size[q.i][0] - size[p.i][0]; }); run = [srt[0], srt[1]]; br = srt[2]; }
+            var ri = bigger(run[0].i, run[1].i), tk = keyOf(ri) + '>' + pipeLabel(size[br.i][0]);
+            bump(tees, tk); items.push({ t: 'tee', main: keyOf(ri), branch: pipeLabel(size[br.i][0]), xy: pt(cx, cy) });
+          } else if (U.length >= 4) {
+            var mi = U.reduce(function (m, d) { return size[d.i][0] > size[m.i][0] ? d : m; }, U[0]), ck = keyOf(mi.i);
+            bump(crosses, ck); items.push({ t: 'cross', size: ck, xy: pt(cx, cy) });
+          }
+        });
+        function sum(o) { var n = 0; for (var k in o) n += o[k]; return n; }
+        var ne = sum(elbows), nt = sum(tees), nr = sum(reducers), nc = sum(crosses);
+        return { elbows: elbows, tees: tees, reducers: reducers, crosses: crosses, valves: valves, n_elbows: ne, n_tees: nt, n_reducers: nr, n_crosses: nc, n_valves: nVal, n_total: ne + nt + nr + nc + nVal, items: items };
+      })();
       // ─── dashed rows: a pipe drawn as a row of short strokes in a pen the vote cannot keep (645 Madison: the condenser-water return is a
       // gray dashed line beside the solid supply — 1–3 ft dashes, 26 labels, 247 ft of labelled rows the network never saw). Collinear
       // axis-aligned dashes are chained across regular gaps; a row counts when a size label sits within 2.5 ft of it (written along it or
@@ -2104,6 +2228,7 @@
       // the length is counted once per line here; the engine flags it so the estimator doubles it when the pair is priced per pipe
       var sr = /\bS\s*[\/&]\s*R\b|SUPPLY\s*(AND|&|\/|\+)\s*RETURN|\b(CHW|CW|HW|HHW|CHWS|CWS|HWS|GLY\w*)\s*[\/&]\s*R\b/i.test(D.fullText);
       return { ptft: ptft, sizes: sizes, total_ft: Math.round(total * 10) / 10, labels: labs.length, styles: keep, votes: votes, lab_list: labs.map(function (l) { return l.txt; }), sr: sr || undefined,
+        pipe_fittings: pfit && pfit.n_total ? pfit : undefined,
         paired_ft: Math.round(pairedFt * 10) / 10, single_ft: Math.round(singleFt * 10) / 10, single_sizes: singleSizes, pen_votes: votes, pens: keep, dashed_ft: Math.round(dashedFt * 10) / 10, dashed_rows: dashedRows, dashed_cd_ft: Math.round(dashedCdFt * 10) / 10, riser_sizes: pipeRiser.n ? pipeRiser.sizes : undefined, riser_n: pipeRiser.n || undefined, riser_ft: pipeRiser.ft || undefined, dashed_dbg: D.pipeDashedDebug ? D._dd : undefined,
         xy: D.wantPieces ? Object.keys(size).map(function (is) { return { s: S[+is].slice(0, 4), z: pipeLabel(size[is][0]) + (size[is][1] === 'CD' ? ' CD' : '') }; }) : undefined };
     }

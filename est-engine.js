@@ -328,6 +328,23 @@
       fittings.n_elbows += f.n_elbows || 0; fittings.n_tees += f.n_tees || 0; fittings.n_transitions += f.n_transitions || 0; fittings.n_total += f.n_total || 0;
       fittings.sheets.push(sh + ' (' + f.n_total + ')');
     }
+    // pipe fittings + valves census of a measured piping sheet (geo_pipe.pipe_fittings from geo-takeoff, Takso demo 2026-10-21): elbows /
+    // tees run>branch / reducers big>small / crosses / valves per size + service, summed with the sheets. Information only: pipe is priced
+    // per ft with the fittings in the rate — the counts go to the panel, ⬇ Quantities and the Takeoff review tab
+    var pipeFit = { elbows: {}, tees: {}, reducers: {}, crosses: {}, valves: {}, n_elbows: 0, n_tees: 0, n_reducers: 0, n_crosses: 0, n_valves: 0, n_total: 0, sheets: [], rows: {} };
+    function addPipeFittings(sh, f) {
+      if (!f || !f.n_total) return;
+      [['elbow', 'elbows'], ['tee', 'tees'], ['reducer', 'reducers'], ['cross', 'crosses'], ['valve', 'valves']].forEach(function (t) {
+        Object.keys(f[t[1]] || {}).forEach(function (k) {
+          var n = Number(f[t[1]][k]) || 0; if (!n) return;
+          pipeFit[t[1]][k] = (pipeFit[t[1]][k] || 0) + n;
+          var row = pipeFit.rows[t[0] + '|' + k] = pipeFit.rows[t[0] + '|' + k] || { type: t[0], size: k, count: 0, sheets: [] };
+          row.count += n; if (row.sheets.indexOf(sh) < 0) row.sheets.push(sh);
+        });
+      });
+      ['n_elbows', 'n_tees', 'n_reducers', 'n_crosses', 'n_valves', 'n_total'].forEach(function (k) { pipeFit[k] += f[k] || 0; });
+      pipeFit.sheets.push(sh + ' (' + f.n_total + ')');
+    }
     function slotLenFt(txt) {
       txt = String(txt || '');
       var m = /(\d+)\s*'\s*-?\s*(\d+)?\s*"?/.exec(txt); if (m && /'/.test(m[0])) return (+m[1]) + (m[2] ? +m[2] / 12 : 0);
@@ -598,6 +615,7 @@
             // measured from the piping plan's own lines (geo-takeoff.js); the AI reading stays a cross-check
             var aiP = (r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
             geoCheck.push({ sheet: sh, geo: r.geo_pipe.total_ft, ai: aiP, what: 'Pipe' });
+            addPipeFittings(sh, r.geo_pipe.pipe_fittings);
             // supply and return on ONE line (legend "… SUPPLY AND RETURN" on a single symbol, "CHWS/R" labels) — the lines drawn without a
             // parallel partner stand for two pipes, so their feet are counted twice (645 Madison: Kastriot carried the 1in loop as 531 ft =
             // 2 × the drawn length); lines drawn as pairs (L'Catteron) are both measured already and stay as they are
@@ -653,7 +671,7 @@
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
-      rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, pipeFittings: pipeFit, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── reviewer decisions (Takeoff → AI review tab, table est_ai_corrections) ──────────────────────────────
@@ -840,6 +858,11 @@
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
+    if (C.pipeFittings && C.pipeFittings.n_total) {
+      var PF = C.pipeFittings, pl = function (n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); };
+      flags.push({ category: 'pipework', item: 'Pipe fittings & valves', flag: [pl(PF.n_valves, 'valve'), pl(PF.n_elbows, 'elbow'), pl(PF.n_tees, 'tee'), PF.n_reducers ? pl(PF.n_reducers, 'reducer') : '', PF.n_crosses ? pl(PF.n_crosses, 'cross') : ''].filter(Boolean).join(', ') +
+        ' counted on the measured piping (' + PF.sheets.join(', ') + ') — information only: pipe is priced per ft with the fittings in the rate; valves outside a coil / riser connection kit (balancing, control, specialties) may need their own lines; per size in ⬇ Quantities' });
+    }
     if (C.fittings && C.fittings.n_total)
       flags.push({ category: 'ductwork', item: 'Ductwork fittings', flag: C.fittings.n_elbows + ' elbow' + (C.fittings.n_elbows === 1 ? '' : 's') + ', ' + C.fittings.n_tees + ' tee' + (C.fittings.n_tees === 1 ? '' : 's') + ', ' + C.fittings.n_transitions + ' transition' + (C.fittings.n_transitions === 1 ? '' : 's') + ' counted on the measured duct (' + C.fittings.sheets.join(', ') + ') — information only: duct is priced per ft with the fittings in the rate; the counts per size are in ⬇ Quantities' });
     if (C.srDoubled && C.srDoubled.length)
@@ -1029,7 +1052,8 @@
       byKey[k] = { category: f.category, flag: f.flag, item: f.item, items: [f.item], n: 1 }; grouped.push(byKey[k]);
     });
     grouped.forEach(function (g) { if (g.n > 1) { g.item = g.n + ' lines (' + g.items.slice(0, 3).map(function (s) { return String(s).split(' — ')[0]; }).join(', ') + (g.n > 3 ? '…' : '') + ')'; } });
-    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck, ductSystems: Object.keys(ductSystems).length ? ductSystems : undefined, fittings: C.fittings && C.fittings.n_total ? { n_elbows: C.fittings.n_elbows, n_tees: C.fittings.n_tees, n_transitions: C.fittings.n_transitions, n_total: C.fittings.n_total, sheets: C.fittings.sheets } : null };
+    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck, ductSystems: Object.keys(ductSystems).length ? ductSystems : undefined, fittings: C.fittings && C.fittings.n_total ? { n_elbows: C.fittings.n_elbows, n_tees: C.fittings.n_tees, n_transitions: C.fittings.n_transitions, n_total: C.fittings.n_total, sheets: C.fittings.sheets } : null,
+      pipeFittings: C.pipeFittings && C.pipeFittings.n_total ? { n_elbows: C.pipeFittings.n_elbows, n_tees: C.pipeFittings.n_tees, n_reducers: C.pipeFittings.n_reducers, n_crosses: C.pipeFittings.n_crosses, n_valves: C.pipeFittings.n_valves, n_total: C.pipeFittings.n_total, sheets: C.pipeFittings.sheets } : null };
   }
 
   // "IDU-35-A,B" → IDU-35-A, IDU-35-B ; "AC-1-1/1-2" → AC-1-1, AC-1-2 ; "EF-1 & EF-2" → EF-1, EF-2

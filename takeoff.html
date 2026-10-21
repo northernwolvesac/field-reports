@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=536">
+<link rel="stylesheet" href="procore-ui.css?v=537">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=536"></script>
-<script src="auth.js?v=536"></script>
-<script src="est-totals.js?v=536"></script>
-<script src="procore-ui.js?v=536"></script>
+<script src="supabase-config.js?v=537"></script>
+<script src="auth.js?v=537"></script>
+<script src="est-totals.js?v=537"></script>
+<script src="procore-ui.js?v=537"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=536"></script>
-<script src="est-drawings.js?v=536"></script>
-<script src="nw-catalog-picker.js?v=536"></script>
-<script src="nw-duct-weight.js?v=536"></script>
-<script src="geo-takeoff.js?v=536"></script>
-<script src="est-engine.js?v=536"></script>
+<script src="bid-actions.js?v=537"></script>
+<script src="est-drawings.js?v=537"></script>
+<script src="nw-catalog-picker.js?v=537"></script>
+<script src="nw-duct-weight.js?v=537"></script>
+<script src="geo-takeoff.js?v=537"></script>
+<script src="est-engine.js?v=537"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -1850,6 +1850,17 @@ requireAuth().catch(function(){});
   }
   // the open page's `meas` holds the same objects as allMeas after a load, but not always after an insert — copy the fields across
   function syncPageMeas() { meas.forEach(function(m) { var a = allMeas.find(function(x) { return x.id === m.id; }); if (a && a !== m) Object.assign(m, a); }); }
+  // a batch edit's Undo / Redo: marks that go back to the same values are written in one request (225 marks: 1-3 requests, not 225)
+  async function applyPatchMulti(items, which) {
+    var groups = {};
+    items.forEach(function(x) { var k = JSON.stringify(x[which]); (groups[k] = groups[k] || []).push(x.id); });
+    for (var k in groups) {
+      var patch = JSON.parse(k), ids = groups[k];
+      for (var c = 0; c < ids.length; c += 200) { var r = await sb.from('estimate_measurements').update(patch).in('id', ids.slice(c, c + 200)); if (r.error) { toast(r.error.message, 'error'); return false; } }
+      allMeas.forEach(function(m) { if (ids.indexOf(m.id) >= 0) Object.assign(m, patch); });
+    }
+    syncPageMeas(); return true;
+  }
   async function applyPatch(id, patch) {
     var m = allMeas.find(function(x) { return x.id === id; }); if (!m) return false;
     var r = await sb.from('estimate_measurements').update(patch).eq('id', id); if (r.error) { toast(r.error.message, 'error'); return false; }
@@ -1863,7 +1874,7 @@ requireAuth().catch(function(){});
     else if (u.type === 'delete' || u.type === 'delete-multi') { var rows = (u.rows || [u.row]).map(function(x) { var row = Object.assign({}, x); delete row.id; delete row.created_at; delete row.updated_at; return row; });
       var r = await sb.from('estimate_measurements').insert(rows).select(); if (!r.error) { r.data.forEach(function(m) { allMeas.push(m); if (m.drawing_id === plans[planIdx].drawing.id && m.page_number === plans[planIdx].page) meas.push(m); }); redoStack.push({ type: 'del', ids: r.data.map(function(m) { return m.id; }) }); } renderAll(); scheduleSync(); }
     else if (u.type === 'patch') { if (await applyPatch(u.id, u.before)) redoStack.push(u); renderAll(); scheduleSync(); }
-    else if (u.type === 'patch-multi') { for (var pi2 = 0; pi2 < u.items.length; pi2++) await applyPatch(u.items[pi2].id, u.items[pi2].before); syncPageMeas(); redoStack.push(u); renderAll(); scheduleSync(); }
+    else if (u.type === 'patch-multi') { await applyPatchMulti(u.items, 'before'); redoStack.push(u); renderAll(); scheduleSync(); }
     else if (u.type === 'move' || u.type === 'move-multi') { var items = u.items || [{ id: u.id, points: u.points }], redoItems = [];
       for (var i = 0; i < items.length; i++) { var m = allMeas.find(function(x) { return x.id === items[i].id; }); if (!m) continue; redoItems.push({ id: m.id, points: m.points }); m.points = items[i].points; m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value; await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
       if (redoItems.length) redoStack.push({ type: 'move', items: redoItems });
@@ -1886,7 +1897,7 @@ requireAuth().catch(function(){});
     } else if (u.type === 'patch') {
       if (await applyPatch(u.id, u.after)) undoStack.push(u); renderAll(); scheduleSync();
     } else if (u.type === 'patch-multi') {
-      for (var pj = 0; pj < u.items.length; pj++) await applyPatch(u.items[pj].id, u.items[pj].after); syncPageMeas(); undoStack.push(u); renderAll(); scheduleSync();
+      await applyPatchMulti(u.items, 'after'); undoStack.push(u); renderAll(); scheduleSync();
     } else if (u.type === 'move') {
       var prev = [];
       for (var i = 0; i < u.items.length; i++) { var m = allMeas.find(function(x) { return x.id === u.items[i].id; }); if (!m) continue; prev.push({ id: m.id, points: m.points }); m.points = u.items[i].points;
@@ -2297,6 +2308,7 @@ requireAuth().catch(function(){});
   var reviewOn = false, rvLoaded = false, rvOk = true, rvOnlyNew = false, rvCf = 'all', rvCollapsed = {}, rvPulseT = null;
   var RV = { session: null, files: [], pages: [], corr: {}, sheets: [], flat: [], fits: [], cur: null, occ: [], occIdx: -1, hl: null, textCache: {}, total: 0, done: 0 };
   var FIT_LABEL = { elbow: 'Elbows', tee: 'Tees (main > branch)', transition: 'Transitions (from > to)' };
+  var PFIT_LABEL = { valve: 'Pipe valves', elbow: 'Pipe elbows', tee: 'Pipe tees (run > branch)', reducer: 'Pipe reducers (from > to)', cross: 'Pipe crosses' };
   var KIND_LABEL = { equipment: 'Equipment', device: 'Air devices', duct: 'Ducts', pipe: 'Pipes', riser: 'Risers' };
   var DEV_TYPES = ['diffuser', 'grille', 'register', 'linear', 'vav', 'fpb', 'fsd', 'motorized_damper', 'cod', 'louver', 'other'];
   function rvNorm(s) { return window.NWEngine ? NWEngine.norm(s) : String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
@@ -2404,6 +2416,17 @@ requireAuth().catch(function(){});
         var sizes = Object.keys(bySize).sort(function(a, b) { return bySize[b] - bySize[a]; });
         sh.fits = sh.fits || []; var it = { kind: 'fitting', key: sp.id + '|' + t, sheet: sh.sheet, planIdx: i, page: sp, label: FIT_LABEL[t] + ' · ' + its.length, sub: sizes.slice(0, 6).map(function(z) { return z + ' ×' + bySize[z]; }).join(', ') + (sizes.length > 6 ? ' …' : ''), status: 'info',
           xy: its.map(function(f) { return { x: f.xy[0], y: f.xy[1], str: (t === 'elbow' ? f.size : t === 'tee' ? f.main + ' > ' + f.branch : f.from + ' > ' + f.to) + (f.at === 'elbow' ? ' (at the elbow)' : '') }; }) };
+        sh.fits.push(it); RV.fits.push(it);
+      });
+      // 1c · pipe fittings + valves of a measured piping sheet (geo_pipe.pipe_fittings.items) — information only, like the duct fittings
+      var px = r.geo_pipe && r.geo_pipe.pipe_fittings && Array.isArray(r.geo_pipe.pipe_fittings.items) ? r.geo_pipe.pipe_fittings.items : [];
+      ['valve', 'elbow', 'tee', 'reducer', 'cross'].forEach(function(t) {
+        var its = px.filter(function(f) { return f && f.t === t && Array.isArray(f.xy); }); if (!its.length) return;
+        var zOf = function(f) { return t === 'tee' ? f.main + ' > ' + f.branch : t === 'reducer' ? f.from + ' > ' + f.to : f.size; };
+        var bySize = {}; its.forEach(function(f) { var z = zOf(f); bySize[z] = (bySize[z] || 0) + 1; });
+        var sizes = Object.keys(bySize).sort(function(a, b) { return bySize[b] - bySize[a]; });
+        sh.fits = sh.fits || []; var it = { kind: 'fitting', key: sp.id + '|pipe-' + t, sheet: sh.sheet, planIdx: i, page: sp, label: PFIT_LABEL[t] + ' · ' + its.length, sub: sizes.slice(0, 6).map(function(z) { return z + ' ×' + bySize[z]; }).join(', ') + (sizes.length > 6 ? ' …' : ''), status: 'info',
+          xy: its.map(function(f) { return { x: f.xy[0], y: f.xy[1], str: zOf(f) }; }) };
         sh.fits.push(it); RV.fits.push(it);
       });
     });
@@ -2837,6 +2860,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=536"></script>
+<script src="sw-register.js?v=537"></script>
 </body>
 </html>
