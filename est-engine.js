@@ -287,10 +287,25 @@
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var symDropped = [], colourBars = [], noLenEa = [], unitMounted = [];
-    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
+    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, fittings = { elbows: {}, tees: {}, transitions: {}, n_elbows: 0, n_tees: 0, n_transitions: 0, n_total: 0, sheets: [], rows: {} }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
     var schedDev = {};
+    // fittings census of a measured sheet (geo.fittings from geo-takeoff): elbows per size, tees main>branch, transitions from>to — summed
+    // per type and size with the sheets they sit on. Information only: NWAC prices duct per ft with the fittings in the rate (GEO_FITTINGS)
+    function addFittings(sh, f) {
+      if (!f || !f.n_total) return;
+      [['elbow', 'elbows'], ['tee', 'tees'], ['transition', 'transitions']].forEach(function (t) {
+        Object.keys(f[t[1]] || {}).forEach(function (k) {
+          var n = Number(f[t[1]][k]) || 0; if (!n) return;
+          fittings[t[1]][k] = (fittings[t[1]][k] || 0) + n;
+          var row = fittings.rows[t[0] + '|' + k] = fittings.rows[t[0] + '|' + k] || { type: t[0], size: k, count: 0, sheets: [] };
+          row.count += n; if (row.sheets.indexOf(sh) < 0) row.sheets.push(sh);
+        });
+      });
+      fittings.n_elbows += f.n_elbows || 0; fittings.n_tees += f.n_tees || 0; fittings.n_transitions += f.n_transitions || 0; fittings.n_total += f.n_total || 0;
+      fittings.sheets.push(sh + ' (' + f.n_total + ')');
+    }
     function slotLenFt(txt) {
       txt = String(txt || '');
       var m = /(\d+)\s*'\s*-?\s*(\d+)?\s*"?/.exec(txt); if (m && /'/.test(m[0])) return (+m[1]) + (m[2] ? +m[2] / 12 : 0);
@@ -516,10 +531,12 @@
               o2.lf += use; o2.sheets.push(sh); if (g2 >= a2) { o2.geo = true; fromGeo += use; } mergedFt += use;
             });
             geoCheck.push({ sheet: sh, geo: Math.round(fromGeo), ai: aiFt, merged: Math.round(mergedFt), labels: gl, why: 'single-line drawing: traced sizes + the reader\'s other sizes' });
+            addFittings(sh, r.geo.fittings);
           }
           if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
             geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
+            addFittings(sh, r.geo.fittings);
             Object.keys(r.geo.sizes || {}).forEach(function (sz) {
               var z = sizeOf(sz); if (!z) return;
               var shape = /Ø/.test(sz) ? 'round' : 'rect';
@@ -606,7 +623,7 @@
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
-      rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── reviewer decisions (Takeoff → AI review tab, table est_ai_corrections) ──────────────────────────────
@@ -784,6 +801,8 @@
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
+    if (C.fittings && C.fittings.n_total)
+      flags.push({ category: 'ductwork', item: 'Ductwork fittings', flag: C.fittings.n_elbows + ' elbow' + (C.fittings.n_elbows === 1 ? '' : 's') + ', ' + C.fittings.n_tees + ' tee' + (C.fittings.n_tees === 1 ? '' : 's') + ', ' + C.fittings.n_transitions + ' transition' + (C.fittings.n_transitions === 1 ? '' : 's') + ' counted on the measured duct (' + C.fittings.sheets.join(', ') + ') — information only: duct is priced per ft with the fittings in the rate; the counts per size are in ⬇ Quantities' });
     if (C.srDoubled && C.srDoubled.length)
       flags.push({ category: 'pipework', item: 'Supply + return on one line', flag: 'session choice "one line = supply + return": the water pipe measured on the plans is counted twice — ' + C.srDoubled.map(function (d) { return d.sheet + ' +' + d.ft + ' ft'; }).join(', ') + ' (condensate once)' });
     else if (C.srSingle && C.srSingle.length)
@@ -971,7 +990,7 @@
       byKey[k] = { category: f.category, flag: f.flag, item: f.item, items: [f.item], n: 1 }; grouped.push(byKey[k]);
     });
     grouped.forEach(function (g) { if (g.n > 1) { g.item = g.n + ' lines (' + g.items.slice(0, 3).map(function (s) { return String(s).split(' — ')[0]; }).join(', ') + (g.n > 3 ? '…' : '') + ')'; } });
-    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck };
+    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck, fittings: C.fittings && C.fittings.n_total ? { n_elbows: C.fittings.n_elbows, n_tees: C.fittings.n_tees, n_transitions: C.fittings.n_transitions, n_total: C.fittings.n_total, sheets: C.fittings.sheets } : null };
   }
 
   // "IDU-35-A,B" → IDU-35-A, IDU-35-B ; "AC-1-1/1-2" → AC-1-1, AC-1-2 ; "EF-1 & EF-2" → EF-1, EF-2

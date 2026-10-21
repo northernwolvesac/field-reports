@@ -5,6 +5,7 @@
 // Checked against Kastriot's Procore takeoffs (L'Catteron −1.4 %, April Tax −6.4 %, Sage +8.5 % in duct $).
 // Usage: var data = await NWGeo.extract(pdfjsPage); var r = await NWGeo.measure(data);
 //        r = { ptft, sizes: {'12x8': ft, ...}, total_ft, single_ft, width_ft, styles, labels }
+//            + fittings: { elbows: {size: n}, tees: {'main>branch': n}, transitions: {'from>to': n}, n_total, items: [{t, size|main/branch|from/to, xy}] }
 (function () {
   // ─── 1. read lines + text from a pdf.js page (main thread; the heavy parsing is pdf.js's own worker) ───
   function mul(m, n) {   // m then n
@@ -964,6 +965,7 @@
         if (!drop) return;
         all = all.filter(function (p) { var c = pieceCenter(p); if (chainSide(ch, c[0], c[1], 150 * ptft) === drop) { matchFt += p.len_ft; return false; } return true; });
       });
+      var fittings = D.noFittings ? undefined : fittingsCensus(all, ptft, D.debugFittings);
       all.forEach(function (p) {
         sizes[p.size] = (sizes[p.size] || 0) + p.len_ft; total += p.len_ft;
         if (p.kind === 'single') sf += p.len_ft; else if (p.via === 'width') wf += p.len_ft;
@@ -976,9 +978,106 @@
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN };
       return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
-        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), fill_bars: fillBars(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
+        styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, fittings: fittings, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), fill_bars: fillBars(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
+    }
+
+    // ─── fittings census: elbows, tees and transitions read off the pair-style network (the wall pairs that were measured; single-line
+    // fallbacks, bars and dashed rows carry no corner geometry worth counting). Information only — NWAC prices duct per ft with the
+    // fittings in the rate (GEO_FITTINGS 1.08 in est-engine) — but the counts per size go to the Quantities export and the review tab.
+    //  • joint: collinear runs meeting end to end — a straight joint (no fitting), or a transition when the size changes ("from>to",
+    //    larger first; only between runs sized by a label or carried along a labelled run — a width-guessed neighbour is a misread, not a reducer)
+    //  • elbow: two runs meeting end to end at ~90° (≥ 60°) — one per corner, at the crossing of the two centre lines; the size is the bigger run's
+    //  • tee: a run's free end landing on another run's body, or on the joint where that run's wall pair was split by the branch opening
+    //    (L'Catteron: the 16x10 main is two pieces at every 12x8 runout) — "main>branch"
+    //  • a run's free end (at a diffuser, a VAV, a unit) is a runout end: not counted
+    // every piece end takes part in at most one meeting (joint, elbow or tee), and a corner / junction point is counted once
+    function fittingsCensus(pcs, ptft, dbg) {
+      var items = [], elbows = {}, tees = {}, trans = {}, usedEnd = {}, joined = {}, seenPt = {};
+      var P = pcs.filter(function (p) { return p.kind === 'double' && p.size && p.len_ft * ptft > 2; });
+      var E = P.map(function (p) { return ends(p, ptft); });
+      function dv(a, b) { return dbg ? (a.via || 'label')[0] + (b.via || 'label')[0] + ' ' + Math.round(a.len_ft) + '/' + Math.round(b.len_ft) + ' ' + a.size + '/' + b.size : undefined; }
+      function gapOf(a, b) { return Math.max(1.5, Math.max(a.w_in, b.w_in) / 12 * 2.0) * ptft; }
+      function dims(p) { var m = /^(\d+)x(\d+)$/.exec(p.size); return m ? [+m[1], +m[2]] : [p.w_in, p.w_in]; }
+      function bigger(a, b) { var da = dims(a), db = dims(b); return da[0] * da[1] >= db[0] * db[1]; }
+      function sure(p) { return p.via === 'label' || p.via === 'run'; }
+      function mark(pt, kind) { var k = kind + '|' + Math.round(pt[0] / (0.5 * ptft)) + ',' + Math.round(pt[1] / (0.5 * ptft)); if (seenPt[k]) return false; seenPt[k] = 1; return true; }
+      function cross(a, ea, b, eb) {   // crossing of the two centre lines (fallback: midpoint of the two ends)
+        var d = a.ux * b.uy - a.uy * b.ux; if (Math.abs(d) < 1e-6) return [(ea[0] + eb[0]) / 2, (ea[1] + eb[1]) / 2];
+        var t = ((b.cx - a.cx) * b.uy - (b.cy - a.cy) * b.ux) / d; return [a.cx + a.ux * t, a.cy + a.uy * t];
+      }
+      function pt(x) { return [Math.round(x[0] * 10) / 10, Math.round(x[1] * 10) / 10]; }
+      function near(a, b) { return Math.abs(a.cx - b.cx) <= (a.len_ft + b.len_ft) * ptft / 2 + 4 * ptft && Math.abs(a.cy - b.cy) <= (a.len_ft + b.len_ft) * ptft / 2 + 4 * ptft; }
+      function freeEnds(i, j, gap) {   // the closest pair of still-free ends of two pieces within the gap
+        var best = null;
+        for (var u = 0; u < 2; u++) for (var v = 0; v < 2; v++) {
+          if (usedEnd[i + ':' + u] || usedEnd[j + ':' + v]) continue;
+          var d = hyp(E[i][u][0] - E[j][v][0], E[i][u][1] - E[j][v][1]);
+          if (d <= gap && (!best || d < best.d)) best = { d: d, u: u, v: v };
+        }
+        return best;
+      }
+      var i, j, a, b, best;
+      // pass 1 · collinear joints (a straight run cut at a label, a damper or a branch opening): the ends are spoken for, a size change is a transition
+      for (i = 0; i < P.length; i++) for (j = i + 1; j < P.length; j++) {
+        a = P[i]; b = P[j]; if (Math.abs(a.ux * b.ux + a.uy * b.uy) < 0.97 || !near(a, b)) continue;
+        var dx = b.cx - a.cx, dy = b.cy - a.cy; if (Math.abs(-dx * a.uy + dy * a.ux) > Math.max(a.w_in, b.w_in) / 12 * ptft) continue;
+        best = freeEnds(i, j, gapOf(a, b)); if (!best) continue;
+        usedEnd[i + ':' + best.u] = 1; usedEnd[j + ':' + best.v] = 1; joined[i + ':' + best.u] = j; joined[j + ':' + best.v] = i;
+        if (a.size === b.size || !sure(a) || !sure(b) || Math.min(a.len_ft, b.len_ft) < 1.5) continue;
+        var m = [(E[i][best.u][0] + E[j][best.v][0]) / 2, (E[i][best.u][1] + E[j][best.v][1]) / 2]; if (!mark(m, 't')) continue;
+        var from = bigger(a, b) ? a : b, to = from === a ? b : a, k = from.size + '>' + to.size;
+        trans[k] = (trans[k] || 0) + 1; items.push({ t: 'transition', from: from.size, to: to.size, xy: pt(m), d: dv(a, b) });
+      }
+      // pass 2 · elbows: perpendicular runs meeting end to end, the corner at both runs' ends. Candidates are taken same size first, then
+      // closest width, then nearest — a radius elbow's straight walls stop where the arc starts (16x10: the ends sit ~2.8 ft apart) and a
+      // 12x8 runout entering right there must not steal the main's end from the main's own corner
+      var cands = [];
+      for (i = 0; i < P.length; i++) for (j = i + 1; j < P.length; j++) {
+        a = P[i]; b = P[j]; if (Math.abs(a.ux * b.ux + a.uy * b.uy) > 0.5 || !near(a, b) || Math.min(a.len_ft, b.len_ft) < 1.5) continue;
+        var gap = Math.max(2.0, Math.max(a.w_in, b.w_in) / 12 * 2.5) * ptft;
+        for (var u = 0; u < 2; u++) for (var v = 0; v < 2; v++) {
+          if (usedEnd[i + ':' + u] || usedEnd[j + ':' + v]) continue;
+          var d = hyp(E[i][u][0] - E[j][v][0], E[i][u][1] - E[j][v][1]); if (d > gap) continue;
+          cands.push({ i: i, j: j, u: u, v: v, d: d, gap: gap, same: a.size === b.size ? 0 : 1, wd: Math.abs(a.w_in - b.w_in) });
+        }
+      }
+      cands.sort(function (p, q) { return p.same - q.same || p.wd - q.wd || p.d - q.d; });
+      cands.forEach(function (c0) {
+        if (usedEnd[c0.i + ':' + c0.u] || usedEnd[c0.j + ':' + c0.v]) return;
+        var a = P[c0.i], b = P[c0.j], ea = E[c0.i][c0.u], eb = E[c0.j][c0.v], c = cross(a, ea, b, eb);
+        var ta = Math.abs((c[0] - a.cx) * a.ux + (c[1] - a.cy) * a.uy), tb = Math.abs((c[0] - b.cx) * b.ux + (c[1] - b.cy) * b.uy);
+        // the corner sits at both runs' ends: the centre-line crossing may be inside a run by half the other run's width (a mitred corner) + 6"
+        // — further in, the other run is a branch entering the body (a tee), not an elbow
+        if (ta < a.len_ft * ptft / 2 - (b.w_in / 24 + 0.5) * ptft || tb < b.len_ft * ptft / 2 - (a.w_in / 24 + 0.5) * ptft) return;
+        usedEnd[c0.i + ':' + c0.u] = 1; usedEnd[c0.j + ':' + c0.v] = 1;
+        if (!mark(c, 'e')) return;
+        var main = bigger(a, b) ? a : b, other = main === a ? b : a;
+        elbows[main.size] = (elbows[main.size] || 0) + 1; items.push({ t: 'elbow', size: main.size, xy: pt(c), d: dv(a, b) });
+        if (main.size !== other.size && sure(a) && sure(b)) { var tk = main.size + '>' + other.size; trans[tk] = (trans[tk] || 0) + 1; items.push({ t: 'transition', from: main.size, to: other.size, xy: pt(c), at: 'elbow', d: dv(a, b) }); }
+      });
+      // pass 3 · tees: a free end landing on another run's body (or at a joint / corner of it — the main carries on past that point)
+      for (i = 0; i < P.length; i++) for (var u2 = 0; u2 < 2; u2++) {
+        if (usedEnd[i + ':' + u2]) continue;
+        var e = E[i][u2], br = P[i], hit = null, hd = Infinity; if (br.len_ft < 1) continue;
+        for (j = 0; j < P.length; j++) {
+          if (j === i) continue;
+          var mn = P[j]; if (Math.abs(br.ux * mn.ux + br.uy * mn.uy) > 0.5 || !near(br, mn)) continue;
+          var half = mn.len_ft * ptft / 2, along = (e[0] - mn.cx) * mn.ux + (e[1] - mn.cy) * mn.uy, perp = Math.abs(-(e[0] - mn.cx) * mn.uy + (e[1] - mn.cy) * mn.ux);
+          if (Math.abs(along) > half + 0.5 * ptft) continue;
+          var inset = Math.max(br.w_in / 24 * ptft, 0.5 * ptft), side = along < 0 ? 0 : 1;   // inside the main's ends by half the branch width, unless the main goes on past that end (a joint or its own elbow)
+          if (Math.abs(along) > half - inset && !usedEnd[j + ':' + side]) continue;
+          if (perp > mn.w_in / 24 * ptft + Math.max(1.0, mn.w_in / 12 * 1.0) * ptft) continue;
+          if (perp < hd) { hd = perp; hit = { mn: mn, along: along }; }
+        }
+        if (!hit) continue;
+        usedEnd[i + ':' + u2] = 1;
+        var jp = [hit.mn.cx + hit.mn.ux * hit.along, hit.mn.cy + hit.mn.uy * hit.along]; if (!mark(jp, 'j')) continue;
+        var kt = hit.mn.size + '>' + br.size; tees[kt] = (tees[kt] || 0) + 1; items.push({ t: 'tee', main: hit.mn.size, branch: br.size, xy: pt(jp), d: dv(hit.mn, br) });
+      }
+      function sum(o) { var n = 0; for (var k in o) n += o[k]; return n; }
+      return { elbows: elbows, tees: tees, transitions: trans, n_elbows: sum(elbows), n_tees: sum(tees), n_transitions: sum(trans), n_total: sum(elbows) + sum(tees) + sum(trans), items: items };
     }
 
     function norm(s) {
