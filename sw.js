@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nw-field-v517';
+const CACHE_NAME = 'nw-field-v518';
 const ASSETS = [
   './',
   './ai-chat.js',

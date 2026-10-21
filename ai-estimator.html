@@ -322,7 +322,7 @@ var AE = (function() {
     if (r.geo && r.geo.slots && r.geo.slots.n) bits.push('📐 slot diffusers drawn: ' + r.geo.slots.n + ' = ' + Math.round(r.geo.slots.ft) + ' ft (' + Object.keys(r.geo.slots.lens).map(function(l) { return r.geo.slots.lens[l] + ' × ' + l + ' ft'; }).join(', ') + ')');
     if (r.geo && r.geo.riser_n) bits.push('⬆ ' + r.geo.riser_n + ' UP/DN riser' + (r.geo.riser_n === 1 ? '' : 's') + ' = ' + Math.round(r.geo.riser_ft) + ' ft');
     if (r.geo && r.geo.error) bits.push('📐 ' + r.geo.error);
-    if (r.repeat) bits.push('🔁 read ' + r.repeat.passes + '×' + (r.repeat.error ? ' — ' + esc(r.repeat.error) : r.repeat.changes.length ? ' — ' + esc(r.repeat.changes.slice(0, 5).join(', ')) + (r.repeat.changes.length > 5 ? ' …' : '') : ' — the reads agree'));
+    if (r.repeat) bits.push('🔁 read ' + r.repeat.passes + '×' + (r.repeat.costs && r.repeat.costs.length ? ' (' + r.repeat.costs.map(function(c) { return '$' + (Number(c) || 0).toFixed(2); }).join(' + ') + ')' : '') + (r.repeat.error ? ' — ' + esc(r.repeat.error) : r.repeat.changes.length ? ' — ' + esc(r.repeat.changes.slice(0, 6).join(', ')) + (r.repeat.changes.length > 6 ? ' … (' + r.repeat.changes.length + ' changes)' : '') : ' — the reads agree'));
     if (r.frozen && r.frozen.length) bits.push('🔒 text-layer counts: ' + esc(r.frozen.join(', ')));
     if (r.addendum_diff) bits.push('<a href="#" onclick="event.stopPropagation();AE.showDiff(\'' + p.id + '\');return false" title="What changed against the sheet this one replaces">Δ vs ' + esc(r.addendum_diff.old_sheet) + ': ' + esc(diffSummary(r.addendum_diff)) + '</a>');
     else if (r.triage && r.triage.supersedes && p.status === 'done') bits.push('<a href="#" onclick="event.stopPropagation();AE.compareAddendum(\'' + p.id + '\');return false">Δ compare with ' + esc(r.triage.supersedes_sheet || 'the replaced sheet') + '</a>');
@@ -748,14 +748,21 @@ var AE = (function() {
   // run (BOSS M-101: A3 10 → 7, R2 9 → "R2/R3 15"). Such a sheet is read a second time; when the two passes disagree on any device
   // family or equipment tag a third pass decides: a row counts when it is in more than half of the passes, qty / feet = median,
   // type = majority. Device families that ARE in the text layer ("C (150) TYP. 3") take exactly the text count (frozen).
-  var PLAN_TYPES = /^(duct_plan|pipe_plan|enlarged)$/;
+  // Duct and pipe runs drift the same way on EVERY duct / pipe plan, tagged or not (414 W 14th M-300: transfer ducts 24x10 / 24x14 /
+  // 24x6 read 10 / 10 / 8 ft one day and 5 / 5 / 5 ft the next, the 14x6 run gone — the priced bid moved $18k → $23k on one sheet),
+  // so a duct_plan / pipe_plan with runs is read again too and the runs are reconciled per size + system (pipe: service + size):
+  // a size counts when it is in more than half of the passes, lf = median of the passes that have it. Devices / equipment are
+  // reconciled only when the sheet qualified by the device rule (a tagged sheet's device rows are exact already and a census sheet's
+  // repeat passes count by eye). At most 3 passes; every pass's cost is kept on repeat.costs[] and summed in repeat.cost.
+  var PLAN_TYPES = /^(duct_plan|pipe_plan|enlarged)$/, RUN_PLAN_TYPES = /^(duct_plan|pipe_plan)$/;
   function isPlanResult(r) { return !!r && (PLAN_TYPES.test(r.sheet_type || '') || (r.sheet_type === 'other' && /plan/i.test(r.sheet_title || ''))); }
   function devTagTotal(d) { var n = 0; Object.keys(d || {}).forEach(function(k) { if (k !== '(cfm only)') n += Number(d[k]) || 0; }); return n; }
   function devQty(rows) { return (rows || []).reduce(function(a, x) { return a + (Number(x.qty) || 0); }, 0); }
-  function needsRepeat(p, body) {
-    var r = p.result || {}; if (p.status !== 'done' || r.parse_error || !isPlanResult(r) || body.symbol_census) return false;
-    if (devTagTotal(body.device_tags) >= 3) return false;
-    return devQty(r.air_devices) >= 3 || (r.equipment || []).length >= 2;
+  function repeatWhy(p, body) {
+    var r = p.result || {}; if (p.status !== 'done' || r.parse_error || !isPlanResult(r)) return null;
+    var devices = !body.symbol_census && devTagTotal(body.device_tags) < 3 && (devQty(r.air_devices) >= 3 || (r.equipment || []).length >= 2);
+    var runs = RUN_PLAN_TYPES.test(r.sheet_type || '') && ((r.duct_runs || []).length > 0 || (r.pipe_runs || []).length > 0);
+    return devices || runs ? { devices: devices, runs: runs } : null;
   }
   async function repeatRead(p, body, pass) {
     p.repeating = 'reading again (pass ' + pass + ')…'; paintKeep();
@@ -790,15 +797,42 @@ var AE = (function() {
     });
     return { rows: out, changes: changes };
   }
-  function runsTotal(rows) { return (rows || []).reduce(function(a, x) { return a + (Number(x.lf) || 0); }, 0); }
-  function pickMedianRuns(lists) { var tot = lists.map(runsTotal), m = median(tot), best = 0; tot.forEach(function(t, i) { if (Math.abs(t - m) < Math.abs(tot[best] - m)) best = i; }); return lists[best] || []; }
-  function reconcile(p, reads) {
-    var r = p.result, ok = reads.filter(function(x) { return x && !x.error && !x.parse_error; });
-    if (ok.length < 2) { r.repeat = { passes: reads.length, used: ok.length, changes: [], error: (reads.find(function(x) { return x && x.error; }) || {}).error || 'second read unreadable', cost: reads.reduce(function(a, x) { return a + (Number(x.cost) || 0); }, 0) }; return; }
-    var dev = reconcileRows(ok.map(function(x) { return x.air_devices; }), ['qty', 'linear_ft']), eq = reconcileRows(ok.map(function(x) { return x.equipment; }), ['qty']);
-    r.air_devices = dev.rows; r.equipment = eq.rows;
-    r.duct_runs = pickMedianRuns(ok.map(function(x) { return x.duct_runs; })); r.pipe_runs = pickMedianRuns(ok.map(function(x) { return x.pipe_runs; }));
-    r.repeat = { passes: reads.length, used: ok.length, changes: dev.changes.concat(eq.changes), cost: reads.reduce(function(a, x) { return a + (Number(x.cost) || 0); }, 0), at: new Date().toISOString() };
+  // duct runs: one family per size + system (24x10 SA and 24x10 RA are two); pipe runs: service + size (CWS 2" and CWR 2" are two).
+  // Two rows of one family in one pass are one family (summed); a family counts when it is in more than half of the passes,
+  // its feet = the median of the passes that have it; shape / lining / notes come from the first pass that has it.
+  function runName(x, pipe) { var sys = String(x.system || '').toUpperCase(); return pipe ? ((x.service ? x.service + ' ' : '') + (x.size || '?')) : ((x.size || '?') + (sys && sys !== 'UNKNOWN' ? ' ' + sys : '')); }
+  function sizeKey(s) { return String(s || '').toUpperCase().replace(/Ø|DIA\.?|INCH(ES)?|\bIN\b|"|''|”/g, '').replace(/[^A-Z0-9\/]/g, ''); }   // 2" = 2 in = 2"Ø, 24x10 = 24 X 10
+  function runKey(x, pipe) { return pipe ? NWEngine.norm(x.service) + '|' + sizeKey(x.size) : sizeKey(x.size) + '|' + (NWEngine.norm(x.system) || 'UNKNOWN'); }
+  function reconcileRuns(lists, pipe) {
+    var n = lists.length, by = {}, order = [];
+    lists.forEach(function(rows) { var seen = {}; (rows || []).forEach(function(x) { if (!x || typeof x !== 'object') return; var k = runKey(x, pipe);
+      if (seen[k]) { seen[k].lf = (Number(seen[k].lf) || 0) + (Number(x.lf) || 0); return; }
+      seen[k] = Object.assign({}, x, { lf: Number(x.lf) || 0 }); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(seen[k]); }); });
+    var out = [], changes = [];
+    order.forEach(function(k) {
+      var hits = by[k], name = runName(hits[0], pipe);
+      if (hits.length * 2 <= n) { changes.push(name + ' ' + hits.map(function(h) { return h.lf; }).join('/') + ' ft only in ' + hits.length + ' of ' + n + ' reads → dropped'); return; }
+      var lf = hits.map(function(h) { return h.lf; }), m = Math.round(median(lf) * 10) / 10, base = Object.assign({}, hits[0], { lf: m });
+      if (lf.some(function(v) { return v !== lf[0]; })) changes.push(name + ' ' + lf.join('/') + ' → ' + m + ' ft');
+      else if (hits.length < n) changes.push(name + ' ' + m + ' ft in ' + hits.length + ' of ' + n + ' reads');
+      out.push(base);
+    });
+    return { rows: out, changes: changes };
+  }
+  function reconcile(p, reads, why) {
+    var r = p.result, ok = reads.filter(function(x) { return x && !x.error && !x.parse_error; }), costs = reads.map(function(x) { return Number(x.cost) || 0; }), cost = costs.reduce(function(a, c) { return a + c; }, 0);
+    why = why || { devices: true, runs: true };
+    if (ok.length < 2) { r.repeat = { passes: reads.length, used: ok.length, changes: [], error: (reads.find(function(x) { return x && x.error; }) || {}).error || 'second read unreadable', cost: cost, costs: costs }; return; }
+    var changes = [];
+    if (why.devices) {
+      var dev = reconcileRows(ok.map(function(x) { return x.air_devices; }), ['qty', 'linear_ft']), eq = reconcileRows(ok.map(function(x) { return x.equipment; }), ['qty']);
+      r.air_devices = dev.rows; r.equipment = eq.rows; changes = changes.concat(dev.changes, eq.changes);
+    }
+    if (why.runs) {
+      var duct = reconcileRuns(ok.map(function(x) { return x.duct_runs; }), false), pipe = reconcileRuns(ok.map(function(x) { return x.pipe_runs; }), true);
+      r.duct_runs = duct.rows; r.pipe_runs = pipe.rows; changes = changes.concat(duct.changes, pipe.changes);
+    }
+    r.repeat = { passes: reads.length, used: ok.length, changes: changes, devices: !!why.devices, runs: !!why.runs, cost: cost, costs: costs, at: new Date().toISOString() };
   }
   // device families counted in the text layer are exact: the reader's count for such a family is replaced by the text count
   function freezeDevices(p) {
@@ -823,11 +857,12 @@ var AE = (function() {
   async function postRead(p, body) {
     var r = p.result; if (!r || typeof r !== 'object' || r.parse_error) return;
     var changed = false;
-    if (needsRepeat(p, body)) {
+    var why = repeatWhy(p, body);
+    if (why) {
       var first = { pass: 1, cost: p.cost, air_devices: r.air_devices || [], equipment: r.equipment || [], duct_runs: r.duct_runs || [], pipe_runs: r.pipe_runs || [] };
       var reads = [first, await repeatRead(p, body, 2)];
-      reconcile(p, reads);
-      if (reads[1] && !reads[1].error && !reads[1].parse_error && r.repeat.changes.length) { reads.push(await repeatRead(p, body, 3)); reconcile(p, reads); }
+      reconcile(p, reads, why);
+      if (reads[1] && !reads[1].error && !reads[1].parse_error && r.repeat.changes.length) { reads.push(await repeatRead(p, body, 3)); reconcile(p, reads, why); }
       r.reads = reads; changed = true;
     }
     if (freezeDevices(p)) changed = true;

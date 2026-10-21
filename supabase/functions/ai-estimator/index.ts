@@ -267,8 +267,9 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
   if (error || !pg) throw new Error("page not found");
   const { data: ses } = await db.from("ai_est_sessions").select("model").eq("id", pg.session_id).single();
   const model = MODELS[body.model] ? body.model : (ses && MODELS[ses.model] ? ses.model : DEFAULT_MODEL);
-  // pass 2 / 3 = a repeat read of a sheet the reader counted by eye (no device tags in the text layer): the answer goes to
-  // result.reads[] and the page reconciles the passes; the row's status / result stay as they are
+  // pass 2 / 3 = a repeat read of a plan sheet (devices the reader counted by eye, or any duct / pipe plan with duct / pipe runs —
+  // the page decides, see ai-estimator.html repeatWhy): the answer goes to result.reads[] with its own cost and the page reconciles
+  // the passes (devices by majority + median, duct runs per size + system, pipe runs per service + size); status / result stay
   const pass = Math.max(1, Math.min(5, Number(body.pass) || 1));
   if (pass === 1) await db.from("ai_est_pages").update({ status: "running", error: null, model, started_at: new Date().toISOString() }).eq("id", pg.id);
 
