@@ -556,8 +556,8 @@
               var parts = k2.split('|'), round2 = parts[0] === 'round', dims = parts[1].split('x');
               if (g2 > 0 && a2 > g2 * 1.5) readerOver.push(sh + ': ' + (round2 ? dims[0] + '"Ø' : parts[1]) + ' traced ' + Math.round(g2) + ' ft, the reader says ' + Math.round(a2));
               var o2 = duct[k2] = duct[k2] || { shape: parts[0], size: round2 ? dims[0] + '"Ø' : parts[1], lf: 0, sheets: [], geo: false };
-              o2.lf += use; o2.sheets.push(sh); if (g2 >= a2) { o2.geo = true; fromGeo += use; } mergedFt += use;
-              addSys(o2, use, (g2 >= a2 && geoSys[k2]) ? geoSys[k2] : (aiSys[k2] || geoSys[k2]));
+              o2.lf += use; o2.sheets.push(sh); if (g2 > 0) { o2.geo = true; fromGeo += use; } mergedFt += use;
+              addSys(o2, use, (g2 > 0 && geoSys[k2]) ? geoSys[k2] : (aiSys[k2] || geoSys[k2]));
             });
             geoCheck.push({ sheet: sh, geo: Math.round(fromGeo), ai: aiFt, merged: Math.round(mergedFt), labels: gl, why: 'single-line drawing: traced sizes + the reader\'s other sizes' + (readerOver.length ? ' — the reader reads more than was traced on ' + readerOver.join('; ') + ' (unlabelled branches? check the plan)' : '') });
             addFittings(sh, r.geo.fittings);
