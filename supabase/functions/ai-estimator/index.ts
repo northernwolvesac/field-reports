@@ -245,7 +245,7 @@ function repairJson(s: string): any {
   throw new Error("unreadable JSON");
 }
 
-const GLYPH_NOTE = "SYMBOL GLYPHS counted from the vector layer of this sheet (one family per line: count x shape, paper size in inches, diagonal strokes inside, how many have a cfm number or a short tag beside them). Find the legend's air-device symbols among these families by shape and size: a family that matches a legend symbol gives the EXACT quantity of that device on this sheet - use that count instead of counting by eye, and say in the row's basis which family (#n) you used. Families that are tag bubbles, light fixtures, sprinkler heads, thermostats, furniture, column markers or dimension marks are not devices.\n";
+const GLYPH_NOTE = "SYMBOL GLYPHS counted from the vector layer of this sheet (one family per line: count x shape, paper size in inches, diagonal strokes inside, how many have a cfm number or a short tag beside them). Find the legend's air-device symbols among these families by shape and size: a family that matches a legend symbol gives the EXACT quantity of that device on this sheet - use that count instead of counting by eye, and say in the row's basis which family (#n) you used. Families that are tag bubbles, light fixtures, sprinkler heads, thermostats, furniture, column markers or dimension marks are not devices. A family is a device count ONLY when its number also fits what the sheet shows: most of its members carry the device's tag or a cfm, and the count is in the range of the devices you can see labelled - a family of 100+ glyphs on a floor with a dozen labelled devices is ceiling tiles, lights or sprinkler heads, not a device. A quantity taken from a glyph family has basis 'symbols (family #n)', never 'tags'.\n";
 
 // ─── spec Q&A: the bid's specification passages (ai_est_spec_chunks, full-text search) answer the estimator's question with citations ───
 const SPECQA_PROMPT = `You answer an HVAC estimator's question about THIS project's specifications and general notes.
@@ -261,6 +261,21 @@ function kbKeywords(q: string): string {
   return q.toLowerCase().replace(/[^\w\s"'/.-]/g, " ").split(/\s+/).filter((w) => w && !stop.has(w) && w.length > 1).slice(0, 8).join(" OR ");
 }
 
+// the exact counts and vector-layer hints that go with a sheet read — identical for every pass, so repeat passes see what pass 1 saw
+function sheetExtras(body: any): string {
+  let extra = "";
+  if (body.tag_counts && Object.keys(body.tag_counts).length)
+    extra += "\n\nTAG COUNTS (exact, from the text layer of this sheet): " + JSON.stringify(body.tag_counts);
+  if (body.device_tags && Object.keys(body.device_tags).length)
+    extra += "\n\nDEVICE TAGS (exact, from the text layer of this sheet; device code → number of devices, TYP. multipliers already applied): " + JSON.stringify(body.device_tags);
+  if (body.symbol_census && body.symbol_census.by_colour)
+    extra += "\n\nCOLOURED SYMBOLS beside the bare cfm bubbles (exact, counted from the vector layer; each symbol once): " + JSON.stringify(body.symbol_census.by_colour) +
+      " — bubbles with no symbol: " + body.symbol_census.no_symbol + ". USE THESE NUMBERS as the quantities of the bare-cfm device rows: one row per colour (put the colour in the tag), qty = that colour's count; your job is to say what each colour is (supply diffuser / return grille / exhaust register / round diffuser / linear) from the legend and the symbol shape. Do not count the bubbles yourself.";
+  if (body.glyph_text) extra += "\n\n" + GLYPH_NOTE + String(body.glyph_text).slice(0, 3000);
+  if (body.text_hint) extra += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
+  return extra;
+}
+
 // ─── handlers ─────────────────────────────────────────────────────────
 async function runPage(db: any, body: any, kind: "sheet" | "quote") {
   const { data: pg, error } = await db.from("ai_est_pages").select("id, session_id, page_no, result").eq("id", body.page_id).single();
@@ -268,8 +283,9 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
   const { data: ses } = await db.from("ai_est_sessions").select("model").eq("id", pg.session_id).single();
   const model = MODELS[body.model] ? body.model : (ses && MODELS[ses.model] ? ses.model : DEFAULT_MODEL);
   // pass 2 / 3 = a repeat read of a plan sheet (devices the reader counted by eye, or any duct / pipe plan with duct / pipe runs —
-  // the page decides, see ai-estimator.html repeatWhy): the answer goes to result.reads[] with its own cost and the page reconciles
-  // the passes (devices by majority + median, duct runs per size + system, pipe runs per service + size); status / result stay
+  // the page decides, see ai-estimator.html repeatWhy): same PDF, tiles and prompt extras as pass 1; the answer goes to result.reads[]
+  // with its own cost and the page reconciles the passes (devices by majority + median, duct runs per size + system, pipe runs per
+  // service + size); status / result stay as they are
   const pass = Math.max(1, Math.min(5, Number(body.pass) || 1));
   if (pass === 1) await db.from("ai_est_pages").update({ status: "running", error: null, model, started_at: new Date().toISOString() }).eq("id", pg.id);
 
@@ -279,11 +295,7 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
       try {
         const content: any[] = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: body.pdf_base64 } }];
         (body.tiles || []).slice(0, 12).forEach((t: string) => content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: t } }));
-        let prompt = SHEET_PROMPT;
-        if (body.tag_counts && Object.keys(body.tag_counts).length) prompt += "\n\nTAG COUNTS (exact, from the text layer of this sheet): " + JSON.stringify(body.tag_counts);
-        if (body.device_tags && Object.keys(body.device_tags).length) prompt += "\n\nDEVICE TAGS (exact, from the text layer of this sheet; device code → number of devices, TYP. multipliers already applied): " + JSON.stringify(body.device_tags);
-        if (body.text_hint) prompt += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
-        content.push({ type: "text", text: prompt });
+        content.push({ type: "text", text: SHEET_PROMPT + sheetExtras(body) });
         const r = await claude(model, content, 8000, SHEET_SCHEMA);
         let result: any;
         if (r.data) result = r.data; else try { result = parseJson(r.text); } catch (_e) { result = { parse_error: true }; }
@@ -301,19 +313,7 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
       const content: any[] = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: body.pdf_base64 } }];
       (body.tiles || []).slice(0, 12).forEach((t: string) =>
         content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: t } }));
-      let prompt = kind === "quote" ? QUOTE_PROMPT : SHEET_PROMPT;
-      if (kind === "sheet") {
-        if (body.tag_counts && Object.keys(body.tag_counts).length)
-          prompt += "\n\nTAG COUNTS (exact, from the text layer of this sheet): " + JSON.stringify(body.tag_counts);
-        if (body.device_tags && Object.keys(body.device_tags).length)
-          prompt += "\n\nDEVICE TAGS (exact, from the text layer of this sheet; device code → number of devices, TYP. multipliers already applied): " + JSON.stringify(body.device_tags);
-        if (body.symbol_census && body.symbol_census.by_colour)
-          prompt += "\n\nCOLOURED SYMBOLS beside the bare cfm bubbles (exact, counted from the vector layer; each symbol once): " + JSON.stringify(body.symbol_census.by_colour) +
-            " — bubbles with no symbol: " + body.symbol_census.no_symbol + ". USE THESE NUMBERS as the quantities of the bare-cfm device rows: one row per colour (put the colour in the tag), qty = that colour's count; your job is to say what each colour is (supply diffuser / return grille / exhaust register / round diffuser / linear) from the legend and the symbol shape. Do not count the bubbles yourself.";
-        if (body.glyph_text) prompt += "\n\n" + GLYPH_NOTE + String(body.glyph_text).slice(0, 3000);
-        if (body.text_hint) prompt += "\n\nDuct/pipe size labels found in the text layer (label ×count): " + String(body.text_hint).slice(0, 4000);
-      }
-      content.push({ type: "text", text: prompt });
+      content.push({ type: "text", text: kind === "quote" ? QUOTE_PROMPT : SHEET_PROMPT + sheetExtras(body) });
       const r = await claude(model, content, kind === "quote" ? 4000 : 8000, kind === "quote" ? QUOTE_SCHEMA : SHEET_SCHEMA);
       let result: any;
       if (r.data) result = r.data;
