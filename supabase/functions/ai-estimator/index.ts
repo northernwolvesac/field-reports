@@ -323,6 +323,12 @@ async function runPage(db: any, body: any, kind: "sheet" | "quote") {
       const prev: any = (pg as any).result || {};
       if (prev.triage) result.triage = prev.triage;
       if (prev.ocr_labels) result.ocr_labels = prev.ocr_labels;
+      // the OCR word list (printed device tags on an outlined-text sheet — the engine's symbol-row rule needs it) and the measured
+      // geometry are the page's work on the same PDF page: a re-read must not throw them away (414 M-300 lost "CD" / "CG" and priced
+      // 30 "A" diffusers after a re-read)
+      if (prev.ocr_words) result.ocr_words = prev.ocr_words;
+      if (prev.geo) result.geo = prev.geo;
+      if (prev.geo_pipe) result.geo_pipe = prev.geo_pipe;
       if (Array.isArray(body.glyph_families) && body.glyph_families.length) result.glyphs = body.glyph_families.slice(0, 16);
       await db.from("ai_est_pages").update({
         status: "done", result, tokens_in: r.tokens_in, tokens_out: r.tokens_out, cost: r.cost,
