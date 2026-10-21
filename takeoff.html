@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=537">
+<link rel="stylesheet" href="procore-ui.css?v=538">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=537"></script>
-<script src="auth.js?v=537"></script>
-<script src="est-totals.js?v=537"></script>
-<script src="procore-ui.js?v=537"></script>
+<script src="supabase-config.js?v=538"></script>
+<script src="auth.js?v=538"></script>
+<script src="est-totals.js?v=538"></script>
+<script src="procore-ui.js?v=538"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=537"></script>
-<script src="est-drawings.js?v=537"></script>
-<script src="nw-catalog-picker.js?v=537"></script>
-<script src="nw-duct-weight.js?v=537"></script>
-<script src="geo-takeoff.js?v=537"></script>
-<script src="est-engine.js?v=537"></script>
+<script src="bid-actions.js?v=538"></script>
+<script src="est-drawings.js?v=538"></script>
+<script src="nw-catalog-picker.js?v=538"></script>
+<script src="nw-duct-weight.js?v=538"></script>
+<script src="geo-takeoff.js?v=538"></script>
+<script src="est-engine.js?v=538"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -533,6 +533,131 @@ requireAuth().catch(function(){});
     updatePlanLabel(); renderAll(); scheduleSync();
     toast(n === 1 ? planShort(p) + ' counts once' : planShort(p) + ' counts × ' + n + ' — layer totals and the estimate follow', 'success');
   }
+
+  // ─── zones (Takso, Russ 2026-10-21): named polygons drawn on a sheet — a floor wing, a phase, a CO area (Snowflake's bathrooms) ───
+  // estimates.settings.takeoff_zones [{id, name, color, d: drawingId, p: page, pts}]. Inside a zone: a count by its point, a run by the part of
+  // its length inside the polygon (clipped), an area by its centre — × the sheet's typical-floor count. Report + Excel from the Actions menu.
+  var ZONE_COLORS = ['#7c3aed', '#0891b2', '#c2410c', '#15803d', '#be185d', '#4d7c0f'];
+  function zonesAll() { var z = settings().takeoff_zones; return Array.isArray(z) ? z : []; }
+  function zonesOn(p) { return p ? zonesAll().filter(function(z) { return z.d === p.drawing.id && z.p === p.page; }) : []; }
+  function segIn(a, b, poly) {
+    var ts = [0, 1];
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var p = poly[j], q = poly[i], rx = b[0] - a[0], ry = b[1] - a[1], sx = q[0] - p[0], sy = q[1] - p[1], den = rx * sy - ry * sx;
+      if (Math.abs(den) < 1e-9) continue;
+      var t = ((p[0] - a[0]) * sy - (p[1] - a[1]) * sx) / den, u = ((p[0] - a[0]) * ry - (p[1] - a[1]) * rx) / den;
+      if (t > 0 && t < 1 && u >= 0 && u <= 1) ts.push(t);
+    }
+    ts.sort(function(x, y) { return x - y; });
+    var L = dist(a, b), inside = 0;
+    for (var k = 1; k < ts.length; k++) { var tm = (ts[k - 1] + ts[k]) / 2; if (inPoly([a[0] + (b[0] - a[0]) * tm, a[1] + (b[1] - a[1]) * tm], poly)) inside += (ts[k] - ts[k - 1]) * L; }
+    return inside;
+  }
+  function zoneShare(m, poly) {
+    var pts = m.points || []; if (!pts.length) return 0;
+    if (m.tool_type === 'count') return inPoly(pts[0], poly) ? 1 : 0;
+    if (m.tool_type === 'length') { var tot = 0, ins = 0; for (var i = 1; i < pts.length; i++) { tot += dist(pts[i - 1], pts[i]); ins += segIn(pts[i - 1], pts[i], poly); } return tot > 0 ? ins / tot : 0; }
+    if (m.tool_type === 'area') { var cx = 0, cy = 0; pts.forEach(function(q) { cx += q[0]; cy += q[1]; }); return inPoly([cx / pts.length, cy / pts.length], poly) ? 1 : 0; }
+    return 0;
+  }
+  function zoneTotals(z) {
+    var by = {};
+    allMeas.forEach(function(m) { if (m.drawing_id !== z.d || m.page_number !== z.p || !m.layer_id) return; var l = layerById(m.layer_id); if (!l) return; var sh = zoneShare(m, z.pts); if (!sh) return;
+      var o = by[l.id] = by[l.id] || { l: l, qty: 0 }; o.qty += markQtyAll(m, l) * sh; });
+    return Object.keys(by).map(function(k) { var o = by[k], l = o.l; o.mat = o.qty * (1 + Number(l.waste_pct || 0) / 100) * Number(l.unit_material_cost || 0); o.hrs = o.qty * Number(l.unit_labor_hours || 0) * Number(l.labor_factor || 1); return o; })
+      .filter(function(o) { return Math.abs(o.qty) > 0.004; }).sort(function(a, b) { return String(a.l.group_name || '').localeCompare(String(b.l.group_name || '')) || String(a.l.name).localeCompare(String(b.l.name)); });
+  }
+  async function addZone(pts) {
+    var p = plans[planIdx]; if (!p) return;
+    if (!settingsOk || !est) { toast('Estimate settings are not available here — run procore-ui-schema.sql', 'error'); return; }
+    var n = zonesAll().length, name = await P.prompt({ title: 'New zone', label: 'Zone name', value: 'Zone ' + (n + 1), hint: 'e.g. Level 2 East, Phase 1, CO-07 bathrooms. The quantities inside it: Actions → Zones report.', okLabel: 'Save' });
+    if (!name || !String(name).trim()) { redraw(); return; }
+    var z = { id: 'z' + Date.now().toString(36), name: String(name).trim().slice(0, 60), color: ZONE_COLORS[n % ZONE_COLORS.length], d: p.drawing.id, p: p.page,
+      pts: pts.map(function(q) { return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]; }) };
+    saveSettings({ takeoff_zones: zonesAll().concat([z]) }); setTool('select'); redraw();
+    var t = zoneTotals(z); toast('Zone "' + z.name + '" saved — ' + t.length + ' takeoff' + (t.length === 1 ? '' : 's') + ' inside · Actions → Zones report', 'success');
+  }
+  function drawZones() {
+    var cur = plans[planIdx]; if (!cur || !ctx) return;
+    zonesOn(cur).forEach(function(z) {
+      var pts = z.pts.map(S), col = z.color || '#7c3aed'; if (pts.length < 3) return;
+      ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.globalAlpha = 0.07;
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 0.9; ctx.lineWidth = 2; ctx.setLineDash([10, 6]); ctx.stroke(); ctx.setLineDash([]);
+      var mn = pts.reduce(function(a, b) { return (b[1] < a[1] - 0.5 || (Math.abs(b[1] - a[1]) <= 0.5 && b[0] < a[0])) ? b : a; });
+      ctx.font = '600 13px Inter, Arial, sans-serif'; var tw = ctx.measureText(z.name).width;
+      ctx.fillRect(mn[0], mn[1] - 20, tw + 12, 18); ctx.fillStyle = '#fff'; ctx.fillText(z.name, mn[0] + 6, mn[1] - 6); ctx.restore();
+    });
+  }
+  function zonesReport() {
+    var zs = zonesAll();
+    if (!zs.length) { toast('No zones yet — pick the Zone tool on the right rail and outline an area (Enter closes it)'); return; }
+    var order = {}; plans.forEach(function(p, i) { order[p.drawing.id + ':' + p.page] = i; });
+    zs = zs.slice().sort(function(a, b) { return (order[a.d + ':' + a.p] || 0) - (order[b.d + ':' + b.p] || 0) || String(a.name).localeCompare(String(b.name)); });
+    var gm = 0, gh = 0;
+    var body = zs.map(function(z) {
+      var pi = order[z.d + ':' + z.p], p = plans[pi], rows = zoneTotals(z), mat = 0, hrs = 0;
+      rows.forEach(function(o) { mat += o.mat; hrs += o.hrs; }); gm += mat; gh += hrs;
+      return '<div style="border:1px solid var(--pc-border,#e5e7eb);border-radius:8px;margin-bottom:12px">' +
+        '<div style="display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--pc-border,#e5e7eb)"><span class="pc-dot" style="background:' + esc(z.color || '#7c3aed') + '"></span><b>' + esc(z.name) + '</b><span class="pc-muted">' + (p ? esc(planShort(p)) : 'sheet removed') + (p && pageMult(p.drawing.id, p.page) > 1 ? ' · ×' + pageMult(p.drawing.id, p.page) + ' floors' : '') + '</span><span style="flex:1"></span>' +
+          (p ? '<button class="pc-btn pc-btn-ghost" data-zgo="' + pi + '">Go to sheet</button>' : '') + (me.canEdit ? '<button class="pc-btn pc-btn-ghost" data-zren="' + esc(z.id) + '">Rename</button><button class="pc-btn pc-btn-ghost" data-zdel="' + esc(z.id) + '" style="color:var(--pc-danger)">Delete</button>' : '') + '</div>' +
+        (rows.length ? '<table class="pc-table"><thead><tr><th>Takeoff</th><th class="num">Quantity</th><th class="num">Material</th><th class="num">Labor h</th><th class="num">Total</th></tr></thead><tbody>' +
+          rows.map(function(o) { return '<tr><td>' + esc(o.l.name) + '</td><td class="num">' + qtyStr(o.qty, o.l.takeoff_type) + '</td><td class="num">' + P.money(o.mat) + '</td><td class="num">' + o.hrs.toFixed(1) + '</td><td class="num">' + P.money(o.mat + o.hrs * laborRate) + '</td></tr>'; }).join('') +
+          '<tr style="font-weight:700"><td>Zone total</td><td></td><td class="num">' + P.money(mat) + '</td><td class="num">' + hrs.toFixed(1) + '</td><td class="num">' + P.money(mat + hrs * laborRate) + '</td></tr></tbody></table>'
+          : '<div class="pc-muted" style="padding:10px">No takeoff marks inside this zone.</div>') + '</div>';
+    }).join('');
+    body = '<div class="pc-banner-info" style="margin-bottom:12px">Cost before overhead, profit and tax · labor at ' + P.money0(laborRate) + '/h. Runs crossing a zone line count only the part inside it.</div>' + body +
+      '<div style="text-align:right;font-weight:700">All zones: ' + P.money(gm) + ' material · ' + gh.toFixed(1) + ' h · ' + P.money(gm + gh * laborRate) + '</div>';
+    var dlg = P.modal({ title: 'Zones report', body: body, size: 'lg', buttons: [{ label: 'Close', onClick: function() { dlg.close(); } }, { label: 'Export Excel', primary: true, close: false, closeOnDone: false, onClick: function() { exportBySheet(true); } }] });
+    dlg.body.addEventListener('click', async function(e) {
+      var b = e.target.closest('button'); if (!b) return;
+      if (b.hasAttribute('data-zgo')) { dlg.close(); openPlan(+b.getAttribute('data-zgo')); return; }
+      var id = b.getAttribute('data-zren') || b.getAttribute('data-zdel'); if (!id) return;
+      var list = zonesAll().slice(), z = list.find(function(x) { return x.id === id; }); if (!z) return;
+      if (b.hasAttribute('data-zren')) { var nm = await P.prompt({ title: 'Rename zone', label: 'Zone name', value: z.name, okLabel: 'Save' }); if (!nm || !String(nm).trim()) return; z = Object.assign({}, z, { name: String(nm).trim().slice(0, 60) }); list = list.map(function(x) { return x.id === id ? z : x; }); }
+      else { if (!await P.confirm({ title: 'Delete zone', message: 'Delete the zone "' + z.name + '"? The takeoff marks stay.', okLabel: 'Delete', danger: true })) return; list = list.filter(function(x) { return x.id !== id; }); }
+      saveSettings({ takeoff_zones: list }); redraw(); dlg.close(); if (list.length) zonesReport();
+    });
+  }
+  // Excel by sheet (Takso "Insulation by drawing" / "Poundage by page"): every sheet × takeoff with the sheet-metal weight (SMACNA gauge,
+  // nw-duct-weight.js) and the insulation it carries (est-totals insulationOf: duct liner / wrap sq ft, pipe insulation ft), sheet totals,
+  // and the zones (same columns). withZones = called from the Zones report.
+  function insFor(l, qty) {
+    if (!window.nwInsulationOf) return null;
+    var r = nwInsulationOf({ description: l.name, unit_material_cost: l.unit_material_cost, unit_labor_hours: l.unit_labor_hours }, l.category, lineUnit(l.takeoff_type));
+    if (!r || r.kind === 'explicit') return r ? { label: r.label, qty: qty, unit: r.unit } : null;
+    return { label: r.label, qty: qty * r.qtyUnit, unit: r.unit, liner: !!r.liner, pipe: r.kind === 'pipe' };
+  }
+  function lbFor(l, qty) { if (!window.NWDuct || l.category !== 'ductwork' || l.takeoff_type !== 'linear') return null; var w = NWDuct.weightOf(l.name); return w ? { lbft: w.lb_ft, lb: qty * w.lb_ft, kind: w.kind, sf: qty * w.perim_in / 12 } : null; }
+  function exportBySheet(withZones) {
+    if (!window.XLSX) { toast('Excel library did not load', 'error'); return; }
+    if (!layers.length) { toast('No takeoff layers yet'); return; }
+    var r2 = function(v) { return Math.round(v * 100) / 100; };
+    var head = ['Sheet', 'File', 'Page', 'Floors ×', 'Group', 'Takeoff', 'Category', 'Quantity', 'UoM', 'lb / ft', 'Sheet metal lb', 'Duct surface sq ft', 'Insulation', 'Insulation qty', 'Insulation unit'];
+    var aoa = [head], tot = [['Sheet', 'Floors ×', 'Duct ft', 'Sheet metal lb — rectangular', 'lb — round', 'lb — oval', 'Sheet metal lb total', 'Duct liner sq ft', 'Duct wrap sq ft', 'Pipe insulation ft']];
+    plans.forEach(function(p) {
+      var k = p.drawing.id + ':' + p.page, s = { dft: 0, rect: 0, round: 0, oval: 0, liner: 0, wrap: 0, pipe: 0 }, any = false;
+      groupNames().forEach(function(g) { groupLayers(g).forEach(function(l) {
+        var pp = layerTotals(l).perPage[k]; if (!pp || Math.abs(pp.qty) < 0.004) return; any = true;
+        var q = pp.qty, w = lbFor(l, q), ins = insFor(l, q);
+        if (w) { s.dft += q; s[w.kind] = (s[w.kind] || 0) + w.lb; }
+        if (ins && ins.unit === 'sq ft') { if (ins.liner) s.liner += ins.qty; else s.wrap += ins.qty; } else if (ins && ins.pipe) s.pipe += ins.qty;
+        aoa.push([planShort(p), p.drawing.filename, p.page, pageMult(p.drawing.id, p.page), g, l.name, CATS[l.category] || l.category || '', r2(q), P.uom(typeUnit(l.takeoff_type)), w ? w.lbft : '', w ? Math.round(w.lb) : '', w ? Math.round(w.sf) : '', ins ? ins.label : '', ins ? r2(ins.qty) : '', ins ? ins.unit : '']);
+      }); });
+      if (any) tot.push([planShort(p), pageMult(p.drawing.id, p.page), Math.round(s.dft), Math.round(s.rect), Math.round(s.round), Math.round(s.oval), Math.round(s.rect + s.round + s.oval), Math.round(s.liner), Math.round(s.wrap), Math.round(s.pipe)]);
+    });
+    var wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = head.map(function(h, i) { return { wch: i === 5 ? 40 : i === 12 ? 30 : i === 1 ? 26 : 12 }; });
+    XLSX.utils.book_append_sheet(wb, ws, 'By sheet');
+    var ws2 = XLSX.utils.aoa_to_sheet(tot); ws2['!cols'] = tot[0].map(function() { return { wch: 16 }; }); XLSX.utils.book_append_sheet(wb, ws2, 'Weight & insulation');
+    var zs = zonesAll();
+    if (zs.length) {
+      var zh = [['Zone', 'Sheet', 'Takeoff', 'Quantity', 'UoM', 'Sheet metal lb', 'Insulation', 'Insulation qty', 'Insulation unit', 'Material $', 'Labor h', 'Total $ (before OH / profit / tax)']];
+      zs.forEach(function(z) { var p = plans.find(function(x) { return x.drawing.id === z.d && x.page === z.p; }); zoneTotals(z).forEach(function(o) { var w = lbFor(o.l, o.qty), ins = insFor(o.l, o.qty);
+        zh.push([z.name, p ? planShort(p) : '', o.l.name, r2(o.qty), P.uom(typeUnit(o.l.takeoff_type)), w ? Math.round(w.lb) : '', ins ? ins.label : '', ins ? r2(ins.qty) : '', ins ? ins.unit : '', r2(o.mat), r2(o.hrs), r2(o.mat + o.hrs * laborRate)]); }); });
+      var ws3 = XLSX.utils.aoa_to_sheet(zh); ws3['!cols'] = zh[0].map(function(h, i) { return { wch: i === 2 ? 40 : i === 6 ? 30 : 14 }; }); XLSX.utils.book_append_sheet(wb, ws3, 'Zones');
+    } else if (withZones) { toast('No zones yet'); return; }
+    XLSX.writeFile(wb, ((est && est.name) || 'takeoff').replace(/[^\w\- ]+/g, '').slice(0, 60) + (withZones ? ' - Zones.xlsx' : ' - By sheet (weight, insulation).xlsx'));
+  }
   // totals of one layer over every plan; perPage = {'<drawingId>:<page>': {qty, marks}} (quantities after the sheet's typical-floor multiplier)
   function layerTotals(l) {
     var qty = Number(l.extra_count || 0), marks = 0, perPage = {};
@@ -703,7 +828,8 @@ requireAuth().catch(function(){});
       { label: 'Create New Layer', icon: 'add', onClick: function() { openLayerModal(null); } },
       { label: 'Expand All', icon: 'expand_more', onClick: function() { groupNames().forEach(function(g) { groupEntry(g, true).collapsed = false; }); saveGroups(); renderLayerTree(); } },
       { label: 'Collapse All', icon: 'chevron_right', onClick: function() { groupNames().forEach(function(g) { groupEntry(g, true).collapsed = true; }); saveGroups(); renderLayerTree(); } },
-      { label: 'Export', icon: 'download', sub: [{ label: 'Takeoff Quantities to Excel', icon: 'description', onClick: exportExcel }] },
+      { label: 'Export', icon: 'download', sub: [{ label: 'Takeoff Quantities to Excel', icon: 'description', onClick: exportExcel }, { label: 'By sheet — weight & insulation (Excel)', icon: 'table_chart', onClick: function() { exportBySheet(false); } }] },
+      { label: 'Zones report' + (zonesAll().length ? ' (' + zonesAll().length + ')' : '') + '…', icon: 'select_all', onClick: zonesReport },
       { sep: true },
       { label: 'Add NWAC standard layers', icon: 'layers', onClick: addStandardLayers },
       { label: 'Auto-measure ducts & pipes on this page', icon: 'auto_awesome', onClick: autoMeasure },
@@ -1501,7 +1627,7 @@ requireAuth().catch(function(){});
     $('compareBtn').innerHTML = ic('picture_in_picture', 18) + 'Compare'; $('compareClose').innerHTML = ic('close', 14); $('undoTop').innerHTML = ic('undo', 18) + 'Undo'; $('redoTop').innerHTML = ic('redo', 18); $('openNewBtn').innerHTML = ic('open_in_new', 18); $('downloadBtn').innerHTML = ic('download', 18);
     $('emptyIcon').innerHTML = ic('straighten', 56); $('rightClose').innerHTML = ic('close', 18);
     $('rail').innerHTML = '<div class="tk-float">' + tb('pan', 'pan_tool', 'Pan (H) — or hold Space / Alt and drag') + tb('select', 'near_me', 'Select / move marks (V)') + tb('marquee', 'select_all', 'Marquee select — drag a rectangle') + ib('undoBtn', 'undo', 'Undo (Ctrl+Z)') + ib('redoBtn', 'redo', 'Redo (Ctrl+Y / Ctrl+Shift+Z)') + ib('layersBtn', 'layers', 'Show / hide the takeoff panel') + '</div>' +
-      '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
+      '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('zone', 'select_all', 'Zone — outline an area (a wing, a phase, a CO area), Enter to close; quantities inside it: Actions → Zones report') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
       '<div class="tk-float">' + ib('legendBtn', 'description', 'Legend of the layers on this plan') + ib('pasteBtn', 'content_paste', 'Paste copied marks (Ctrl+V)') + '</div>' +
       '<div class="tk-float tk-rail-last">' + ib('swapBtn', 'swap_horiz', 'Swap the compared plans') + ib('railCollapse', 'chevron_right', 'Collapse the tool rail') + '</div>';
     $('bottombar').innerHTML = ib('zoomFit', 'fit_screen', 'Fit width (0)') + ib('zoomOut', 'remove', 'Zoom out (−)') + '<input type="range" id="zoomRange" min="10" max="1200" step="5" value="100" title="Zoom"><span id="zoomText" class="pc-muted" style="font-size:11px;min-width:34px;text-align:center">100%</span>' + ib('zoomIn', 'add', 'Zoom in (+)') +
@@ -1543,7 +1669,7 @@ requireAuth().catch(function(){});
   function saveVS() { try { localStorage.setItem('tk_settings', JSON.stringify(VS)); } catch (e) {} redraw(); }
 
   // ═══════════════════════ tools & drawing ═══════════════════════
-  var DRAFT_TOOLS = ['linear', 'area', 'countline', 'cloud', 'arealen', 'arc', 'rect'];
+  var DRAFT_TOOLS = ['linear', 'area', 'countline', 'cloud', 'arealen', 'arc', 'rect', 'zone'];
   function setTool(t) { tool = t; if (overlayCanvas) { overlayCanvas.style.cursor = ''; overlayCanvas.removeAttribute('data-cur'); } draft = []; draftDrops = []; measureLine = null; marquee = null; if (['linear', 'arc', 'area', 'rect'].indexOf(t) < 0) draftDeduct = false;
     document.querySelectorAll('[data-tool]').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-tool') === t); });
     var db = $('deductBtn'); if (db) db.classList.toggle('on', draftDeduct);
@@ -1661,7 +1787,7 @@ requireAuth().catch(function(){});
     if (tool === 'note') { draft = [p]; addNote(); return; }
     if (tool === 'stamp') { stampPoint = p; openStamp(); return; }
     if (tool === 'highlight') { draft.push(p); if (draft.length === 2) { var a = draft[0], b = draft[1]; saveAnnot({ tool_type: 'area', points: [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]], notes: 'highlight', color: '#facc15' }); draft = []; } redraw(); return; }
-    if (tool === 'cloud') { draft.push(p); hover = null; redraw(); return; }
+    if (tool === 'cloud' || tool === 'zone') { draft.push(p); hover = null; redraw(); return; }
     var l = layerById(activeLayerId); if (!l) { toast('Pick a takeoff layer first (left panel)', 'error'); return; }
     if (l.is_locked) { toast('Layer is locked', 'error'); return; }
     if (tool === 'countline' && l.takeoff_type !== 'count') { toast('Count by distance needs a count layer (diffusers, hangers, sprinklers…)', 'error'); return; }
@@ -1688,6 +1814,7 @@ requireAuth().catch(function(){});
     return pts;
   }
   async function finishDraft() {
+    if (tool === 'zone') { var zp = draft.slice(); draft = []; hover = null; redraw(); if (zp.length >= 3) addZone(zp); return; }
     if (tool === 'cloud') { if (draft.length >= 3) saveAnnot({ tool_type: 'area', points: draft.slice(), notes: 'cloud', color: '#dc2626' }); draft = []; hover = null; redraw(); return; }
     if (!scalePpf || draft.length < 2) { draft = []; redraw(); return; }
     if (tool === 'countline') { openSpacing(); return; }
@@ -1923,16 +2050,17 @@ requireAuth().catch(function(){});
   // ─── overlay drawing ───
   function redraw() {
     if (!ctx) return; ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    drawZones();
     ctx.globalAlpha = VS.opacity;
     meas.forEach(function(m) { if (!annotVisible && isAnnot(m)) return; var l = layerById(m.layer_id); if (l && l.is_visible === false) return; drawMark(m, l, selectedIds.has(m.id)); });
     ctx.globalAlpha = 1;
     drawReviewHl();
-    var l = layerById(activeLayerId), col = tool === 'scale' ? '#dc2626' : tool === 'cloud' ? '#dc2626' : tool === 'highlight' ? '#eab308' : (l ? l.color : '#1a66e0');
+    var l = layerById(activeLayerId), col = tool === 'zone' ? '#7c3aed' : tool === 'scale' ? '#dc2626' : tool === 'cloud' ? '#dc2626' : tool === 'highlight' ? '#eab308' : (l ? l.color : '#1a66e0');
     if (draft.length) { var pts = draft.map(S); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-      if (hover) { var h = S(hover); ctx.lineTo(h[0], h[1]); } if ((tool === 'area' || tool === 'cloud' || tool === 'arealen') && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); pts.forEach(function(q) { dot(q, col); });
+      if (hover) { var h = S(hover); ctx.lineTo(h[0], h[1]); } if ((tool === 'area' || tool === 'cloud' || tool === 'zone' || tool === 'arealen') && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); pts.forEach(function(q) { dot(q, col); });
       if ((tool === 'highlight' || tool === 'rect') && hover) { var hh = S(hover); ctx.globalAlpha = .3; ctx.fillRect(Math.min(pts[0][0], hh[0]), Math.min(pts[0][1], hh[1]), Math.abs(hh[0] - pts[0][0]), Math.abs(hh[1] - pts[0][1])); ctx.globalAlpha = 1; }
       draftDrops.forEach(function(di) { if (pts[di]) glyph(pts[di], '▼', col); });
-      if (scalePpf && ['scale', 'cloud', 'highlight'].indexOf(tool) < 0) { var isA = tool === 'area' || tool === 'arealen' || tool === 'rect', v = isA ? (pts.length > 2 ? polyArea(draft.concat(hover ? [hover] : [])) / (scalePpf * scalePpf) : 0) : polyLen(draft.concat(hover ? [hover] : [])) / scalePpf; var lp = hover ? S(hover) : pts[pts.length - 1]; label([lp[0] + 14, lp[1] - 14], isA ? v.toFixed(0) + ' sf' : v.toFixed(1) + ' ft', col); } }
+      if (scalePpf && ['scale', 'cloud', 'highlight', 'zone'].indexOf(tool) < 0) { var isA = tool === 'area' || tool === 'arealen' || tool === 'rect', v = isA ? (pts.length > 2 ? polyArea(draft.concat(hover ? [hover] : [])) / (scalePpf * scalePpf) : 0) : polyLen(draft.concat(hover ? [hover] : [])) / scalePpf; var lp = hover ? S(hover) : pts[pts.length - 1]; label([lp[0] + 14, lp[1] - 14], isA ? v.toFixed(0) + ' sf' : v.toFixed(1) + ' ft', col); } }
     if (measureLine) { var a = S(measureLine[0]), b = measureLine[1] ? S(measureLine[1]) : (hover ? S(hover) : null); if (b) { ctx.strokeStyle = '#1f2933'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); var ft = scalePpf ? dist(measureLine[0], measureLine[1] || hover) / scalePpf : 0; label([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], scalePpf ? ftIn(ft) : 'no scale', '#1f2933'); } dot(a, '#1f2933'); }
     if (marquee) { var ma = S(marquee.a), mb = S(marquee.b); ctx.setLineDash([4, 3]); ctx.strokeStyle = '#1a66e0'; ctx.lineWidth = 1; ctx.fillStyle = 'rgba(26,102,224,.08)'; ctx.fillRect(Math.min(ma[0], mb[0]), Math.min(ma[1], mb[1]), Math.abs(mb[0] - ma[0]), Math.abs(mb[1] - ma[1])); ctx.strokeRect(Math.min(ma[0], mb[0]), Math.min(ma[1], mb[1]), Math.abs(mb[0] - ma[0]), Math.abs(mb[1] - ma[1])); ctx.setLineDash([]); }
   }
@@ -2860,6 +2988,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=537"></script>
+<script src="sw-register.js?v=538"></script>
 </body>
 </html>

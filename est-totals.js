@@ -483,6 +483,7 @@
   window.nwEstSettings = nwEstSettings;
   window.nwGroupMultiplier = nwGroupMultiplier;
   window.nwLineTotals = nwLineTotals;
+  window.nwInsulationOf = insulationOf;   // takeoff.html: insulation per sheet / zone in the Excel exports
   window.nwEstTotals = nwEstTotals;
   window.nwGroupTotals = nwGroupTotals;
   window.nwEstMoney = nwEstMoney;
