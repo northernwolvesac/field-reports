@@ -26,7 +26,31 @@ if (typeof supabase === 'undefined' || !supabase.createClient) {
         'Make sure the CDN script is loaded before supabase-config.js.');
 }
 
-var supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ---------------------------------------------------------------------------
+// "JWT expired" (Leonid 2026-10-20): a tab left open past the token's hour can fire a request with the old token before the
+// library's own refresh runs (background tabs throttle timers). Every REST / storage / functions call goes through this fetch:
+// a 401 "JWT expired" refreshes the session once and repeats the request with the new token; if the refresh itself fails the
+// user is sent to the login page and brought back to the same URL afterwards.
+// ---------------------------------------------------------------------------
+async function nwAuthFetch(url, opts) {
+    var res = await fetch(url, opts);
+    if (res.status !== 401 || !/\/(rest|storage|functions)\/v1\//.test(String(url))) return res;
+    var body = ''; try { body = await res.clone().text(); } catch (e) { }
+    if (!/jwt expired|PGRST301|invalid JWT|token is expired/i.test(body)) return res;
+    try {
+        var r = await supabaseClient.auth.refreshSession();
+        var tok = r && r.data && r.data.session && r.data.session.access_token;
+        if (tok) {
+            opts = Object.assign({}, opts || {});
+            var h = new Headers(opts.headers || {}); h.set('Authorization', 'Bearer ' + tok); opts.headers = h;
+            return fetch(url, opts);
+        }
+    } catch (e) { console.warn('[supabase-config] session refresh failed', e); }
+    try { localStorage.setItem('nw_return_to', window.location.href); } catch (e) { }
+    if (!/login\.html/.test(window.location.pathname)) window.location.href = 'login.html?expired=1';
+    return res;
+}
+var supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: nwAuthFetch } });
 console.log('[supabase-config] Supabase client initialised for', SUPABASE_URL);
 
 // ---------------------------------------------------------------------------
