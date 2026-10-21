@@ -11,22 +11,22 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=517">
+<link rel="stylesheet" href="procore-ui.css?v=536">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=517"></script>
-<script src="auth.js?v=517"></script>
-<script src="est-totals.js?v=517"></script>
-<script src="procore-ui.js?v=517"></script>
-<script src="nw-catalog-picker.js?v=517"></script>
-<script src="nw-duct-weight.js?v=517"></script>
-<script src="nw-proposal.js?v=517"></script>
-<script src="bid-actions.js?v=517"></script>
+<script src="supabase-config.js?v=536"></script>
+<script src="auth.js?v=536"></script>
+<script src="est-totals.js?v=536"></script>
+<script src="procore-ui.js?v=536"></script>
+<script src="nw-catalog-picker.js?v=536"></script>
+<script src="nw-duct-weight.js?v=536"></script>
+<script src="nw-proposal.js?v=536"></script>
+<script src="bid-actions.js?v=536"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=517"></script>
-<script src="nw-email.js?v=517"></script>
+<script src="email-utils.js?v=536"></script>
+<script src="nw-email.js?v=536"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -2517,7 +2517,10 @@ requireAuth().catch(function(){});
     await loadLines(); refreshAll();
   }
 
-  // takeoff mark quantity for a layer (same rule as takeoff.html: multiplier, slope, drops, deduct)
+  // typical floors (takeoff.html setPageMult): a sheet standing for N floors counts its marks N times — settings.takeoff_page_mult
+  function pageMultOf(m) { var o = getSettings().takeoff_page_mult, n = o && typeof o === 'object' ? Number(o[m.drawing_id + ':' + m.page_number]) : 0; return n > 0 ? n : 1; }
+  // takeoff mark quantity for a layer (same rule as takeoff.html: multiplier, slope, drops, deduct; × the sheet's typical-floor count)
+  function markQtyAll(m, l) { return markQty(m, l) * pageMultOf(m); }
   function markQty(m, l) {
     var v = num(m.computed_value), sgn = m.deduct ? -1 : 1;
     if (m.tool_type === 'length' && l) {
@@ -2536,10 +2539,10 @@ requireAuth().catch(function(){});
     var layerIds = withLayer.map(function(l) { return l.layer_id; });
     var lr = await supabaseClient.from('estimate_takeoff_layers').select('id, multiplier, drop_length_ft, rise, run, extra_count, takeoff_type').in('id', layerIds);
     var lay = {}; (lr.data || []).forEach(function(l) { lay[l.id] = l; });
-    var mr = await supabaseClient.from('estimate_measurements').select('layer_id, tool_type, computed_value, drops, deduct').in('layer_id', layerIds);
+    var mr = await supabaseClient.from('estimate_measurements').select('layer_id, tool_type, computed_value, drops, deduct, drawing_id, page_number').in('layer_id', layerIds);
     if (mr.error) { showToast('Takeoff read failed: ' + mr.error.message, 'error'); return; }
     var sum = {};
-    (mr.data || []).forEach(function(m) { sum[m.layer_id] = (sum[m.layer_id] || 0) + markQty(m, lay[m.layer_id]); });
+    (mr.data || []).forEach(function(m) { sum[m.layer_id] = (sum[m.layer_id] || 0) + markQtyAll(m, lay[m.layer_id]); });
     var updates = [], n = 0;
     withLayer.forEach(function(l) {
       var q = Math.round(((sum[l.layer_id] || 0) + num(lay[l.layer_id] && lay[l.layer_id].extra_count)) * 10000) / 10000;
@@ -2570,10 +2573,10 @@ requireAuth().catch(function(){});
     var lr = await supabaseClient.from('estimate_takeoff_layers').select('id, name, multiplier, drop_length_ft, rise, run, extra_count, takeoff_type').eq('id', li.layer_id).maybeSingle();
     if (lr.error || !lr.data) { showToast(layerLockHint(li)); return; }
     var L = lr.data;
-    var mr = await supabaseClient.from('estimate_measurements').select('layer_id, tool_type, computed_value, drops, deduct').eq('layer_id', L.id);
+    var mr = await supabaseClient.from('estimate_measurements').select('layer_id, tool_type, computed_value, drops, deduct, drawing_id, page_number').eq('layer_id', L.id);
     if (mr.error) { showToast('Takeoff read failed: ' + mr.error.message, 'error'); return; }
     var marks = (mr.data || []).length, fromMarks = 0;
-    (mr.data || []).forEach(function(m) { fromMarks += markQty(m, L); });
+    (mr.data || []).forEach(function(m) { fromMarks += markQtyAll(m, L); });
     var cur = Math.round((fromMarks + num(L.extra_count)) * 10000) / 10000, unit = li.unit || '';
     var ans = await PC.prompt({ title: 'Change quantity', label: '"' + L.name + '" — new total quantity' + (unit ? ' (' + unit + ')' : ''), value: String(cur),
       hint: marks + ' mark' + (marks === 1 ? '' : 's') + ' on the plans = ' + (Math.round(fromMarks * 100) / 100) + (unit ? ' ' + unit : '') + '. The rest is entered by hand on the takeoff layer (Extra quantity).', okLabel: 'Save' });
@@ -3724,6 +3727,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=517"></script>
+<script src="sw-register.js?v=536"></script>
 </body>
 </html>

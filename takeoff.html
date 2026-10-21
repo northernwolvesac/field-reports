@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=533">
+<link rel="stylesheet" href="procore-ui.css?v=536">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=533"></script>
-<script src="auth.js?v=533"></script>
-<script src="est-totals.js?v=533"></script>
-<script src="procore-ui.js?v=533"></script>
+<script src="supabase-config.js?v=536"></script>
+<script src="auth.js?v=536"></script>
+<script src="est-totals.js?v=536"></script>
+<script src="procore-ui.js?v=536"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=533"></script>
-<script src="est-drawings.js?v=533"></script>
-<script src="nw-catalog-picker.js?v=533"></script>
-<script src="nw-duct-weight.js?v=533"></script>
-<script src="geo-takeoff.js?v=533"></script>
-<script src="est-engine.js?v=533"></script>
+<script src="bid-actions.js?v=536"></script>
+<script src="est-drawings.js?v=536"></script>
+<script src="nw-catalog-picker.js?v=536"></script>
+<script src="nw-duct-weight.js?v=536"></script>
+<script src="geo-takeoff.js?v=536"></script>
+<script src="est-engine.js?v=536"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -127,6 +127,9 @@
   .tk-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; border: 1px solid var(--pc-border, #e5e7eb); border-radius: 6px; overflow: hidden; position: relative; }
   .tk-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--pc-border, #e5e7eb); flex: none; flex-wrap: wrap; }
   .tk-plan-dd { max-width: 300px; }
+  .tk-mult { padding: 0 9px; min-width: 38px; font-weight: 600; }
+  .tk-mult.on { border-color: #b45309; color: #b45309; background: #fffbeb; }
+  .tk-xm { color: #b45309; font-size: 10px; font-weight: 700; }
   .tk-plan-dd span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tk-ib { width: 32px; height: 30px; border: 0; background: transparent; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: #374151; cursor: pointer; flex: none; padding: 0; }
   .tk-ib:hover { background: var(--pc-secondary, #f0f1f3); }
@@ -298,6 +301,7 @@
       <button class="tk-ib" id="nextPlan" title="Next plan (PageDown)"></button>
       <button class="pc-btn pc-btn-secondary tk-doc-dd" id="docBtn" title="Switch document (file) — each file keeps its own pages, takeoff marks and notes"><span id="docLabel">No file</span><span id="docCaret"></span></button>
       <button class="pc-btn pc-btn-secondary tk-plan-dd" id="planBtn"><span id="planLabel">— No plans yet —</span><span id="planCaret"></span></button>
+      <button class="pc-btn pc-btn-outline tk-mult" id="multBtn" title="Typical floors — this sheet counts × N (one typical plan for several identical floors)" disabled>×1</button>
       <button class="pc-btn pc-btn-ghost" id="compareBtn" title="Overlay another plan"></button>
       <span class="pc-pill-dd" id="comparePill" style="display:none"><span id="comparePillText"></span><span id="compareClose" style="display:inline-flex;cursor:pointer"></span></span>
       <button class="tk-ib" id="openNewBtn" title="Open the PDF in a new tab"></button>
@@ -508,15 +512,36 @@ requireAuth().catch(function(){});
     if (l.takeoff_type === 'count' || m.tool_type === 'count') return sgn * v * Number(l.multiplier || 1);
     return sgn * v;
   }
-  // totals of one layer over every plan; perPage = {'<drawingId>:<page>': {qty, marks}}
+  // typical floors (Takso's "Page Multiplier", Russ 2026-10-21): a sheet that stands for N identical floors counts every mark on it N times —
+  // estimates.settings.takeoff_page_mult {'<drawingId>:<page>': N}; estimating.html (Reset / Change quantity) applies the same map
+  function pageMultMap() { var o = settings().takeoff_page_mult; return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; }
+  function pageMult(drawingId, page) { var n = Number(pageMultMap()[drawingId + ':' + page]); return n > 0 ? n : 1; }
+  function markQtyAll(m, l) { return markQty(m, l) * pageMult(m.drawing_id, m.page_number); }
+  async function setPageMult() {
+    var p = plans[planIdx]; if (!p) return;
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    if (!settingsOk || !est) { toast('Estimate settings are not available here — run procore-ui-schema.sql', 'error'); return; }
+    var k = p.drawing.id + ':' + p.page, cur = pageMult(p.drawing.id, p.page);
+    var ans = await P.prompt({ title: 'Typical floors', label: 'Sheet ' + planShort(p) + ' stands for how many floors?', value: String(cur),
+      hint: 'Every mark on this sheet counts × N in the layer totals and the estimate — e.g. one typical plan for floors 3 to 10 = 8. Enter 1 to count the sheet once.', okLabel: 'Save' });
+    if (ans == null) return;
+    var n = Number(String(ans).replace(/[^0-9.]/g, ''));
+    if (!(n >= 1) || n > 200) { toast('Enter a number from 1 to 200', 'error'); return; }
+    n = Math.round(n * 100) / 100;
+    var map = Object.assign({}, pageMultMap()); if (n === 1) delete map[k]; else map[k] = n;
+    saveSettings({ takeoff_page_mult: map });
+    updatePlanLabel(); renderAll(); scheduleSync();
+    toast(n === 1 ? planShort(p) + ' counts once' : planShort(p) + ' counts × ' + n + ' — layer totals and the estimate follow', 'success');
+  }
+  // totals of one layer over every plan; perPage = {'<drawingId>:<page>': {qty, marks}} (quantities after the sheet's typical-floor multiplier)
   function layerTotals(l) {
     var qty = Number(l.extra_count || 0), marks = 0, perPage = {};
-    allMeas.forEach(function(m) { if (m.layer_id !== l.id) return; var q = markQty(m, l); qty += q; marks++; var k = m.drawing_id + ':' + m.page_number; perPage[k] = perPage[k] || { qty: 0, marks: 0 }; perPage[k].qty += q; perPage[k].marks++; });
+    allMeas.forEach(function(m) { if (m.layer_id !== l.id) return; var q = markQtyAll(m, l); qty += q; marks++; var k = m.drawing_id + ':' + m.page_number; perPage[k] = perPage[k] || { qty: 0, marks: 0 }; perPage[k].qty += q; perPage[k].marks++; });
     var matQty = qty * (1 + Number(l.waste_pct || 0) / 100);
     var mat = matQty * Number(l.unit_material_cost || 0), hrs = qty * Number(l.unit_labor_hours || 0) * Number(l.labor_factor || 1);
     return { qty: qty, marks: marks, pages: Object.keys(perPage).length, perPage: perPage, mat: mat, hrs: hrs, labor: hrs * laborRate, total: mat + hrs * laborRate };
   }
-  function pageQty(l) { var q = 0; meas.forEach(function(m) { if (m.layer_id === l.id) q += markQty(m, l); }); return q; }
+  function pageQty(l) { var q = 0; meas.forEach(function(m) { if (m.layer_id === l.id) q += markQtyAll(m, l); }); return q; }
   function fmtMoney(v) { return P.money0(v); }
 
   // ─── groups: settings.takeoff_groups ∪ distinct layer group_name ───
@@ -689,6 +714,7 @@ requireAuth().catch(function(){});
     if (sel.length) items.push({ sep: true },
       { label: 'Delete selected (' + sel.length + ')', icon: 'delete', danger: true, onClick: function() { deleteLayers(sel); } },
       { label: 'Move selected to group', icon: 'folder', sub: groupNames().map(function(g) { return { label: g, onClick: function() { moveLayersToGroup(sel, g); } }; }).concat([{ sep: true }, { label: 'New group…', icon: 'create_new_folder', onClick: async function() { var g = await P.prompt({ title: 'Move to new group', label: 'Group name', okLabel: 'Move' }); if (g && g.trim()) moveLayersToGroup(sel, g.trim()); } }]) },
+      { label: 'Edit selected (' + sel.length + ')…', icon: 'edit', onClick: function() { editLayersDialog(sel); } },
       { label: 'Hide / Show selected', icon: 'visibility_off', onClick: async function() { var ls = sel.map(layerById).filter(Boolean), vis = !ls.every(function(l) { return l.is_visible !== false; }); ls.forEach(function(l) { l.is_visible = vis; }); renderAll(); await sb.from('estimate_takeoff_layers').update({ is_visible: vis }).in('id', sel); } });
     P.menu(anchor, items);
   }
@@ -698,6 +724,37 @@ requireAuth().catch(function(){});
     if (!g || !g.trim()) return; g = g.trim();
     if (groupEntry(g)) { toast('Group already exists'); return; }
     groupEntry(g, true); saveGroups(); renderLayerTree();
+  }
+  // several layers at once: every filled field is written to every selected (unlocked) layer; empty = keep each layer's own value
+  function editLayersDialog(ids) {
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    var ls = ids.map(layerById).filter(Boolean), lockedN = ls.filter(function(l) { return l.is_locked; }).length;
+    ls = ls.filter(function(l) { return !l.is_locked; });
+    if (!ls.length) { toast('The selected layers are locked', 'error'); return; }
+    function f(label, id, extra) { return '<div class="pc-field"><label class="pc-label">' + label + '</label><input class="pc-input" id="' + id + '" placeholder="keep"' + (extra || '') + '></div>'; }
+    var body = '<div class="pc-banner-info" style="margin-bottom:12px">' + ls.length + ' layer' + (ls.length === 1 ? '' : 's') + ' — every filled field is written to all of them; empty fields keep each layer\'s own value.' + (lockedN ? ' ' + lockedN + ' locked layer' + (lockedN === 1 ? ' is' : 's are') + ' skipped.' : '') + '</div>' +
+      '<div class="pc-grid2">' + (extCols ? f('Tag (area / phase)', 'beTag', ' type="text"') : '') + f('Multiplier', 'beMult', ' type="number" step="0.01" min="0"') + '</div>' +
+      '<div class="pc-grid2">' + f('Material $ / unit', 'beCost', ' type="number" step="0.01" min="0"') + f('Labor min / unit', 'beMin', ' type="number" step="0.1" min="0"') + '</div>' +
+      '<div class="pc-grid2">' + f('Waste %', 'beWaste', ' type="number" step="0.5" min="0"') + f('Labor factor', 'beLabF', ' type="number" step="0.05" min="0"') + '</div>' +
+      '<div class="pc-grid2">' + f('Drop length (ft)', 'beDrop', ' type="number" step="0.5" min="0"') +
+        '<div class="pc-field"><label class="pc-label">Estimate category</label><select class="pc-select" id="beCat"><option value="">— keep —</option>' + Object.keys(CATS).map(function(k) { return '<option value="' + k + '">' + CATS[k] + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">Crew</label><select class="pc-select" id="beCrew"><option value="">— keep —</option>' + [['sm', 'Sheet metal'], ['pipe', 'Pipe'], ['startup', 'Start-up'], ['other', 'Other'], ['none', 'None']].map(function(c) { return '<option value="' + c[0] + '">' + c[1] + '</option>'; }).join('') + '</select></div><div></div></div>';
+    var dlg = P.modal({ title: 'Edit ' + ls.length + ' layers', body: body, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Apply', primary: true, close: false, closeOnDone: false, onClick: async function() {
+      function v(id) { var el = dlg.body.querySelector('#' + id); return el ? String(el.value || '').trim() : ''; }
+      var patch = {};
+      if (v('beTag')) patch.tag = v('beTag');
+      if (v('beMult') !== '') patch.multiplier = Number(v('beMult')) || 1;
+      if (v('beCost') !== '') patch.unit_material_cost = Math.max(0, Number(v('beCost')) || 0);
+      if (v('beMin') !== '') patch.unit_labor_hours = Math.round(Math.max(0, Number(v('beMin')) || 0) / 60 * 10000) / 10000;
+      if (v('beWaste') !== '') patch.waste_pct = Math.max(0, Number(v('beWaste')) || 0);
+      if (v('beLabF') !== '') patch.labor_factor = Number(v('beLabF')) || 1;
+      if (v('beDrop') !== '') patch.drop_length_ft = Math.max(0, Number(v('beDrop')) || 0);
+      if (v('beCat')) patch.category = v('beCat');
+      if (v('beCrew')) patch.labor_crew_type = v('beCrew');
+      if (!Object.keys(patch).length) { toast('Fill at least one field'); return false; }
+      var ok = 0; for (var i = 0; i < ls.length; i++) if (await saveLayer(ls[i].id, Object.assign({}, patch))) ok++;
+      dlg.close(); toast(ok + ' layer' + (ok === 1 ? '' : 's') + ' updated', 'success');
+    } }] });
   }
   async function moveLayersToGroup(ids, g) {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
@@ -1147,6 +1204,7 @@ requireAuth().catch(function(){});
     b.title = p ? (p.sheet ? p.sheet + ' · ' : '') + (p.title ? p.title + ' · ' : '') + p.drawing.filename : ''; b.disabled = !plans.length;
     $('prevPlan').disabled = planIdx <= 0; $('nextPlan').disabled = planIdx >= plans.length - 1;
     $('openNewBtn').disabled = $('downloadBtn').disabled = !p;
+    var mb = $('multBtn'); if (mb) { var pmN = p ? pageMult(p.drawing.id, p.page) : 1; mb.textContent = '×' + pmN + (pmN > 1 ? ' floors' : ''); mb.classList.toggle('on', pmN > 1); mb.disabled = !p; }
   }
   // ─── which pages carry markups: layer marks · text notes · stamps / clouds / highlights ───
   function pageStats() {
@@ -1173,7 +1231,7 @@ requireAuth().catch(function(){});
     if (cur) items.push({ head: true, label: cur.drawing.filename + ' · ' + (cur.drawing.page_count || 1) + ' page' + ((cur.drawing.page_count || 1) === 1 ? '' : 's') });
     docPlans().forEach(function(i) { var q = plans[i], o = st[q.drawing.id + ':' + q.page];
       if (marksOnly && !hasMarkup(o) && i !== planIdx) return;
-      items.push({ label: (hasMarkup(o) ? '● ' : '') + 'Page ' + q.page + (q.sheet ? ' · ' + q.sheet : '') + (q.title ? ' — ' + q.title : ''), hint: statText(o), checked: i === planIdx, onClick: function() { openPlan(i); } }); });
+      items.push({ label: (hasMarkup(o) ? '● ' : '') + 'Page ' + q.page + (q.sheet ? ' · ' + q.sheet : '') + (q.title ? ' — ' + q.title : ''), hint: statText(o) + (pageMult(q.drawing.id, q.page) > 1 ? ' · ×' + pageMult(q.drawing.id, q.page) + ' floors' : ''), checked: i === planIdx, onClick: function() { openPlan(i); } }); });
     P.menu(anchor, items);
   }
   function openDocMenu(anchor) {
@@ -1194,7 +1252,7 @@ requireAuth().catch(function(){});
     list.forEach(function(i) { var q = plans[i]; if (hasMarkup(st[q.drawing.id + ':' + q.page])) marked++; });
     host.innerHTML = (cur ? '<div class="tfile" title="' + esc(cur.drawing.filename) + '"><b>' + esc(cur.drawing.filename.replace(/\.pdf$/i, '')) + '</b><span>' + list.length + ' page' + (list.length === 1 ? '' : 's') + (marked ? ' · ' + marked + ' with markups' : '') + '</span></div>' : '') +
       list.map(function(i) { var p = plans[i], o = st[p.drawing.id + ':' + p.page]; if (marksOnly && !hasMarkup(o) && i !== planIdx) return '';
-        return '<div class="thumb' + (i === planIdx ? ' on' : '') + (hasMarkup(o) ? ' marked' : '') + '" data-plan="' + i + '" title="' + esc('Page ' + p.page + (p.sheet ? ' · ' + p.sheet : '') + (p.title ? ' — ' + p.title : '') + (hasMarkup(o) ? ' — ' + statText(o) : '')) + '"><div class="im">' + (p.thumb ? '<img src="' + p.thumb + '">' : 'p' + p.page) + '</div><div class="lb"><span>' + esc(p.sheet || 'p' + p.page) + '</span>' +
+        return '<div class="thumb' + (i === planIdx ? ' on' : '') + (hasMarkup(o) ? ' marked' : '') + '" data-plan="' + i + '" title="' + esc('Page ' + p.page + (p.sheet ? ' · ' + p.sheet : '') + (p.title ? ' — ' + p.title : '') + (hasMarkup(o) ? ' — ' + statText(o) : '')) + '"><div class="im">' + (p.thumb ? '<img src="' + p.thumb + '">' : 'p' + p.page) + '</div><div class="lb"><span>' + esc(p.sheet || 'p' + p.page) + (pageMult(p.drawing.id, p.page) > 1 ? ' <b class="tk-xm" title="typical floors">×' + pageMult(p.drawing.id, p.page) + '</b>' : '') + '</span>' +
           (hasMarkup(o) ? '<span class="bd">' + (o.marks ? '<small title="' + o.marks + ' takeoff marks">' + o.marks + '</small>' : '') + (o.notes ? '<small class="n" title="' + o.notes + ' notes">✎' + o.notes + '</small>' : '') + (o.annots ? '<small class="a" title="' + o.annots + ' stamps / clouds / highlights">☁' + o.annots + '</small>' : '') + '</span>' : '') + '</div></div>'; }).join('');
     host.querySelectorAll('[data-plan]').forEach(function(el) { el.onclick = function() { openPlan(+el.getAttribute('data-plan')); }; });
     var on = host.querySelector('.thumb.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' });
@@ -1790,6 +1848,8 @@ requireAuth().catch(function(){});
     Object.assign(m, patch); var am = allMeas.find(function(x) { return x.id === m.id; }); if (am && am !== m) Object.assign(am, patch);
     pushUndo({ type: 'patch', id: m.id, before: before, after: Object.assign({}, patch) }); renderAll(); scheduleSync(); return true;
   }
+  // the open page's `meas` holds the same objects as allMeas after a load, but not always after an insert — copy the fields across
+  function syncPageMeas() { meas.forEach(function(m) { var a = allMeas.find(function(x) { return x.id === m.id; }); if (a && a !== m) Object.assign(m, a); }); }
   async function applyPatch(id, patch) {
     var m = allMeas.find(function(x) { return x.id === id; }); if (!m) return false;
     var r = await sb.from('estimate_measurements').update(patch).eq('id', id); if (r.error) { toast(r.error.message, 'error'); return false; }
@@ -1803,6 +1863,7 @@ requireAuth().catch(function(){});
     else if (u.type === 'delete' || u.type === 'delete-multi') { var rows = (u.rows || [u.row]).map(function(x) { var row = Object.assign({}, x); delete row.id; delete row.created_at; delete row.updated_at; return row; });
       var r = await sb.from('estimate_measurements').insert(rows).select(); if (!r.error) { r.data.forEach(function(m) { allMeas.push(m); if (m.drawing_id === plans[planIdx].drawing.id && m.page_number === plans[planIdx].page) meas.push(m); }); redoStack.push({ type: 'del', ids: r.data.map(function(m) { return m.id; }) }); } renderAll(); scheduleSync(); }
     else if (u.type === 'patch') { if (await applyPatch(u.id, u.before)) redoStack.push(u); renderAll(); scheduleSync(); }
+    else if (u.type === 'patch-multi') { for (var pi2 = 0; pi2 < u.items.length; pi2++) await applyPatch(u.items[pi2].id, u.items[pi2].before); syncPageMeas(); redoStack.push(u); renderAll(); scheduleSync(); }
     else if (u.type === 'move' || u.type === 'move-multi') { var items = u.items || [{ id: u.id, points: u.points }], redoItems = [];
       for (var i = 0; i < items.length; i++) { var m = allMeas.find(function(x) { return x.id === items[i].id; }); if (!m) continue; redoItems.push({ id: m.id, points: m.points }); m.points = items[i].points; m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value; await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
       if (redoItems.length) redoStack.push({ type: 'move', items: redoItems });
@@ -1824,6 +1885,8 @@ requireAuth().catch(function(){});
       renderAll(); scheduleSync();
     } else if (u.type === 'patch') {
       if (await applyPatch(u.id, u.after)) undoStack.push(u); renderAll(); scheduleSync();
+    } else if (u.type === 'patch-multi') {
+      for (var pj = 0; pj < u.items.length; pj++) await applyPatch(u.items[pj].id, u.items[pj].after); syncPageMeas(); undoStack.push(u); renderAll(); scheduleSync();
     } else if (u.type === 'move') {
       var prev = [];
       for (var i = 0; i < u.items.length; i++) { var m = allMeas.find(function(x) { return x.id === u.items[i].id; }); if (!m) continue; prev.push({ id: m.id, points: m.points }); m.points = u.items[i].points;
@@ -1950,8 +2013,8 @@ requireAuth().catch(function(){});
     var m = selOne(), html;
     if (!m) {
       var locked = Array.from(selectedIds).some(function(id) { var x = meas.find(function(y) { return y.id === id; }); return x && lockedMark(x); });
-      html = '<div class="hd">' + selectedIds.size + ' marks selected<span class="x" id="mcClose">' + ic('close', 16) + '</span></div><div class="bd pc-muted">' + (me.canEdit ? 'Drag to move them together. Ctrl+C copies, Del deletes.' : 'Read-only view.') + '</div><div class="ft"><button class="pc-btn pc-btn-outline" id="mcCopy">' + ic('content_copy', 16) + 'Copy</button><button class="pc-btn pc-btn-outline" id="mcDel" style="color:var(--pc-danger)"' + (locked || !me.canEdit ? ' disabled' : '') + '>' + ic('delete', 16) + 'Delete</button></div>';
-      card.innerHTML = html; card.classList.add('show'); $('mcClose').onclick = function() { selectedIds.clear(); renderProps(); redraw(); }; $('mcCopy').onclick = copySelected; $('mcDel').onclick = deleteSelected; positionMarkCard(); return;
+      html = '<div class="hd">' + selectedIds.size + ' marks selected<span class="x" id="mcClose">' + ic('close', 16) + '</span></div><div class="bd">' + batchHtml(locked) + '</div><div class="ft"><button class="pc-btn pc-btn-outline" id="mcCopy">' + ic('content_copy', 16) + 'Copy</button><button class="pc-btn pc-btn-outline" id="mcDel" style="color:var(--pc-danger)"' + (locked || !me.canEdit ? ' disabled' : '') + '>' + ic('delete', 16) + 'Delete</button>' + (me.canEdit && !locked ? '<button class="pc-btn pc-btn-primary" id="mcApply">Apply</button>' : '') + '</div>';
+      card.innerHTML = html; card.classList.add('show'); $('mcClose').onclick = function() { selectedIds.clear(); renderProps(); redraw(); }; $('mcCopy').onclick = copySelected; $('mcDel').onclick = deleteSelected; if ($('mcApply')) $('mcApply').onclick = applyBatch; positionMarkCard(); return;
     }
     var l = layerById(m.layer_id), ro = !me.canEdit || lockedMark(m);
     if (isAnnot(m)) {
@@ -1964,11 +2027,11 @@ requireAuth().catch(function(){});
       if ($('mcFmt')) $('mcFmt').onclick = function() { openTextFormat(m); };
       positionMarkCard(); return;
     }
-        var q = markQty(m, l), unit = l ? l.takeoff_type : null;
+        var pmx = pageMult(m.drawing_id, m.page_number), q = markQty(m, l) * pmx, unit = l ? l.takeoff_type : null;
     html = '<div class="hd"><span class="pc-dot" style="background:' + ((l && l.color) || m.color) + '"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l ? l.name : (m.tool_type === 'note' ? 'Note' : m.tool_type === 'scale' ? 'Scale' : 'Legacy mark')) + '</span>' + (l && l.is_locked ? ic('lock', 14) : '') + '<span class="x" id="mcClose">' + ic('close', 16) + '</span></div><div class="bd">' +
       (m.tool_type === 'note' ? '<div class="row"><span>Text</span><b style="font-weight:500;white-space:pre-wrap;max-width:190px">' + esc(m.label || '') + '</b></div>' : '') +
       (m.tool_type !== 'note' && m.tool_type !== 'scale' ? '<div class="row"><span>Measured</span><b>' + (m.tool_type === 'count' ? '1 mark' + (m.mark_no ? ' #' + m.mark_no : '') : m.tool_type === 'area' ? Number(m.computed_value).toFixed(1) + ' sf' : ftIn(Number(m.computed_value))) + '</b></div>' +
-        '<div class="row"><span>Counts as</span><b>' + (unit ? qtyStr(q, unit) : Number(m.computed_value || 0).toFixed(2) + ' ' + (m.computed_unit || '')) + '</b></div>' + markPriceRow(l, q) +
+        '<div class="row"><span>Counts as' + (pmx > 1 ? ' (× ' + pmx + ' floors)' : '') + '</span><b>' + (unit ? qtyStr(q, unit) : Number(m.computed_value || 0).toFixed(2) + ' ' + (m.computed_unit || '')) + '</b></div>' + markPriceRow(l, q) +
         (m.tool_type === 'length' && l ? '<div class="row"><span>Drops (× ' + Number(l.drop_length_ft || 0) + ' ft)</span><input type="number" min="0" step="1" id="pDrops" value="' + Number(m.drops || 0) + '"' + (ro ? ' disabled' : '') + '></div>' : '') +
         '<div class="row"><span>Deduct (negative)</span><input type="checkbox" class="tk-cb" id="pDeduct"' + (m.deduct ? ' checked' : '') + (ro ? ' disabled' : '') + '></div>' +
         '<div class="row"><span>Label</span><input type="text" id="pLabel" value="' + esc(m.label || '') + '"' + (ro ? ' disabled' : '') + '></div>' +
@@ -1982,6 +2045,41 @@ requireAuth().catch(function(){});
       if ($('pLayer') && $('pLayer').value !== m.layer_id) { var nl = layerById($('pLayer').value); if (nl) { patch.layer_id = nl.id; patch.layer_category = nl.category; patch.color = nl.color; } }
       if (await patchMark(m, patch)) toast('Saved', 'success'); };
     positionMarkCard();
+  }
+  // ─── several marks selected: what they are (by layer) + one form that edits them all ───
+  function batchMarks() { return Array.from(selectedIds).map(function(id) { return allMeas.find(function(x) { return x.id === id; }); }).filter(function(m) { return m && !isAnnot(m) && m.tool_type !== 'note' && m.tool_type !== 'scale'; }); }
+  var KIND_OF_TOOL = { length: 'linear', count: 'count', area: 'area' };
+  function batchHtml(locked) {
+    var ms = batchMarks(), by = {}, kinds = {};
+    ms.forEach(function(m) { var l = layerById(m.layer_id), k = l ? l.name : 'no layer'; by[k] = (by[k] || 0) + 1; kinds[KIND_OF_TOOL[m.tool_type] || m.tool_type] = 1; });
+    var names = Object.keys(by).sort(function(a, b) { return by[b] - by[a]; });
+    var h = '<div class="pc-muted" style="font-size:12px;margin-bottom:6px">' + (names.length ? names.slice(0, 5).map(function(n) { return esc(n) + ' · ' + by[n]; }).join('<br>') + (names.length > 5 ? '<br>+ ' + (names.length - 5) + ' more layers' : '') : 'Only notes / markups selected.') + '</div>';
+    if (!me.canEdit) return h + '<div class="pc-muted">Read-only view.</div>';
+    if (locked) return h + '<div class="pc-muted">Some marks are on a locked layer — unlock it to edit them together.</div>';
+    if (!ms.length) return h;
+    var ks = Object.keys(kinds), kind = ks.length === 1 ? ks[0] : null;
+    var opts = kind ? layers.filter(function(x) { return x.takeoff_type === kind && !x.is_locked; }) : [];
+    h += '<div class="row"><span>Layer</span>' + (kind ? '<select id="bLayer"><option value="">— keep —</option>' + opts.map(function(x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join('') + '</select>' : '<b style="font-weight:500">mixed types</b>') + '</div>';
+    if (kind === 'linear') h += '<div class="row"><span>Drops</span><input type="number" min="0" step="1" id="bDrops" placeholder="keep"></div>';
+    h += '<div class="row"><span>Deduct</span><select id="bDeduct"><option value="">— keep —</option><option value="1">yes (negative)</option><option value="0">no</option></select></div>';
+    h += '<div class="row"><span>Label</span><input type="text" id="bLabel" placeholder="keep"></div>';
+    return h + '<div class="pc-muted" style="font-size:11px">Drag to move them together · Ctrl+C copies · Del deletes</div>';
+  }
+  async function applyBatch() {
+    var ms = batchMarks(); if (!ms.length) return;
+    var patch = {}, lid = $('bLayer') ? $('bLayer').value : '';
+    if (lid) { var nl = layerById(lid); if (nl) { patch.layer_id = nl.id; patch.layer_category = nl.category; patch.color = nl.color; } }
+    if ($('bDrops') && $('bDrops').value !== '') patch.drops = Math.max(0, parseInt($('bDrops').value, 10) || 0);
+    if ($('bDeduct') && $('bDeduct').value !== '') patch.deduct = $('bDeduct').value === '1';
+    if ($('bLabel') && $('bLabel').value.trim()) patch.label = $('bLabel').value.trim();
+    if (!Object.keys(patch).length) { toast('Nothing to change — pick a layer, drops, deduct or a label'); return; }
+    var items = ms.map(function(m) { var before = {}; Object.keys(patch).forEach(function(k) { before[k] = m[k] === undefined ? null : m[k]; }); return { id: m.id, before: before, after: Object.assign({}, patch) }; });
+    var ids = ms.map(function(m) { return m.id; });
+    for (var c = 0; c < ids.length; c += 200) { var r = await sb.from('estimate_measurements').update(patch).in('id', ids.slice(c, c + 200)); if (r.error) { toast(r.error.message, 'error'); return; } }
+    ms.forEach(function(m) { Object.assign(m, patch); var cm = meas.find(function(x) { return x.id === m.id; }); if (cm && cm !== m) Object.assign(cm, patch); });
+    pushUndo({ type: 'patch-multi', items: items });
+    renderAll(); scheduleSync();
+    toastUndo(ms.length + ' marks updated' + (patch.layer_id ? ' — moved to ' + layerById(patch.layer_id).name : ''));
   }
   function renderProps() {
     renderMarkCard();
@@ -2669,7 +2767,7 @@ requireAuth().catch(function(){});
     $('allEye').onclick = toggleAllVis; $('actionsBtn').onclick = function(e) { e.stopPropagation(); openActionsMenu(this); };
     $('leftCollapse').onclick = toggleLeft;
     $('modeLayers').onclick = function() { setReviewMode(false); }; $('modeReview').onclick = function() { setReviewMode(true); }; $('reviewPanel').addEventListener('click', onReviewClick);
-    $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); }; $('docBtn').onclick = function(e) { e.stopPropagation(); openDocMenu(this); };
+    $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); }; $('multBtn').onclick = function() { setPageMult(); }; $('docBtn').onclick = function(e) { e.stopPropagation(); openDocMenu(this); };
     $('prevPlan').onclick = function() { openPlan(planIdx - 1); }; $('nextPlan').onclick = function() { openPlan(planIdx + 1); };
     $('compareBtn').onclick = function(e) { e.stopPropagation(); openCompareMenu(this); }; $('compareClose').onclick = function() { setCompare(-1); };
     $('openNewBtn').onclick = async function() { var p = plans[planIdx]; if (!p) return; try { window.open(await EstDrawings.signedUrl(p.drawing.storage_path), '_blank', 'noopener'); } catch (e) { toast(e.message, 'error'); } };
@@ -2739,6 +2837,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=533"></script>
+<script src="sw-register.js?v=536"></script>
 </body>
 </html>
