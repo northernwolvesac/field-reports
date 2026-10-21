@@ -14,10 +14,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="supabase-config.js?v=504"></script>
-<script src="nw-drive.js?v=504"></script>
-<script src="auth.js?v=504"></script>
-<script src="labor-rates.js?v=504"></script>
+<script src="supabase-config.js?v=506"></script>
+<script src="nw-drive.js?v=506"></script>
+<script src="auth.js?v=506"></script>
+<script src="labor-rates.js?v=506"></script>
 <style>
   body { padding-bottom: 24px; }
   .iv-wrap { max-width: none; width: 100%; margin: 0 auto; }
@@ -610,7 +610,7 @@
       <div class="field" style="flex:0 0 140px"><label>Invoice #</label><input type="text" id="seInv"></div>
       <div class="field"><label>Invoice date</label><input type="date" id="seDate"></div>
       <div class="field"><label>Period to</label><input type="date" id="seTo"></div>
-      <div class="field" style="flex:0 0 150px"><label>Status</label><select id="seStatus"><option value="draft">Draft</option><option value="submitted">Submitted</option><option value="approved">Approved</option><option value="paid">Paid</option></select></div>
+      <div class="field" style="flex:0 0 150px"><label>Status</label><select id="seStatus"><option value="draft">Draft</option><option value="submitted">Submitted / under review</option><option value="certified">Approved</option><option value="paid">Paid</option><option value="void">Void</option></select></div>
     </div>
     <div class="row">
       <div class="field"><label>TO (client)</label><input type="text" id="seClient"></div>
@@ -1462,7 +1462,7 @@ requireAuth().catch(function(){});
     if (!canEdit) return;
     var s = currentSetup, a = currentApp, v = simpleView(s, a), ov = simpleOv(a), t = computeTotals().lines, ml = memoLines();
     var g = function(id) { return document.getElementById(id); };
-    g('seInv').value = a.invoice_no || String(a.application_no); g('seDate').value = a.application_date || ''; g('seTo').value = a.period_to || ''; g('seStatus').value = a.status || 'draft';
+    g('seInv').value = a.invoice_no || String(a.application_no); g('seDate').value = a.application_date || ''; g('seTo').value = a.period_to || ''; g('seStatus').value = INVOICE_STATUS[a.status] ? a.status : 'draft';
     g('seClient').value = v.client_name; g('seAttn').value = v.client_attn; g('seAddr').value = v.client_address;
     g('seJob').value = v.job_name; g('seLoc').value = v.job_location; g('sePo').value = a.po_number || v.po; g('seJobNo').value = v.job_number;
     g('seDated').value = v.contract_date || ''; g('seDatedHint').textContent = a.bill_co ? 'Saved on the change order as its PO date' : poSubOf(s, a) ? 'Saved on client PO ' + poSubOf(s, a).po : 'Contract date from the setup';
@@ -3662,6 +3662,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=504"></script>
+<script src="sw-register.js?v=506"></script>
 </body>
 </html>
