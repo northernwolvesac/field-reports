@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=515">
+<link rel="stylesheet" href="procore-ui.css?v=532">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=515"></script>
-<script src="auth.js?v=515"></script>
-<script src="est-totals.js?v=515"></script>
-<script src="procore-ui.js?v=515"></script>
+<script src="supabase-config.js?v=532"></script>
+<script src="auth.js?v=532"></script>
+<script src="est-totals.js?v=532"></script>
+<script src="procore-ui.js?v=532"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=515"></script>
-<script src="est-drawings.js?v=515"></script>
-<script src="nw-catalog-picker.js?v=515"></script>
-<script src="nw-duct-weight.js?v=515"></script>
-<script src="geo-takeoff.js?v=529"></script>
-<script src="est-engine.js?v=531"></script>
+<script src="bid-actions.js?v=532"></script>
+<script src="est-drawings.js?v=532"></script>
+<script src="nw-catalog-picker.js?v=532"></script>
+<script src="nw-duct-weight.js?v=532"></script>
+<script src="geo-takeoff.js?v=532"></script>
+<script src="est-engine.js?v=532"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -44,6 +44,8 @@
   .rv-kind { padding: 6px 10px 2px 30px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--pc-head, #4b5563); font-weight: 700; }
   .rv-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 14px; min-height: 36px; cursor: pointer; border-left: 3px solid transparent; }
   .rv-row:hover { background: var(--pc-row-active, #f3f6fb); }
+  .rv-cf { flex: none; font-size: 10px; font-weight: 700; line-height: 1; padding: 2px 5px; border-radius: 8px; letter-spacing: .2px; }
+  .rv-cf.low { background: #fde8e8; color: #b42318; } .rv-cf.med { background: #fef3c7; color: #92400e; }
   .rv-row.cur { background: var(--pc-link-bg, #e8f0fe); border-left-color: var(--pc-link, #1a66e0); }
   .rv-row.deleted .t1 { text-decoration: line-through; color: var(--pc-muted, #6b7280); }
   .rv-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: #f59e0b; box-shadow: 0 0 0 2px #fff inset; }
@@ -2194,7 +2196,7 @@ requireAuth().catch(function(){});
   // AI session) and the duct / pipe / riser runs measured from the drawing lines (auto-marks). Each one is accepted, corrected or
   // deleted; the decisions live in est_ai_corrections (est-ai-corrections.sql). Run edits change the marks themselves (the takeoff →
   // estimate sync carries them); device / equipment decisions are applied by est-engine.js when the AI Estimator prices the session.
-  var reviewOn = false, rvLoaded = false, rvOk = true, rvOnlyNew = false, rvCollapsed = {}, rvPulseT = null;
+  var reviewOn = false, rvLoaded = false, rvOk = true, rvOnlyNew = false, rvCf = 'all', rvCollapsed = {}, rvPulseT = null;
   var RV = { session: null, files: [], pages: [], corr: {}, sheets: [], flat: [], fits: [], cur: null, occ: [], occIdx: -1, hl: null, textCache: {}, total: 0, done: 0 };
   var FIT_LABEL = { elbow: 'Elbows', tee: 'Tees (main > branch)', transition: 'Transitions (from > to)' };
   var KIND_LABEL = { equipment: 'Equipment', device: 'Air devices', duct: 'Ducts', pipe: 'Pipes', riser: 'Risers' };
@@ -2235,6 +2237,45 @@ requireAuth().catch(function(){});
   }
   function rvStatus(kind, key) { var c = RV.corr[kind + '|' + key]; return c ? c.status : 'new'; }
   function rvRunKind(m, l) { if (/^riser/i.test(m.notes || '')) return 'riser'; return ((l && l.category) || m.layer_category) === 'pipework' ? 'pipe' : 'duct'; }
+  // ─── confidence of an AI item: high / med / low with the reasons (what the reader had to go on), so the review starts where it matters ───
+  // device: tag printed in the sheet's text layer + counted from tags = high; counted from symbols or the schedule alone = medium; no count,
+  // reads that disagreed (repeat changes name the tag) or a one-of-N hit = low. equipment: schedule-backed (model / capacity / manufacturer)
+  // and a real tag = high; a tag-less or detail-title row = low. measured runs: from the sheet's geometry — mostly width-guessed or most
+  // size labels on no measured duct = low / medium.
+  function rvNormTag(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function rvConf(kind, row, sp) {
+    var why = [], lvl = 3; function dn(l, w) { if (l < lvl) lvl = l; why.push(w); }
+    var r = (sp && sp.result) || {}, tc = (sp && sp.tag_counts) || {}, tag = rvNormTag(row.tag);
+    var printed = !!tag && ((tc.devices && Object.keys(tc.devices).some(function(k) { return rvNormTag(k) === tag; })) || (tc.tags && Object.keys(tc.tags).some(function(k) { return rvNormTag(k) === tag; })));
+    var changes = (r.repeat && r.repeat.changes) || [], noted = tag && changes.filter(function(c) { return rvNormTag(String(c).split(/\s/)[0]) === tag; });
+    if (kind === 'device') {
+      var b = String(row.basis || '').toLowerCase();
+      if (!(Number(row.qty) > 0) && !(Number(row.linear_ft) > 0)) dn(1, 'no count on the sheet');
+      if (b === 'tags') { if (printed) why.push('tag printed in the PDF text'); else dn(2, 'counted from tags the PDF text does not carry'); }
+      else if (b === 'symbols') dn(2, 'counted from drawn symbols, not tags');
+      else if (b === 'schedule') dn(2, 'schedule row — the plan count is not checked');
+      else dn(2, 'basis not stated');
+      if (noted && noted.length) dn(noted.some(function(c) { return /reads disagree|only in|in \d of \d/.test(c); }) ? 1 : 2, 'repeat reads: ' + String(noted[0]).slice(0, 60));
+      if (/cfm[- ]only|no symbol|unmarked/i.test(String(row.tag || '') + ' ' + String(row.notes || ''))) dn(1, 'bubble with no device symbol');
+    } else if (kind === 'equipment') {
+      if (!/^[A-Za-z]{1,6}([-\s]?[A-Za-z]{1,2})?[-\s]?\d[\w.\-\/]*$/.test(String(row.tag || '').trim()) || /[()]|typ/i.test(String(row.tag || ''))) dn(1, 'no equipment tag — a detail title or legend row?');
+      var backed = !!(row.model || row.capacity || row.manufacturer);
+      if (backed) why.push('schedule row (model / capacity)'); else dn(2, 'no schedule data: on the plan only');
+      if (noted && noted.length) dn(2, 'repeat reads: ' + String(noted[0]).slice(0, 60));
+    }
+    return { lvl: lvl === 3 ? 'high' : lvl === 2 ? 'med' : 'low', why: why };
+  }
+  function rvRunConf(sp) {
+    var g = (sp && sp.result && sp.result.geo) || {}, why = [], lvl = 3;
+    if (g.total_ft > 0 && g.width_ft > 0.5 * g.total_ft) { lvl = 1; why.push('mostly sized by line width, not by labels'); }
+    if (g.labels >= 6 && g.labels_hit != null && g.labels_hit < 0.6 * g.labels) { lvl = Math.min(lvl, 2); why.push('only ' + g.labels_hit + ' of ' + g.labels + ' size labels sit on measured duct'); }
+    if (g.unsized_ft > 0.15 * (g.total_ft || 1)) { lvl = Math.min(lvl, 2); why.push(Math.round(g.unsized_ft) + ' ft of duct without a size'); }
+    if (!why.length) why.push('sized by the sheet\'s own labels');
+    return { lvl: lvl === 3 ? 'high' : lvl === 2 ? 'med' : 'low', why: why };
+  }
+  function rvCfOk(it) { return rvCf === 'all' || (it.cf && (rvCf === 'low' ? it.cf.lvl === 'low' : it.cf.lvl !== 'high')); }
+  var CF_RANK = { low: 0, med: 1, high: 2 }, CF_TXT = { low: 'check', med: 'look', high: 'ok' };
+  function rvCfBadge(cf) { return cf && cf.lvl !== 'high' ? '<span class="rv-cf ' + cf.lvl + '" title="' + esc((cf.lvl === 'low' ? 'Low confidence — ' : 'Medium confidence — ') + cf.why.join('; ')) + '">' + CF_TXT[cf.lvl] + '</span>' : ''; }
   function buildReview() {
     var byPlan = {}, grp = {}; RV.flat = []; RV.fits = []; RV.sheets = [];
     function sheetOf(i) { var p = plans[i], k = p.key; if (!byPlan[k]) { byPlan[k] = { planIdx: i, key: k, sheet: planShort(p), title: p.title || '', items: [], groups: [], total: 0, done: 0 }; RV.sheets.push(byPlan[k]); } return byPlan[k]; }
@@ -2284,6 +2325,10 @@ requireAuth().catch(function(){});
     RV.sheets.sort(function(a, b) { return a.planIdx - b.planIdx; });
     RV.sheets.forEach(function(sh) {
       sh.groups.sort(function(a, b) { return (a.kind > b.kind ? 1 : a.kind < b.kind ? -1 : 0) || a.name.localeCompare(b.name, undefined, { numeric: true }); });
+      sh.items.forEach(function(it) { it.cf = it.cf || ((it.kind === 'device' || it.kind === 'equipment') && it.row ? rvConf(it.kind, it.row, it.page) : null); });
+      // the review starts where it matters: low first, then medium, within each kind (stable)
+      var ord = {}; sh.items.forEach(function(it, i) { ord[it.kind + '|' + it.key] = i; });
+      sh.items.sort(function(a, b) { return (a.kind === b.kind ? (CF_RANK[(a.cf || { lvl: 'high' }).lvl] - CF_RANK[(b.cf || { lvl: 'high' }).lvl]) : 0) || (ord[a.kind + '|' + a.key] - ord[b.kind + '|' + b.key]); });
       sh.items.forEach(function(it) { sh.total++; if (it.status !== 'new') sh.done++; RV.flat.push(it); });
       sh.groups.forEach(function(g) { sh.total += g.marks.length; sh.done += g.done; g.marks.forEach(function(it) { RV.flat.push(it); }); });
     });
@@ -2297,17 +2342,18 @@ requireAuth().catch(function(){});
     if (!rvOk) { host.innerHTML = '<div class="rv-empty">The review log needs one database update: run <code>est-ai-corrections.sql</code> (app folder) in Supabase → SQL Editor, then reload this page.</div>'; return; }
     if (!RV.session && !RV.flat.length) { host.innerHTML = '<div class="rv-empty">No AI items on these plans yet.<br><br>Run the AI Estimator on these plans (page menu ⋮) and press “Open in Takeoff” there, or auto-measure a plan — everything the AI produces lands here to be checked.</div>'; return; }
     var pct = RV.total ? Math.round(RV.done / RV.total * 100) : 0;
-    var html = '<div class="rv-bar"><span><b>' + RV.done + '</b> of <b>' + RV.total + '</b> checked</span><span class="rv-prog"><i style="width:' + pct + '%"></i></span><label><input type="checkbox" class="tk-cb" id="rvOnlyNew"' + (rvOnlyNew ? ' checked' : '') + '>only new</label></div>';
+    var rvNeed = { look: 0, low: 0 }; RV.flat.forEach(function(it) { if (it.status === 'new' && it.cf && it.cf.lvl !== 'high') { rvNeed.look++; if (it.cf.lvl === 'low') rvNeed.low++; } });
+    var html = '<div class="rv-bar"><span><b>' + RV.done + '</b> of <b>' + RV.total + '</b> checked</span><span class="rv-prog"><i style="width:' + pct + '%"></i></span><label><input type="checkbox" class="tk-cb" id="rvOnlyNew"' + (rvOnlyNew ? ' checked' : '') + '>only new</label><select id="rvCf" title="Confidence: what the reader had to go on for each item" style="font-size:11px;padding:1px 2px"><option value="all"' + (rvCf === 'all' ? ' selected' : '') + '>all items</option><option value="look"' + (rvCf === 'look' ? ' selected' : '') + '>need a look (' + rvNeed.look + ')</option><option value="low"' + (rvCf === 'low' ? ' selected' : '') + '>low only (' + rvNeed.low + ')</option></select></div>';
     if (!RV.flat.length) html += '<div class="rv-empty">Nothing to check on these plans' + (RV.session ? ' — the AI session “' + esc(RV.session.name) + '” has no items on sheets that are in this takeoff (read the sheets there first)' : '') + '.</div>';
     RV.sheets.forEach(function(sh) {
       var open = !rvCollapsed[sh.key], left = sh.total - sh.done;
       if (rvOnlyNew && !left) return;
       html += '<div class="rv-sheet"><div class="rv-sheet-h" data-rvsheet="' + esc(sh.key) + '"><span class="chev">' + ic(open ? 'expand_more' : 'chevron_right', 20) + '</span><span class="nm" title="' + esc(sh.title) + '">' + esc(sh.sheet) + (sh.title ? ' <span class="pc-muted" style="font-weight:400">' + esc(sh.title) + '</span>' : '') + '</span><span class="pr">' + (left ? left + ' new' : '✓ done') + ' · ' + sh.done + '/' + sh.total + '</span></div>';
       if (open) {
-        ['equipment', 'device'].forEach(function(kd) { var its = sh.items.filter(function(it) { return it.kind === kd && (!rvOnlyNew || it.status === 'new'); }); if (!its.length) return;
+        ['equipment', 'device'].forEach(function(kd) { var its = sh.items.filter(function(it) { return it.kind === kd && (!rvOnlyNew || it.status === 'new') && rvCfOk(it); }); if (!its.length) return;
           html += '<div class="rv-kind">' + KIND_LABEL[kd] + ' · ' + its.length + '</div>' + its.map(rvRowHtml).join(''); });
         var lastKind = '';
-        sh.groups.forEach(function(g) { if (rvOnlyNew && g.done >= g.marks.length) return; if (g.kind !== lastKind) { lastKind = g.kind; html += '<div class="rv-kind">' + KIND_LABEL[g.kind] + ' — measured runs</div>'; } html += rvGroupHtml(g); });
+        sh.groups.forEach(function(g) { if (rvOnlyNew && g.done >= g.marks.length) return; if (rvCf !== 'all') { var gs = RV.pages.find(function(sp) { return rvPlanFor(sp) === g.planIdx; }); g.cf = g.cf || (gs ? rvRunConf(gs) : null); if (!rvCfOk({ cf: g.cf })) return; } if (g.kind !== lastKind) { lastKind = g.kind; html += '<div class="rv-kind">' + KIND_LABEL[g.kind] + ' — measured runs</div>'; } html += rvGroupHtml(g); });
         if (sh.fits && sh.fits.length && !rvOnlyNew) html += '<div class="rv-kind" title="Counted on the measured wall pairs — information only, priced within the per-ft duct rate">Fittings — counted on the measured runs</div>' + sh.fits.map(function(it) { return '<div class="rv-row' + (rvIsCur(it) ? ' cur' : '') + '" data-rv="' + esc(it.kind + '|' + it.key) + '" title="' + esc(it.label + ' — ' + it.sub + ' · click, then N for the next place') + '"><span class="rv-dot" style="background:#64748b"></span><div class="tx"><div class="t1">' + esc(it.label) + '</div><div class="t2">' + esc(it.sub) + '</div></div></div>'; }).join('');
       }
       html += '</div>';
@@ -2316,12 +2362,13 @@ requireAuth().catch(function(){});
       (RV.session ? '<br>AI session: <a class="pc-link" href="ai-estimator.html?s=' + RV.session.id + '" target="_top">' + esc(RV.session.name) + '</a> — press “Price it” there after corrections; run edits reach the estimate through the takeoff sync.' : '') + '</div>';
     host.innerHTML = html;
     var on = $('rvOnlyNew'); if (on) on.onchange = function() { rvOnlyNew = this.checked; renderReview(); };
+    var cs = $('rvCf'); if (cs) cs.onchange = function() { rvCf = this.value; renderReview(); };
     var cur = host.querySelector('.rv-row.cur'); if (cur) cur.scrollIntoView({ block: 'nearest' });
   }
   function rvIsCur(it) { return !!(RV.cur && RV.cur.kind === it.kind && RV.cur.key === it.key); }
   function rvFixText(fix) { return Object.keys(fix || {}).filter(function(k) { return k !== 'note' && fix[k] !== '' && fix[k] != null; }).map(function(k) { return k === 'qty' ? fix[k] + ' ea' : k === 'linear_ft' || k === 'ft' ? fix[k] + ' ft' : k === 'weight_lb' ? fix[k] + ' lb' : fix[k]; }).join(', '); }
   function rvRowHtml(it) {
-    return '<div class="rv-row' + (rvIsCur(it) ? ' cur' : '') + (it.status === 'deleted' ? ' deleted' : '') + '" data-rv="' + esc(it.kind + '|' + it.key) + '" title="' + esc(it.label + (it.sub ? ' — ' + it.sub : '')) + '"><span class="rv-dot ' + it.status + '"></span><div class="tx"><div class="t1">' + esc(it.label) + '</div><div class="t2">' + esc(it.sub || '') + (it.fix ? ' <b>→ ' + esc(rvFixText(it.fix)) + '</b>' : '') + '</div></div>' + rvActs(it) + '</div>';
+    return '<div class="rv-row' + (rvIsCur(it) ? ' cur' : '') + (it.status === 'deleted' ? ' deleted' : '') + '" data-rv="' + esc(it.kind + '|' + it.key) + '" title="' + esc(it.label + (it.sub ? ' — ' + it.sub : '')) + '"><span class="rv-dot ' + it.status + '"></span><div class="tx"><div class="t1">' + esc(it.label) + '</div><div class="t2">' + esc(it.sub || '') + (it.fix ? ' <b>→ ' + esc(rvFixText(it.fix)) + '</b>' : '') + '</div></div>' + rvCfBadge(it.cf) + rvActs(it) + '</div>';
   }
   function rvActs(it) {
     if (!me.canEdit) return '';
@@ -2331,8 +2378,9 @@ requireAuth().catch(function(){});
   function rvGroupHtml(g) {
     var st = g.done >= g.marks.length ? (g.marks.every(function(x) { return x.status === 'deleted'; }) ? 'deleted' : g.marks.some(function(x) { return x.status === 'corrected'; }) ? 'corrected' : 'accepted') : g.done ? 'partial' : 'new';
     var cur = !!(RV.cur && RV.cur.group === g), gone = g.marks.filter(function(x) { return x.gone; }).length, live = g.marks.length - gone;
+    var gsp = RV.pages.find(function(sp) { return rvPlanFor(sp) === g.planIdx; }); g.cf = g.cf || (gsp ? rvRunConf(gsp) : null);
     return '<div class="rv-row' + (cur ? ' cur' : '') + '" data-rvg="' + esc(g.key) + '" title="' + esc(g.name) + '"><span class="rv-dot ' + st + '"></span><div class="tx"><div class="t1"><span class="pc-dot" style="background:' + esc((g.layer && g.layer.color) || '#94a3b8') + ';margin-right:5px"></span>' + esc(g.name) + '</div><div class="t2">' + live + ' run' + (live === 1 ? '' : 's') + ' · ' + Math.round(g.ft) + ' ft · ' + g.done + '/' + g.marks.length + ' checked' + (gone ? ' · <b>' + gone + ' deleted</b>' : '') + (cur ? ' · <b>run ' + (g.marks.indexOf(RV.cur) + 1) + '</b>' : '') + '</div></div>' +
-      (me.canEdit ? '<span class="rv-acts">' + (g.done < g.marks.length ? '<button class="ok" data-act="acceptgroup" title="Accept every run in this group (A)">' + ic('check_circle', 16) + '</button>' : '') + (gone ? '<button data-act="restoregroup" title="Bring the ' + gone + ' deleted run' + (gone === 1 ? '' : 's') + ' back">' + ic('history', 16) + '</button>' : '') + (g.done > gone ? '<button data-act="resetgroup" title="Accepted / corrected runs back to new">' + ic('undo', 16) + '</button>' : '') + '</span>' : '') + '</div>';
+      rvCfBadge(g.cf) + (me.canEdit ? '<span class="rv-acts">' + (g.done < g.marks.length ? '<button class="ok" data-act="acceptgroup" title="Accept every run in this group (A)">' + ic('check_circle', 16) + '</button>' : '') + (gone ? '<button data-act="restoregroup" title="Bring the ' + gone + ' deleted run' + (gone === 1 ? '' : 's') + ' back">' + ic('history', 16) + '</button>' : '') + (g.done > gone ? '<button data-act="resetgroup" title="Accepted / corrected runs back to new">' + ic('undo', 16) + '</button>' : '') + '</span>' : '') + '</div>';
   }
   async function rvRestoreGroup(g) {
     if (!me.canEdit || !g) return;
@@ -2689,6 +2737,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=515"></script>
+<script src="sw-register.js?v=532"></script>
 </body>
 </html>
