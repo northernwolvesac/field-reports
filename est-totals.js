@@ -324,7 +324,10 @@
     var epRaw = insul.field.ep_duct + insul.field.ep_pipe;
     insul.field.ep_total = epRaw > 0 ? Math.max(epRaw, EP.minimum) : 0; insul.field.ep_min_applied = epRaw > 0 && epRaw < EP.minimum;
     // insulation by subcontractor: the field insulation (material + labor) left the duct / pipe lines; the sub's installed price joins services
-    if (insul.sub) { insul.subCost = insul.field.ep_total; services += insul.subCost; servicesSales += insul.subCost; subtotal += insul.subCost; }
+    // Russ 2026-10-21: 15 % on top of Energy Plus's price (es_settings.insulation_sub_markup, %); our overhead / misc then apply as to any services amount
+    insul.subMarkupPct = (settings.es_settings && settings.es_settings.insulation_sub_markup != null && settings.es_settings.insulation_sub_markup !== '') ? num(settings.es_settings.insulation_sub_markup) : 15;
+    insul.subMarkup = insul.field.ep_total * insul.subMarkupPct / 100;
+    if (insul.sub) { insul.subCost = insul.field.ep_total; services += insul.subCost; servicesSales += insul.subCost + insul.subMarkup; subtotal += insul.subCost + insul.subMarkup; }
     // ── company rules: minimum charges / allowances join the buckets of the lines they matched ──
     var ruleSet = Array.isArray(est.rules) ? est.rules : (typeof window !== 'undefined' && Array.isArray(window.NW_EST_RULES) ? window.NW_EST_RULES : []);
     var rulesOut = nwEstRules(lines, perLine, ruleSet);

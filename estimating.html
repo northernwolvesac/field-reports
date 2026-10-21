@@ -11,22 +11,22 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=514">
+<link rel="stylesheet" href="procore-ui.css?v=517">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=514"></script>
-<script src="auth.js?v=514"></script>
-<script src="est-totals.js?v=514"></script>
-<script src="procore-ui.js?v=514"></script>
-<script src="nw-catalog-picker.js?v=514"></script>
-<script src="nw-duct-weight.js?v=514"></script>
-<script src="nw-proposal.js?v=514"></script>
-<script src="bid-actions.js?v=514"></script>
+<script src="supabase-config.js?v=517"></script>
+<script src="auth.js?v=517"></script>
+<script src="est-totals.js?v=517"></script>
+<script src="procore-ui.js?v=517"></script>
+<script src="nw-catalog-picker.js?v=517"></script>
+<script src="nw-duct-weight.js?v=517"></script>
+<script src="nw-proposal.js?v=517"></script>
+<script src="bid-actions.js?v=517"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=514"></script>
-<script src="nw-email.js?v=514"></script>
+<script src="email-utils.js?v=517"></script>
+<script src="nw-email.js?v=517"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -795,6 +795,7 @@ requireAuth().catch(function(){});
     if (F.from_liner_sqft > 0) rows.push({ label: 'Duct wrap 1-1/2" R6 FSK — bare duct beyond the lined first runs', qty: F.from_liner_sqft, unit: 'sq ft', duct: true });
     return rows;
   }
+  window.setInsSubMarkup = async function(v) { v = Math.min(100, Math.max(0, Number(v) || 0)); await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.insulation_sub_markup = v; }); renderSummary(); };
   window.setAlShopPct = async function(v) { v = Math.min(100, Math.max(0, Number(v) || 0)); await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.al_shop_pct = v; }); renderSummary(); };
   function insRfqBody(t) {
     var rows = insRfqRows(t).map(function(d) { return '  - ' + d.label + ': ' + fmtNum(d.qty, 0) + ' ' + d.unit + (d.duct ? ' of duct surface' : ''); });
@@ -802,7 +803,6 @@ requireAuth().catch(function(){});
     return 'Hello ' + INS_SUB.name + ' team,\n\nPlease quote the insulation for the project below (material + labor, installed):\n\nProject: ' + (e.name || '') + (e.project_address ? '\nAddress: ' + e.project_address : '') + (e.client_name ? '\nClient / GC: ' + e.client_name : '') + (e.bid_due_date ? '\nBid due: ' + e.bid_due_date : '') +
       '\n\nTake-off quantities:\n' + rows.join('\n') +
       '\n\nDuct quantities are square feet of duct surface (perimeter × length, fittings included at 25 %), external wrap on bare duct — acoustic lining is by our duct shop and is not part of this request. Pipe quantities are linear feet by pipe size; please include fittings, valves and hangers in the per-foot rate or list them separately.' +
-      (t.insulation && t.insulation.field && t.insulation.field.ep_total ? '\n\nAt your rates of 10/19/2026 we budget this at ' + money(t.insulation.field.ep_total) + (t.insulation.field.ep_min_applied ? ' (your project minimum)' : '') + ' — please confirm or send a revised figure.' : '') +
       '\n\nPlease send a lump-sum price with the unit rates you used, lead time, and anything excluded (lifts, firestop, jacketing).\n\nThank you,\n' + (currentUserName || 'Estimating') + '\nNorthern Wolves Air Conditioning\nestimating@northernwolvesac.com';
   }
   window.openInsRfq = function() {
@@ -3188,9 +3188,9 @@ requireAuth().catch(function(){});
     if (t.insulation && (t.insulation.duct_sqft > 0 || t.insulation.pipe_ft > 0 || t.insulation.explicit_mat > 0)) {
       var I = t.insulation, insMat = I.duct_mat + I.pipe_mat + I.explicit_mat, insH = (I.duct_min + I.pipe_min + I.explicit_min) / 60;
       var F = I.field || { duct_sqft: 0, pipe_ft: 0, duct_mat: 0, pipe_mat: 0, duct_min: 0, pipe_min: 0, from_liner_sqft: 0 }, SH = I.shop || { sqft: 0, mat: 0, min: 0 };
-      html += '<div class="es-side-line" style="margin-top:6px">Insulation budget <b>' + money(insMat) + '</b> material · <b>' + fmtNum(insH, 1) + ' h</b>' + (I.sub ? ' → <b>Insulation (sub) ' + money(I.subCost) + '</b>' : '') +
+      html += '<div class="es-side-line" style="margin-top:6px">Insulation budget <b>' + money(insMat) + '</b> material · <b>' + fmtNum(insH, 1) + ' h</b>' + (I.sub ? ' → <b>Insulation (sub) ' + money((I.subCost || 0) + (I.subMarkup || 0)) + '</b> <span class="pc-muted">(Energy Plus ' + money(I.subCost) + ' + ' + fmtNum(I.subMarkupPct, 0) + ' %)</span>' : '') +
         (I.liner_sqft > 0 ? '<div style="font-size:11.5px;margin-top:4px">Acoustic lining calculated on <b>' + fmtNum(I.liner_sqft, 0) + ' sq ft</b> · duct shop lines <input type="number" id="alShopPct" value="' + fmtNum(I.al_shop_pct, 0) + '" min="0" max="100" step="5" style="width:56px;padding:2px 4px;font-size:12px"' + (canEdit && !locked ? '' : ' disabled') + ' onchange="setAlShopPct(this.value)"> % of it (first runs of the mains) = ' + fmtNum(SH.sqft, 0) + ' sq ft lined in the shop (' + money(SH.mat) + ', ' + fmtNum(SH.min / 60, 1) + ' h, inside the duct lines); the other <b>' + fmtNum(F.from_liner_sqft, 0) + ' sq ft</b> is bare duct wrapped R6 in the field</div>' : '') +
-        '<div style="font-size:11.5px;margin-top:2px">Field insulation: duct wrap <b>' + fmtNum(F.duct_sqft, 0) + ' sq ft</b>' + (F.pipe_ft ? ' · pipe <b>' + fmtNum(F.pipe_ft, 0) + ' ft</b>' : '') + ' → <b>Energy Plus budget ' + money(F.ep_total || 0) + '</b>' + (F.ep_min_applied ? ' (their $1,500 minimum)' : '') + ' <span class="pc-muted">(installed: R6 $4.50 / R8 $6.00 per sq ft, pipe $7.50–27/ft + 25 % fittings, quote 10/19/2026)</span>' + (I.sub ? ' — <b>in the price as Insulation (sub)</b>, our material ' + money(F.duct_mat + F.pipe_mat) + ' and ' + fmtNum((F.duct_min + F.pipe_min) / 60, 1) + ' h taken out of the lines' : ' — our own figure inside the lines: ' + money(F.duct_mat + F.pipe_mat) + ' material + ' + fmtNum((F.duct_min + F.pipe_min) / 60, 1) + ' h') + '</div>' +
+        '<div style="font-size:11.5px;margin-top:2px">Field insulation: duct wrap <b>' + fmtNum(F.duct_sqft, 0) + ' sq ft</b>' + (F.pipe_ft ? ' · pipe <b>' + fmtNum(F.pipe_ft, 0) + ' ft</b>' : '') + ' → <b>Energy Plus ' + money(F.ep_total || 0) + '</b>' + (F.ep_min_applied ? ' (their $1,500 minimum)' : '') + ' + <input type="number" id="insSubMk" value="' + fmtNum(I.subMarkupPct == null ? 15 : I.subMarkupPct, 0) + '" min="0" max="100" step="1" style="width:48px;padding:2px 4px;font-size:12px"' + (canEdit && !locked ? '' : ' disabled') + ' onchange="setInsSubMarkup(this.value)"> % = <b>' + money((F.ep_total || 0) + (I.subMarkup || 0)) + '</b>' + ' <span class="pc-muted">(installed: R6 $4.50 / R8 $6.00 per sq ft, pipe $7.50–27/ft + 25 % fittings, quote 10/19/2026)</span>' + (I.sub ? ' — <b>in the price as Insulation (sub)</b> (overhead / misc on top as usual), our material ' + money(F.duct_mat + F.pipe_mat) + ' and ' + fmtNum((F.duct_min + F.pipe_min) / 60, 1) + ' h taken out of the lines' : ' — our own figure inside the lines: ' + money(F.duct_mat + F.pipe_mat) + ' material + ' + fmtNum((F.duct_min + F.pipe_min) / 60, 1) + ' h') + '</div>' +
         '<div class="pc-muted" style="font-size:11px">' + (I.duct_sqft ? 'duct ' + fmtNum(I.duct_sqft, 0) + ' sq ft (' + money(I.duct_mat) + ', ' + fmtNum(I.duct_min / 60, 1) + ' h)' : '') + (I.pipe_ft ? (I.duct_sqft ? ' · ' : '') + 'pipe ' + fmtNum(I.pipe_ft, 0) + ' ft (' + money(I.pipe_mat) + ', ' + fmtNum(I.pipe_min / 60, 1) + ' h)' : '') + (I.explicit_mat ? ' · insulation lines ' + money(I.explicit_mat) : '') + (I.sub ? ' — labor moved out of our hours' : ' — inside the duct / pipe lines') + '</div>' +
         (canEdit ? '<button type="button" class="pc-btn pc-btn-outline" style="margin-top:6px" onclick="openInsRfq()">✉ Request insulation quote</button>' : '') + '</div>';
     }
@@ -3724,6 +3724,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=514"></script>
+<script src="sw-register.js?v=517"></script>
 </body>
 </html>
