@@ -732,12 +732,19 @@ var AE = (function() {
       body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(bytes), zoom_tiles: zoom, tag_counts: txt.tags || {}, device_tags: txt.devices || {}, symbol_census: census || undefined, glyph_families: glyphs ? glyphs.families.map(function(g) { return Object.assign({}, g, { boxes: undefined }); }) : undefined, glyph_text: glyphs ? NWGeo.glyphText(glyphs) : undefined,
         text_hint: Object.entries(txt.sizes || {}).map(function(e) { return e[0] + '×' + e[1]; }).join(', ') };
     }
+    // the page's own work on this PDF page survives a re-read: the OCR word list (printed device tags of an outlined-text sheet —
+    // the engine's symbol-row rule needs it), the measured geometry, the addendum diff (the function rewrites result from scratch)
+    var keep = {}; ['ocr_words', 'ocr_labels', 'geo', 'geo_pipe', 'glyphs', 'addendum_diff'].forEach(function(k) { if (p.result && p.result[k] != null) keep[k] = p.result[k]; });
     await callFn(body);
     // the function works in the background; wait for its row to finish
     for (var i = 0; i < 70; i++) {
       await sleep(4000);
       var r = await supabaseClient.from('ai_est_pages').select('status, error, result, cost, tokens_in, tokens_out, sheet_no, sheet_title, sheet_type, model').eq('id', p.id).single();
-      if (r.data && (r.data.status === 'done' || r.data.status === 'error')) { Object.assign(p, r.data); if (p.result) p.result = unpack(p.result); if (r.data.status === 'done' && body.action === 'sheet') await postRead(p, body); return; }
+      if (r.data && (r.data.status === 'done' || r.data.status === 'error')) {
+        Object.assign(p, r.data); if (p.result) p.result = unpack(p.result);
+        p.restored = false; if (r.data.status === 'done' && p.result && typeof p.result === 'object') Object.keys(keep).forEach(function(k) { if (p.result[k] == null) { p.result[k] = keep[k]; p.restored = true; } });
+        if (r.data.status === 'done' && body.action === 'sheet') await postRead(p, body); return;
+      }
     }
     await supabaseClient.from('ai_est_pages').update({ status: 'error', error: 'timed out — press ↻ to try again' }).eq('id', p.id);
     p.status = 'error'; p.error = 'timed out';
@@ -896,6 +903,7 @@ var AE = (function() {
       r.reads = reads; changed = true;
     }
     if (freezeDevices(p)) changed = true;
+    if (p.restored) { changed = true; p.restored = false; }
     if (changed) {
       var cur = await supabaseClient.from('ai_est_pages').select('result').eq('id', p.id).single();
       var res = Object.assign({}, (cur.data && cur.data.result) || {}, r);
