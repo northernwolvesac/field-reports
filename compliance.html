@@ -9,14 +9,14 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <title>Subs &amp; Vendors Compliance — Northern Wolves AC</title>
-<link rel="stylesheet" href="styles.css?v=523">
+<link rel="stylesheet" href="styles.css?v=524">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=523"></script>
-<script src="auth.js?v=523"></script>
-<script src="nw-drive.js?v=523"></script>
+<script src="supabase-config.js?v=524"></script>
+<script src="auth.js?v=524"></script>
+<script src="nw-drive.js?v=524"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=523"></script>
-<script src="nw-email.js?v=523"></script>
+<script src="email-utils.js?v=524"></script>
+<script src="nw-email.js?v=524"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 60px; }
@@ -566,7 +566,7 @@ requireAuth().catch(function(){});
     var p = party(editDoc.party_id);
     $('dAi').textContent = '🤖 Reading the certificate…';
     var prompt = 'You read a US certificate of liability insurance (usually ACORD 25) for a New York HVAC contractor, Northern Wolves, Inc. ' +
-      'The company that should be the INSURED is "' + p.name + '". Read the text below and answer in plain text lines only, KEY: value, no JSON, no markdown, no quotes. Unknown = blank. Dates as YYYY-MM-DD, money as plain numbers.\n' +
+      'The INSURED is our subcontractor / vendor "' + p.name + '" (a different legal name of the same company is fine); Northern Wolves is the certificate HOLDER and an additional insured, never the insured. Read the text below and answer in plain text lines only, KEY: value, no JSON, no markdown, no quotes. Unknown = blank. Dates as YYYY-MM-DD, money as plain numbers.\n' +
       'INSURED: <insured name as printed>\nINSURERS: <insurer names, ; separated>\nEFFECTIVE: <earliest policy effective date>\nEXPIRATION: <EARLIEST expiration date of any listed policy>\n' +
       'GL_EACH_OCCURRENCE: <number>\nGL_AGGREGATE: <general aggregate number>\nAUTO: <combined single limit>\nUMBRELLA: <umbrella / excess each occurrence>\n' +
       'WORKERS_COMP: yes|no\nNY_DISABILITY: yes|no (DBL / PFL listed)\nADDITIONAL_INSURED: yes|no (ADDL INSD marked Y on general liability, or the description names additional insureds)\n' +
@@ -733,6 +733,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=523"></script>
+<script src="sw-register.js?v=524"></script>
 </body>
 </html>
