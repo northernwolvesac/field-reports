@@ -553,8 +553,8 @@
               // a traced size keeps the traced feet (414 W 14th 14x6: four runouts 30.1 ft traced, Vladimir 30.3, the reader 40–60 — the
               // reader's feet are the weaker source once the lines are measured); the reader fills in only the sizes nothing was traced for
               var g2 = geoBySize[k2], a2 = aiBySize[k2] || 0, use = g2 > 0 ? g2 : a2; if (!use) return;
-              if (g2 > 0 && a2 > g2 * 1.5) readerOver.push(sh + ': ' + (parts[0] === 'round' ? dims[0] + '"Ø' : parts[1]) + ' traced ' + Math.round(g2) + ' ft, the reader says ' + Math.round(a2));
               var parts = k2.split('|'), round2 = parts[0] === 'round', dims = parts[1].split('x');
+              if (g2 > 0 && a2 > g2 * 1.5) readerOver.push(sh + ': ' + (round2 ? dims[0] + '"Ø' : parts[1]) + ' traced ' + Math.round(g2) + ' ft, the reader says ' + Math.round(a2));
               var o2 = duct[k2] = duct[k2] || { shape: parts[0], size: round2 ? dims[0] + '"Ø' : parts[1], lf: 0, sheets: [], geo: false };
               o2.lf += use; o2.sheets.push(sh); if (g2 >= a2) { o2.geo = true; fromGeo += use; } mergedFt += use;
               addSys(o2, use, (g2 >= a2 && geoSys[k2]) ? geoSys[k2] : (aiSys[k2] || geoSys[k2]));
