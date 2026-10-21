@@ -248,17 +248,38 @@ async function uploadToGoogleDrive(pdfDoc, filename) {
  * (nw-email.js: logo signature, details table, PDF buttons); without it, or if nw-email.js did not load, the old plain-text template.
  * o: { to, subject, bodyText, reportType, title, subtitle, customerName, techName, senderName, intro, files: [{label, plain, url, primary}] }
  */
+// The signed-in user as the e-mail's visible sender. o.senderName / o.senderEmail win; otherwise the cached profile
+// (auth.js syncProfile → localStorage) of the person using the app.
+function nwSenderIdentity(o) {
+  var name = (o && o.senderName) || '', email = (o && o.senderEmail) || '';
+  try {
+    var raw = localStorage.getItem('nw_tech_profile');
+    var prof = raw ? JSON.parse(raw) : null;
+    if (prof) { if (!name) name = prof.name || prof.full_name || ''; if (!email) email = prof.email || ''; }
+  } catch (e) { }
+  if (!email && name && /@/.test(name)) email = name;
+  if (name && /@/.test(name)) name = name.split('@')[0];
+  return { name: name, email: email };
+}
+
 async function nwSendBrandedEmail(o) {
   emailjs.init(EMAIL_CONFIG.EMAILJS_PUBLIC_KEY);
   var files = (o.files || []).filter(function(f) { return f && f.url; });
   var plain = o.bodyText + '\n\n--- PDF Report ---' + files.map(function(f) { return '\n' + (f.plain || f.label) + ': ' + f.url; }).join('') + '\n\n-- Northern Wolves Air Conditioning';
+  // who is sending: the signed-in user (not the mailbox EmailJS is connected to) — the templates print {{from_name}} as the
+  // From name and {{reply_to}} as Reply-To, so a CO sent by Whitney shows "Whitney Bynoe (Northern Wolves)" and replies go to him
+  var who = nwSenderIdentity(o);
   var params = {
     to_emails:     o.to,
     subject:       o.subject,
     body_text:     plain,
     report_type:   o.reportType || '',
     customer_name: o.customerName || '',
-    tech_name:     o.techName || ''
+    tech_name:     o.techName || '',
+    from_name:     who.name ? who.name + ' (Northern Wolves)' : 'Northern Wolves Air Conditioning',
+    reply_to:      who.email || 'hello@northernwolvesac.com',
+    sender_name:   who.name || '',
+    sender_email:  who.email || ''
   };
   var template = EMAIL_CONFIG.EMAILJS_TEMPLATE_ID;
   var internalOnly = nwEmailList(o.to).split(', ').every(function(e) { return /@northernwolvesac\.com$/i.test(e); });
