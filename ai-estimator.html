@@ -801,21 +801,38 @@ var AE = (function() {
   // Two rows of one family in one pass are one family (summed); a family counts when it is in more than half of the passes,
   // its feet = the median of the passes that have it; shape / lining / notes come from the first pass that has it.
   function runName(x, pipe) { var sys = String(x.system || '').toUpperCase(); return pipe ? ((x.service ? x.service + ' ' : '') + (x.size || '?')) : ((x.size || '?') + (sys && sys !== 'UNKNOWN' ? ' ' + sys : '')); }
-  function sizeKey(s) { return String(s || '').toUpperCase().replace(/Ø|DIA\.?|INCH(ES)?|\bIN\b|"|''|”/g, '').replace(/[^A-Z0-9\/]/g, ''); }   // 2" = 2 in = 2"Ø, 24x10 = 24 X 10
-  function runKey(x, pipe) { return pipe ? NWEngine.norm(x.service) + '|' + sizeKey(x.size) : sizeKey(x.size) + '|' + (NWEngine.norm(x.system) || 'UNKNOWN'); }
+  // "14x6 (VD)" = 14x6, 2" = 2 in = 2"Ø, 24x10 = 24 X 10; the system is the SA / RA / EA / OA / TA token in whatever the reader wrote
+  // ("existing/EA" = EA, "S/A" = SA, anything else = UNKNOWN)
+  function sizeKey(s) { return String(s || '').toUpperCase().replace(/\([^)]*\)/g, '').replace(/Ø|DIA\.?|INCH(ES)?|\bIN\b|"|''|”/g, '').replace(/[^A-Z0-9\/]/g, ''); }
+  function sysKey(s) { var m = String(s || '').toUpperCase().replace(/\b([SREOT])\/A\b/g, '$1A').replace(/\bT\.?D\.?\b/g, 'TA').replace(/[^A-Z]+/g, ' ').match(/\b(SA|RA|EA|OA|TA)\b/); return m ? m[1] : 'UNKNOWN'; }
+  function runKey(x, pipe) { return pipe ? NWEngine.norm(x.service) + '|' + sizeKey(x.size) : sizeKey(x.size) + '|' + sysKey(x.system); }
   function reconcileRuns(lists, pipe) {
     var n = lists.length, by = {}, order = [];
-    lists.forEach(function(rows) { var seen = {}; (rows || []).forEach(function(x) { if (!x || typeof x !== 'object') return; var k = runKey(x, pipe);
+    lists.forEach(function(rows, pi) { var seen = {}; (rows || []).forEach(function(x) { if (!x || typeof x !== 'object') return; var k = runKey(x, pipe);
       if (seen[k]) { seen[k].lf = (Number(seen[k].lf) || 0) + (Number(x.lf) || 0); return; }
-      seen[k] = Object.assign({}, x, { lf: Number(x.lf) || 0 }); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(seen[k]); }); });
-    var out = [], changes = [];
-    order.forEach(function(k) {
-      var hits = by[k], name = runName(hits[0], pipe);
-      if (hits.length * 2 <= n) { changes.push(name + ' ' + hits.map(function(h) { return h.lf; }).join('/') + ' ft only in ' + hits.length + ' of ' + n + ' reads → dropped'); return; }
-      var lf = hits.map(function(h) { return h.lf; }), m = Math.round(median(lf) * 10) / 10, base = Object.assign({}, hits[0], { lf: m });
-      if (lf.some(function(v) { return v !== lf[0]; })) changes.push(name + ' ' + lf.join('/') + ' → ' + m + ' ft');
-      else if (hits.length < n) changes.push(name + ' ' + m + ' ft in ' + hits.length + ' of ' + n + ' reads');
+      seen[k] = Object.assign({}, x, { lf: Number(x.lf) || 0, _pass: pi }); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(seen[k]); }); });
+    var out = [], changes = [], fam = function(hits, name, note) {
+      var lf = hits.map(function(h) { return h.lf; }), m = Math.round(median(lf) * 10) / 10, base = Object.assign({}, hits[0], { lf: m }); delete base._pass;
+      if (lf.some(function(v) { return v !== lf[0]; })) changes.push(name + ' ' + lf.join('/') + ' → ' + m + ' ft' + (note || ''));
+      else if (hits.length < n || note) changes.push(name + ' ' + m + ' ft in ' + hits.length + ' of ' + n + ' reads' + (note || ''));
       out.push(base);
+    };
+    // a size whose system the passes name differently (16x10: "unknown" / "existing/EA" / "OA") is one family when the SIZE is in more than
+    // half of the passes: feet per pass = that size's rows summed, system = the most frequent one the passes named
+    var bySize = {}, sizeOrder = [];
+    order.forEach(function(k) { var sz = k.split('|')[0]; if (!bySize[sz]) { bySize[sz] = []; sizeOrder.push(sz); } bySize[sz].push(k); });
+    sizeOrder.forEach(function(sz) {
+      var keys = bySize[sz], major = keys.filter(function(k) { return by[k].length * 2 > n; });
+      if (major.length || pipe) { keys.forEach(function(k) { var hits = by[k], name = runName(hits[0], pipe);
+        if (hits.length * 2 <= n) changes.push(name + ' ' + hits.map(function(h) { return h.lf; }).join('/') + ' ft only in ' + hits.length + ' of ' + n + ' reads → dropped'); else fam(hits, name); }); return; }
+      var perPass = {}, systems = {}; keys.forEach(function(k) { by[k].forEach(function(h) { var sk = sysKey(h.system);
+        if (!perPass[h._pass]) perPass[h._pass] = Object.assign({}, h); else perPass[h._pass].lf += h.lf;
+        if (sk !== 'UNKNOWN') systems[sk] = (systems[sk] || 0) + 1; }); });
+      var hits = Object.keys(perPass).sort().map(function(i) { return perPass[i]; });
+      if (hits.length * 2 <= n) { keys.forEach(function(k) { changes.push(runName(by[k][0], pipe) + ' ' + by[k].map(function(h) { return h.lf; }).join('/') + ' ft only in ' + by[k].length + ' of ' + n + ' reads → dropped'); }); return; }
+      var sys = Object.keys(systems).sort(function(a, b) { return systems[b] - systems[a]; })[0] || 'unknown';
+      hits.forEach(function(h) { h.system = sys; });
+      fam(hits, runName(hits[0], false), ' (system read as ' + keys.map(function(k) { return String(by[k][0].system || 'unknown'); }).join(' / ') + ')');
     });
     return { rows: out, changes: changes };
   }
