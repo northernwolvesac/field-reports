@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=503">
+<link rel="stylesheet" href="procore-ui.css?v=515">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=503"></script>
-<script src="auth.js?v=503"></script>
-<script src="est-totals.js?v=503"></script>
-<script src="procore-ui.js?v=503"></script>
+<script src="supabase-config.js?v=515"></script>
+<script src="auth.js?v=515"></script>
+<script src="est-totals.js?v=515"></script>
+<script src="procore-ui.js?v=515"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=503"></script>
-<script src="est-drawings.js?v=503"></script>
-<script src="nw-catalog-picker.js?v=503"></script>
-<script src="nw-duct-weight.js?v=503"></script>
-<script src="geo-takeoff.js?v=513"></script>
-<script src="est-engine.js?v=513"></script>
+<script src="bid-actions.js?v=515"></script>
+<script src="est-drawings.js?v=515"></script>
+<script src="nw-catalog-picker.js?v=515"></script>
+<script src="nw-duct-weight.js?v=515"></script>
+<script src="geo-takeoff.js?v=515"></script>
+<script src="est-engine.js?v=515"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -2195,7 +2195,8 @@ requireAuth().catch(function(){});
   // deleted; the decisions live in est_ai_corrections (est-ai-corrections.sql). Run edits change the marks themselves (the takeoff →
   // estimate sync carries them); device / equipment decisions are applied by est-engine.js when the AI Estimator prices the session.
   var reviewOn = false, rvLoaded = false, rvOk = true, rvOnlyNew = false, rvCollapsed = {}, rvPulseT = null;
-  var RV = { session: null, files: [], pages: [], corr: {}, sheets: [], flat: [], cur: null, occ: [], occIdx: -1, hl: null, textCache: {}, total: 0, done: 0 };
+  var RV = { session: null, files: [], pages: [], corr: {}, sheets: [], flat: [], fits: [], cur: null, occ: [], occIdx: -1, hl: null, textCache: {}, total: 0, done: 0 };
+  var FIT_LABEL = { elbow: 'Elbows', tee: 'Tees (main > branch)', transition: 'Transitions (from > to)' };
   var KIND_LABEL = { equipment: 'Equipment', device: 'Air devices', duct: 'Ducts', pipe: 'Pipes', riser: 'Risers' };
   var DEV_TYPES = ['diffuser', 'grille', 'register', 'linear', 'vav', 'fpb', 'fsd', 'motorized_damper', 'cod', 'louver', 'other'];
   function rvNorm(s) { return window.NWEngine ? NWEngine.norm(s) : String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
@@ -2235,7 +2236,7 @@ requireAuth().catch(function(){});
   function rvStatus(kind, key) { var c = RV.corr[kind + '|' + key]; return c ? c.status : 'new'; }
   function rvRunKind(m, l) { if (/^riser/i.test(m.notes || '')) return 'riser'; return ((l && l.category) || m.layer_category) === 'pipework' ? 'pipe' : 'duct'; }
   function buildReview() {
-    var byPlan = {}, grp = {}; RV.flat = []; RV.sheets = [];
+    var byPlan = {}, grp = {}; RV.flat = []; RV.fits = []; RV.sheets = [];
     function sheetOf(i) { var p = plans[i], k = p.key; if (!byPlan[k]) { byPlan[k] = { planIdx: i, key: k, sheet: planShort(p), title: p.title || '', items: [], groups: [], total: 0, done: 0 }; RV.sheets.push(byPlan[k]); } return byPlan[k]; }
     function groupOf(i, kind, layerId) { var gk = i + '|' + layerId; if (!grp[gk]) { var sh = sheetOf(i), l = layerById(layerId); grp[gk] = { kind: kind, key: 'grp:' + gk, layer: l, name: l ? l.name : 'Layer', planIdx: i, sheet: sh.sheet, marks: [], ft: 0, done: 0 }; sh.groups.push(grp[gk]); } return grp[gk]; }
     // 1 · equipment + air-device rows read on the sheets
@@ -2252,6 +2253,17 @@ requireAuth().catch(function(){});
         var k = rvKeyOf('device', sp.id, a); seen[k] = (seen[k] || 0) + 1; if (seen[k] > 1) k += '#' + seen[k];
         var c = RV.corr['device|' + k];
         sh.items.push({ kind: 'device', key: k, sheet: sh.sheet, planIdx: i, page: sp, row: a, tag: a.tag || '', label: (a.tag || '(no tag)') + ' — ' + (a.type || 'other') + (a.size ? ' ' + a.size : ''), sub: [(Number(a.qty) || 0) + ' ea' + (Number(a.linear_ft) ? ' · ' + a.linear_ft + ' ft' : ''), a.cfm ? a.cfm + ' cfm' : '', a.basis ? 'from ' + a.basis : '', a.notes].filter(Boolean).join(' · '), status: c ? c.status : 'new', fix: (c && c.status === 'corrected' && c.corrected) || null });
+      });
+      // 1b · the fittings census of the measured sheet (geo.fittings.items, PDF user space): one row per type, N steps through the places —
+      // information only, nothing to accept (duct is priced per ft with the fittings in the rate)
+      var fx = r.geo && r.geo.fittings && Array.isArray(r.geo.fittings.items) ? r.geo.fittings.items : [];
+      ['elbow', 'tee', 'transition'].forEach(function(t) {
+        var its = fx.filter(function(f) { return f && f.t === t && Array.isArray(f.xy); }); if (!its.length) return;
+        var bySize = {}; its.forEach(function(f) { var z = t === 'elbow' ? f.size : t === 'tee' ? f.main + ' > ' + f.branch : f.from + ' > ' + f.to; bySize[z] = (bySize[z] || 0) + 1; });
+        var sizes = Object.keys(bySize).sort(function(a, b) { return bySize[b] - bySize[a]; });
+        sh.fits = sh.fits || []; var it = { kind: 'fitting', key: sp.id + '|' + t, sheet: sh.sheet, planIdx: i, page: sp, label: FIT_LABEL[t] + ' · ' + its.length, sub: sizes.slice(0, 6).map(function(z) { return z + ' ×' + bySize[z]; }).join(', ') + (sizes.length > 6 ? ' …' : ''), status: 'info',
+          xy: its.map(function(f) { return { x: f.xy[0], y: f.xy[1], str: (t === 'elbow' ? f.size : t === 'tee' ? f.main + ' > ' + f.branch : f.from + ' > ' + f.to) + (f.at === 'elbow' ? ' (at the elbow)' : '') }; }) };
+        sh.fits.push(it); RV.fits.push(it);
       });
     });
     // 2 · measured runs (auto-marks), one group per size layer and plan
@@ -2296,6 +2308,7 @@ requireAuth().catch(function(){});
           html += '<div class="rv-kind">' + KIND_LABEL[kd] + ' · ' + its.length + '</div>' + its.map(rvRowHtml).join(''); });
         var lastKind = '';
         sh.groups.forEach(function(g) { if (rvOnlyNew && g.done >= g.marks.length) return; if (g.kind !== lastKind) { lastKind = g.kind; html += '<div class="rv-kind">' + KIND_LABEL[g.kind] + ' — measured runs</div>'; } html += rvGroupHtml(g); });
+        if (sh.fits && sh.fits.length && !rvOnlyNew) html += '<div class="rv-kind" title="Counted on the measured wall pairs — information only, priced within the per-ft duct rate">Fittings — counted on the measured runs</div>' + sh.fits.map(function(it) { return '<div class="rv-row' + (rvIsCur(it) ? ' cur' : '') + '" data-rv="' + esc(it.kind + '|' + it.key) + '" title="' + esc(it.label + ' — ' + it.sub + ' · click, then N for the next place') + '"><span class="rv-dot" style="background:#64748b"></span><div class="tx"><div class="t1">' + esc(it.label) + '</div><div class="t2">' + esc(it.sub) + '</div></div></div>'; }).join('');
       }
       html += '</div>';
     });
@@ -2327,7 +2340,7 @@ requireAuth().catch(function(){});
     if (!await P.confirm({ title: 'Restore deleted runs', message: 'Put the ' + gone.length + ' deleted run' + (gone.length === 1 ? '' : 's') + ' of ' + g.name + ' back on the plan?', okLabel: 'Restore' })) return;
     for (var i = 0; i < gone.length; i++) await rvReset(gone[i]);
   }
-  function rvItemByKey(k) { return RV.flat.find(function(it) { return it.kind + '|' + it.key === k; }) || null; }
+  function rvItemByKey(k) { return RV.flat.find(function(it) { return it.kind + '|' + it.key === k; }) || RV.fits.find(function(it) { return it.kind + '|' + it.key === k; }) || null; }
   function rvGroupByKey(k) { for (var i = 0; i < RV.sheets.length; i++) { var g = RV.sheets[i].groups.find(function(x) { return x.key === k; }); if (g) return g; } return null; }
   function onReviewClick(e) {
     var sh = e.target.closest('[data-rvsheet]'); if (sh) { var k = sh.getAttribute('data-rvsheet'); rvCollapsed[k] = !rvCollapsed[k]; renderReview(); return; }
@@ -2350,6 +2363,10 @@ requireAuth().catch(function(){});
       if (!it.gone) selectedIds.add(it.m.id);
       var pts = it.m.points || [];
       if (pts.length) { var xs = pts.map(function(p) { return p[0]; }), ys = pts.map(function(p) { return p[1]; }); RV.occ = [{ pt: midOf(pts), box: [Math.min.apply(null, xs), Math.min.apply(null, ys), Math.max.apply(null, xs), Math.max.apply(null, ys)] }]; RV.occIdx = 0; await rvZoomTo(RV.occ[0].box); }
+    } else if (it.kind === 'fitting') {
+      RV.occ = (it.xy || []).map(function(q) { var v = viewport1.convertToViewportPoint(q.x, q.y); return { pt: [v[0], v[1]], box: [v[0] - 24, v[1] - 24, v[0] + 24, v[1] + 24], str: q.str }; });
+      RV.occIdx = RV.occ.length ? 0 : -1;
+      if (RV.occ.length) await rvZoomTo(RV.occ[0].box);
     } else {
       var occ = await rvFindTag(it); if (RV.cur !== it) return;
       RV.occ = occ; RV.occIdx = occ.length ? 0 : -1;
@@ -2407,6 +2424,7 @@ requireAuth().catch(function(){});
       ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.stroke();
       if (cur) { ctx.fillStyle = 'rgba(245,158,11,.14)'; ctx.fill(); }
       if (o.mult > 1) { ctx.globalAlpha = 1; label([s[0], s[1] - r - 10], '× ' + o.mult, '#f59e0b'); }
+      else if (cur && o.str && RV.cur && RV.cur.kind === 'fitting') { ctx.globalAlpha = 1; label([s[0], s[1] - r - 10], o.str, '#f59e0b'); }
     });
     ctx.globalAlpha = 1;
   }
@@ -2441,6 +2459,7 @@ requireAuth().catch(function(){});
     return true;
   }
   async function rvAccept(it, andNext) {
+    if (it && it.kind === 'fitting') { toast('Fittings are counted from the measured runs — nothing to decide here'); return; }
     if (!me.canEdit || !it) return;
     if (it.gone) { rvReset(it); return; }
     if (!await rvUpsert([rvRow(it, 'accepted')])) return;
@@ -2461,6 +2480,7 @@ requireAuth().catch(function(){});
     keys.forEach(function(k) { delete RV.corr[g.kind + '|' + k]; }); renderReview();
   }
   async function rvDelete(it) {
+    if (it && it.kind === 'fitting') { toast('Fittings are counted from the measured runs — nothing to decide here'); return; }
     if (!me.canEdit || !it || it.status === 'deleted') return;
     var note = null;
     if (!it.m) { note = await P.prompt({ title: 'Delete — not an item', label: 'Why is “' + it.label + '” not ' + (it.kind === 'device' ? 'an air device' : 'a piece of equipment') + '? (optional — it teaches the reader)', placeholder: 'e.g. existing to remain · sprinkler head · legend row · counted twice', required: false }); if (note === null) return; }
@@ -2469,6 +2489,7 @@ requireAuth().catch(function(){});
     it.status = 'deleted'; await rvStep(1);
   }
   async function rvReset(it) {
+    if (it && it.kind === 'fitting') { toast('Fittings are counted from the measured runs — nothing to decide here'); return; }
     if (!me.canEdit || !it) return;
     var c = RV.corr[it.kind + '|' + it.key]; if (!c) return;
     var r = await sb.from('est_ai_corrections').delete().eq('id', c.id); if (r.error) { toast(r.error.message, 'error'); return; }
@@ -2482,6 +2503,7 @@ requireAuth().catch(function(){});
     it.status = 'new'; renderAll();
   }
   async function rvCorrect(it) {
+    if (it && it.kind === 'fitting') { toast('Fittings are counted from the measured runs — nothing to decide here'); return; }
     if (!me.canEdit || !it || it.status === 'deleted') return;
     if (it.m) return rvCorrectRun(it);
     var row = it.row || {}, c = RV.corr[it.kind + '|' + it.key], v = Object.assign({}, row, (c && c.corrected) || {}), isDev = it.kind === 'device';
@@ -2540,6 +2562,7 @@ requireAuth().catch(function(){});
   function rvStatusText() {
     if (!reviewOn || !RV.cur) return reviewOn ? 'AI review: click an item on the left, or press <span class="kbd">J</span> for the first one.' : '';
     var it = RV.cur, where = it.m ? '' : (RV.occ.length ? ' · place ' + (RV.occIdx + 1) + ' of ' + RV.occ.length + ' on the sheet (<span class="kbd">N</span> next)' : ' · tag not found in the sheet text');
+    if (it.kind === 'fitting') return 'Fittings → <b>' + esc(it.label) + '</b>' + (RV.occ.length && RV.occ[RV.occIdx] ? ' · ' + esc(RV.occ[RV.occIdx].str || '') : '') + where + ' — counted on the measured runs; information only, priced within the per-ft rate';
     return 'AI review → <b>' + esc(it.label) + '</b>' + (it.group ? ' (run ' + (it.group.marks.indexOf(it) + 1) + ' of ' + it.group.marks.length + ')' : '') + where + ' — <span class="kbd">Enter</span> accept · <span class="kbd">E</span> correct · <span class="kbd">X</span> delete' + (it.group ? ' · <span class="kbd">A</span> accept the group' : '');
   }
 
@@ -2666,6 +2689,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=503"></script>
+<script src="sw-register.js?v=515"></script>
 </body>
 </html>

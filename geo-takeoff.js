@@ -965,7 +965,9 @@
         if (!drop) return;
         all = all.filter(function (p) { var c = pieceCenter(p); if (chainSide(ch, c[0], c[1], 150 * ptft) === drop) { matchFt += p.len_ft; return false; } return true; });
       });
-      var fittings = D.noFittings ? undefined : fittingsCensus(all, ptft, D.debugFittings);
+      // equipment tags on the sheet (VAV-31, FCU-6-5, AC-2…): a size change beside one is the unit's connection, not a transition
+      var unitPts = (D.text || []).filter(function (t) { return /^(VAV|FPB|FCU|AC|ACU|AHU|RTU|HP|CU|EF|SF|RF|DOAS|ERV|HRV|WSHP|VRF|IDU|ODU|CAV|TU|MAU|CRAC|UH|CUH|PTAC)\s?-?\s?\d/i.test(String(t.str || '').trim()); }).map(function (t) { return [(t.x0 + t.x1) / 2, (t.y0 + t.y1) / 2]; });
+      var fittings = D.noFittings ? undefined : fittingsCensus(all, ptft, D.debugFittings, unitPts);
       var systems = {};   // ft per size per air system (SA / RA / EA / OA / TA, '' = the label named none) — what the labels say, not a guess
       all.forEach(function (p) {
         sizes[p.size] = (sizes[p.size] || 0) + p.len_ft; total += p.len_ft;
@@ -996,8 +998,9 @@
     //    (L'Catteron: the 16x10 main is two pieces at every 12x8 runout) — "main>branch"
     //  • a run's free end (at a diffuser, a VAV, a unit) is a runout end: not counted
     // every piece end takes part in at most one meeting (joint, elbow or tee), and a corner / junction point is counted once
-    function fittingsCensus(pcs, ptft, dbg) {
-      var items = [], elbows = {}, tees = {}, trans = {}, usedEnd = {}, joined = {}, seenPt = {};
+    function fittingsCensus(pcs, ptft, dbg, unitPts) {
+      var items = [], elbows = {}, tees = {}, trans = {}, usedEnd = {}, joined = {}, seenPt = {}; unitPts = unitPts || [];
+      function atUnit(m) { return unitPts.some(function (u) { return hyp(u[0] - m[0], u[1] - m[1]) <= 4 * ptft; }); }   // a VAV / fan-coil tag within 4 ft: the size change is the unit's inlet / outlet, not a reducer
       var P = pcs.filter(function (p) { return p.kind === 'double' && p.size && p.len_ft * ptft > 2; });
       var E = P.map(function (p) { return ends(p, ptft); });
       function dv(a, b) { return dbg ? (a.via || 'label')[0] + (b.via || 'label')[0] + ' ' + Math.round(a.len_ft) + '/' + Math.round(b.len_ft) + ' ' + a.size + '/' + b.size : undefined; }
@@ -1029,7 +1032,7 @@
         best = freeEnds(i, j, gapOf(a, b)); if (!best) continue;
         usedEnd[i + ':' + best.u] = 1; usedEnd[j + ':' + best.v] = 1; joined[i + ':' + best.u] = j; joined[j + ':' + best.v] = i;
         if (a.size === b.size || !sure(a) || !sure(b) || Math.min(a.len_ft, b.len_ft) < 1.5) continue;
-        var m = [(E[i][best.u][0] + E[j][best.v][0]) / 2, (E[i][best.u][1] + E[j][best.v][1]) / 2]; if (!mark(m, 't')) continue;
+        var m = [(E[i][best.u][0] + E[j][best.v][0]) / 2, (E[i][best.u][1] + E[j][best.v][1]) / 2]; if (atUnit(m) || !mark(m, 't')) continue;
         var from = bigger(a, b) ? a : b, to = from === a ? b : a, k = from.size + '>' + to.size;
         trans[k] = (trans[k] || 0) + 1; items.push({ t: 'transition', from: from.size, to: to.size, xy: pt(m), d: dv(a, b) });
       }
