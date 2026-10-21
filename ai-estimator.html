@@ -21,8 +21,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="email-utils.js?v=513"></script>
 <script src="nw-email.js?v=513"></script>
-<script src="est-engine.js?v=528"></script>
-<script src="geo-takeoff.js?v=515"></script>
+<script src="est-engine.js?v=529"></script>
+<script src="geo-takeoff.js?v=529"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -574,7 +574,8 @@ var AE = (function() {
           var nLab = data.text.filter(function (t) { return pipes ? NWGeo.isPipeLabel(t.str) : NWGeo.isSizeLabel(t.str); }).length;
           if (nLab < (pipes ? 6 : 15) && (data.glyphs || []).length > 150) {
             var cached = !all && p.result && p.result.ocr_labels;
-            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: 2, shortNear: pipes ? 0 : 40, reader: aiReader,
+            var tagHints = ((p.result && p.result.air_devices) || []).map(function(a) { return String(a.tag || '').toUpperCase().replace(/[^A-Z0-9-]/g, ''); }).filter(function(t) { return /^[A-Z]{1,3}-?\d{0,2}[A-Z]?$/.test(t); });
+            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: 2, shortNear: pipes ? 0 : 40, reader: aiReader, tagHints: tagHints,
               onProgress: function (d, n) { measuring = 'Reading labels (OCR) on ' + (p.sheet_no || 'sheet ' + p.page_no) + ': ' + d + ' / ' + n + ' words…'; render(); } });
             ocrItems = ocr.items;
             data.text = data.text.concat(ocr.items);

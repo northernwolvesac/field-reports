@@ -479,7 +479,15 @@
       // on fresh sheets; a second reading replaces the first only when it is the better kind (size > pipe > keyword > other)
       if (!stop && !opts.noSecondPass) {
         function kind(t) { return !t ? 0 : isSizeLabel(t) ? 4 : isPipeLabel(t) ? 3 : (KW_PHRASE.test(t) || KW_OCR.test(kwWord(t)) || UPDN_RE.test(t)) ? 2 : 1; }
-        var redo = crops.filter(function (cr) { var r = results[cr.i]; return !r || (kind(r.txt) === 1 && /\d/.test(r.txt)); });
+        // …and the short tag-like cells ("CC", "E", "R": device tags of an outlined-text sheet, 2–3 letters the reader garbles most) are
+        // read once more at twice the size; a hinted device code (opts.tagHints: the codes the sheet reader named) wins over a non-hint
+        var hints = {}; (opts.tagHints || []).forEach(function (h) { h = String(h || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); if (h) hints[h] = 1; });
+        function tagLike(t) { return /^[A-Z]{1,3}-?\d{0,2}[A-Z]?$/.test(String(t || '').toUpperCase().replace(/[^A-Z0-9-]/g, '')); }
+        function tagKey(t) { return String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+        function up2(c) { var o = document.createElement('canvas'); o.width = c.width * 2; o.height = c.height * 2; var oc = o.getContext('2d'); oc.imageSmoothingEnabled = true; oc.fillStyle = '#fff'; oc.fillRect(0, 0, o.width, o.height); oc.drawImage(c, 0, 0, o.width, o.height); return o; }
+        var redo = crops.filter(function (cr) { var r = results[cr.i]; return !r || (kind(r.txt) === 1 && (/\d/.test(r.txt) || tagLike(r.txt))); })
+          .map(function (cr) { return { i: cr.i, c: cr.c.width * 2 <= SW - 2 * GAP ? up2(cr.c) : cr.c }; });
+        var tagsFixed = 0;
         if (redo.length) {
           var batches2 = []; for (var s2 = 0; s2 < redo.length; s2 += 30) batches2.push(redo.slice(s2, s2 + 30));
           var nextB2 = 0, gained = 0, filled = 0;
@@ -490,13 +498,16 @@
               try {
                 (await readSheet(batch)).forEach(function (r) {
                   var prev = results[r[0]], k1 = prev ? kind(prev.txt) : 0, k2 = kind(r[1]);
-                  if (k2 > k1) { results[r[0]] = { txt: r[1], conf: 90, flip: 0, pass: 2 }; if (k2 >= 2) gained++; else filled++; }
+                  if (k2 > k1) { results[r[0]] = { txt: r[1], conf: 90, flip: 0, pass: 2 }; if (k2 >= 2) gained++; else filled++; return; }
+                  // both reads are short words: the hinted device code wins ("CC" then "CG" with CG in the hints → CG); a second read that is
+                  // a hint when the first was not replaces it, a first read that is a hint stays
+                  if (prev && k1 === 1 && k2 === 1 && tagLike(r[1]) && tagKey(r[1]) !== tagKey(prev.txt) && hints[tagKey(r[1])] && !hints[tagKey(prev.txt)]) { results[r[0]] = { txt: r[1], conf: 90, flip: 0, pass: 2, was: prev.txt }; tagsFixed++; }
                 });
               } catch (err) { console.warn('[NWGeo] second reader pass failed:', err && err.message); return; }
             }
           };
           await Promise.all([lane2(), lane2(), lane2(), lane2()]);
-          pass2 = { cells: redo.length, gained: gained, filled: filled };
+          pass2 = { cells: redo.length, gained: gained, filled: filled, tags_fixed: tagsFixed };
         }
       }
       todo = failed.sort(function (a, b) { return a - b; });
