@@ -141,6 +141,20 @@
   };
   // Shape from the specs picks the family. Insulation stays 1" ACL: NWAC Procore history (1,187 jobs) prices 1" ACL even when the spec
   // calls 1-1/2" liner or wrap (Sage, April Tax); 1.5"/2" families appear on only ~50 jobs — so thicker specs raise a note, not a new rate.
+  // air system of a duct run: the reader's "system" or a label suffix → SA / RA / EA / OA / TA, '' when unknown
+  function sysNorm(s) {
+    s = String(s || '').toUpperCase().trim(); if (!s || /UNKNOWN|NULL|OTHER|N\/A/.test(s)) return '';
+    var m = /^([SREO])\.?\s*\/?\s*A\.?$|(?:^|[^A-Z])([SREO])\.?\s*\/?\s*A\.?(?:$|[^A-Z])/.exec(s); if (m) return (m[1] || m[2]) + 'A';
+    if (/^T\.?[DA]\.?$|TRANSFER/.test(s)) return 'TA';
+    if (/SUPPLY/.test(s)) return 'SA'; if (/RETURN|RELIEF/.test(s)) return 'RA'; if (/EXHAUST/.test(s)) return 'EA'; if (/OUTSIDE|FRESH|VENTILATION/.test(s)) return 'OA';
+    return '';
+  }
+  // spread ft over a duct key's systems: shares = {SA: ft, RA: ft, '': ft} (any scale) — an empty share map books the ft as unknown ('')
+  function addSys(o, ft, shares) {
+    var sy = o.systems = o.systems || {}, keys = Object.keys(shares || {}), tot = keys.reduce(function (a, k) { return a + (Number(shares[k]) || 0); }, 0);
+    if (!tot) { sy[''] = (sy[''] || 0) + ft; return; }
+    keys.forEach(function (k) { var f = ft * (Number(shares[k]) || 0) / tot; if (f) sy[sysNorm(k) || ''] = (sy[sysNorm(k) || ''] || 0) + f; });
+  }
   function familyFor(spec, dflt) {
     dflt = (dflt && DUCT_FAMILIES[dflt]) ? dflt : 'rect_lined_1';
     if (!spec) return dflt;
@@ -513,15 +527,16 @@
           var mergeGeo = !coarseDup && takeoffSheet && weakWhy === 'single-line drawing, AI reads more';
           if (weakGeo && !coarseDup && !mergeGeo) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: gl, why: weakWhy });
           if (mergeGeo) {
-            var aiBySize = {};
+            var aiBySize = {}, aiSys = {}, geoSys = {};
             (r.duct_runs || []).forEach(function (x) {
               if (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || ''))) return;
               var z0 = sizeOf(x.size); if (!z0) return;
               var k0 = (x.shape === 'round' || x.shape === 'oval' || z0.round ? 'round' : 'rect') + '|' + (z0.round ? z0.w : z0.w + 'x' + z0.h);
               aiBySize[k0] = (aiBySize[k0] || 0) + Number(x.lf || 0);
+              var s0 = aiSys[k0] = aiSys[k0] || {}; s0[sysNorm(x.system)] = (s0[sysNorm(x.system)] || 0) + Number(x.lf || 0);
             });
             var geoBySize = {};
-            Object.keys(r.geo.sizes || {}).forEach(function (sz) { var z1 = sizeOf(sz); if (!z1) return; var k1 = (/Ø/.test(sz) ? 'round' : 'rect') + '|' + (z1.round ? z1.w : z1.w + 'x' + z1.h); geoBySize[k1] = (geoBySize[k1] || 0) + r.geo.sizes[sz] * GEO_FITTINGS; });
+            Object.keys(r.geo.sizes || {}).forEach(function (sz) { var z1 = sizeOf(sz); if (!z1) return; var k1 = (/Ø/.test(sz) ? 'round' : 'rect') + '|' + (z1.round ? z1.w : z1.w + 'x' + z1.h); geoBySize[k1] = (geoBySize[k1] || 0) + r.geo.sizes[sz] * GEO_FITTINGS; if (r.geo.systems && r.geo.systems[sz]) geoSys[k1] = r.geo.systems[sz]; });
             var mergedFt = 0, fromGeo = 0;
             Object.keys(aiBySize).forEach(function (k2) { if (!geoBySize[k2]) geoBySize[k2] = 0; });
             Object.keys(geoBySize).forEach(function (k2) {
@@ -529,6 +544,7 @@
               var parts = k2.split('|'), round2 = parts[0] === 'round', dims = parts[1].split('x');
               var o2 = duct[k2] = duct[k2] || { shape: parts[0], size: round2 ? dims[0] + '"Ø' : parts[1], lf: 0, sheets: [], geo: false };
               o2.lf += use; o2.sheets.push(sh); if (g2 >= a2) { o2.geo = true; fromGeo += use; } mergedFt += use;
+              addSys(o2, use, (g2 >= a2 && geoSys[k2]) ? geoSys[k2] : (aiSys[k2] || geoSys[k2]));
             });
             geoCheck.push({ sheet: sh, geo: Math.round(fromGeo), ai: aiFt, merged: Math.round(mergedFt), labels: gl, why: 'single-line drawing: traced sizes + the reader\'s other sizes' });
             addFittings(sh, r.geo.fittings);
@@ -543,6 +559,7 @@
               var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
               var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [], geo: true };
               o.lf += r.geo.sizes[sz] * GEO_FITTINGS; o.sheets.push(sh); o.geo = true;
+              addSys(o, r.geo.sizes[sz] * GEO_FITTINGS, r.geo.systems && r.geo.systems[sz]);
             });
           }
           // vertical duct: every UP / DN size label on the plan is a run to the next floor (12 ft each) — on top of the plan lengths,
@@ -552,7 +569,7 @@
               var z = sizeOf(sz); if (!z) return;
               var shape = /Ø/.test(sz) ? 'round' : 'rect', k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
               var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [] };
-              o.lf += r.geo.riser_sizes[sz]; o.riser_ft = (o.riser_ft || 0) + r.geo.riser_sizes[sz]; o.sheets.push(sh);
+              o.lf += r.geo.riser_sizes[sz]; o.riser_ft = (o.riser_ft || 0) + r.geo.riser_sizes[sz]; o.sheets.push(sh); addSys(o, r.geo.riser_sizes[sz], null);
             });
             ductRisers.n += r.geo.riser_n || 0; ductRisers.ft += r.geo.riser_ft || 0; ductRisers.sheets.push(sh + ' (' + (r.geo.riser_n || 0) + ')');
           }
@@ -562,7 +579,7 @@
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
             var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
             var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [] };
-            o.lf += Number(x.lf || 0); o.sheets.push(sh);
+            o.lf += Number(x.lf || 0); o.sheets.push(sh); var xs = {}; xs[sysNorm(x.system)] = 1; addSys(o, Number(x.lf || 0), xs);
           });
           if (takeoffSheet && r.geo_pipe && r.geo_pipe.total_ft > 0) {
             // measured from the piping plan's own lines (geo-takeoff.js); the AI reading stays a cross-check
@@ -773,12 +790,21 @@
 
     // 3. Ductwork
     var ductFt = 0;
+    // "SA 120 ft, RA 40 ft" — the air systems the labels / the reader named for this size (unknown ft shown only beside a known one)
+    var ductSystems = {};
+    function sysSplit(sy) {
+      if (!sy) return ''; var ks = Object.keys(sy).filter(function (k) { return k && sy[k] >= 0.5; }); if (!ks.length) return '';
+      var order = ['SA', 'RA', 'EA', 'OA', 'TA']; ks.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+      var t = ks.map(function (k) { return k + ' ' + Math.round(sy[k]) + ' ft'; }); if (sy[''] >= 0.5) t.push('unmarked ' + Math.round(sy['']) + ' ft');
+      return t.join(', ');
+    }
     Object.keys(C.duct).forEach(function (k) {
       var d = C.duct[k]; if (!d.lf) return;
       var r = ductRate(R, d.size, d.shape, famKey); ductFt += d.lf;
+      var sysTxt = sysSplit(d.systems); Object.keys(d.systems || {}).forEach(function (s3) { ductSystems[s3] = (ductSystems[s3] || 0) + d.systems[s3]; });
       add('ductwork', d.size + ' duct — ' + (d.shape === 'round' ? DUCT_FAMILIES[famKey].round.replace(/acl/, 'ACL') : DUCT_FAMILIES[famKey].label) + ' — ' + Math.round(d.lf) + ' ft', d.lf, 'lf', r.cost, r.hrs,
-        r.basis + (d.geo ? ' · measured from the drawing lines on ' + uniq(d.sheets).join(', ') + ' (+8% fittings)' : ' · AI estimate from ' + uniq(d.sheets).join(', ')),
-        { flag: r.flag || null });
+        r.basis + (d.geo ? ' · measured from the drawing lines on ' + uniq(d.sheets).join(', ') + ' (+8% fittings)' : ' · AI estimate from ' + uniq(d.sheets).join(', ')) + (sysTxt ? ' · ' + sysTxt : ''),
+        { flag: r.flag || null, systems: d.systems || null });
     });
     // rooftop units drop full-size supply and return ducts through the roof to a drop box — no plan line shows them (Kastriot, Sky Zone:
     // 40x24 for 5–6,000 CFM, 48x14 for 8,750 CFM, ≈27 ft per unit). Sized at 1,000 fpm, 1.7:1 aspect, 2 drops × 14 ft per unit, flagged.
@@ -990,7 +1016,7 @@
       byKey[k] = { category: f.category, flag: f.flag, item: f.item, items: [f.item], n: 1 }; grouped.push(byKey[k]);
     });
     grouped.forEach(function (g) { if (g.n > 1) { g.item = g.n + ' lines (' + g.items.slice(0, 3).map(function (s) { return String(s).split(' — ')[0]; }).join(', ') + (g.n > 3 ? '…' : '') + ')'; } });
-    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck, fittings: C.fittings && C.fittings.n_total ? { n_elbows: C.fittings.n_elbows, n_tees: C.fittings.n_tees, n_transitions: C.fittings.n_transitions, n_total: C.fittings.n_total, sheets: C.fittings.sheets } : null };
+    return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck, ductSystems: Object.keys(ductSystems).length ? ductSystems : undefined, fittings: C.fittings && C.fittings.n_total ? { n_elbows: C.fittings.n_elbows, n_tees: C.fittings.n_tees, n_transitions: C.fittings.n_transitions, n_total: C.fittings.n_total, sheets: C.fittings.sheets } : null };
   }
 
   // "IDU-35-A,B" → IDU-35-A, IDU-35-B ; "AC-1-1/1-2" → AC-1-1, AC-1-2 ; "EF-1 & EF-2" → EF-1, EF-2
@@ -1010,6 +1036,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
+  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
     applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();

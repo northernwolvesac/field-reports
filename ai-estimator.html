@@ -14,15 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=510"></script>
-<script src="auth.js?v=510"></script>
-<script src="est-org.js?v=510"></script>
-<script src="est-totals.js?v=510"></script>
+<script src="supabase-config.js?v=513"></script>
+<script src="auth.js?v=513"></script>
+<script src="est-org.js?v=513"></script>
+<script src="est-totals.js?v=513"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=510"></script>
-<script src="nw-email.js?v=510"></script>
-<script src="est-engine.js?v=510"></script>
-<script src="geo-takeoff.js?v=510"></script>
+<script src="email-utils.js?v=513"></script>
+<script src="nw-email.js?v=513"></script>
+<script src="est-engine.js?v=513"></script>
+<script src="geo-takeoff.js?v=513"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -588,7 +588,7 @@ var AE = (function() {
         data.riserFt = Number((session.result || {}).floor_height) || 12;   // floor-to-floor height for the UP / DN risers (session card)
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, fittings: g.fittings && g.fittings.n_total ? g.fittings : undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, fittings: g.fittings && g.fittings.n_total ? g.fittings : undefined, systems: g.systems || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
         // refrigerant / water piping drawn on the HVAC plan itself: measured too when the AI saw pipe runs on this sheet, and kept only when the
         // two agree within a factor of 3-4 (duct lines and walls look like pipes to the line follower)
         if (!riser && !pipes && !g.error) {
@@ -1250,7 +1250,7 @@ var AE = (function() {
     pages.forEach(function(p) { if (p.status === 'done' && freezeDevices(p)) supabaseClient.from('ai_est_pages').update({ result: p.result }).eq('id', p.id).then(function() {}); });
     var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr, equipmentPrices: (session.result || {}).equipment_prices || {}, settings: orgSettings() });
     var res = Object.assign({}, session.result || {}, {
-      engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, normsLoaded: n.length, at: new Date().toISOString() },
+      engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, ductSystems: eng.ductSystems, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
     session.result = res; session.status = 'priced';
     await supabaseClient.from('ai_est_sessions').update({ result: res, status: 'priced', updated_at: new Date().toISOString() }).eq('id', session.id);
@@ -1284,6 +1284,7 @@ var AE = (function() {
       '<tr class="cat"><td>PROJECT TOTAL</td><td class="n">' + money(t.bidPrice) + '</td></tr></table>' +
       '<p class="muted">Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' NWAC Procore rates' : 'fallback formula (Procore rate table not loaded yet)') + '. Shop drawings / T&B: ' + e.floors + ' plan sheet' + (e.floors > 1 ? 's' : '') + (e.sdBasis ? ' — ' + esc(e.sdBasis) : '') + (e.pipeSheets ? '; piping ' + e.pipeSheets : '') + '.</p></div><div>' +
       (e.ductCheck ? '<p><b>Duct footage check:</b> ' + e.ductCheck.measured_ft + ' ft measured for ' + e.ductCheck.outlets + ' air devices; NWAC history says ' + e.ductCheck.expected_ft[0] + '–' + e.ductCheck.expected_ft[2] + ' ft (median ' + e.ductCheck.expected_ft[1] + ').</p>' : '') +
+      (e.ductSystems ? '<p><b>Duct by system:</b> ' + ['SA', 'RA', 'EA', 'OA', 'TA', ''].filter(function(s) { return e.ductSystems[s] >= 0.5; }).map(function(s) { return (s ? ({ SA: 'supply', RA: 'return', EA: 'exhaust', OA: 'outside air', TA: 'transfer' })[s] + ' (' + s + ')' : 'not marked') + ' ' + Math.round(e.ductSystems[s]).toLocaleString('en-US') + ' ft'; }).join(' · ') + ' <span class="muted">— from the S/A · R/A · E/A marks on the size labels and the reader\'s reading; sizes per system in ⬇ Quantities</span></p>' : '') +
       (e.fittings && e.fittings.n_total ? '<p><b>Fittings:</b> ' + e.fittings.n_elbows + ' elbows, ' + e.fittings.n_tees + ' tees, ' + e.fittings.n_transitions + ' transitions <span class="muted">— counted on the measured duct (' + esc((e.fittings.sheets || []).join(', ')) + '); priced within the per-ft rate, sizes in ⬇ Quantities</span></p>' : '') +
       (e.flags.length ? '<b>To check before this goes out (' + e.flags.length + ')</b><ul class="l">' + e.flags.map(function(f) { return '<li><b>' + esc(f.item) + '</b> — ' + esc(f.flag) + '</li>'; }).join('') + '</ul>' : '') +
       '</div></div>';
@@ -1327,7 +1328,10 @@ var AE = (function() {
     function row(a) { return a.map(q).join(','); }
     function uniq(a) { return a.filter(function(x, i) { return a.indexOf(x) === i; }); }
     var out = [row(['Section', 'Item', 'Size', 'Service / type', 'Qty', 'Unit', 'of which risers', 'Sheets'])];
-    var dk = Object.keys(C.duct || {}).sort(); dk.forEach(function(k) { var d = C.duct[k]; out.push(row(['Ductwork', d.shape === 'round' ? 'Round duct' : 'Rectangular duct', d.size, d.shape, Math.round(d.lf * 10) / 10, 'ft', d.riser_ft ? Math.round(d.riser_ft * 10) / 10 : '', uniq(d.sheets || []).join(' ')])); });
+    var SYSN = { SA: 'SA supply', RA: 'RA return', EA: 'EA exhaust', OA: 'OA outside air', TA: 'TA transfer', '': 'not marked' };
+    var dk = Object.keys(C.duct || {}).sort(); dk.forEach(function(k) { var d = C.duct[k], sy = d.systems || {}, ks = Object.keys(sy).filter(function(s) { return sy[s] >= 0.5; });
+      if (ks.length > 1 || (ks.length === 1 && ks[0])) ks.sort().forEach(function(s) { out.push(row(['Ductwork', d.shape === 'round' ? 'Round duct' : 'Rectangular duct', d.size, d.shape + ' · ' + SYSN[s], Math.round(sy[s] * 10) / 10, 'ft', '', uniq(d.sheets || []).join(' ')])); });
+      else out.push(row(['Ductwork', d.shape === 'round' ? 'Round duct' : 'Rectangular duct', d.size, d.shape, Math.round(d.lf * 10) / 10, 'ft', d.riser_ft ? Math.round(d.riser_ft * 10) / 10 : '', uniq(d.sheets || []).join(' ')])); });
     var pk = Object.keys(C.pipe || {}).sort(); pk.forEach(function(k) { var p = C.pipe[k]; out.push(row(['Pipework', p.riser ? 'Pipe riser' : 'Pipe', p.size, (p.service || '') + (p.material ? ' ' + p.material : ''), Math.round(p.lf * 10) / 10, 'ft', p.riser_ft ? Math.round(p.riser_ft * 10) / 10 : '', uniq(p.sheets || []).join(' ')])); });
     Object.keys(C.devices || {}).sort().forEach(function(k) { var d = C.devices[k]; if (d.type === 'linear') out.push(row(['Air devices', 'Linear diffuser ' + (d.tag || ''), d.size || '', 'linear', d.lf ? Math.round(d.lf * 10) / 10 : d.qty, d.lf ? 'ft' : 'ea', '', uniq(d.sheets || []).join(' ')])); else out.push(row(['Air devices', (d.tag || d.type), d.size || '', d.type, d.qty, 'ea', '', uniq(d.sheets || []).join(' ')])); });
     var eq = {}; Object.keys(C.sched || {}).forEach(function(t) { eq[t] = { sched: C.sched[t].qty, plan: (C.planEq[t] || {}).qty || 0, row: C.sched[t] }; }); Object.keys(C.planEq || {}).forEach(function(t) { if (!eq[t]) eq[t] = { sched: '', plan: C.planEq[t].qty, row: C.planEq[t] }; });
@@ -1683,6 +1687,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=510"></script>
+<script src="sw-register.js?v=513"></script>
 </body>
 </html>

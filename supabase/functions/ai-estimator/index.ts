@@ -64,7 +64,9 @@ Rules:
   dashed slot run ("D (200) TYP. 5") is a LINEAR slot diffuser: type linear, qty = sections, linear_ft = total slot length.
   Also VAV / fan-powered boxes, fire/smoke & motorized dampers, cable-operated dampers, louvers. Equipment shown on the plan with its tag.
 - Ductwork: estimate linear feet per duct size using the sheet scale (read it from the title block / view label).
-  Group by shape+size (e.g. "24x12", "12 round"). Note lining/insulation if stated. Existing-to-remain ducts are NOT new scope.
+  Group by shape+size+system (e.g. "24x12" SA, "12 round" EA): system = SA supply, RA return, EA exhaust, OA outside air, TA transfer —
+  from the label suffix (24x12 S/A, 12x8 EA, T.D.), the legend's line type, or the devices the run serves; "unknown" when nothing says.
+  Note lining/insulation if stated. Existing-to-remain ducts are NOT new scope.
 - Piping: linear feet per service and size (CWS/CWR, HWS/HWR, CHWS/CHWR, refrigerant, condensate, gas…), material if stated.
 - Demolition/removal sheets: items to disconnect/remove with counts.
 - Notes: read ALL general/keyed notes. List scope that lands on the mechanical contractor, especially items vendor quotes
@@ -85,7 +87,7 @@ Answer with the record_findings tool, one object in this shape:
                 "qty":1,"location":"","electrical":"","furnished_by":"contractor|owner|null","notes":""}],
  "air_devices": [{"type":"diffuser|grille|register|linear|vav|fpb|fsd|motorized_damper|cod|louver|other","tag":"C","size":"24x24 in",
                   "cfm":150,"qty":0,"linear_ft":0,"basis":"tags|symbols|schedule","notes":""}],
- "duct_runs": [{"shape":"rect|round|oval","size":"24x12","lf":0,"lined":false,"insulated":false,"notes":""}],
+ "duct_runs": [{"shape":"rect|round|oval","size":"24x12","system":"SA|RA|EA|OA|TA|unknown","lf":0,"lined":false,"insulated":false,"notes":""}],
  "pipe_runs": [{"service":"CWS/CWR","size":"2\\"","lf":0,"material":"","insulated":true,"notes":""}],
  "demo": [{"item":"","qty":0,"notes":""}],
  "wet_taps": 0,

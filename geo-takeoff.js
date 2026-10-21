@@ -601,7 +601,7 @@
         // OCR glues a neighbouring digit on ("12x8" + the 6 of "(650)" = "12x86", Esquire: 12x62, 18x71, 8x94) — a duct that deep and that
         // narrow is a misread, and it would be priced as an 86" duct
         if (t.ocr && h >= 36 && h > 2.5 * w) return;
-        labs.push({ txt: t.str, w: w, h: h, round: !!r, ocr: !!t.ocr, cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
+        labs.push({ txt: t.str, w: w, h: h, round: !!r, ocr: !!t.ocr, sys: sysOf(t.str), cx: (t.x0 + t.x1) / 2, cy: (t.y0 + t.y1) / 2, bbox: [t.x0, t.y0, t.x1, t.y1] });
       });
       // risers: a size label marked UP / DN (in the text, or an UP / DN word read beside it) is a vertical run to the next floor —
       // RISER_FT each (Russ 2026-10-15: floor height 12 ft; Seafarers 18 Vesey: most of the job is "12X8 DN" drops no plan line shows)
@@ -812,9 +812,9 @@
           rectIsoFt += p.len_ft; return false;
         });
       })();
-      pcs.forEach(function (p) { var l = onLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.via = 'label'; } });
+      pcs.forEach(function (p) { var l = onLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.sys = l.sys || ''; p.via = 'label'; } });
       propagate(pcs, ptft);
-      pcs.forEach(function (p) { if (p.size) return; var l = nearLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.via = 'near'; } });
+      pcs.forEach(function (p) { if (p.size) return; var l = nearLabel(p, labs, ptft); if (l) { p.size = sizeOf(l); p.sys = l.sys || ''; p.via = 'near'; } });
       propagate(pcs, ptft);
       // Duct is one connected network and a size label sits on it somewhere. Table rules, legend swatches and hatch pair up too and borrow
       // a width-matching label from far away ("20x10": 394 ft in the title block of 645 Madison) but never touch a labelled duct.
@@ -966,18 +966,21 @@
         all = all.filter(function (p) { var c = pieceCenter(p); if (chainSide(ch, c[0], c[1], 150 * ptft) === drop) { matchFt += p.len_ft; return false; } return true; });
       });
       var fittings = D.noFittings ? undefined : fittingsCensus(all, ptft, D.debugFittings);
+      var systems = {};   // ft per size per air system (SA / RA / EA / OA / TA, '' = the label named none) — what the labels say, not a guess
       all.forEach(function (p) {
         sizes[p.size] = (sizes[p.size] || 0) + p.len_ft; total += p.len_ft;
+        var sy = systems[p.size] = systems[p.size] || {}; sy[p.sys || ''] = (sy[p.sys || ''] || 0) + p.len_ft;
         if (p.kind === 'single') sf += p.len_ft; else if (p.via === 'width') wf += p.len_ft;
       });
       for (var z in sizes) sizes[z] = Math.round(sizes[z] * 10) / 10;
+      Object.keys(systems).forEach(function (z2) { Object.keys(systems[z2]).forEach(function (s2) { systems[z2][s2] = Math.round(systems[z2][s2] * 10) / 10; }); });
       // labels the measured duct reaches (within 4 ft of a piece): a sheet whose labels mostly sit on nothing was measured only in part
       var segsAll = []; all.forEach(function (p) { if (p.kind === 'single') (p.xy || []).forEach(function (s) { segsAll.push([s[0], s[1], s[2], s[3], 0]); }); else { var e = ends(p, ptft); segsAll.push([e[0][0], e[0][1], e[1][0], e[1][1], p.w_in / 24 * ptft]); } });
       var labsIn = ZN && ZN.zones.length && !zoneSkipped ? labs.filter(function (l) { return !ZN.noWork(l.cx, l.cy); }) : labs;   // zone labels sit on dropped duct
       var labHit = labsIn.filter(function (l) { return segsAll.some(function (s) { return Math.abs(l.cx - (s[0] + s[2]) / 2) <= Math.abs(s[2] - s[0]) / 2 + 6 * ptft && Math.abs(l.cy - (s[1] + s[3]) / 2) <= Math.abs(s[3] - s[1]) / 2 + 6 * ptft && ptSeg(l.cx, l.cy, s) <= s[4] + 4 * ptft; }); }).length;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN };
-      return { ptft: ptft, scale_from: scaleFrom, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
+      return { ptft: ptft, scale_from: scaleFrom, systems: systems, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
         styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, fittings: fittings, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), fill_bars: fillBars(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
@@ -1129,6 +1132,14 @@
       return { pieces: pieces, used: used };
     }
     function sizeOf(l) { return l.round ? l.w + '"Ø' : l.w + 'x' + l.h; }
+    // the air system a size label names: "24x12 S/A", "SA 24x12", "12x8 EA", "T.D. 14x6" (transfer), "RA" words — '' when the label says nothing
+    function sysOf(s) {
+      s = String(s || '').toUpperCase();
+      var m = /(?:^|[^A-Z])([SREO])\.?\s*\/?\s*A\.?(?:$|[^A-Z])/.exec(s); if (m) return m[1] + 'A';
+      if (/(?:^|[^A-Z])T\.?D\.?(?:$|[^A-Z])|TRANSFER/.test(s)) return 'TA';
+      if (/SUPPLY/.test(s)) return 'SA'; if (/RETURN/.test(s)) return 'RA'; if (/EXHAUST/.test(s)) return 'EA'; if (/OUTSIDE|\bO\.?A\.?\b/.test(s)) return 'OA';
+      return '';
+    }
     function looseLabel(p, labs, ptft, maxFt) {
       var best = null, bd = 1e9;
       labs.forEach(function (l) {
@@ -1728,7 +1739,7 @@
           labs.forEach(function (l2) { if (l2.w !== l.w || l2.h !== l.h) return; for (var q = 0; q < ids.length; q++) if (ptSeg(l2.cx, l2.cy, S[ids[q]]) <= 2.5 * ptft) { nLab++; return; } });
           if (L > (D.singleFtPerLabel || 100) * Math.max(1, nLab)) return 'long ' + L.toFixed(1) + '/' + nLab;
         }
-        pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), ids: ids, xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
+        pieces.push({ kind: 'single', w_in: l.w, len_ft: L, size: sizeOf(l), sys: l.sys || '', ids: ids, xy: ids.map(function (j) { return S[j].slice(0, 4); }) });
         return 'ok ' + L.toFixed(1);
       }
       labs.forEach(function (l) {
