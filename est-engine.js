@@ -270,18 +270,23 @@
     if (left > 0) ft += left * f.mean_ft;
     return { colour: col, mean_ft: f.mean_ft, n_drawn: f.n, ft_drawn: f.ft, ft: qty > 0 && bins.length ? Math.round(ft * 10) / 10 : Math.round(qty * f.mean_ft * 10) / 10, top_mean: qty > 0 && bins.length ? Math.round(ft / qty * 100) / 100 : f.mean_ft };
   }
+  function textTagTotal(p) { var d = (p && p.tag_counts && p.tag_counts.devices) || {}, n = 0; Object.keys(d).forEach(function (k) { if (k !== '(cfm only)') n += Number(d[k]) || 0; }); return n; }
   function symbolRowDropped(a, p) {
-    if (!a || String(a.basis || '').toLowerCase() !== 'symbols') return false;
+    if (!a) return false;
+    var basis = String(a.basis || '').toLowerCase();
     // only a row named by a bare code (A, A2, TD, RD-B) can be grid bubbles; a row the reader named by its look ("blue square-X ceiling
     // supply diffuser", CENTRALE's 36 outlets) is a symbol census on purpose and stays
     var tag = String(a.tag || '').trim().toUpperCase(), fam = (/^([A-Z]{1,3})/.exec(tag) || [])[1];
     if (!/^[A-Z]{1,3}-?\d{0,2}[A-Z]?$/.test(tag) || !fam) return false;
-    var r = (p && p.result) || {}, w = devWords(p);
+    var r = (p && p.result) || {}, w = devWords(p), printed = w[norm(tag)] > 0 || w[fam] > 0;
+    // "tags" on a sheet whose text layer prints no device tags (outlined text) can only mean the OCR words — a code the OCR never saw
+    // is a symbol count whatever the reader called it (414 M-300 "A 30 (tags)" beside printed CD / CG)
+    if (basis !== 'symbols' && !(basis === 'tags' && !printed && textTagTotal(p) < 3)) return false;
     // the sheet's printed tags must be outlet tags (CD / CG on 414); AD / ID-7 equipment codes beside a census of unlabelled diffusers
     // (CENTRALE) do not make it a tagged-outlet sheet
     var tagRows = (r.air_devices || []).filter(function (x) { return x !== a && String(x.basis || '').toLowerCase() === 'tags' && w[norm(x.tag)] > 0 && /diffuser|grille|register|linear|louver/i.test(String(x.type || '')); });
     if (!tagRows.length) return false;
-    return !(w[norm(tag)] > 0 || w[fam] > 0);   // the code or its family (RD for RD-B) printed anywhere → a real device row
+    return !printed;   // the code or its family (RD for RD-B) printed anywhere → a real device row
   }
   // "15", "ground", "roof"… from whatever the reader put in floor; null when it is not a level
   function levelKey(floor) {
