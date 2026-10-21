@@ -524,7 +524,9 @@
           // a single-line drawing where the reader sees more than the traced runs: the traced sizes are real (414 W 14th: four 14x6
           // runouts 30.1 ft, Vladimir 30.3) and the reader's other sizes (transfer ducts drawn as lined boxes + flex, nothing to trace)
           // are the rest — per size, the larger of the two sources, instead of throwing the geometry away
-          var mergeGeo = !coarseDup && takeoffSheet && weakWhy === 'single-line drawing, AI reads more';
+          // …and on a single-line sheet the reader's sizes the geometry never traced (414 W 14th: the TA transfer ducts drawn as lined
+          // boxes) are added even when the reader's total is the smaller one — per size, the larger of the two, traced sizes stay geometry
+          var mergeGeo = !coarseDup && takeoffSheet && (weakWhy === 'single-line drawing, AI reads more' || (!weakGeo && !!(r.geo && r.geo.single_style && r.geo.total_ft > 0) && aiFt > 0));
           if (weakGeo && !coarseDup && !mergeGeo) geoCheck.push({ sheet: sh, geo: 0, ai: aiFt, weak: Math.round(r.geo.total_ft), labels: gl, why: weakWhy });
           if (mergeGeo) {
             var aiBySize = {}, aiSys = {}, geoSys = {};
@@ -549,7 +551,7 @@
             geoCheck.push({ sheet: sh, geo: Math.round(fromGeo), ai: aiFt, merged: Math.round(mergedFt), labels: gl, why: 'single-line drawing: traced sizes + the reader\'s other sizes' });
             addFittings(sh, r.geo.fittings);
           }
-          if (!coarseDup && !weakGeo && r.geo && r.geo.total_ft > 0) {
+          if (!coarseDup && !weakGeo && !mergeGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
             geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
             addFittings(sh, r.geo.fittings);
