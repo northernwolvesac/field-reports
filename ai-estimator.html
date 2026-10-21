@@ -840,14 +840,14 @@ var AE = (function() {
     var r = p.result, ok = reads.filter(function(x) { return x && !x.error && !x.parse_error; }), costs = reads.map(function(x) { return Number(x.cost) || 0; }), cost = costs.reduce(function(a, c) { return a + c; }, 0);
     why = why || { devices: true, runs: true };
     if (ok.length < 2) { r.repeat = { passes: reads.length, used: ok.length, changes: [], error: (reads.find(function(x) { return x && x.error; }) || {}).error || 'second read unreadable', cost: cost, costs: costs }; return; }
-    var changes = [];
-    if (why.devices) {
-      var dev = reconcileRows(ok.map(function(x) { return x.air_devices; }), ['qty', 'linear_ft']), eq = reconcileRows(ok.map(function(x) { return x.equipment; }), ['qty']);
-      r.air_devices = dev.rows; r.equipment = eq.rows; changes = changes.concat(dev.changes, eq.changes);
-    }
+    var changes = [];   // duct / pipe changes first: they move the price, and the sheet row shows only the first few
     if (why.runs) {
       var duct = reconcileRuns(ok.map(function(x) { return x.duct_runs; }), false), pipe = reconcileRuns(ok.map(function(x) { return x.pipe_runs; }), true);
       r.duct_runs = duct.rows; r.pipe_runs = pipe.rows; changes = changes.concat(duct.changes, pipe.changes);
+    }
+    if (why.devices) {
+      var dev = reconcileRows(ok.map(function(x) { return x.air_devices; }), ['qty', 'linear_ft']), eq = reconcileRows(ok.map(function(x) { return x.equipment; }), ['qty']);
+      r.air_devices = dev.rows; r.equipment = eq.rows; changes = changes.concat(dev.changes, eq.changes);
     }
     r.repeat = { passes: reads.length, used: ok.length, changes: changes, devices: !!why.devices, runs: !!why.runs, cost: cost, costs: costs, at: new Date().toISOString() };
   }
