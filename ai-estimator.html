@@ -14,15 +14,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=534"></script>
-<script src="auth.js?v=534"></script>
-<script src="est-org.js?v=534"></script>
-<script src="est-totals.js?v=534"></script>
+<script src="supabase-config.js?v=535"></script>
+<script src="auth.js?v=535"></script>
+<script src="est-org.js?v=535"></script>
+<script src="est-totals.js?v=535"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=534"></script>
-<script src="nw-email.js?v=534"></script>
-<script src="est-engine.js?v=534"></script>
-<script src="geo-takeoff.js?v=534"></script>
+<script src="email-utils.js?v=535"></script>
+<script src="nw-email.js?v=535"></script>
+<script src="est-engine.js?v=535"></script>
+<script src="geo-takeoff.js?v=535"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -142,7 +142,7 @@ var AE = (function() {
     if (window.NWOrg && NWOrg.id()) q0 = q0.eq('org_id', NWOrg.id());   // one organisation at a time (RLS keeps the others out anyway)
     var r = await q0;
     var rows = (r.data || []).map(function(s) {
-      return '<tr class="click" onclick="location.href=\'ai-estimator.html?s=' + s.id + '\'"><td><b>' + esc(s.name) + '</b>' + (s.intake ? ' <span class="chip" title="Arrived by e-mail">📧' + (s.status === 'new' ? ' new' : '') + '</span>' : '') + '<div class="muted">' + esc(s.location || '') + (s.intake ? (s.location ? ' · ' : '') + 'from ' + esc(String(s.intake.from || '').replace(/<.*$/, '').trim() || 'e-mail') + (s.intake.files != null ? ' · ' + s.intake.files + ' file' + (s.intake.files === 1 ? '' : 's') : '') + (s.intake.due ? ' · ' + esc(String(s.intake.due).slice(0, 50)) : '') : '') + '</div></td>' +
+      return '<tr class="click" onclick="location.href=\'ai-estimator.html?s=' + s.id + '\'"><td><b>' + esc(s.name) + '</b>' + (s.intake ? ' <span class="chip" title="Arrived by e-mail">📧' + (s.status === 'new' ? ' new' : '') + '</span>' : '') + '<div class="muted">' + esc(s.location || '') + (s.intake ? (s.location ? ' · ' : '') + 'from ' + esc(String(s.intake.from || '').replace(/<.*$/, '').trim() || 'e-mail') + (s.intake.files != null ? ' · ' + s.intake.files + ' file' + (s.intake.files === 1 ? '' : 's') : '') + (s.intake.due ? ' · ' + esc(dueTxt(s.intake.due)) : '') : '') + '</div></td>' +
         '<td><span class="st">' + esc(s.status) + '</span></td><td class="muted">' + esc(s.created_at.slice(0, 10)) + '</td><td>' + (s.estimate_id ? '📐 estimate' : '') + '</td></tr>';
     }).join('');
     $('main').innerHTML =
@@ -199,6 +199,8 @@ var AE = (function() {
   }
   // ─── e-mail intake: the Edge Function made the session + file rows and the script uploaded the PDFs to Storage; the pages are split
   // and their text counted here, the same way an upload does it (files with a storage path and no page count yet) ───
+  // "Bids due Friday 11/7 at 2pm. Plans: https://…" → the first sentence only
+  function dueTxt(d) { return String(d || '').split(/\.\s|https?:\/\//)[0].replace(/[\s.,;:]+$/, '').slice(0, 60); }
   function isIncoming(f) { return !!f.storage_path && !(f.pages > 0); }
   var preparing = false;
   async function prepareIncoming() {
@@ -285,7 +287,7 @@ var AE = (function() {
     var res = session.result || {};
     var html =
       '<div class="card"><div class="row" style="justify-content:space-between">' +
-      (res.intake ? '<details class="muted" style="margin-bottom:8px"><summary style="cursor:pointer">📧 Received by e-mail from ' + esc(res.intake.from || '') + ' — ' + esc(res.intake.subject || '') + (res.intake.due ? ' · <b>' + esc(res.intake.due) + '</b>' : '') + '</summary><div style="margin:6px 0;white-space:pre-wrap;font-size:12px">' + esc(res.intake.snippet || '') + '</div>' +
+      (res.intake ? '<details class="muted" style="margin-bottom:8px"><summary style="cursor:pointer">📧 Received by e-mail from ' + esc(res.intake.from || '') + ' — ' + esc(res.intake.subject || '') + (res.intake.due ? ' · <b>' + esc(dueTxt(res.intake.due)) + '</b>' : '') + '</summary><div style="margin:6px 0;white-space:pre-wrap;font-size:12px">' + esc(res.intake.snippet || '') + '</div>' +
         ((res.intake.links || []).length ? '<div style="font-size:12px">Links in the e-mail: ' + (res.intake.links || []).map(function(u) { return /^https?:\/\//i.test(u) ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(u.replace(/^https?:\/\/(www\.)?/i, '').slice(0, 48)) + '</a>' : ''; }).filter(Boolean).join(' · ') + ' <span class="muted">(drawings behind a link are not attached — download them and use Upload)</span></div>' : '') + '</details>' : '') +
       '<div><div class="big">' + esc(session.name) + '</div><div class="muted">' + esc(session.location || '') + (session.floors ? ' · ' + session.floors + ' floors' : '') +
       ' · model ' + esc(session.model) + ' · AI cost so far ' + money(cost + Number(res.review_cost || 0)) + (res.run && res.run.finished_at ? ' · last run ' + res.run.read + ' sheet' + (res.run.read === 1 ? '' : 's') + ' in ' + Math.max(1, Math.round(res.run.secs / 60)) + ' min, $' + Number(res.run.cost || 0).toFixed(2) + (res.run.retries ? ', ' + res.run.retries + ' retr' + (res.run.retries === 1 ? 'y' : 'ies') : '') + (res.run.failed ? ', <span class="flag">' + res.run.failed + ' failed</span>' : '') : '') + (res.run && res.run.active && !running && res.run.heartbeat && Date.now() - new Date(res.run.heartbeat).getTime() < 120000 ? ' · <span class="flag">reading in another tab' + (res.run.by ? ' (' + esc(res.run.by) + ')' : '') + '</span>' : '') + '</div></div>' +
@@ -1794,6 +1796,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=534"></script>
+<script src="sw-register.js?v=535"></script>
 </body>
 </html>
