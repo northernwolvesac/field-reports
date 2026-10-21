@@ -777,25 +777,36 @@ var AE = (function() {
   }
   function rowKey(x) { var t = NWEngine.norm(x.tag || ''); return t ? 'T' + t : 'S' + String(x.type || '').toLowerCase() + '|' + String(x.size || '').toLowerCase(); }
   function median(a) { a = a.slice().sort(function(x, y) { return x - y; }); var n = a.length; return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : 0; }
+  function basisKind(b) { return /symbol|glyph|famil|by eye|count/i.test(String(b || '')) ? 'symbols' : 'tags'; }
   function reconcileRows(lists, numFields) {
     var n = lists.length, by = {}, order = [];
     lists.forEach(function(rows, ri) { var seen = {}; (rows || []).forEach(function(x) { var k = rowKey(x);
       if (seen[k]) { numFields.forEach(function(f) { seen[k][f] = (Number(seen[k][f]) || 0) + (Number(x[f]) || 0); }); return; }   // two rows of one tag in one pass = one family
       seen[k] = Object.assign({}, x); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(seen[k]); }); });
-    var out = [], changes = [];
+    var out = [], changes = [], unsure = [], big = 0;
     order.forEach(function(k) {
       var hits = by[k], name = hits[0].tag || hits[0].type || '?';
-      if (hits.length * 2 <= n) { changes.push(name + ' only in ' + hits.length + ' of ' + n + ' reads → dropped'); return; }
+      if (hits.length * 2 <= n) { changes.push(name + ' only in ' + hits.length + ' of ' + n + ' reads → dropped'); big++; return; }
       var base = Object.assign({}, hits[0]);
       numFields.forEach(function(f) { var m = median(hits.map(function(h) { return Number(h[f]) || 0; })); base[f] = f === 'qty' ? Math.round(m) : Math.round(m * 10) / 10; });
       var types = {}; hits.forEach(function(h) { var t = String(h.type || '').toLowerCase(); types[t] = (types[t] || 0) + 1; });
       var best = Object.keys(types).sort(function(a, b) { return types[b] - types[a]; })[0]; if (best && types[best] > 1 && best !== String(base.type || '').toLowerCase()) base.type = best;
-      var q = hits.map(function(h) { return Number(h[numFields[0]]) || 0; });
-      if (q.some(function(v) { return v !== q[0]; })) changes.push(name + ' ' + q.join('/') + ' → ' + base[numFields[0]]);
-      else if (hits.length < n) changes.push(name + ' in ' + hits.length + ' of ' + n + ' reads');
+      // basis by majority: pass 1 read "A 150 (tags)" off a 150-glyph family, passes 2 / 3 "A 24 / 1 (symbols)" — the row is a
+      // symbol count (the engine drops symbol rows on a tagged sheet and flags them), not an exact tag count
+      var kinds = { tags: 0, symbols: 0 }; hits.forEach(function(h) { kinds[basisKind(h.basis)]++; });
+      var bk = kinds.symbols > kinds.tags ? 'symbols' : kinds.tags > kinds.symbols ? 'tags' : null;
+      if (bk && basisKind(base.basis) !== bk) { var h2 = hits.filter(function(h) { return basisKind(h.basis) === bk; })[0]; base.basis = h2.basis || bk; if (bk === 'symbols' && base.qty_ai == null) base.qty_ai = Number(hits[0][numFields[0]]) || 0; }
+      var q = hits.map(function(h) { return Number(h[numFields[0]]) || 0; }), lo = Math.min.apply(null, q), hi = Math.max.apply(null, q);
+      if (hi !== lo) {
+        var wild = hi > 2 * Math.max(lo, 1) && hi - lo >= 3;   // 150 / 24 / 1: the reads do not describe the same thing — say so
+        changes.push(name + ' ' + q.join('/') + ' → ' + base[numFields[0]] + (bk && basisKind(hits[0].basis) !== bk ? ' (' + bk + ')' : '') + (wild ? ' ⚠ reads disagree' : ''));
+        if (wild) unsure.push(name + ' ' + q.join('/'));
+        big++;
+      }
+      else if (hits.length < n) { changes.push(name + ' in ' + hits.length + ' of ' + n + ' reads'); big++; }
       out.push(base);
     });
-    return { rows: out, changes: changes };
+    return { rows: out, changes: changes, unsure: unsure, big: big };
   }
   // duct runs: one family per size + system (24x10 SA and 24x10 RA are two); pipe runs: service + size (CWS 2" and CWR 2" are two).
   // Two rows of one family in one pass are one family (summed); a family counts when it is in more than half of the passes,
@@ -811,10 +822,11 @@ var AE = (function() {
     lists.forEach(function(rows, pi) { var seen = {}; (rows || []).forEach(function(x) { if (!x || typeof x !== 'object' || !(Number(x.lf) > 0)) return; var k = runKey(x, pipe);   // "16x10 existing — not new scope, 0 ft" = this pass found no new 16x10
       if (seen[k]) { seen[k].lf = (Number(seen[k].lf) || 0) + (Number(x.lf) || 0); return; }
       seen[k] = Object.assign({}, x, { lf: Number(x.lf) || 0, _pass: pi }); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(seen[k]); }); });
-    var out = [], changes = [], fam = function(hits, name, note) {
+    var out = [], changes = [], big = 0, fam = function(hits, name, note) {
       var lf = hits.map(function(h) { return h.lf; }), m = Math.round(median(lf) * 10) / 10, base = Object.assign({}, hits[0], { lf: m }); delete base._pass;
-      if (lf.some(function(v) { return v !== lf[0]; })) changes.push(name + ' ' + lf.join('/') + ' → ' + m + ' ft' + (note || ''));
-      else if (hits.length < n || note) changes.push(name + ' ' + m + ' ft in ' + hits.length + ' of ' + n + ' reads' + (note || ''));
+      var lo = Math.min.apply(null, lf), hi = Math.max.apply(null, lf);
+      if (hi !== lo) { changes.push(name + ' ' + lf.join('/') + ' → ' + m + ' ft' + (note || '')); if ((hi - lo) / hi > 0.15 || hits.length < n) big++; }
+      else if (hits.length < n || note) { changes.push(name + ' ' + m + ' ft in ' + hits.length + ' of ' + n + ' reads' + (note || '')); if (hits.length < n) big++; }
       out.push(base);
     };
     // a size whose system the passes name differently (16x10: "unknown" / "existing/EA" / "OA") is one family when the SIZE is in more than
@@ -824,32 +836,33 @@ var AE = (function() {
     sizeOrder.forEach(function(sz) {
       var keys = bySize[sz], major = keys.filter(function(k) { return by[k].length * 2 > n; });
       if (major.length || pipe) { keys.forEach(function(k) { var hits = by[k], name = runName(hits[0], pipe);
-        if (hits.length * 2 <= n) changes.push(name + ' ' + hits.map(function(h) { return h.lf; }).join('/') + ' ft only in ' + hits.length + ' of ' + n + ' reads → dropped'); else fam(hits, name); }); return; }
+        if (hits.length * 2 <= n) { changes.push(name + ' ' + hits.map(function(h) { return h.lf; }).join('/') + ' ft only in ' + hits.length + ' of ' + n + ' reads → dropped'); big++; } else fam(hits, name); }); return; }
       var perPass = {}, systems = {}; keys.forEach(function(k) { by[k].forEach(function(h) { var sk = sysKey(h.system);
         if (!perPass[h._pass]) perPass[h._pass] = Object.assign({}, h); else perPass[h._pass].lf += h.lf;
         if (sk !== 'UNKNOWN') systems[sk] = (systems[sk] || 0) + 1; }); });
       var hits = Object.keys(perPass).sort().map(function(i) { return perPass[i]; });
-      if (hits.length * 2 <= n) { keys.forEach(function(k) { changes.push(runName(by[k][0], pipe) + ' ' + by[k].map(function(h) { return h.lf; }).join('/') + ' ft only in ' + by[k].length + ' of ' + n + ' reads → dropped'); }); return; }
+      if (hits.length * 2 <= n) { keys.forEach(function(k) { changes.push(runName(by[k][0], pipe) + ' ' + by[k].map(function(h) { return h.lf; }).join('/') + ' ft only in ' + by[k].length + ' of ' + n + ' reads → dropped'); }); big++; return; }
       var sys = Object.keys(systems).sort(function(a, b) { return systems[b] - systems[a]; })[0] || 'unknown';
       hits.forEach(function(h) { h.system = sys; });
       fam(hits, runName(hits[0], false), ' (system read as ' + keys.map(function(k) { return String(by[k][0].system || 'unknown'); }).join(' / ') + ')');
     });
-    return { rows: out, changes: changes };
+    return { rows: out, changes: changes, big: big };
   }
   function reconcile(p, reads, why) {
     var r = p.result, ok = reads.filter(function(x) { return x && !x.error && !x.parse_error; }), costs = reads.map(function(x) { return Number(x.cost) || 0; }), cost = costs.reduce(function(a, c) { return a + c; }, 0);
     why = why || { devices: true, runs: true };
     if (ok.length < 2) { r.repeat = { passes: reads.length, used: ok.length, changes: [], error: (reads.find(function(x) { return x && x.error; }) || {}).error || 'second read unreadable', cost: cost, costs: costs }; return; }
-    var changes = [];   // duct / pipe changes first: they move the price, and the sheet row shows only the first few
+    var changes = [], unsure = [], big = 0;   // duct / pipe changes first: they move the price, and the sheet row shows only the first few
     if (why.runs) {
       var duct = reconcileRuns(ok.map(function(x) { return x.duct_runs; }), false), pipe = reconcileRuns(ok.map(function(x) { return x.pipe_runs; }), true);
-      r.duct_runs = duct.rows; r.pipe_runs = pipe.rows; changes = changes.concat(duct.changes, pipe.changes);
+      r.duct_runs = duct.rows; r.pipe_runs = pipe.rows; changes = changes.concat(duct.changes, pipe.changes); big += duct.big + pipe.big;
     }
     if (why.devices) {
       var dev = reconcileRows(ok.map(function(x) { return x.air_devices; }), ['qty', 'linear_ft']), eq = reconcileRows(ok.map(function(x) { return x.equipment; }), ['qty']);
-      r.air_devices = dev.rows; r.equipment = eq.rows; changes = changes.concat(dev.changes, eq.changes);
+      r.air_devices = dev.rows; r.equipment = eq.rows; changes = changes.concat(dev.changes, eq.changes); unsure = dev.unsure.concat(eq.unsure); big += dev.big + eq.big;
     }
-    r.repeat = { passes: reads.length, used: ok.length, changes: changes, devices: !!why.devices, runs: !!why.runs, cost: cost, costs: costs, at: new Date().toISOString() };
+    changes.sort(function(a, b) { return (b.indexOf('⚠') >= 0 ? 1 : 0) - (a.indexOf('⚠') >= 0 ? 1 : 0); });   // the disagreements first
+    r.repeat = { passes: reads.length, used: ok.length, changes: changes, unsure: unsure, big: big, devices: !!why.devices, runs: !!why.runs, cost: cost, costs: costs, at: new Date().toISOString() };
   }
   // device families counted in the text layer are exact: the reader's count for such a family is replaced by the text count
   function freezeDevices(p) {
@@ -879,7 +892,7 @@ var AE = (function() {
       var first = { pass: 1, cost: p.cost, air_devices: r.air_devices || [], equipment: r.equipment || [], duct_runs: r.duct_runs || [], pipe_runs: r.pipe_runs || [] };
       var reads = [first, await repeatRead(p, body, 2)];
       reconcile(p, reads, why);
-      if (reads[1] && !reads[1].error && !reads[1].parse_error && r.repeat.changes.length) { reads.push(await repeatRead(p, body, 3)); reconcile(p, reads, why); }
+      if (reads[1] && !reads[1].error && !reads[1].parse_error && r.repeat.big) { reads.push(await repeatRead(p, body, 3)); reconcile(p, reads, why); }   // a third pass only when the two disagree in something that moves the price
       r.reads = reads; changed = true;
     }
     if (freezeDevices(p)) changed = true;
