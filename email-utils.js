@@ -290,7 +290,7 @@ async function nwSendBrandedEmail(o) {
   if (EMAIL_CONFIG.EMAILJS_TEMPLATE_HTML_ID && window.NWEmail && (!EMAIL_CONFIG.EMAILJS_HTML_INTERNAL_ONLY || internalOnly)) {
     template = EMAIL_CONFIG.EMAILJS_TEMPLATE_HTML_ID;
     params.html_body = NWEmail.build({
-      reportType: o.reportType, title: o.title, subtitle: o.subtitle, bodyText: o.bodyText, senderName: o.senderName || o.techName || who.name,   // the signature names the person who sent it (Gmail shows the alias name in From)
+      reportType: o.reportType, title: o.title, subtitle: o.subtitle, bodyText: o.bodyText, senderName: '',   // signature block = company only (Russ 2026-10-21: no person next to the logo); the person is the Reply-To
       intro: o.intro, files: files
     }).html;
   }
