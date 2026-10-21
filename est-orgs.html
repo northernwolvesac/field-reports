@@ -9,13 +9,13 @@
 <title>Organisations — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=499"></script>
-<script src="auth.js?v=499"></script>
-<script src="est-org.js?v=499"></script>
-<script src="est-engine.js?v=531"></script>
+<script src="supabase-config.js?v=534"></script>
+<script src="auth.js?v=534"></script>
+<script src="est-org.js?v=534"></script>
+<script src="est-engine.js?v=534"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=499"></script>
-<script src="nw-email.js?v=499"></script>
+<script src="email-utils.js?v=534"></script>
+<script src="nw-email.js?v=534"></script>
 <style>
   body { padding-bottom: 40px; }
   .og-wrap { max-width: 1100px; margin: 0 auto; }
@@ -62,7 +62,7 @@ requireAuth().catch(function(){});
 var OG = (function() {
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
-  var sb = window.supabaseClient, me = null, globalAdmin = false, orgs = [], members = {}, invites = {}, profiles = {}, cost = {};
+  var sb = window.supabaseClient, me = null, globalAdmin = false, orgs = [], members = {}, invites = {}, profiles = {}, cost = {}, tokens = {}, ilog = {}, lastTok = {};
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
   function slugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
@@ -73,6 +73,10 @@ var OG = (function() {
     await NWOrg.load();
     var o = await sb.from('est_orgs').select('*').order('name'); orgs = o.data || [];
     var m = await sb.from('est_org_members').select('org_id,user_id,role,created_at'); members = {}; (m.data || []).forEach(function(x) { (members[x.org_id] = members[x.org_id] || []).push(x); });
+    try {
+      var tk = await sb.from('est_intake_tokens').select('id,org_id,label,notify_emails,created_at,last_used_at,revoked_at').order('created_at', { ascending: false }); tokens = {}; (tk.data || []).forEach(function(x) { (tokens[x.org_id] = tokens[x.org_id] || []).push(x); });
+      var lg = await sb.from('est_intake_log').select('id,org_id,from_email,subject,session_id,files,status,note,created_at').order('created_at', { ascending: false }).limit(150); ilog = {}; (lg.data || []).forEach(function(x) { (ilog[x.org_id] = ilog[x.org_id] || []).push(x); });
+    } catch (eI) { tokens = {}; ilog = {}; }   // est-intake.sql not run yet: the card then explains it
     var iv = await sb.from('est_org_invites').select('*').is('claimed_at', null); invites = {}; (iv.data || []).forEach(function(x) { (invites[x.org_id] = invites[x.org_id] || []).push(x); });
     var ids = []; Object.keys(members).forEach(function(k) { members[k].forEach(function(x) { ids.push(x.user_id); }); });
     if (ids.length) { var pr = await sb.from('profiles').select('id,full_name,email,role').in('id', ids); profiles = {}; (pr.data || []).forEach(function(x) { profiles[x.id] = x; }); }
@@ -93,7 +97,7 @@ var OG = (function() {
         '</tbody></table>' +
         (mg ? '<div class="row" style="margin-top:10px"><input type="email" id="inv-' + o.id + '" placeholder="estimator@company.com" style="min-width:240px"><select id="invr-' + o.id + '"><option value="estimator">estimator</option><option value="admin">admin</option><option value="viewer">viewer</option></select><button class="btn" onclick="OG.invite(\'' + o.id + '\')">Add / invite</button>' +
           (globalAdmin && o.slug !== 'nwac' ? '<button class="btn" onclick="OG.copyLib(\'' + o.id + '\')" title="Copy NWAC\'s rules, catalog, norms and knowledge notes into this organisation">Copy NWAC library</button>' : '') + '</div>' : '') +
-        settingsForm(o, mg) + '</div>';
+        settingsForm(o, mg) + intakeCard(o, mg) + '</div>';
     });
     $('main').innerHTML = html;
   }
@@ -111,6 +115,97 @@ var OG = (function() {
     ['tab', 'Testing & balancing $/sheet', 'number', 2500, 1],
     ['lift', 'Man-lift / scaffolding $', 'number', 2500, 1]
   ];
+  // ─── E-mail intake: a Google Apps Script on a mailbox turns a labelled e-mail with drawings into an AI Estimator session of this organisation ───
+  function intakeScript(org, token, notify) {
+    var base = location.origin + location.pathname.replace(/[^\/]*$/, '');
+    return [
+      "// Northern Wolves AC — AI Estimator e-mail intake (Google Apps Script) · organisation: " + org.name,
+      "// 1) script.google.com → New project → paste all of this → Save.   2) Select  setup  and press Run (allow Gmail + external requests).",
+      "// 3) In Gmail make a label  AI-Bids  and a filter that applies it to bid invitations (e.g. To: bids@yourcompany.com) — or put the label on",
+      "//    any e-mail by hand (works from the phone too). Every 10 minutes the labelled e-mails with PDF / ZIP drawings become sessions.",
+      "var CFG = {",
+      "  url: '" + SUPABASE_URL + "/functions/v1/ai-estimator',",
+      "  key: '" + SUPABASE_ANON_KEY + "',",
+      "  token: '" + token + "',",
+      "  app: '" + base + "ai-estimator.html',",
+      "  label: 'AI-Bids', doneLabel: 'AI-Bids-sent',",
+      "  notify: '" + String(notify || '').replace(/'/g, '') + "',",
+      "  minBytes: 20 * 1024, maxBytes: 45 * 1024 * 1024",
+      "};",
+      "function setup() {",
+      "  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });",
+      "  ScriptApp.newTrigger('run').timeBased().everyMinutes(10).create();",
+      "  var r = call_({ action: 'intake_ping', token: CFG.token });",
+      "  Logger.log(r.ok ? 'Connected to: ' + r.org + ' — now label an e-mail AI-Bids' : 'NOT connected: ' + r.error);",
+      "  if (r.ok) run();",
+      "}",
+      "function call_(p) {",
+      "  var r = UrlFetchApp.fetch(CFG.url, { method: 'post', contentType: 'application/json', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key }, payload: JSON.stringify(p), muteHttpExceptions: true });",
+      "  try { return JSON.parse(r.getContentText()); } catch (e) { return { ok: false, error: r.getResponseCode() + ' ' + r.getContentText().slice(0, 200) }; }",
+      "}",
+      "function run() {",
+      "  var label = GmailApp.getUserLabelByName(CFG.label); if (!label) return;",
+      "  var done = GmailApp.getUserLabelByName(CFG.doneLabel) || GmailApp.createLabel(CFG.doneLabel);",
+      "  label.getThreads(0, 8).forEach(function (th) {",
+      "    var msgs = th.getMessages(), ok = true, made = 0;",
+      "    msgs.forEach(function (m) { var r = handle_(m, false); if (r === false) ok = false; else if (r === 'session') made++; });",
+      "    if (ok && !made && msgs.length) { var r2 = handle_(msgs[0], true); if (r2 === false) ok = false; }   // no attachments anywhere: a bid sent as links",
+      "    if (ok) { th.removeLabel(label); th.addLabel(done); }",
+      "  });",
+      "}",
+      "function handle_(m, linksOnly) {",
+      "  var files = [], skipped = [];",
+      "  function add(b, n) {",
+      "    var low = String(n).toLowerCase(), bytes = b.getBytes();",
+      "    if (!/\\.pdf$/.test(low) && String(b.getContentType()).indexOf('pdf') < 0) { skipped.push({ name: n, why: 'not a PDF' }); return; }",
+      "    if (bytes.length < CFG.minBytes) { skipped.push({ name: n, why: 'too small (logo / signature?)' }); return; }",
+      "    if (bytes.length > CFG.maxBytes) { skipped.push({ name: n, why: 'over 45 MB — use the link or upload it by hand' }); return; }",
+      "    files.push({ bytes: bytes, name: String(n).split('/').pop(), size: bytes.length });",
+      "  }",
+      "  m.getAttachments({ includeInlineImages: false, includeAttachments: true }).forEach(function (a) {",
+      "    var n = a.getName(), t = String(a.getContentType()).toLowerCase();",
+      "    if (/\\.zip$/i.test(n) || t.indexOf('zip') >= 0) { try { Utilities.unzip(a.copyBlob()).forEach(function (b) { add(b, n + '/' + b.getName()); }); } catch (e) { skipped.push({ name: n, why: 'zip not readable' }); } }",
+      "    else add(a, n);",
+      "  });",
+      "  if (!files.length && !linksOnly) return 'none';",
+      "  var body = m.getPlainBody() || '', links = [];",
+      "  (body.match(/https?:\\/\\/[^\\s<>\")\\]]+/g) || []).forEach(function (u) { if (!/unsubscribe|\\.(png|jpe?g|gif)(\\?|$)|mailto:/i.test(u) && links.indexOf(u) < 0) links.push(u); });",
+      "  var b = call_({ action: 'intake_begin', token: CFG.token, message_id: m.getHeader('Message-ID') || m.getId(), from: m.getFrom(), subject: m.getSubject(), text: body, links: links,",
+      "    files: files.map(function (f) { return { name: f.name, size: f.size }; }), received_at: m.getDate().toISOString() });",
+      "  if (!b.ok) { Logger.log('intake_begin failed: ' + b.error); return false; }",
+      "  if (b.duplicate) return 'session';",
+      "  var up = [];",
+      "  (b.uploads || []).forEach(function (u, i) {",
+      "    var r = UrlFetchApp.fetch(u.url, { method: 'put', contentType: 'application/pdf', payload: files[i].bytes, headers: { 'x-upsert': 'true' }, muteHttpExceptions: true });",
+      "    if (r.getResponseCode() < 300) up.push(u.file_id); else Logger.log('upload failed ' + u.name + ': ' + r.getResponseCode() + ' ' + r.getContentText().slice(0, 120));",
+      "  });",
+      "  var f2 = call_({ action: 'intake_finish', token: CFG.token, session_id: b.session_id, uploaded: up, skipped: skipped });",
+      "  if (CFG.notify) { try { GmailApp.sendEmail(CFG.notify, 'New bid in the AI Estimator: ' + (b.name || m.getSubject()), 'From: ' + m.getFrom() + '\\nFiles: ' + up.length + (skipped.length ? ' (left out: ' + skipped.map(function (s) { return s.name + ' — ' + s.why; }).join('; ') + ')' : '') + '\\n\\nOpen it: ' + CFG.app + '?s=' + b.session_id); } catch (e) {} }",
+      "  return f2.ok ? 'session' : false;",
+      "}"
+    ].join('\n');
+  }
+  function intakeCard(o, mg) {
+    if (!mg) return '';
+    var tk = tokens[o.id] || [], lg = ilog[o.id] || [], lt = lastTok[o.id];
+    var h = '<div class="row" style="margin-top:16px;justify-content:space-between"><b style="font-size:12px">E-mail intake</b><span class="muted">a bid e-mailed with drawings becomes an AI Estimator session of ' + esc(o.name) + '</span></div>';
+    if (lt) h += '<div class="card" style="margin:8px 0;background:#fffbeb"><b>New token — copy the script now, the token is not shown again.</b><div class="muted" style="margin:4px 0">Paste it into script.google.com on the Google account whose Gmail receives the bid invitations; the steps are at the top of the script.</div>' +
+      '<textarea id="isc-' + o.id + '" readonly style="width:100%;height:150px;font:11px/1.4 ui-monospace,Consolas,monospace">' + esc(intakeScript(o, lt.token, lt.notify)) + '</textarea><div class="row" style="margin-top:6px"><button class="btn primary sm" onclick="OG.copyScript(\'' + o.id + '\')">Copy script</button><button class="btn sm" onclick="OG.hideScript(\'' + o.id + '\')">I copied it</button></div></div>';
+    h += '<div class="row" style="margin-top:6px"><input type="text" id="itl-' + o.id + '" placeholder="Label (e.g. bids@ mailbox)" style="min-width:180px"><input type="text" id="itn-' + o.id + '" placeholder="Notify e-mails (optional)" style="min-width:220px"><button class="btn" onclick="OG.createToken(\'' + o.id + '\')">New intake token</button></div>';
+    if (tokens && !Object.keys(tokens).length && !lg.length && window.__intakeMissing) h += '<div class="muted" style="margin-top:6px">Run est-intake.sql in the Supabase SQL editor first.</div>';
+    if (tk.length) h += '<table class="t" style="margin-top:8px"><thead><tr><th>Token</th><th>Created</th><th>Last used</th><th>Notifies</th><th></th></tr></thead><tbody>' + tk.map(function(x) { return '<tr><td>' + esc(x.label || '(no label)') + (x.revoked_at ? ' <span class="chip">revoked</span>' : '') + '</td><td class="muted">' + String(x.created_at).slice(0, 10) + '</td><td class="muted">' + (x.last_used_at ? String(x.last_used_at).replace('T', ' ').slice(0, 16) : 'never') + '</td><td class="muted">' + esc(x.notify_emails || '') + '</td><td style="text-align:right">' + (x.revoked_at ? '' : '<button class="btn sm" onclick="OG.revokeToken(\'' + x.id + '\')">Revoke</button>') + '</td></tr>'; }).join('') + '</tbody></table>';
+    if (lg.length) h += '<table class="t" style="margin-top:8px"><thead><tr><th>Received</th><th>From</th><th>Subject</th><th>Files</th><th></th></tr></thead><tbody>' + lg.slice(0, 8).map(function(x) { return '<tr><td class="muted">' + String(x.created_at).replace('T', ' ').slice(0, 16) + '</td><td class="muted">' + esc(String(x.from_email || '').replace(/<.*$/, '').trim()) + '</td><td>' + esc(String(x.subject || '').slice(0, 60)) + '</td><td>' + x.files + (x.status === 'failed' ? ' <span class="chip">failed</span>' : '') + '</td><td style="text-align:right">' + (x.session_id ? '<a href="ai-estimator.html?s=' + x.session_id + '">open</a>' : '') + '</td></tr>'; }).join('') + '</tbody></table>';
+    return h;
+  }
+  async function createToken(orgId) {
+    var label = ($('itl-' + orgId) || {}).value || '', notify = ($('itn-' + orgId) || {}).value || '';
+    var r = await sb.rpc('est_intake_create_token', { p_org: orgId, p_label: label, p_notify: notify });
+    if (r.error) { toast(/function .* does not exist|est_intake/i.test(r.error.message) ? 'Run est-intake.sql in the Supabase SQL editor first' : r.error.message); return; }
+    lastTok[orgId] = { token: r.data, notify: notify }; await load(); render();
+  }
+  function copyScript(orgId) { var el = $('isc-' + orgId); if (!el) return; el.select(); try { document.execCommand('copy'); toast('Script copied — paste it into script.google.com'); } catch (e) { toast('Select the text and copy it'); } }
+  function hideScript(orgId) { delete lastTok[orgId]; render(); }
+  async function revokeToken(id) { if (!confirm('Revoke this token? The mailbox script stops working until you give it a new token.')) return; var r = await sb.rpc('est_intake_revoke', { p_id: id }); if (r.error) { toast(r.error.message); return; } await load(); render(); }
   function settingsForm(o, mg) {
     var s = o.settings || {}, fams = (window.NWEngine && NWEngine.DUCT_FAMILIES) || {};
     var html = '<div class="row" style="margin-top:14px;justify-content:space-between"><b style="font-size:12px">Estimating settings</b><span class="muted">used by the AI estimate of this organisation — empty = NWAC standard</span></div><div class="set">';
@@ -186,9 +281,9 @@ var OG = (function() {
   async function uninvite(id) { var r = await sb.from('est_org_invites').delete().eq('id', id); if (r.error) { toast(r.error.message); return; } await load(); render(); }
   async function copyLib(orgId) { if (!confirm('Copy NWAC\'s rules, catalog, norms and knowledge notes into this organisation? Existing rows stay.')) return; var c = await sb.rpc('est_copy_library', { src: '11111111-1111-4111-8111-111111111111', dst: orgId }); if (c.error) toast(c.error.message); else toast('Copied: ' + JSON.stringify(c.data)); }
   (async function() { try { await load(); render(); } catch (e) { $('main').innerHTML = '<div class="card">' + esc(e.message || e) + '</div>'; } })();
-  return { create: create, invite: invite, sendInvite: sendInvite, setRole: setRole, remove: remove, uninvite: uninvite, copyLib: copyLib, saveSettings: saveSettings };
+  return { create: create, invite: invite, sendInvite: sendInvite, setRole: setRole, remove: remove, uninvite: uninvite, copyLib: copyLib, saveSettings: saveSettings, createToken: createToken, copyScript: copyScript, hideScript: hideScript, revokeToken: revokeToken };
 })();
 </script>
-<script src="sw-register.js?v=499"></script>
+<script src="sw-register.js?v=534"></script>
 </body>
 </html>

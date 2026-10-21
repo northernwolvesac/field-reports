@@ -375,9 +375,95 @@ async function runReview(db: any, body: any) {
   return { ok: true, queued: true, model };
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// E-mail intake (2026-10-21): a Google Apps Script on a mailbox calls these actions with an intake token (est_intake_tokens, one per
+// organisation, created on est-organisations). No user is signed in, so they run before the sign-in gate with the service role:
+//   intake_ping   { token }                                          → { ok, org }
+//   intake_begin  { token, message_id, from, subject, text, links[], files:[{name,size}], received_at } → { ok, session_id, uploads:[{file_id,url}] }
+//   intake_finish { token, session_id, uploaded:[file_id], skipped:[{name,why}] } → { ok }
+// A bid invitation becomes an ai_est_sessions row of the token's organisation (result.intake keeps sender, subject, links, snippet); the
+// files are uploaded straight to Storage through the signed URLs, and the page splits / reads them when an estimator opens the session.
+// ═══════════════════════════════════════════════════════════════════════
+const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+async function sha256hex(s: string): Promise<string> {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+function intakeKind(name: string): string {
+  const n = name.toLowerCase();
+  if (/addend|\badd[-_ ]?\d|bulletin|revision|rev[-_ ]?\d/.test(n)) return "addendum";
+  if (/spec|division|project[-_ ]?manual|\b\d{2}[-_ ]?\d{2}[-_ ]?\d{2}\b/.test(n)) return "specs";
+  if (/\brfi\b/.test(n)) return "rfi";
+  if (/quote|proposal|estimate|bid[-_ ]?form/.test(n)) return "quote";
+  return "drawings";
+}
+function intakeName(subject: string): string {
+  let s = String(subject || "").replace(/^\s*((re|fw|fwd)\s*:\s*)+/ig, "").trim();
+  s = s.replace(/\b(invitation to bid|invitation for bid|bid invitation|request for proposals?|request for quotes?|rfp|rfq|itb|bid request|bid package)\b\s*[:\-–—]?\s*/ig, "").replace(/^[\s:\-–—]+|[\s:\-–—]+$/g, "");
+  return (s || String(subject || "Bid by e-mail")).slice(0, 120);
+}
+function intakeLocation(text: string): string | null {
+  const m = /\b\d{1,5}\s+(?:[NSEW]\.?\s+)?[A-Z0-9][\w.'’ ]{1,32}?\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Place|Pl|Broadway|Drive|Dr|Lane|Ln|Parkway|Pkwy|Plaza|Way)\b\.?(?:,?\s+(?:[A-Za-z .]{2,24}),?\s+(?:NY|NJ|CT|PA)\.?(?:\s+\d{5})?)?/.exec(text || "");
+  return m ? m[0].replace(/\s+/g, " ").trim().slice(0, 140) : null;
+}
+async function intake(body: any): Promise<any> {
+  if (!SB_SERVICE) return { ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is not available to the function" };
+  const sb = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
+  const tok = String(body.token || "");
+  if (!/^nwi_[0-9a-f]{40,}$/.test(tok)) return { ok: false, error: "bad intake token" };
+  const { data: t } = await sb.from("est_intake_tokens").select("id, org_id, created_by, revoked_at").eq("token_hash", await sha256hex(tok)).maybeSingle();
+  if (!t || (t as any).revoked_at) return { ok: false, error: "intake token not valid (revoked?)" };
+  const org = (t as any).org_id as string;
+  await sb.from("est_intake_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", (t as any).id);
+  if (body.action === "intake_ping") {
+    const { data: o } = await sb.from("est_orgs").select("name").eq("id", org).maybeSingle();
+    return { ok: true, org: (o as any)?.name || "" };
+  }
+  if (body.action === "intake_begin") {
+    const mid = String(body.message_id || "").slice(0, 300); if (!mid) return { ok: false, error: "message_id missing" };
+    const { data: dup } = await sb.from("est_intake_log").select("session_id").eq("org_id", org).eq("message_id", mid).maybeSingle();
+    if (dup) return { ok: true, duplicate: true, session_id: (dup as any).session_id, uploads: [] };
+    const subject = String(body.subject || "").slice(0, 300), text = String(body.text || "").slice(0, 20000);
+    const links = (Array.isArray(body.links) ? body.links : []).map((x: any) => String(x).slice(0, 400)).slice(0, 25);
+    const files = (Array.isArray(body.files) ? body.files : []).slice(0, 40);
+    const due = (/(?:bids?\s+(?:are\s+)?due|due\s+(?:date|by|on)?|submission\s+deadline|deadline)[^\n]{0,80}/i.exec(text) || [""])[0].trim() || null;
+    const intakeInfo = { from: String(body.from || "").slice(0, 200), subject, message_id: mid, received_at: body.received_at || new Date().toISOString(), snippet: text.replace(/\s+/g, " ").slice(0, 1200), links, due, files: files.length };
+    const ses = await sb.from("ai_est_sessions").insert({ name: intakeName(subject), location: intakeLocation(subject + "\n" + text), status: "new", org_id: org, created_by: (t as any).created_by || null,
+      notes: "Received by e-mail from " + intakeInfo.from + (due ? " — " + due : ""), result: { intake: intakeInfo } }).select("id").single();
+    if (ses.error || !ses.data) return { ok: false, error: "session: " + (ses.error?.message || "not created") };
+    const sid = (ses.data as any).id as string;
+    const uploads: any[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const nm = String(files[i].name || ("file" + i + ".pdf")).slice(0, 160), safe = nm.replace(/[^\w.\- ]+/g, "_");
+      const path = sid + "/" + Date.now() + "_" + i + "_" + safe;
+      const su = await sb.storage.from("ai-estimator").createSignedUploadUrl(path);
+      if (su.error || !su.data) return { ok: false, error: "signed url: " + (su.error?.message || "none"), session_id: sid };
+      const fr = await sb.from("ai_est_files").insert({ session_id: sid, kind: intakeKind(nm), file_name: nm, storage_path: path, size: Number(files[i].size) || null }).select("id").single();
+      if (fr.error || !fr.data) return { ok: false, error: "file row: " + (fr.error?.message || "none"), session_id: sid };
+      uploads.push({ file_id: (fr.data as any).id, name: nm, path, url: su.data.signedUrl, token: (su.data as any).token });
+    }
+    await sb.from("est_intake_log").insert({ org_id: org, token_id: (t as any).id, message_id: mid, from_email: intakeInfo.from, subject, session_id: sid, files: files.length, links, status: "received" });
+    return { ok: true, session_id: sid, name: intakeName(subject), uploads };
+  }
+  if (body.action === "intake_finish") {
+    const sid = String(body.session_id || ""); if (!sid) return { ok: false, error: "session_id missing" };
+    const { data: ses } = await sb.from("ai_est_sessions").select("id, org_id").eq("id", sid).maybeSingle();
+    if (!ses || (ses as any).org_id !== org) return { ok: false, error: "session not found for this token" };
+    const up: string[] = (Array.isArray(body.uploaded) ? body.uploaded : []).map(String);
+    const { data: rows } = await sb.from("ai_est_files").select("id").eq("session_id", sid);
+    const lost = ((rows as any[]) || []).filter((r) => up.indexOf(r.id) < 0).map((r) => r.id);
+    if (lost.length) await sb.from("ai_est_files").delete().in("id", lost);
+    const skipped = (Array.isArray(body.skipped) ? body.skipped : []).slice(0, 40);
+    await sb.from("est_intake_log").update({ files: up.length, skipped, status: up.length ? "ready" : "failed", note: lost.length ? lost.length + " upload(s) did not arrive" : null }).eq("org_id", org).eq("session_id", sid);
+    return { ok: true, files: up.length, dropped: lost.length };
+  }
+  return { ok: false, error: "unknown intake action" };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+  { const peek = await req.clone().json().catch(() => null); if (peek && typeof peek.action === "string" && peek.action.indexOf("intake_") === 0) { try { return json(await intake(peek)); } catch (e) { return json({ ok: false, error: String((e as any)?.message || e).slice(0, 300) }, 500); } } }
   if (!ANTHROPIC_KEY) return json({ ok: false, error: "ANTHROPIC_API_KEY secret is not set" }, 500);
   try {
     const auth = req.headers.get("Authorization") || "";
