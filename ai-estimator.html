@@ -808,7 +808,7 @@ var AE = (function() {
   function runKey(x, pipe) { return pipe ? NWEngine.norm(x.service) + '|' + sizeKey(x.size) : sizeKey(x.size) + '|' + sysKey(x.system); }
   function reconcileRuns(lists, pipe) {
     var n = lists.length, by = {}, order = [];
-    lists.forEach(function(rows, pi) { var seen = {}; (rows || []).forEach(function(x) { if (!x || typeof x !== 'object') return; var k = runKey(x, pipe);
+    lists.forEach(function(rows, pi) { var seen = {}; (rows || []).forEach(function(x) { if (!x || typeof x !== 'object' || !(Number(x.lf) > 0)) return; var k = runKey(x, pipe);   // "16x10 existing — not new scope, 0 ft" = this pass found no new 16x10
       if (seen[k]) { seen[k].lf = (Number(seen[k].lf) || 0) + (Number(x.lf) || 0); return; }
       seen[k] = Object.assign({}, x, { lf: Number(x.lf) || 0, _pass: pi }); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(seen[k]); }); });
     var out = [], changes = [], fam = function(hits, name, note) {
