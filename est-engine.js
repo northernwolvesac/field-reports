@@ -279,14 +279,17 @@
     var tag = String(a.tag || '').trim().toUpperCase(), fam = (/^([A-Z]{1,3})/.exec(tag) || [])[1];
     if (!/^[A-Z]{1,3}-?\d{0,2}[A-Z]?$/.test(tag) || !fam) return false;
     var r = (p && p.result) || {}, w = devWords(p), printed = w[norm(tag)] > 0 || w[fam] > 0;
-    // "tags" on a sheet whose text layer prints no device tags (outlined text) can only mean the OCR words — a code the OCR never saw
-    // is a symbol count whatever the reader called it (414 M-300 "A 30 (tags)" beside printed CD / CG)
-    if (basis !== 'symbols' && !(basis === 'tags' && !printed && textTagTotal(p) < 3)) return false;
     // the sheet's printed tags must be outlet tags (CD / CG on 414); AD / ID-7 equipment codes beside a census of unlabelled diffusers
     // (CENTRALE) do not make it a tagged-outlet sheet
     var tagRows = (r.air_devices || []).filter(function (x) { return x !== a && String(x.basis || '').toLowerCase() === 'tags' && w[norm(x.tag)] > 0 && /diffuser|grille|register|linear|louver/i.test(String(x.type || '')); });
     if (!tagRows.length) return false;
-    return !printed;   // the code or its family (RD for RD-B) printed anywhere → a real device row
+    if (basis === 'symbols') return !printed;   // the code or its family (RD for RD-B) printed anywhere → a real device row
+    // "tags" on a sheet whose text layer prints no device tags (outlined text) can only mean the OCR words: a code the OCR never saw,
+    // counted MORE often than any outlet tag it did see, is a symbol family whatever the reader called it (414 M-300 "A 30 (tags)"
+    // beside CD ×5 in the OCR); a small unprinted family (CG 3) is more likely an OCR miss and stays priced
+    if (basis !== 'tags' || printed || textTagTotal(p) >= 3) return false;
+    var maxPrinted = Math.max.apply(null, tagRows.map(function (x) { return Math.max(Number(w[norm(x.tag)]) || 0, Number(x.qty) || 0); }));
+    return (Number(a.qty) || 0) > maxPrinted;
   }
   // "15", "ground", "roof"… from whatever the reader put in floor; null when it is not a level
   function levelKey(floor) {
