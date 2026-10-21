@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=532">
+<link rel="stylesheet" href="procore-ui.css?v=533">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=532"></script>
-<script src="auth.js?v=532"></script>
-<script src="est-totals.js?v=532"></script>
-<script src="procore-ui.js?v=532"></script>
+<script src="supabase-config.js?v=533"></script>
+<script src="auth.js?v=533"></script>
+<script src="est-totals.js?v=533"></script>
+<script src="procore-ui.js?v=533"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=532"></script>
-<script src="est-drawings.js?v=532"></script>
-<script src="nw-catalog-picker.js?v=532"></script>
-<script src="nw-duct-weight.js?v=532"></script>
-<script src="geo-takeoff.js?v=532"></script>
-<script src="est-engine.js?v=532"></script>
+<script src="bid-actions.js?v=533"></script>
+<script src="est-drawings.js?v=533"></script>
+<script src="nw-catalog-picker.js?v=533"></script>
+<script src="nw-duct-weight.js?v=533"></script>
+<script src="geo-takeoff.js?v=533"></script>
+<script src="est-engine.js?v=533"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -2246,6 +2246,8 @@ requireAuth().catch(function(){});
   function rvConf(kind, row, sp) {
     var why = [], lvl = 3; function dn(l, w) { if (l < lvl) lvl = l; why.push(w); }
     var r = (sp && sp.result) || {}, tc = (sp && sp.tag_counts) || {}, tag = rvNormTag(row.tag);
+    // existing equipment / devices "to remain" or "to be removed" are not priced — nothing to doubt
+    if (/\(E\)|existing|to remain|to be removed|demolish|remove/i.test(String(row.tag || '') + ' ' + String(row.type || '') + ' ' + String(row.notes || '') + ' ' + String(row.location || ''))) return { lvl: 'high', why: ['existing / to remain / removed — not priced'] };
     var printed = !!tag && ((tc.devices && Object.keys(tc.devices).some(function(k) { return rvNormTag(k) === tag; })) || (tc.tags && Object.keys(tc.tags).some(function(k) { return rvNormTag(k) === tag; })));
     var changes = (r.repeat && r.repeat.changes) || [], noted = tag && changes.filter(function(c) { return rvNormTag(String(c).split(/\s/)[0]) === tag; });
     if (kind === 'device') {
@@ -2737,6 +2739,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=532"></script>
+<script src="sw-register.js?v=533"></script>
 </body>
 </html>
