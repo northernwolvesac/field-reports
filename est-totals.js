@@ -104,7 +104,15 @@
   // Every Procore grid column for one line. ctx: {groupMultiplier, rates, settings} (rates/settings are optional caches).
   // ── insulation budget (2026-10-19, Russ): duct and pipe lines carry insulation inside their price — split it out so the
   // insulation budget is visible, and optionally (es_settings.insulation_sub) move its labor to a subcontract bucket ──
-  var INS_PIPE_FT = { 0.5: 3.0, 0.75: 3.2, 1: 3.6, 1.25: 4.1, 1.5: 4.6, 2: 5.4, 2.5: 6.3, 3: 7.2, 4: 9.0, 5: 11, 6: 13.5 };   // $/ft fiberglass ASJ 1"
+  var INS_PIPE_FT = { 0.5: 3.0, 0.75: 3.2, 1: 3.6, 1.25: 4.1, 1.5: 4.6, 2: 5.4, 2.5: 6.3, 3: 7.2, 4: 9.0, 5: 11, 6: 13.5 };   // $/ft fiberglass ASJ 1" (material only, self-perform)
+  // ── Energy Plus NY installed rates (material + labor), quote of 2026-10-19 valid 60 days: non-prevailing wage, normal hours,
+  // accessible new construction, below 12 ft; pipe rates = straight pipe, fittings 25 % allowance, valves/flanges/jackets quoted
+  // separately, hangers excluded; minimum $1,500 per project (one mobilization). Duct = bare surface sq ft. ──
+  var EP = { name: 'Energy Plus NY', date: '2026-10-19', r6: 4.50, r8: 6.00, outdoor: 18.50, grease: 34.00, board: 11.00, fittings: 0.25, minimum: 1500,
+    fg:   [[1, 7.50, 9.00], [2, 9.00, 11.00], [3, 12.00, 15.00], [4, 16.00, 19.00], [6, 22.00, 27.00]],   // [max nominal size, 1" wall, 1-1/2" wall]
+    arma: [[1, 11.50, 13.50], [2, 15.00, 18.00]] };                                                        // [max nominal copper size (OD ≤ 1-1/8 / ≤ 2-1/8), 3/4" wall, 1" wall]
+  function epPipeRate(size, armaflex, thick) { var t = armaflex ? EP.arma : EP.fg, row = t.filter(function (r) { return size <= r[0] + 1e-6; })[0] || t[t.length - 1]; return row[thick ? 2 : 1]; }
+  if (typeof window !== 'undefined') window.NW_EP_RATES = EP;
   function pipeSize(desc) { var m = /(\d+(?:-\d\/\d)?|\d\/\d)"/.exec(desc || ''); if (!m) return 0; var t = m[1], v = 0; if (t.indexOf('-') >= 0) { var a = t.split('-'); var f = a[1].split('/'); v = +a[0] + (+f[0]) / (+f[1]); } else if (t.indexOf('/') >= 0) { var g = t.split('/'); v = (+g[0]) / (+g[1]); } else v = +t; return v; }
   function nearest(tbl, s) { var ks = Object.keys(tbl).map(Number).sort(function (a, b) { return a - b; }), best = ks[0]; ks.forEach(function (k) { if (k <= s) best = k; }); return tbl[best]; }
   // returns { kind:'duct'|'pipe'|'explicit', qtyUnit: sq ft or ft per line unit, mat: $ per line unit, min: labor minutes per line unit } or null
@@ -118,13 +126,16 @@
       if (!liner && !wrap) return null;
       var rate = liner ? 2.4 : (/R8|2"/.test(d) ? 1.7 : 1.35), min = liner ? 5 : 4.5;   // $/sq ft and min/sq ft (catalog NW Insulation)
       var dl2 = liner ? 'Duct liner 1" (acoustic)' : (/R8|2"/.test(d) ? 'Duct wrap 2" R8 FSK' : 'Duct wrap 1-1/2" R6 FSK');
-      return { kind: 'duct', liner: liner, label: dl2, unit: 'sq ft', qtyUnit: sqft, mat: sqft * rate, min: sqft * min, wrapMat: sqft * 1.35, wrapMin: sqft * 4.5 };
+      var epRate = /outdoor|exterior|rooftop|weather/i.test(d) ? EP.outdoor : (/R8|2"/.test(d) ? EP.r8 : EP.r6);   // installed $/sq ft by the insulation sub (liner lines → R6 wrap for the field part)
+      return { kind: 'duct', liner: liner, label: dl2, unit: 'sq ft', qtyUnit: sqft, mat: sqft * rate, min: sqft * min, wrapMat: sqft * 1.35, wrapMin: sqft * 4.5, epUnit: sqft * (liner ? EP.r6 : epRate) };
     }
     if (cat === 'pipework' && /^(ft|lf)$/i.test(unit) && /insulat/i.test(d) && !/bare/i.test(d)) {
       var s = pipeSize(d); if (!s) return null;
       var svc = /chilled|chw/i.test(d) ? 'chilled water' : /hot water|hhw|heating/i.test(d) ? 'hot water' : /condensate|drain/i.test(d) ? 'condensate' : /refrig|suction|liquid/i.test(d) ? 'refrigerant' : /pvc/i.test(d) ? 'PVC (condensate)' : /copper/i.test(d) ? 'copper' : /steel|black iron/i.test(d) ? 'steel' : 'piping';
       var thick = /1-1\/2"\s*(insul|thick)/i.test(d) ? '1-1/2"' : /2"\s*(insul|thick)/i.test(d) ? '2"' : '1"';
-      return { kind: 'pipe', label: 'Pipe insulation ' + thick + ' — ' + svc + ' ' + ((/(\d+(?:-\d\/\d)?|\d\/\d)"/.exec(d) || ['', '?'])[1]) + '" pipe', unit: 'ft', qtyUnit: 1, mat: nearest(INS_PIPE_FT, s), min: 10 };
+      var armaflex = /condensate|drain|refrig|suction|liquid|pvc|armaflex|closed.cell|line set/i.test(d);
+      var epPipe = epPipeRate(s, armaflex, armaflex ? thick === '1"' : thick !== '1"') * (1 + EP.fittings);   // straight pipe + 25 % fittings allowance (Energy Plus)
+      return { kind: 'pipe', label: 'Pipe insulation ' + thick + ' — ' + svc + ' ' + ((/(\d+(?:-\d\/\d)?|\d\/\d)"/.exec(d) || ['', '?'])[1]) + '" pipe', unit: 'ft', qtyUnit: 1, mat: nearest(INS_PIPE_FT, s), min: 10, epUnit: epPipe, armaflex: armaflex };
     }
     return null;
   }
@@ -147,6 +158,8 @@
     if (flag(es.round_ea) && /^ea$/i.test(unit.trim())) totalQty = Math.round(totalQty);
 
     var unitCost = num(line.unit_material_cost);
+
+    if (insSubMat) unitCost = Math.max(0, unitCost - insSubMat);   // sub-installed insulation: its material is no longer ours
     var pricedUnitCost = materialDropped ? 0 : unitCost;   // legacy: install-category material is not priced
     var wastePct = num(line.waste_pct);
     if (wastePct > 1) wastePct = wastePct / 100;           // whole percent slipped through (catalog / layer scale)
@@ -166,8 +179,10 @@
       ins.fieldQty = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? ins.qtyUnit * (1 - shopFrac) : ins.qtyUnit;
       ins.fieldMat = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? ins.wrapMat * (1 - shopFrac) : ins.mat;
       ins.fieldMin = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? ins.wrapMin * (1 - shopFrac) : ins.min;
+      ins.fieldEp = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? (ins.epUnit || 0) * (1 - shopFrac) : (ins.epUnit || 0);   // what Energy Plus charges for the field part
     }
     if (ins && insSub && ins.kind !== 'explicit') unitLaborTime = Math.max(0, unitLaborTime - ins.fieldMin / 60);   // insulators do the field part; lining stays with the shop
+    var insSubMat = (ins && insSub && ins.kind !== 'explicit') ? ins.fieldMat : 0;   // … and their material leaves the line as well (the sub price is installed)
     var indiv = flag(es.individual_labor_rates);
     var laborRate = (indiv && num(line.labor_rate) > 0) ? num(line.labor_rate) : rates.labor;
     var globalSalesRate = num(settings.labor_sales_rate);
@@ -192,7 +207,7 @@
 
     return {
       insulation: ins ? { kind: ins.kind, liner: !!ins.liner, label: ins.label, unit: ins.unit, qty: totalQty * ins.qtyUnit, mat: totalQty * ins.mat, min: totalQty * ins.min, sub: insSub,
-        shopQty: totalQty * ins.shopQty, shopMat: totalQty * ins.shopMat, shopMin: totalQty * ins.shopMin, fieldQty: totalQty * ins.fieldQty, fieldMat: totalQty * ins.fieldMat, fieldMin: totalQty * ins.fieldMin } : null,
+        shopQty: totalQty * ins.shopQty, shopMat: totalQty * ins.shopMat, shopMin: totalQty * ins.shopMin, fieldQty: totalQty * ins.fieldQty, fieldMat: totalQty * ins.fieldMat, fieldMin: totalQty * ins.fieldMin, fieldEp: totalQty * ins.fieldEp } : null,
       weightLb: weightLb, ductKind: ductKind, qty: qty, totalQty: totalQty, groupMultiplier: gm, unit: unit,
       unitCost: unitCost, wastePct: wastePct, subtotalItemCost: subtotalItemCost,
       markupPct: markupPct, marginPct: subtotalItemSales > 0 ? profit / subtotalItemSales : 0,
@@ -268,7 +283,7 @@
     var duct = { lb: 0, rect: 0, round: 0, oval: 0, shopCost: 0, lineMaterial: 0, lines: 0 };   // sheet-metal weight (lb) + shop $/lb check
     var insul = { duct_sqft: 0, duct_mat: 0, duct_min: 0, pipe_ft: 0, pipe_mat: 0, pipe_min: 0, explicit_mat: 0, explicit_min: 0, lines: 0, sub: flag(settings.es_settings && settings.es_settings.insulation_sub), subCost: 0, detail: {},
       al_shop_pct: (settings.es_settings && settings.es_settings.al_shop_pct != null && settings.es_settings.al_shop_pct !== '') ? num(settings.es_settings.al_shop_pct) : 100,
-      liner_sqft: 0, shop: { sqft: 0, mat: 0, min: 0 }, field: { duct_sqft: 0, duct_mat: 0, duct_min: 0, from_liner_sqft: 0, from_liner_mat: 0, from_liner_min: 0, pipe_ft: 0, pipe_mat: 0, pipe_min: 0 } };
+      liner_sqft: 0, shop: { sqft: 0, mat: 0, min: 0 }, field: { duct_sqft: 0, duct_mat: 0, duct_min: 0, from_liner_sqft: 0, from_liner_mat: 0, from_liner_min: 0, pipe_ft: 0, pipe_mat: 0, pipe_min: 0, ep_duct: 0, ep_pipe: 0, ep_total: 0, ep_min_applied: false }, ep: EP };
     var perLine = [];   // per-line totals in line order, for the rules
 
     (lines || []).forEach(function (li) {
@@ -281,9 +296,9 @@
       taxableSales += lt.taxableSales;   // every cost type — a taxable wet-tap / services line is taxed too
 
       if (lt.insulation) { var I = lt.insulation; insul.lines++; var dk = I.label || I.kind, dd = insul.detail[dk] = insul.detail[dk] || { kind: I.kind, unit: I.unit, qty: 0, mat: 0, min: 0, lines: 0 }; dd.qty += I.qty; dd.mat += I.mat; dd.min += I.min; dd.lines++; dd.fieldQty = (dd.fieldQty || 0) + I.fieldQty; dd.fieldMat = (dd.fieldMat || 0) + I.fieldMat; dd.fieldMin = (dd.fieldMin || 0) + I.fieldMin; dd.liner = !!I.liner;
-        if (I.kind === 'duct' && I.liner) { insul.liner_sqft += I.qty; insul.shop.sqft += I.shopQty; insul.shop.mat += I.shopMat; insul.shop.min += I.shopMin; insul.field.from_liner_sqft += I.fieldQty; insul.field.from_liner_mat += I.fieldMat; insul.field.from_liner_min += I.fieldMin; insul.field.duct_sqft += I.fieldQty; insul.field.duct_mat += I.fieldMat; insul.field.duct_min += I.fieldMin; }
-        else if (I.kind === 'duct') { insul.field.duct_sqft += I.fieldQty; insul.field.duct_mat += I.fieldMat; insul.field.duct_min += I.fieldMin; }
-        else if (I.kind === 'pipe') { insul.field.pipe_ft += I.fieldQty; insul.field.pipe_mat += I.fieldMat; insul.field.pipe_min += I.fieldMin; } if (I.kind === 'duct') { insul.duct_sqft += I.qty; insul.duct_mat += I.mat; insul.duct_min += I.min; } else if (I.kind === 'pipe') { insul.pipe_ft += I.qty; insul.pipe_mat += I.mat; insul.pipe_min += I.min; } else { insul.explicit_mat += I.mat; insul.explicit_min += I.min; } }
+        if (I.kind === 'duct' && I.liner) { insul.liner_sqft += I.qty; insul.shop.sqft += I.shopQty; insul.shop.mat += I.shopMat; insul.shop.min += I.shopMin; insul.field.from_liner_sqft += I.fieldQty; insul.field.from_liner_mat += I.fieldMat; insul.field.from_liner_min += I.fieldMin; insul.field.duct_sqft += I.fieldQty; insul.field.duct_mat += I.fieldMat; insul.field.duct_min += I.fieldMin; insul.field.ep_duct += I.fieldEp || 0; }
+        else if (I.kind === 'duct') { insul.field.duct_sqft += I.fieldQty; insul.field.duct_mat += I.fieldMat; insul.field.duct_min += I.fieldMin; insul.field.ep_duct += I.fieldEp || 0; }
+        else if (I.kind === 'pipe') { insul.field.pipe_ft += I.fieldQty; insul.field.pipe_mat += I.fieldMat; insul.field.pipe_min += I.fieldMin; insul.field.ep_pipe += I.fieldEp || 0; } if (I.kind === 'duct') { insul.duct_sqft += I.qty; insul.duct_mat += I.mat; insul.duct_min += I.min; } else if (I.kind === 'pipe') { insul.pipe_ft += I.qty; insul.pipe_mat += I.mat; insul.pipe_min += I.min; } else { insul.explicit_mat += I.mat; insul.explicit_min += I.min; } }
       if (lt.costType === 'S') { wetTap += lt.subcontractorCost; wetTapSales += lt.totalSales; return; }
       if (lt.costType === 'O') { services += lt.otherCost; servicesSales += lt.totalSales; return; }
 
@@ -305,7 +320,11 @@
     });
 
     // ── insulation by subcontractor: the labor taken out of the duct / pipe lines comes back as a services amount ──
-    if (insul.sub) { var subRate = num(settings.insulation_sub_rate) || r.labor; insul.subCost = (insul.field.duct_min + insul.field.pipe_min) / 60 * subRate; services += insul.subCost; servicesSales += insul.subCost; subtotal += insul.subCost; }
+    // Energy Plus budget for the field insulation: their installed rates, $1,500 minimum per project
+    var epRaw = insul.field.ep_duct + insul.field.ep_pipe;
+    insul.field.ep_total = epRaw > 0 ? Math.max(epRaw, EP.minimum) : 0; insul.field.ep_min_applied = epRaw > 0 && epRaw < EP.minimum;
+    // insulation by subcontractor: the field insulation (material + labor) left the duct / pipe lines; the sub's installed price joins services
+    if (insul.sub) { insul.subCost = insul.field.ep_total; services += insul.subCost; servicesSales += insul.subCost; subtotal += insul.subCost; }
     // ── company rules: minimum charges / allowances join the buckets of the lines they matched ──
     var ruleSet = Array.isArray(est.rules) ? est.rules : (typeof window !== 'undefined' && Array.isArray(window.NW_EST_RULES) ? window.NW_EST_RULES : []);
     var rulesOut = nwEstRules(lines, perLine, ruleSet);
