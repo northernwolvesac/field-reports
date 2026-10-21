@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=538">
+<link rel="stylesheet" href="procore-ui.css?v=539">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=538"></script>
-<script src="auth.js?v=538"></script>
-<script src="est-totals.js?v=538"></script>
-<script src="procore-ui.js?v=538"></script>
+<script src="supabase-config.js?v=539"></script>
+<script src="auth.js?v=539"></script>
+<script src="est-totals.js?v=539"></script>
+<script src="procore-ui.js?v=539"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=538"></script>
-<script src="est-drawings.js?v=538"></script>
-<script src="nw-catalog-picker.js?v=538"></script>
-<script src="nw-duct-weight.js?v=538"></script>
-<script src="geo-takeoff.js?v=538"></script>
-<script src="est-engine.js?v=538"></script>
+<script src="bid-actions.js?v=539"></script>
+<script src="est-drawings.js?v=539"></script>
+<script src="nw-catalog-picker.js?v=539"></script>
+<script src="nw-duct-weight.js?v=539"></script>
+<script src="geo-takeoff.js?v=539"></script>
+<script src="est-engine.js?v=539"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -354,7 +354,9 @@ requireAuth().catch(function(){});
   [['1/16"',1/16],['3/32"',3/32],['1/8"',1/8],['3/16"',3/16],['1/4"',1/4],['3/8"',3/8],['1/2"',1/2],['3/4"',3/4],['1"',1],['1 1/2"',1.5],['3"',3]].forEach(function(p) { SCALE_PRESETS.push({ label: p[0] + ' = 1\'', ppf: p[1] * 72, group: 'Architectural' }); });
   [10,20,30,40,50,60,100].forEach(function(n) { SCALE_PRESETS.push({ label: '1" = ' + n + '\'', ppf: 72 / n, group: 'Engineering' }); });
   var TYPE_HINT = { count: 'Count Quantity items - EX: Light Fixtures, Electrical Outlets, Data Outlets', linear: 'Linear Quantity items - EX: Conduit, Pipe, Duct', area: 'Area Quantity items - EX: Flooring, Roofing, Insulation' };
-  var SYMBOLS = [['circle', 'Circle'], ['square', 'Square'], ['diamond', 'Diamond'], ['triangle', 'Triangle'], ['x', 'Cross']];
+  var SYMBOLS = [['circle', 'Circle'], ['square', 'Square'], ['diamond', 'Diamond'], ['triangle', 'Triangle'], ['x', 'Cross'], ['valve', 'Valve (bow-tie)'], ['check', 'Check valve'], ['ctrl', 'Control valve'], ['damper', 'Damper'],
+    ['L:B', 'B — balancing'], ['L:Y', 'Y — strainer'], ['L:U', 'U — union'], ['L:DV', 'DV — drain valve'], ['L:AV', 'AV — air vent'], ['L:TH', 'TH — thermometer'], ['L:PG', 'PG — gauge'], ['L:FC', 'FC — flex connector'], ['L:BP', 'BP — backflow'], ['L:ET', 'ET — expansion tank'],
+    ['L:FD', 'FD — fire damper'], ['L:FSD', 'FSD — fire/smoke damper'], ['L:MD', 'MD — motorized damper'], ['L:BD', 'BD — backdraft damper'], ['L:AD', 'AD — access door'], ['L:SD', 'SD — smoke detector'], ['L:T', 'T — thermostat'], ['L:S', 'S — sensor'], ['L:CO2', 'CO2 — sensor'], ['L:CP', 'CP — condensate pump']];
 
   var params = new URLSearchParams(location.search);
   var estimateId = params.get('est') || params.get('id');
@@ -1627,7 +1629,7 @@ requireAuth().catch(function(){});
     $('compareBtn').innerHTML = ic('picture_in_picture', 18) + 'Compare'; $('compareClose').innerHTML = ic('close', 14); $('undoTop').innerHTML = ic('undo', 18) + 'Undo'; $('redoTop').innerHTML = ic('redo', 18); $('openNewBtn').innerHTML = ic('open_in_new', 18); $('downloadBtn').innerHTML = ic('download', 18);
     $('emptyIcon').innerHTML = ic('straighten', 56); $('rightClose').innerHTML = ic('close', 18);
     $('rail').innerHTML = '<div class="tk-float">' + tb('pan', 'pan_tool', 'Pan (H) — or hold Space / Alt and drag') + tb('select', 'near_me', 'Select / move marks (V)') + tb('marquee', 'select_all', 'Marquee select — drag a rectangle') + ib('undoBtn', 'undo', 'Undo (Ctrl+Z)') + ib('redoBtn', 'redo', 'Redo (Ctrl+Y / Ctrl+Shift+Z)') + ib('layersBtn', 'layers', 'Show / hide the takeoff panel') + '</div>' +
-      '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('zone', 'select_all', 'Zone — outline an area (a wing, a phase, a CO area), Enter to close; quantities inside it: Actions → Zones report') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
+      '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('zone', 'select_all', 'Zone — outline an area (a wing, a phase, a CO area), Enter to close; quantities inside it: Actions → Zones report') + ib('symBtn', 'tune', 'Symbols — valves, dampers, controls, specialties: a priced count layer in one click, then place them on the plan') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
       '<div class="tk-float">' + ib('legendBtn', 'description', 'Legend of the layers on this plan') + ib('pasteBtn', 'content_paste', 'Paste copied marks (Ctrl+V)') + '</div>' +
       '<div class="tk-float tk-rail-last">' + ib('swapBtn', 'swap_horiz', 'Swap the compared plans') + ib('railCollapse', 'chevron_right', 'Collapse the tool rail') + '</div>';
     $('bottombar').innerHTML = ib('zoomFit', 'fit_screen', 'Fit width (0)') + ib('zoomOut', 'remove', 'Zoom out (−)') + '<input type="range" id="zoomRange" min="10" max="1200" step="5" value="100" title="Zoom"><span id="zoomText" class="pc-muted" style="font-size:11px;min-width:34px;text-align:center">100%</span>' + ib('zoomIn', 'add', 'Zoom in (+)') +
@@ -2114,7 +2116,131 @@ requireAuth().catch(function(){});
     ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y + 1);
     if (sf.u) ctx.fillRect(x - ctx.measureText(t).width / 2, y + sf.s * 0.6, ctx.measureText(t).width, Math.max(1, Math.round(sf.s / 14)));
   }
+
+  // ─── symbol palette (Takso "Add a symbol", Russ 2026-10-21): valves, duct accessories, controls and specialties as count layers in one click.
+  // Pick a symbol (+ its pipe or duct size) → the NWAC Cost Catalog item of that kind and size gives the price and labor (no match = a $0 layer
+  // to price), an existing layer of the same name is reused, the Count tool is on — click the plan to place them. Glyphs drawn by drawGlyphSym.
+  var PIPE_SIZES = ['1/2"', '3/4"', '1"', '1-1/4"', '1-1/2"', '2"', '2-1/2"', '3"', '4"', '6"'];
+  var PALETTE = [
+    { g: 'Valves & specialties', items: [
+      { k: 'ball', label: 'Ball valve', q: 'ball valve', not: /^gas/i, sym: 'valve', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#0e7490' },
+      { k: 'gate', label: 'Gate valve', q: 'gate valve', sym: 'valve', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#155e75' },
+      { k: 'check', label: 'Check valve', q: 'check valve', sym: 'check', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#0f766e' },
+      { k: 'bal', label: 'Balancing valve', q: 'balancing valve', sym: 'L:B', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#047857' },
+      { k: 'bfly', label: 'Butterfly valve', q: 'butterfly', sym: 'valve', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#1d4ed8' },
+      { k: 'cv2', label: 'Control valve 2-way', q: 'control valve 2-way', sym: 'ctrl', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#7c3aed' },
+      { k: 'cv3', label: 'Control valve 3-way', q: 'control valve 3-way', sym: 'ctrl', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#6d28d9' },
+      { k: 'strainer', label: 'Y-strainer', q: 'strainer', sym: 'L:Y', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#475569' },
+      { k: 'union', label: 'Union', q: 'union', sym: 'L:U', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#64748b' },
+      { k: 'drain', label: 'Drain valve', q: 'drain valve', sym: 'L:DV', size: null, cat: 'pipework', crew: 'pipe', color: '#0369a1' },
+      { k: 'aav', label: 'Air vent', q: 'air vent', sym: 'L:AV', size: null, cat: 'pipework', crew: 'pipe', color: '#0284c7' },
+      { k: 'therm', label: 'Thermometer', q: 'thermometer', sym: 'L:TH', size: null, cat: 'pipework', crew: 'pipe', color: '#b45309' },
+      { k: 'gauge', label: 'Pressure gauge', q: 'pressure gauge', sym: 'L:PG', size: null, cat: 'pipework', crew: 'pipe', color: '#92400e' },
+      { k: 'flexp', label: 'Flexible connector', q: 'flexible', not: /gas/i, sym: 'L:FC', size: 'pipe', cat: 'pipework', crew: 'pipe', color: '#9333ea' },
+      { k: 'bfp', label: 'Backflow preventer', q: 'backflow', sym: 'L:BP', size: null, cat: 'pipework', crew: 'pipe', color: '#be123c' },
+      { k: 'xtank', label: 'Expansion tank', q: 'expansion tank', sym: 'L:ET', size: null, cat: 'pipework', crew: 'pipe', color: '#9f1239' }
+    ] },
+    { g: 'Duct accessories', items: [
+      { k: 'vd', label: 'Volume damper', q: 'volume damper', sym: 'damper', size: 'duct', cat: 'ductwork', crew: 'sm', color: '#c2410c' },
+      { k: 'fd', label: 'Fire damper', q: 'fire damper', not: /smoke/i, sym: 'L:FD', size: 'duct', cat: 'ductwork', crew: 'sm', color: '#dc2626' },
+      { k: 'fsd', label: 'Fire / smoke damper', q: 'smoke damper', sym: 'L:FSD', size: 'duct', cat: 'ductwork', crew: 'sm', color: '#b91c1c' },
+      { k: 'md', label: 'Motorized damper', q: 'motorized damper', sym: 'L:MD', size: 'duct', cat: 'ductwork', crew: 'sm', color: '#9a3412' },
+      { k: 'bdd', label: 'Backdraft damper', q: 'backdraft', sym: 'L:BD', size: 'duct', cat: 'ductwork', crew: 'sm', color: '#7c2d12' },
+      { k: 'ad', label: 'Access door', q: 'access door', sym: 'L:AD', size: 'duct', cat: 'ductwork', crew: 'sm', color: '#a16207' },
+      { k: 'dsd', label: 'Duct smoke detector', q: 'smoke detector', sym: 'L:SD', size: null, cat: 'ductwork', crew: 'sm', color: '#e11d48' }
+    ] },
+    { g: 'Controls', items: [
+      { k: 'tstat', label: 'Thermostat', q: 'thermostat', sym: 'L:T', size: null, cat: 'equipment_install', crew: 'other', color: '#2563eb' },
+      { k: 'sens', label: 'Temperature sensor', q: 'temperature sensor', sym: 'L:S', size: null, cat: 'equipment_install', crew: 'other', color: '#4f46e5' },
+      { k: 'co2', label: 'CO2 sensor', q: 'co2', sym: 'L:CO2', size: null, cat: 'equipment_install', crew: 'other', color: '#4338ca' },
+      { k: 'cpump', label: 'Condensate pump', q: 'condensate pump', sym: 'L:CP', size: null, cat: 'equipment_install', crew: 'sm', color: '#0f766e' }
+    ] }
+  ];
+  function glyphSvg(sym, col) {
+    var c = esc(col), b = '<svg viewBox="-12 -12 24 24" width="26" height="26" style="flex:none">';
+    if (sym === 'valve' || sym === 'check' || sym === 'ctrl') return b + '<path d="M-9 -5 L9 5 L9 -5 L-9 5 Z" fill="' + c + '" fill-opacity=".3" stroke="' + c + '" stroke-width="1.8" stroke-linejoin="round"/>' +
+      (sym === 'check' ? '<path d="M0 -8 V8" stroke="' + c + '" stroke-width="1.8"/>' : '') + (sym === 'ctrl' ? '<path d="M0 0 V-10 M-4 -10 H4" stroke="' + c + '" stroke-width="1.8"/>' : '') + '</svg>';
+    if (sym === 'damper') return b + '<circle r="7" fill="none" stroke="' + c + '" stroke-width="1.8"/><path d="M-9 5 L9 -5" stroke="' + c + '" stroke-width="1.8"/></svg>';
+    var t = String(sym).slice(2);
+    return b + '<circle r="10" fill="' + c + '"/><text x="0" y="0.5" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-weight="700" font-size="' + (t.length > 2 ? 6.5 : t.length > 1 ? 8 : 11) + '" fill="#fff">' + esc(t) + '</text></svg>';
+  }
+  function drawGlyphSym(p, sym, col, sel, no) {
+    var r = sel ? 11 : 9, x = p[0], y = p[1];
+    ctx.save(); ctx.setLineDash([]); ctx.lineJoin = 'round';
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2;
+    if (sym === 'valve' || sym === 'check' || sym === 'ctrl') {
+      ctx.beginPath(); ctx.moveTo(x - r, y - r * 0.6); ctx.lineTo(x + r, y + r * 0.6); ctx.lineTo(x + r, y - r * 0.6); ctx.lineTo(x - r, y + r * 0.6); ctx.closePath();
+      ctx.globalAlpha = 0.35; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+      if (sym === 'check') { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke(); }
+      if (sym === 'ctrl') { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - r * 1.3); ctx.moveTo(x - r * 0.5, y - r * 1.3); ctx.lineTo(x + r * 0.5, y - r * 1.3); ctx.stroke(); }
+    } else if (sym === 'damper') { ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - r, y + r * 0.6); ctx.lineTo(x + r, y - r * 0.6); ctx.stroke(); }
+    else { var t = String(sym).slice(2); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold ' + (t.length > 2 ? 7 : t.length > 1 ? 8 : 10) + 'px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y + 0.5); }
+    if (sel) { ctx.strokeStyle = '#1f2933'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.stroke(); }
+    if (no) { ctx.fillStyle = col; ctx.font = 'bold 9px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(String(no), x + r + 4, y); }
+    ctx.restore();
+  }
+  function openPalette() {
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    var body = PALETTE.map(function(gr) {
+      return '<div class="pc-label" style="margin:6px 0">' + esc(gr.g) + '</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px;margin-bottom:10px">' +
+        gr.items.map(function(it) { return '<button class="pc-btn pc-btn-outline" data-pal="' + it.k + '" style="justify-content:flex-start;gap:8px;height:auto;padding:6px 8px;text-align:left">' + glyphSvg(it.sym, it.color) + '<span>' + esc(it.label) + '</span></button>'; }).join('') + '</div>';
+    }).join('') + '<div class="pc-muted" style="font-size:12px">Each symbol becomes a count layer priced from the Cost Catalog (by size where it matters); then click the plan to place them.</div>';
+    var dlg = P.modal({ title: 'Add a symbol', body: body, size: 'lg', buttons: [{ label: 'Close', onClick: function() { dlg.close(); } }] });
+    dlg.body.addEventListener('click', function(e) {
+      var b = e.target.closest('[data-pal]'); if (!b) return;
+      var it = null; PALETTE.forEach(function(gr) { gr.items.forEach(function(x) { if (x.k === b.getAttribute('data-pal')) it = x; }); });
+      dlg.close(); if (it) paletteSize(it);
+    });
+  }
+  async function paletteSize(it) {
+    if (!it.size) { paletteLayer(it, ''); return; }
+    var last = (function() { try { return localStorage.getItem('tk_pal_' + it.size) || ''; } catch (e) { return ''; } })();
+    var field = it.size === 'pipe'
+      ? '<select class="pc-select" id="palSize">' + PIPE_SIZES.map(function(z) { return '<option' + (z === (last || '1"') ? ' selected' : '') + '>' + esc(z) + '</option>'; }).join('') + '</select>'
+      : '<input class="pc-input" id="palSize" placeholder="e.g. 12x12 or 10&quot;Ø" value="' + esc(last) + '">';
+    var dlg = P.modal({ title: it.label + ' — size', body: '<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">' + glyphSvg(it.sym, it.color) + '<b>' + esc(it.label) + '</b></div><div class="pc-field"><label class="pc-label">' + (it.size === 'pipe' ? 'Pipe size' : 'Duct size (W x H, or round Ø)') + '</label>' + field + '</div>',
+      buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Add & place', primary: true, close: false, closeOnDone: false, onClick: function() {
+        var v = String((dlg.body.querySelector('#palSize') || {}).value || '').trim().replace(/\s*[xX×]\s*/, 'x');
+        if (!v) { toast('Enter the size'); return false; }
+        if (it.size === 'duct' && /^\d+$/.test(v)) v += '"Ø';
+        try { localStorage.setItem('tk_pal_' + it.size, v); } catch (e) {}
+        dlg.close(); paletteLayer(it, v);
+      } }] });
+    var f = dlg.body.querySelector('#palSize'); if (f && f.tagName === 'INPUT') { f.focus(); f.addEventListener('keydown', function(e) { if (e.key === 'Enter') dlg.el && dlg.el.querySelector('.pc-btn-primary') && dlg.el.querySelector('.pc-btn-primary').click(); }); }
+  }
+  function sizeRx(v, kind) {
+    var e = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (kind === 'pipe') return new RegExp('(^|[^0-9/-])' + e.replace(/"$/, '') + '(")?(\\s|$|[^0-9/-])');
+    var m = /^(\d+)x(\d+)$/i.exec(v); if (m) return new RegExp('(^|\\D)(' + m[1] + '\\s*x\\s*' + m[2] + '|' + m[2] + '\\s*x\\s*' + m[1] + ')(\\D|$)', 'i');
+    var r = /^(\d+)/.exec(v); if (!r) return /$^/;
+    var rr = new RegExp('(^|\\D)' + r[1] + '\\s*("|”|in\\b|Ø|ø)', 'i');   // a round size: the number with an inch / Ø mark, in a round item
+    return { test: function(x) { return rr.test(x) && /round|Ø|ø|dia/i.test(x); } };
+  }
+  async function paletteLayer(it, size) {
+    var want = it.label + (size ? ' ' + size : ''), have = layers.find(function(l) { return l.takeoff_type === 'count' && (String(l.name).toLowerCase() === want.toLowerCase() || (l.params && l.params.palette === it.k + '|' + size)); });
+    if (have) { selectLayer(have.id); toast('"' + have.name + '" selected — click the plan to place'); return; }
+    var cat = null;
+    if (catalogOk) {
+      var r = await sb.from('est_catalog_items').select('id,name,unit,unit_cost,unit_labor_min,waste_pct').ilike('name', '%' + it.q + '%').order('name').limit(200);
+      var rows = (r.data || []).filter(function(x) { return !(it.not && it.not.test(x.name)); });
+      if (size) { var rx = sizeRx(size, it.size); rows = rows.filter(function(x) { return rx.test(x.name); }); }
+      cat = rows[0] || null;
+    }
+    var row = { estimate_id: estimateId, name: cat ? cat.name : want, group_name: it.cat === 'ductwork' ? 'Duct accessories' : it.cat === 'pipework' ? 'Valves & specialties' : 'Controls',
+      takeoff_type: 'count', category: it.cat, labor_crew_type: it.crew, unit: 'ea', unit_material_cost: cat ? Number(cat.unit_cost || 0) : 0, unit_labor_hours: cat ? Math.round(Number(cat.unit_labor_min || 0) / 60 * 10000) / 10000 : 0,
+      waste_pct: 0, multiplier: 1, drop_length_ft: 0, labor_factor: 1, rise: 0, run: 12, extra_count: 0, line_width: 3, color: it.color, symbol: it.sym,
+      notes: cat ? 'From the symbol palette · Cost Catalog' : 'From the symbol palette — no Cost Catalog item for ' + want + ': set the price', catalog_item_id: cat ? cat.id : null, sort_order: layers.length };
+    if (extCols) row.params = { palette: it.k + '|' + size };
+    var ins = await sb.from('estimate_takeoff_layers').insert(row).select().single();
+    if (ins.error) { toast(ins.error.message, 'error'); return; }
+    if (!ins.data.params || typeof ins.data.params !== 'object') ins.data.params = {};
+    layers.push(ins.data); groupEntry(ins.data.group_name, true).collapsed = false; saveGroups();
+    selectLayer(ins.data.id); renderAll(); scheduleSync();
+    toast(cat ? '"' + cat.name + '" — ' + P.money(cat.unit_cost || 0) + ' + ' + Math.round(cat.unit_labor_min || 0) + ' min each · click the plan to place' : '"' + want + '" added at $0 — no catalog match, set the price in the layer · click the plan to place', cat ? 'success' : 'info');
+  }
   function symbol(p, sym, col, sel, no) {
+    if (sym === 'valve' || sym === 'check' || sym === 'ctrl' || sym === 'damper' || /^L:/.test(String(sym || ''))) { drawGlyphSym(p, sym, col, sel, no); return; }
     var r = sel ? 10 : 8; ctx.setLineDash([]); ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath();
     if (sym === 'square') ctx.rect(p[0] - r, p[1] - r, 2 * r, 2 * r);
     else if (sym === 'diamond') { ctx.moveTo(p[0], p[1] - r * 1.2); ctx.lineTo(p[0] + r * 1.2, p[1]); ctx.lineTo(p[0], p[1] + r * 1.2); ctx.lineTo(p[0] - r * 1.2, p[1]); ctx.closePath(); }
@@ -2485,7 +2611,7 @@ requireAuth().catch(function(){});
     var why = [], lvl = 3; function dn(l, w) { if (l < lvl) lvl = l; why.push(w); }
     var r = (sp && sp.result) || {}, tc = (sp && sp.tag_counts) || {}, tag = rvNormTag(row.tag);
     // existing equipment / devices "to remain" or "to be removed" are not priced — nothing to doubt
-    if (/\(E\)|existing|to remain|to be removed|demolish|remove/i.test(String(row.tag || '') + ' ' + String(row.type || '') + ' ' + String(row.notes || '') + ' ' + String(row.location || ''))) return { lvl: 'high', why: ['existing / to remain / removed — not priced'] };
+    if (/\(E\)|\bexisting\b|to remain|to be removed|demolish|\bremove\b/i.test(String(row.tag || '') + ' ' + String(row.type || '') + ' ' + String(row.notes || '') + ' ' + String(row.location || ''))) return { lvl: 'high', why: ['existing / to remain / removed — not priced'] };
     var printed = !!tag && ((tc.devices && Object.keys(tc.devices).some(function(k) { return rvNormTag(k) === tag; })) || (tc.tags && Object.keys(tc.tags).some(function(k) { return rvNormTag(k) === tag; })));
     var changes = (r.repeat && r.repeat.changes) || [], noted = tag && changes.filter(function(c) { return rvNormTag(String(c).split(/\s/)[0]) === tag; });
     if (kind === 'device') {
@@ -2926,7 +3052,7 @@ requireAuth().catch(function(){});
     $('scaleChip').onclick = scaleDialog;
     // rail / bottom bar
     document.querySelectorAll('#rail [data-tool], #bottombar [data-tool]').forEach(function(b) { b.onclick = function() { setTool(b.getAttribute('data-tool')); }; });
-    $('undoBtn').onclick = undo; $('redoBtn').onclick = redo; $('undoTop').onclick = undo; $('redoTop').onclick = redo; $('layersBtn').onclick = toggleLeft; $('railMore').onclick = function(e) { e.stopPropagation(); railMenu(this); };
+    $('undoBtn').onclick = undo; $('redoBtn').onclick = redo; $('undoTop').onclick = undo; $('redoTop').onclick = redo; $('layersBtn').onclick = toggleLeft; $('symBtn').onclick = function() { openPalette(); }; $('railMore').onclick = function(e) { e.stopPropagation(); railMenu(this); };
     $('legendBtn').onclick = toggleLegend; $('pasteBtn').onclick = pasteMarks; $('swapBtn').onclick = swapCompare; $('swapBtn2').onclick = swapCompare;
     $('railCollapse').onclick = function() { var c = document.body.classList.toggle('tk-rail-collapsed'); this.innerHTML = ic(c ? 'chevron_left' : 'chevron_right', 20); };
     $('zoomIn').onclick = function() { setZoom(zoom * 1.25); }; $('zoomOut').onclick = function() { setZoom(zoom / 1.25); }; $('zoomFit').onclick = function() { fitView(); };
@@ -2988,6 +3114,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=538"></script>
+<script src="sw-register.js?v=539"></script>
 </body>
 </html>
