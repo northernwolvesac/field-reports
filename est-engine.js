@@ -370,7 +370,7 @@
       return t.n > 1 ? Object.assign({}, p, { result: scaleSheet(p.result, t.n) }) : p;
     });
     var symDropped = [], colourBars = [], noLenEa = [], unitMounted = [];
-    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, fittings = { elbows: {}, tees: {}, transitions: {}, n_elbows: 0, n_tees: 0, n_transitions: 0, n_total: 0, sheets: [], rows: {} }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {}, linCallouts = { n: 0, ft: 0, sheets: [] };
+    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, fittings = { elbows: {}, tees: {}, transitions: {}, n_elbows: 0, n_tees: 0, n_transitions: 0, n_total: 0, sheets: [], rows: {} }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {}, linCallouts = { n: 0, ft: 0, sheets: [] }, pipeAiSheets = [];
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
     var schedDev = {};
@@ -725,6 +725,7 @@
             });
             pipeRisers.n += r.geo_pipe.riser_n || 0; pipeRisers.ft += r.geo_pipe.riser_ft || 0; pipeRisers.sheets.push(sh + ' (' + (r.geo_pipe.riser_n || 0) + ')');
           }
+          if (takeoffSheet && !(r.geo_pipe && r.geo_pipe.total_ft > 0) && (r.pipe_runs || []).length) pipeAiSheets.push({ sheet: sh, ft: Math.round((r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0)), why: (r.geo_pipe && r.geo_pipe.error) || 'no piping geometry' });
           if (takeoffSheet && !(r.geo_pipe && r.geo_pipe.total_ft > 0)) (r.pipe_runs || []).forEach(function (x) {
             var k = (x.service || '') + '|' + (x.size || '') + '|' + (x.material || '');
             var o = pipe[k] = pipe[k] || { service: x.service || '', size: x.size || '', material: x.material || '', lf: 0, sheets: [] };
@@ -749,7 +750,7 @@
       (r.scope_notes || []).forEach(function (n) { if (n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
-    return { devCheck: devCheck, linCallouts: linCallouts, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
+    return { devCheck: devCheck, pipeAiSheets: pipeAiSheets, linCallouts: linCallouts, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
       rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, pipeFittings: pipeFit, typical: typical, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
@@ -1096,6 +1097,10 @@
       if (qo.vavd) ao.vavd = qo.vavd;
       if (qo.fpb) ao.fpb = qo.fpb;
     }
+    // pipe lengths the reader eyeballed because the lines could not be measured (no size labels on the pipes, colour carried by a raster layer …)
+    (C.pipeAiSheets || []).forEach(function (s) {
+      if (s.ft >= 30) flags.push({ category: 'piping', item: 'Pipe lengths — reader estimate on ' + s.sheet, flag: 'about ' + s.ft + ' ft of pipe read by eye on ' + s.sheet + ' (' + s.why + ') — in blind tests the eyeballed pipe feet ran 35-60 % under the drawn length; measure this sheet in the Takeoff before relying on it' });
+    });
     // slot lengths printed in the plan callouts ("PROVIDE 17'-6" LINEAR SLOT DIFFUSER …") when the reader / geometry carried fewer feet
     if (C.linCallouts && C.linCallouts.ft > 1.15 * ao.linear && !(qo.lines && qo.linear)) {
       flags.push({ category: 'air devices', item: 'Linear diffusers — plan callouts', flag: Math.round(C.linCallouts.ft) + ' ft of slot diffuser / return named in the callouts (' + C.linCallouts.n + ' on ' + C.linCallouts.sheets.join(', ') + '); the rows carried ' + Math.round(ao.linear) + ' ft — priced by the callouts, check typical (TYP) multipliers' });
