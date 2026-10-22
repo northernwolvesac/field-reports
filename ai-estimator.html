@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=546"></script>
-<script src="auth.js?v=546"></script>
-<script src="est-org.js?v=546"></script>
-<script src="est-totals.js?v=546"></script>
-<script src="nw-duct-weight.js?v=546"></script>
+<script src="supabase-config.js?v=548"></script>
+<script src="auth.js?v=548"></script>
+<script src="est-org.js?v=548"></script>
+<script src="est-totals.js?v=548"></script>
+<script src="nw-duct-weight.js?v=548"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=546"></script>
-<script src="nw-email.js?v=546"></script>
-<script src="est-engine.js?v=546"></script>
-<script src="geo-takeoff.js?v=546"></script>
+<script src="email-utils.js?v=548"></script>
+<script src="nw-email.js?v=548"></script>
+<script src="est-engine.js?v=548"></script>
+<script src="geo-takeoff.js?v=548"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -565,6 +565,7 @@ var AE = (function() {
           var sp = src.getPage(0), rot = ((sp.getRotation().angle || 0) % 360 + 360) % 360;
           var emb = await d3.embedPage(sp), W = emb.width, H = emb.height;
           var cols = W >= H ? 3 : 2, rows = W >= H ? 2 : 3, ov = 0.1;
+          if (m.grid) { cols = W >= H ? m.grid[0] : m.grid[1]; rows = W >= H ? m.grid[1] : m.grid[0]; }   // scanned sheets: finer tiles
           var tw = W / cols * (1 + ov), th = H / rows * (1 + ov);
           for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
             var x0 = Math.min(Math.max(c * W / cols - (tw - W / cols) / 2, 0), W - tw);
@@ -824,7 +825,7 @@ var AE = (function() {
       if (wantCensus || wantGlyphs) {
         try { var pdfC = await pdfjsLib.getDocument({ data: one.slice(0) }).promise, dC = await NWGeo.extract(await pdfC.getPage(1)); if (wantCensus) census = NWGeo.symbolCensus(dC); if (wantGlyphs) glyphs = NWGeo.glyphFamilies(dC, { max: 14 }); await pdfC.destroy(); } catch (eC) { console.warn('[ai-est] census', eC); }
       }
-      if (f.kind !== 'specs') { var z = await pdfJob({ op: 'zoom', buf: one.slice(0) }); bytes = z.bytes; zoom = z.tiles; }
+      if (f.kind !== 'specs') { var raster = p.text_len != null && Number(p.text_len) < 60 && /plan|enlarged|riser|other/.test(String(p.sheet_type || '')) || (p.text_len != null && Number(p.text_len) < 60 && !p.sheet_type); var z = await pdfJob({ op: 'zoom', buf: one.slice(0), grid: raster ? [4, 3] : undefined }); bytes = z.bytes; zoom = z.tiles; }
       body = { action: 'sheet', page_id: p.id, pdf_base64: await b64(bytes), zoom_tiles: zoom, tag_counts: txt.tags || {}, device_tags: txt.devices || {}, symbol_census: census || undefined, glyph_families: glyphs ? glyphs.families.map(function(g) { return Object.assign({}, g, { boxes: undefined }); }) : undefined, glyph_text: glyphs ? NWGeo.glyphText(glyphs) : undefined,
         text_hint: Object.entries(txt.sizes || {}).map(function(e) { return e[0] + '×' + e[1]; }).join(', ') };
     }
@@ -1889,6 +1890,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=546"></script>
+<script src="sw-register.js?v=548"></script>
 </body>
 </html>
