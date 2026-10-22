@@ -361,6 +361,9 @@
       return /^(SP|SPR|FE|FEC|FA|FACP|T|TS|TSTAT|SD|GB|CO2|EX|EXIT|OS|PS|WAP)$/.test(t) || /sprinkler|thermostat|smoke detector|fire extinguisher|gypsum|exit sign|not (an )?hvac/i.test(nt);
     }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote' && !(p.status === 'skipped' && p.result.triage && p.result.triage.superseded); });   // a sheet replaced by a later copy never counts
+    // a reader result with a list field that came back as a string / object (Cannon Hill: scope_notes) must not stop the pricing — such a field reads as empty
+    var LISTS = ['air_devices', 'equipment', 'duct_runs', 'pipe_runs', 'demo', 'scope_notes', 'rigging', 'questions'];
+    sheets = sheets.map(function (p) { var bad = LISTS.filter(function (k) { return p.result[k] != null && !Array.isArray(p.result[k]); }); if (!bad.length) return p; var r2 = Object.assign({}, p.result); bad.forEach(function (k) { r2[k] = []; }); return Object.assign({}, p, { result: r2 }); });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var TM = typicalMults(sheets, opts.sheetMult), typical = [];
     sheets = sheets.map(function (p) {
@@ -747,7 +750,8 @@
       if (isDemo) (r.demo || []).forEach(function (d) { demo.push({ item: d.item, qty: Number(d.qty || 0), sheet: sh }); });
       wetTaps += Number(r.wet_taps || 0);
       (r.rigging || []).forEach(function (x) { rig.push({ tag: String(x.tag || '').trim(), key: norm(x.tag), weight_lb: Number(x.weight_lb || 0), where: x.where, floor: x.floor, sheet: sh }); });
-      (r.scope_notes || []).forEach(function (n) { if (n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
+      // the reader sometimes returns the notes as one string or an object — only a list of note objects is read (Cannon Hill: "forEach is not a function" stopped the whole pricing)
+      (Array.isArray(r.scope_notes) ? r.scope_notes : []).forEach(function (n) { if (n && n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
     return { devCheck: devCheck, pipeAiSheets: pipeAiSheets, linCallouts: linCallouts, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
