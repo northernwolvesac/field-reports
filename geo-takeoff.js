@@ -986,6 +986,31 @@
       var singles = singleLines(S2, used2, labs, ptft, leaders, D).concat(barPieces);
       var dashPieces = dashedRuns(dashSty, labs, ptft, D.text, S, fp.used, singles);
       singles = singles.concat(dashPieces);
+      // a single line drawn along the centre of a wall pair that is already counted is the same duct twice (920 Main: 330 of 756 single-line feet lay inside
+      // measured pairs; the estimator's whole floor was 912 ft against our 1,458) — the segments inside a pair's footprint are dropped from the single pieces
+      var dblFt = 0;
+      if (!D.noPairSingleDedupe && pcs.length && singles.length) (function () {
+        var cell = 12 * ptft, G = {};
+        pcs.forEach(function (q, qi) { var hl = q.len_ft * ptft / 2 + 2 * ptft, hw = q.w_in / 24 * ptft + ptft, R = Math.max(hl, hw), x0 = Math.floor((q.cx - R) / cell), x1 = Math.floor((q.cx + R) / cell), y0 = Math.floor((q.cy - R) / cell), y1 = Math.floor((q.cy + R) / cell); for (var gx = x0; gx <= x1; gx++) for (var gy = y0; gy <= y1; gy++) (G[gx + ',' + gy] = G[gx + ',' + gy] || []).push(qi); });
+        function inPair(x, y, ux, uy, size) {
+          var cand = G[Math.floor(x / cell) + ',' + Math.floor(y / cell)]; if (!cand) return false;
+          for (var c = 0; c < cand.length; c++) { var q = pcs[cand[c]]; if (q.size !== size || Math.abs(ux * q.uy - uy * q.ux) > 0.17) continue; var dx = x - q.cx, dy = y - q.cy, al = Math.abs(dx * q.ux + dy * q.uy), la = Math.abs(-dx * q.uy + dy * q.ux); if (al <= q.len_ft * ptft / 2 + 1.0 * ptft && la <= q.w_in / 24 * ptft * 0.6 + 0.3 * ptft) return true; }
+          return false;
+        }
+        singles = singles.filter(function (s) {
+          if (s.bar || s.dashed || !s.xy || !s.xy.length) return true;
+          var tot = 0, cov = 0, keepSeg = [];
+          s.xy.forEach(function (g) {
+            var L = hyp(g[2] - g[0], g[3] - g[1]), n2 = Math.max(1, Math.round(L / (1.5 * ptft))), c2 = 0;
+            for (var k = 0; k < n2; k++) if (L > 0 && inPair(g[0] + (g[2] - g[0]) * (k + 0.5) / n2, g[1] + (g[3] - g[1]) * (k + 0.5) / n2, (g[2] - g[0]) / L, (g[3] - g[1]) / L, s.size)) c2++;
+            tot += L; cov += L * c2 / n2; if (c2 < 0.6 * n2) keepSeg.push(g);
+          });
+          if (!(tot > 0) || cov < 0.2 * tot) return true;
+          var left = tot - cov; dblFt += s.len_ft * Math.min(1, cov / tot);
+          if (left < 1.0 * ptft || keepSeg.length === 0) return false;
+          s.xy = keepSeg; s.len_ft = s.len_ft * left / tot; return true;
+        });
+      })();
       var all = pcs.concat(singles), sizes = {}, total = 0, sf = 0, wf = 0;
       // ─── scope: duct on the far side of the area-of-work boundary ("EXISTING TO REMAIN / NO WORK PERFORMED" — Esquire's 1st floor carried
       // 436 ft of it) and the strip beyond a match line (drawn on both halves of a floor) are not in the takeoff ───
@@ -1025,7 +1050,7 @@
       var labHit = labsIn.filter(function (l) { return segsAll.some(function (s) { return Math.abs(l.cx - (s[0] + s[2]) / 2) <= Math.abs(s[2] - s[0]) / 2 + 6 * ptft && Math.abs(l.cy - (s[1] + s[3]) / 2) <= Math.abs(s[3] - s[1]) / 2 + 6 * ptft && ptSeg(l.cx, l.cy, s) <= s[4] + 4 * ptft; }); }).length;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN };
-      return { ptft: ptft, scale_from: scaleFrom, anchored: anchored || undefined, systems: systems, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
+      return { ptft: ptft, scale_from: scaleFrom, anchored: anchored || undefined, pair_single_dup_ft: Math.round(dblFt * 10) / 10 || undefined, systems: systems, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
         styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, fittings: fittings, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), fill_bars: fillBars(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
