@@ -2551,6 +2551,76 @@
   }
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
   function measureRisers(data) { data.mode = 'risers'; return measure(data); }
-  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, symbolCensus: symbolCensus, glyphFamilies: glyphFamilies, glyphText: glyphText, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
+
+  // ─── 1c. scanned (image-only) plan pages: the lines and the text are pixels, not vectors ───
+  // The page is rendered, thresholded to the dark layer (duct walls print heavy black, the architecture screened gray), long horizontal / vertical
+  // runs become line segments and text-sized connected components become glyph boxes — the same data extract() returns, so ocrLabels() and measure()
+  // run unchanged. Diagonal elbows are not traced (their legs are). Sunrise Rye Brook: 97 scanned sheets, the reader's eyeball read 965 ft of a
+  // 3,079-ft sheet; the traced lines measured 2,655.
+  async function rasterize(page, opts) {
+    opts = opts || {};
+    var sc = opts.sc || 1.5, vp = page.getViewport({ scale: sc }), W = Math.round(vp.width), H = Math.round(vp.height);
+    var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
+    var img = ctx.getImageData(0, 0, W, H).data, dark = new Uint8Array(W * H), thr = opts.thr || 150;
+    for (var i = 0, j = 0; i < img.length; i += 4, j++) dark[j] = (img[i] * 0.3 + img[i + 1] * 0.59 + img[i + 2] * 0.11) < thr ? 1 : 0;
+    img = null; cv.width = cv.height = 0;
+    var vp1 = page.getViewport({ scale: 1 });
+    function U(px, py) { var q = vp1.convertToPdfPoint(px / sc, py / sc); return [q[0], q[1]]; }
+    var minLen = Math.round((opts.minLenPt || 14) * sc), maxThick = Math.max(6, Math.round(1.2 * sc * 4));
+    function scan(horiz) {
+      var outer = horiz ? H : W, inner = horiz ? W : H, open = {}, res = [];
+      for (var a = 0; a < outer; a++) {
+        var runs = [], s = -1;
+        for (var b = 0; b <= inner; b++) {
+          var d = b < inner && (horiz ? dark[a * W + b] : dark[b * W + a]);
+          if (d) { if (s < 0) s = b; } else if (s >= 0) { if (b - s >= minLen) runs.push([s, b - 1]); s = -1; }
+        }
+        var next = {};
+        runs.forEach(function (r) {
+          var hit = null;
+          for (var k in open) { var o = open[k]; if (o.last === a - 1 && Math.abs(o.s - r[0]) <= 3 && Math.abs(o.e - r[1]) <= 3) { hit = o; break; } }
+          if (hit) { hit.last = a; hit.s = Math.min(hit.s, r[0]); hit.e = Math.max(hit.e, r[1]); hit.sum += a; hit.n++; next[hit.id] = hit; }
+          else { var o2 = { id: a + '_' + r[0], first: a, last: a, s: r[0], e: r[1], sum: a, n: 1 }; next[o2.id] = o2; }
+        });
+        for (var k2 in open) if (!next[k2]) res.push(open[k2]);
+        open = next;
+      }
+      for (var k3 in open) res.push(open[k3]);
+      return res.filter(function (o) { return o.last - o.first + 1 <= 8; }).map(function (o) {
+        var c = o.sum / o.n, p1 = horiz ? U(o.s, c) : U(c, o.s), p2 = horiz ? U(o.e, c) : U(c, o.e);
+        return [p1[0], p1[1], p2[0], p2[1]];
+      });
+    }
+    var segList = scan(true).concat(scan(false));
+    // text-sized 4-connected components (anything that grows past a few text heights is linework and stops)
+    var lab = new Uint8Array(W * H), glyphs = [], stack = new Int32Array(1 << 20), maxPx = Math.round(14 * sc), minPx = Math.round(2.2 * sc);
+    for (var y0 = 0; y0 < H; y0++) for (var x0 = 0; x0 < W; x0++) {
+      var p0 = y0 * W + x0; if (!dark[p0] || lab[p0]) continue;
+      var sp = 0, x1 = x0, x2 = x0, y1 = y0, y2 = y0, cnt = 0, big = false; stack[sp++] = p0; lab[p0] = 1;
+      while (sp) {
+        var p = stack[--sp], py = (p / W) | 0, qx = p - py * W; cnt++;
+        if (qx < x1) x1 = qx; if (qx > x2) x2 = qx; if (py < y1) y1 = py; if (py > y2) y2 = py;
+        if (x2 - x1 > 4 * maxPx || y2 - y1 > 4 * maxPx) big = true;
+        if (big) continue;
+        if (qx > 0 && dark[p - 1] && !lab[p - 1]) { lab[p - 1] = 1; if (sp < stack.length) stack[sp++] = p - 1; }
+        if (qx < W - 1 && dark[p + 1] && !lab[p + 1]) { lab[p + 1] = 1; if (sp < stack.length) stack[sp++] = p + 1; }
+        if (py > 0 && dark[p - W] && !lab[p - W]) { lab[p - W] = 1; if (sp < stack.length) stack[sp++] = p - W; }
+        if (py < H - 1 && dark[p + W] && !lab[p + W]) { lab[p + W] = 1; if (sp < stack.length) stack[sp++] = p + W; }
+      }
+      var bw = x2 - x1 + 1, bh = y2 - y1 + 1;
+      if (!big && bw <= maxPx && bh <= maxPx && Math.max(bw, bh) >= minPx && cnt >= 3) {
+        var a1 = U(x1, y1), a2 = U(x2 + 1, y2 + 1);
+        glyphs.push([Math.min(a1[0], a2[0]), Math.min(a1[1], a2[1]), Math.max(a1[0], a2[0]), Math.max(a1[1], a2[1])]);
+      }
+    }
+    var flat = new Float64Array(segList.length * 5);
+    segList.forEach(function (s, k) { flat[k * 5] = s[0]; flat[k * 5 + 1] = s[1]; flat[k * 5 + 2] = s[2]; flat[k * 5 + 3] = s[3]; flat[k * 5 + 4] = 0; });
+    return { segs: flat, styles: [{ key: '0,0,0|0.84|', col: [0, 0, 0], w: 0.84, dash: false }], text: [], fullText: '', glyphs: glyphs, rectSeg: [], bnd: [], symSegs: [], fills: [], raster: true, nSeg: segList.length };
+  }
+
+  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, rasterize: rasterize, symbolCensus: symbolCensus, glyphFamilies: glyphFamilies, glyphText: glyphText, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
     isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, linearCallouts: linearCallouts, _worker: workerMain };   // _worker: for offline tests
 })();

@@ -622,7 +622,7 @@
           // geometry (Warby, A1C, El Califa) more often than it caught a miss. Benchmark of 22 Procore jobs: mean error 16.9% → 12.6%.
           var gl = r.geo ? (r.geo.labels || 0) : 0, weakWhy = !(r.geo && r.geo.total_ft > 0) ? '' :
             (gl < 15 && (r.geo.width_ft || 0) > 0.5 * r.geo.total_ft) ? 'mostly width-guessed' :
-            (aiFt >= 20 && r.geo.total_ft > 3 * aiFt + 40) ? 'over 3x the AI reading' :
+            (aiFt >= 20 && r.geo.total_ft > 3 * aiFt + 40 && !r.geo.raster) ? 'over 3x the AI reading' :
             (aiFt >= 20 && r.geo.total_ft * GEO_FITTINGS < aiFt / 4) ? 'under a quarter of the AI reading' :
             // (only when the AI reads more: applied both ways it cost 645 Madison 9 points for 2 points on Esquire)
             (gl >= 6 && r.geo.labels_hit != null && r.geo.labels_hit < 0.6 * gl && aiFt > r.geo.total_ft * GEO_FITTINGS) ? 'only ' + r.geo.labels_hit + ' of ' + gl + ' size labels on measured duct' :
@@ -664,7 +664,7 @@
           }
           if (!coarseDup && !weakGeo && !mergeGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
-            geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt, why: r.geo.anchored ? 'dense sheet — measured on the runs connected to a size label; ducts without a label nearby are left out, check the plan' : undefined });
+            geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt, why: r.geo.raster ? 'scanned sheet — lines traced from the image (horizontal and vertical runs; diagonal elbows are not traced), labels read from the pixels — check the sizes' : r.geo.anchored ? 'dense sheet — measured on the runs connected to a size label; ducts without a label nearby are left out, check the plan' : undefined });
             addFittings(sh, r.geo.fittings);
             Object.keys(r.geo.sizes || {}).forEach(function (sz) {
               var z = sizeOf(sz); if (!z) return;
