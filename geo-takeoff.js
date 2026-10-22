@@ -2596,7 +2596,7 @@
     }
     var segList = scan(true).concat(scan(false));
     // text-sized 4-connected components (anything that grows past a few text heights is linework and stops)
-    var lab = new Uint8Array(W * H), glyphs = [], stack = new Int32Array(1 << 20), maxPx = Math.round(14 * sc), minPx = Math.round(2.2 * sc);
+    var lab = new Uint8Array(W * H), glyphs = [], stack = new Int32Array(1 << 20), maxPx = Math.round(14 * sc), minPx = Math.round((opts.minGlyphPt || 3.5) * sc);   // below ~3.5 pt: dots, hatch and line fragments, not letters
     for (var y0 = 0; y0 < H; y0++) for (var x0 = 0; x0 < W; x0++) {
       var p0 = y0 * W + x0; if (!dark[p0] || lab[p0]) continue;
       var sp = 0, x1 = x0, x2 = x0, y1 = y0, y2 = y0, cnt = 0, big = false; stack[sp++] = p0; lab[p0] = 1;
@@ -2611,7 +2611,8 @@
         if (py < H - 1 && dark[p + W] && !lab[p + W]) { lab[p + W] = 1; if (sp < stack.length) stack[sp++] = p + W; }
       }
       var bw = x2 - x1 + 1, bh = y2 - y1 + 1;
-      if (!big && bw <= maxPx && bh <= maxPx && Math.max(bw, bh) >= minPx && cnt >= 3) {
+      var dens = cnt / (bw * bh), asp = Math.max(bw, bh) / Math.max(1, Math.min(bw, bh));   // letters are neither hairline-thin nor a sparse diagonal's box
+      if (!big && bw <= maxPx && bh <= maxPx && Math.max(bw, bh) >= minPx && cnt >= 3 && dens >= 0.14 && asp <= 7) {
         var a1 = U(x1, y1), a2 = U(x2 + 1, y2 + 1);
         glyphs.push([Math.min(a1[0], a2[0]), Math.min(a1[1], a2[1]), Math.max(a1[0], a2[0]), Math.max(a1[1], a2[1])]);
       }
