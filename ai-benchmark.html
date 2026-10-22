@@ -9,10 +9,10 @@
 <title>AI Benchmark — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=542"></script>
-<script src="auth.js?v=542"></script>
-<script src="est-org.js?v=542"></script>
-<script src="est-engine.js?v=542"></script>
+<script src="supabase-config.js?v=543"></script>
+<script src="auth.js?v=543"></script>
+<script src="est-org.js?v=543"></script>
+<script src="est-engine.js?v=543"></script>
 <style>
   body { padding-bottom: 40px; }
   .ab-wrap { max-width: 1380px; margin: 0 auto; }
@@ -137,8 +137,10 @@ var AB = (function() {
     Object.keys(C.pipe).forEach(function(k) { var o = C.pipe[k]; m.pipe_ft += num(o.lf); if (o.riser) m.riser_ft += num(o.lf); });
     Object.keys(C.devices).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) m.outlets_ea += num(d.qty); else if (d.type === 'linear') m.linear_ft += d.lf ? num(d.lf) : num(d.qty) * 4; else if (/vav|fpb/.test(d.type)) m.vav_ea += num(d.qty); else if (d.type === 'fsd' || d.type === 'motorized_damper') m.damper_ea += num(d.qty); });
     if (C.linCallouts && C.linCallouts.ft > 1.15 * m.linear_ft) m.linear_ft = C.linCallouts.ft;   // slot lengths printed in the plan callouts (engine build does the same)
-    Object.keys(C.sched).forEach(function(t) { m.equipment_ea +=Math.max(1, num(C.sched[t].qty) || (C.planEq[t] && C.planEq[t].qty) || 1); });
-    Object.keys(C.planEq).forEach(function(t) { if (!C.sched[t] && /\d/.test(t)) m.equipment_ea += Math.max(1, num(C.planEq[t].qty)); });
+    // equipment = the units the install lines are priced on: terminal units, diffusers, dampers and louvers are air outlets (counted above), not equipment
+    var airDev = function(e) { return /diffuser|grille|register|vav|fpb|fan[- ]powered|terminal unit|air valve|damper|louver|transfer/i.test(((e && e.type) || '') + ' ' + ((e && e.label) || '')); };
+    Object.keys(C.sched).forEach(function(t) { if (airDev(C.sched[t])) return; m.equipment_ea += Math.max(1, num(C.sched[t].qty) || (C.planEq[t] && C.planEq[t].qty) || 1); });
+    Object.keys(C.planEq).forEach(function(t) { if (!C.sched[t] && /\d/.test(t) && !airDev(C.planEq[t])) m.equipment_ea += Math.max(1, num(C.planEq[t].qty)); });
     pages.forEach(function(p) { var r = p.result || {}; if (p.status === 'done') m.read++; m.cost += num(p.cost); if (r && !r.parse_error && isTakeoffSheet(r) && !/demo/i.test(r.sheet_type || '')) (r.duct_runs || []).forEach(function(x) { m.ai_duct_ft += num(x.lf); }); });
     Object.keys(m).forEach(function(k) { m[k] = Math.round(m[k] * 100) / 100; });
     return m;
@@ -323,6 +325,6 @@ var AB = (function() {
   return { estimateTruth: estimateTruth, recompute: recompute, addJob: addJob, editJob: editJob, saveJob: saveJob, removeJob: removeJob, pullTruth: pullTruth, closeModal: closeModal, metrics: metrics, truthFromLines: truthFromLines, get bench() { return bench; }, get runs() { return runs; } };
 })();
 </script>
-<script src="sw-register.js?v=542"></script>
+<script src="sw-register.js?v=543"></script>
 </body>
 </html>

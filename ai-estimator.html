@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=542"></script>
-<script src="auth.js?v=542"></script>
-<script src="est-org.js?v=542"></script>
-<script src="est-totals.js?v=542"></script>
-<script src="nw-duct-weight.js?v=542"></script>
+<script src="supabase-config.js?v=543"></script>
+<script src="auth.js?v=543"></script>
+<script src="est-org.js?v=543"></script>
+<script src="est-totals.js?v=543"></script>
+<script src="nw-duct-weight.js?v=543"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=542"></script>
-<script src="nw-email.js?v=542"></script>
-<script src="est-engine.js?v=542"></script>
-<script src="geo-takeoff.js?v=542"></script>
+<script src="email-utils.js?v=543"></script>
+<script src="nw-email.js?v=543"></script>
+<script src="est-engine.js?v=543"></script>
+<script src="geo-takeoff.js?v=543"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1120,7 +1120,8 @@ var AE = (function() {
       var f = files.find(function(x) { return x.id === p.file_id; }) || {}, t = (p.result && p.result.triage) || null;
       if (!t || f.kind === 'quote' || f.kind === 'specs') return;
       if (p.status === 'skipped' && !t.superseded) return;                   // not mechanical: nothing to supersede
-      var no = norm(String(t.sheet_no || '').replace(/\..*$/, '')), title = norm(t.sheet_title || ''), lvl = norm(t.level || '');
+      // the level text is the reader's free-form note ("Floor 3" / "3RD FLOOR" / "Bridgewater, NJ location-specific…") — one sheet number with one title is one sheet
+      var no = norm(String(t.sheet_no || '').replace(/\..*$/, '')), title = norm(t.sheet_title || ''), lvl = '';
       if (!no || title.length < 8) return;
       var k = no + '|' + title + '|' + lvl; (groups[k] = groups[k] || []).push(p);
     });
@@ -1130,7 +1131,7 @@ var AE = (function() {
       g.sort(function(a, b) { return (order[a.file_id] || 0) - (order[b.file_id] || 0) || a.page_no - b.page_no; });
       var keep = g[g.length - 1], kf = files.find(function(x) { return x.id === keep.file_id; }) || {};
       for (var i = 0; i < g.length - 1; i++) {
-        var p = g[i]; if (p.file_id === keep.file_id || (p.result && p.result.triage && p.result.triage.superseded && p.status === 'skipped')) continue;
+        var p = g[i]; if (p.result && p.result.triage && p.result.triage.superseded && p.status === 'skipped') continue;   // also inside one merged file (DivcoWest: M-403 twice, the estimator took off the later page only)
         var res = Object.assign({}, p.result || {}); res.triage = Object.assign({}, res.triage, { superseded: kf.file_name || 'a later file', superseded_by: keep.id });
         await supabaseClient.from('ai_est_pages').update({ status: 'skipped', result: res }).eq('id', p.id);
         p.status = 'skipped'; p.result = res; n++;
@@ -1888,6 +1889,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=542"></script>
+<script src="sw-register.js?v=543"></script>
 </body>
 </html>

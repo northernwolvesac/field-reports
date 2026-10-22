@@ -360,7 +360,7 @@
       var t = String(a.tag || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''), nt = String(a.notes || '') + ' ' + String(a.size || '');
       return /^(SP|SPR|FE|FEC|FA|FACP|T|TS|TSTAT|SD|GB|CO2|EX|EXIT|OS|PS|WAP)$/.test(t) || /sprinkler|thermostat|smoke detector|fire extinguisher|gypsum|exit sign|not (an )?hvac/i.test(nt);
     }
-    var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
+    var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote' && !(p.status === 'skipped' && p.result.triage && p.result.triage.superseded); });   // a sheet replaced by a later copy never counts
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var TM = typicalMults(sheets, opts.sheetMult), typical = [];
     sheets = sheets.map(function (p) {
@@ -423,9 +423,17 @@
     });
     // an overall plan at a small scale that repeats what the enlarged plans show (Sky Zone: M1.0 at 3/32" vs M2.0 at 3/16") must not be measured twice
     var enlargedPtft = 0, enlargedLabels = 0, ductDrops = false, coarseSet = {}, ductGeoPlans = 0;
-    sheets.forEach(function (p) { var r = p.result, t = r.sheet_type || p.sheet_type || ''; if (t === 'enlarged' && r.geo && r.geo.total_ft > 0) { enlargedPtft = Math.max(enlargedPtft, r.geo.ptft || 0); enlargedLabels = Math.max(enlargedLabels, r.geo.labels || 0); } });
+    var enlargedGeoFt = 0;
+    sheets.forEach(function (p) { var r = p.result, t = r.sheet_type || p.sheet_type || ''; if (t === 'enlarged' && r.geo && r.geo.total_ft > 0) { enlargedPtft = Math.max(enlargedPtft, r.geo.ptft || 0); enlargedLabels = Math.max(enlargedLabels, r.geo.labels || 0); enlargedGeoFt += r.geo.total_ft; } });
     sheets.forEach(function (p) {
       var r = p.result, t = r.sheet_type || p.sheet_type || '', sh0 = r.sheet_no || ('p' + p.page_no);
+      // an overall plan whose lines could not be measured (Floor & Decor M101: 10 labels, "no duct style fits") when enlarged plans carry the ducts: the reader's
+      // few hundred feet on the overall plan are the same ducts the enlarged plans measure (estimator: 304 ft in all, the engine counted 801)
+      if (t === 'duct_plan' && !(r.geo && r.geo.total_ft > 0) && enlargedGeoFt >= 100) {
+        var aiOverall = (r.duct_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
+        if (aiOverall > 0 && aiOverall <= 0.75 * enlargedGeoFt) coarseSet[sh0] = 1;
+        return;
+      }
       if (t !== 'duct_plan' || !(r.geo && r.geo.total_ft > 0)) return;
       if (enlargedPtft > 0 && (r.geo.ptft || 0) <= 0.6 * enlargedPtft && (r.geo.labels || 0) < 12 && enlargedLabels >= 3 * (r.geo.labels || 0)) coarseSet[sh0] = 1; else ductGeoPlans++;
     });
