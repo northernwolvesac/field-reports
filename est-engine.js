@@ -1038,14 +1038,14 @@
     });
 
     // 6. Air outlets install (labor only — material is in the vendor quote)
-    var ao = { outlet: 0, linear: 0, vavd: 0, fpb: 0 };
+    var ao = { outlet: 0, linear: 0, vavd: 0, damp: 0, fpb: 0 };
     Object.keys(C.devices).forEach(function (k) {
       var d = C.devices[k];
       var manual = /^(VD|MVD|BD|COD|OD|CD)\d*$/.test(norm(d.tag)) || /volume|balanc|manual|cable|opposed/i.test((d.notes || '') + ' ' + d.size);
       if (/diffuser|grille|register/.test(d.type)) ao.outlet += d.qty;
       else if (d.type === 'linear') { if (d.lf) ao.linear += d.lf; else { ao.linear += d.qty * 4; ao.linearGuess = true; } }
       else if (d.type === 'vav') { if (!manual && !/\bvdi?\b|volume damper|remote operat/i.test((d.tag || '') + ' ' + (d.notes || ''))) ao.vavd += d.qty; }
-      else if ((d.type === 'fsd' || d.type === 'motorized_damper') && !manual) ao.vavd += d.qty;
+      else if ((d.type === 'fsd' || d.type === 'motorized_damper') && !manual) ao.damp += d.qty;
       else if (d.type === 'fpb') ao.fpb += d.qty;
     });
     Object.keys(C.linGeoSheets || {}).forEach(function (sh) {
@@ -1098,7 +1098,7 @@
       aoBasis = ' — counts from the ' + qo.vendor + ' air-outlet quote';
       if (qo.outlet) ao.outlet = qo.outlet;
       if (qo.linear) { ao.linear = qo.linear; ao.linearGuess = false; }
-      if (qo.vavd) ao.vavd = qo.vavd;
+      if (qo.vavd) { ao.vavd = qo.vavd; ao.damp = 0; }   // the vendor's count already lumps boxes and dampers
       if (qo.fpb) ao.fpb = qo.fpb;
     }
     // pipe lengths the reader eyeballed because the lines could not be measured (no size labels on the pipes, colour carried by a raster layer …)
@@ -1112,7 +1112,10 @@
     }
     if (ao.outlet) add('air_outlets', 'Diffusers / grilles / registers', ao.outlet, 'ea', 0, STD.airOutlet, 'Air Outlets Standards — 1.6 hr each' + aoBasis);
     if (ao.linear) add('air_outlets', 'Linear diffusers', ao.linear, 'lf', 0, STD.linearPerFt, 'Air Outlets Standards — 0.8 hr/ft' + aoBasis, ao.linearGuess ? { flag: 'some lengths not shown — counted 4 ft per piece; check the plans' } : null);
-    if (ao.vavd) add('air_outlets', 'VAV boxes / fire-smoke / motorized dampers', ao.vavd, 'ea', 0, STD.vavOrDamper, 'Air Outlets Standards — 2.67 hr each' + aoBasis);
+    // boxes and dampers on their own lines: the estimators count dampers by their own rule (Sunrise Rye Brook: ~20 "FSD" labels on every floor plan, the estimator carried 21 "Dampers" in all;
+    // 260 Madison 20 read / 3 carried; Burlington 0 / 9) — fire-smoke dampers are often installed with the ductwork, so that line is one click to zero
+    if (ao.vavd) add('air_outlets', ao.damp ? 'VAV boxes' : 'VAV boxes / fire-smoke / motorized dampers', ao.vavd, 'ea', 0, STD.vavOrDamper, 'Air Outlets Standards — 2.67 hr each' + aoBasis);
+    if (ao.damp) add('air_outlets', 'Fire-smoke / motorized dampers', ao.damp, 'ea', 0, STD.vavOrDamper, 'Air Outlets Standards — 2.67 hr each' + aoBasis, { is_firm: false, flag: ao.damp + ' dampers read from the plans (FSD / MD symbols and tags) — in blind tests the estimators carried only part of them (fire-smoke dampers are often installed with the ductwork, motorized ones by controls); confirm who installs them' });
     if (ao.fpb) add('air_outlets', 'Fan-powered boxes', ao.fpb, 'ea', 0, STD.fpb, 'Air Outlets Standards — 8 hr each' + aoBasis);
 
     // standalone controls only when there is no BMS quote (Standalone Controls Standards)
