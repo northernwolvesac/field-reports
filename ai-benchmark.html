@@ -9,10 +9,10 @@
 <title>AI Benchmark — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=444"></script>
-<script src="auth.js?v=478"></script>
-<script src="est-org.js?v=478"></script>
-<script src="est-engine.js?v=531"></script>
+<script src="supabase-config.js?v=541"></script>
+<script src="auth.js?v=541"></script>
+<script src="est-org.js?v=541"></script>
+<script src="est-engine.js?v=541"></script>
 <style>
   body { padding-bottom: 40px; }
   .ab-wrap { max-width: 1380px; margin: 0 auto; }
@@ -85,7 +85,7 @@ var AB = (function() {
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
   var sb = window.supabaseClient;
-  var METRICS = [['duct_ft', 'Duct ft', 'ft'], ['outlets_ea', 'Outlets', 'ea'], ['linear_ft', 'Linear', 'ft'], ['pipe_ft', 'Pipe', 'ft'], ['equipment_ea', 'Equipment', 'ea']];
+  var METRICS = [['duct_ft', 'Duct ft', 'ft'], ['outlets_ea', 'Outlets', 'ea'], ['linear_ft', 'Linear', 'ft'], ['pipe_ft', 'Pipe', 'ft'], ['equipment_ea', 'Equipment', 'ea'], ['vav_ea', 'VAV', 'ea'], ['damper_ea', 'Dampers', 'ea']];
   var bench = [], runs = [], versions = [], curVer = null, cmpVer = null, appVer = null, me = { name: '', canEdit: false }, busy = '', schemaOk = true, prog = 0;
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
@@ -132,10 +132,10 @@ var AB = (function() {
   // ─── measured quantities from the stored sheet reads (same accounting as the price) ───
   function isTakeoffSheet(r) { var t = r.sheet_type || ''; return t === 'duct_plan' || t === 'pipe_plan' || (t === 'other' && /plan/i.test(r.sheet_title || '') && !/enlarged/i.test(r.sheet_title || '')); }
   function metrics(pages, opts) {
-    var C = NWEngine.collect(pages, opts || {}), m = { duct_ft: 0, ai_duct_ft: 0, outlets_ea: 0, linear_ft: 0, vav_ea: 0, pipe_ft: 0, riser_ft: 0, equipment_ea: 0, sheets: pages.length, read: 0, cost: 0 };
+    var C = NWEngine.collect(pages, opts || {}), m = { duct_ft: 0, ai_duct_ft: 0, outlets_ea: 0, linear_ft: 0, vav_ea: 0, damper_ea: 0, pipe_ft: 0, riser_ft: 0, equipment_ea: 0, sheets: pages.length, read: 0, cost: 0 };
     Object.keys(C.duct).forEach(function(k) { m.duct_ft += num(C.duct[k].lf); });
     Object.keys(C.pipe).forEach(function(k) { var o = C.pipe[k]; m.pipe_ft += num(o.lf); if (o.riser) m.riser_ft += num(o.lf); });
-    Object.keys(C.devices).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) m.outlets_ea += num(d.qty); else if (d.type === 'linear') m.linear_ft += d.lf ? num(d.lf) : num(d.qty) * 4; else if (/vav|fpb/.test(d.type)) m.vav_ea += num(d.qty); });
+    Object.keys(C.devices).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) m.outlets_ea += num(d.qty); else if (d.type === 'linear') m.linear_ft += d.lf ? num(d.lf) : num(d.qty) * 4; else if (/vav|fpb/.test(d.type)) m.vav_ea += num(d.qty); else if (d.type === 'fsd' || d.type === 'motorized_damper') m.damper_ea += num(d.qty); });
     Object.keys(C.sched).forEach(function(t) { m.equipment_ea += Math.max(1, num(C.sched[t].qty) || (C.planEq[t] && C.planEq[t].qty) || 1); });
     Object.keys(C.planEq).forEach(function(t) { if (!C.sched[t] && /\d/.test(t)) m.equipment_ea += Math.max(1, num(C.planEq[t].qty)); });
     pages.forEach(function(p) { var r = p.result || {}; if (p.status === 'done') m.read++; m.cost += num(p.cost); if (r && !r.parse_error && isTakeoffSheet(r) && !/demo/i.test(r.sheet_type || '')) (r.duct_runs || []).forEach(function(x) { m.ai_duct_ft += num(x.lf); }); });
@@ -309,10 +309,19 @@ var AB = (function() {
     await load(); render(); toast('Truth updated from Procore');
   }
 
+  // the truth from a Bid Board estimate (the estimator's takeoff lines): estimate id or "a + b" ids whose lines add up
+  async function estimateTruth(benchId, estIds) {
+    var b0 = bench.find(function(x) { return x.id === benchId; }); if (!b0) return null;
+    var ids = [].concat(estIds), lines = [];
+    for (var i = 0; i < ids.length; i++) { var r = await sb.from('estimate_line_items').select('category,description,quantity,unit').eq('estimate_id', ids[i]).limit(5000); if (r.error) throw new Error(r.error.message); lines = lines.concat(r.data || []); }
+    var got = NWEngine.truthFromEstimate(lines);
+    var u = await sb.from('est_ai_bench').update({ truth: Object.assign({}, b0.truth || {}, got.truth), truth_src: 'estimate:' + ids.join('+') }).eq('id', benchId); if (u.error) throw new Error(u.error.message);
+    return got;
+  }
   init();
-  return { recompute: recompute, addJob: addJob, editJob: editJob, saveJob: saveJob, removeJob: removeJob, pullTruth: pullTruth, closeModal: closeModal, metrics: metrics, truthFromLines: truthFromLines, get bench() { return bench; }, get runs() { return runs; } };
+  return { estimateTruth: estimateTruth, recompute: recompute, addJob: addJob, editJob: editJob, saveJob: saveJob, removeJob: removeJob, pullTruth: pullTruth, closeModal: closeModal, metrics: metrics, truthFromLines: truthFromLines, get bench() { return bench; }, get runs() { return runs; } };
 })();
 </script>
-<script src="sw-register.js?v=444"></script>
+<script src="sw-register.js?v=541"></script>
 </body>
 </html>

@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=540"></script>
-<script src="auth.js?v=540"></script>
-<script src="est-org.js?v=540"></script>
-<script src="est-totals.js?v=540"></script>
-<script src="nw-duct-weight.js?v=540"></script>
+<script src="supabase-config.js?v=541"></script>
+<script src="auth.js?v=541"></script>
+<script src="est-org.js?v=541"></script>
+<script src="est-totals.js?v=541"></script>
+<script src="nw-duct-weight.js?v=541"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=540"></script>
-<script src="nw-email.js?v=540"></script>
-<script src="est-engine.js?v=540"></script>
-<script src="geo-takeoff.js?v=540"></script>
+<script src="email-utils.js?v=541"></script>
+<script src="nw-email.js?v=541"></script>
+<script src="est-engine.js?v=541"></script>
+<script src="geo-takeoff.js?v=541"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -197,6 +197,50 @@ var AE = (function() {
     await reload();
     render();
     if (files.some(isIncoming)) prepareIncoming();
+  }
+  // ─── blind benchmark run: the plans of a Bid Board estimate go into a fresh "BLIND · <job>" session, which is read, measured and priced
+  // without touching the estimator's own takeoff; est_ai_bench gets a row whose truth is that takeoff (NWEngine.truthFromEstimate) ───
+  var BLIND = null;
+  async function blindRun(estId, truthIds) {
+    if (running || measuring) throw new Error('busy');
+    BLIND = { est: estId, step: 'session', t0: Date.now(), files: 0, retries: 0 };
+    var er = (await supabaseClient.from('estimates').select('id,name,project_address,parent_estimate_id').eq('id', estId).single()).data; if (!er) throw new Error('estimate not found');
+    var rootId = er.parent_estimate_id || er.id, nm = er.name.replace(/\s+—\s+Original Estimate\s*$/i, '');
+    var ses = await supabaseClient.from('ai_est_sessions').insert((window.NWOrg ? NWOrg.stamp : function(x) { return x; })({ name: 'BLIND · ' + nm, location: er.project_address || null, notes: 'Blind benchmark against the Bid Board estimate ' + estId })).select('*').single();
+    if (ses.error) throw new Error(ses.error.message);
+    session = ses.data; files = []; pages = []; corrections = []; fileCache = {}; BLIND.session = session.id;
+    history.replaceState(null, '', location.pathname + '?s=' + session.id); $('hTitle').textContent = session.name; await reload(); render();
+    BLIND.step = 'import';
+    var dr = (await supabaseClient.from('estimate_drawings').select('id, filename, storage_path, page_count').eq('estimate_id', rootId).order('created_at')).data || [];
+    var batch = [];
+    for (var i = 0; i < dr.length; i++) {
+      var d = await supabaseClient.storage.from('estimate-drawings').download(dr[i].storage_path);
+      if (d.error) { BLIND.skipped = (BLIND.skipped || 0) + 1; continue; }
+      batch.push(new File([d.data], dr[i].filename, { type: 'application/pdf' })); BLIND.files++;
+      if (batch.length >= 8 || i === dr.length - 1) { await upload(batch); batch = []; fileCache = {}; }
+    }
+    await reload(); render();
+    BLIND.step = 'read'; BLIND.pages = pages.length;
+    await readAll();
+    for (var w = 0; w < 1200; w++) {                                    // up to ~100 min
+      await new Promise(function(r) { setTimeout(r, 5000); });
+      if (running || measuring) continue;
+      await reload();
+      var left = pages.filter(function(p) { return p.status === 'pending' || p.status === 'error'; });
+      if (left.length && BLIND.retries < 2) { BLIND.retries++; runQueue(left); continue; }
+      break;
+    }
+    BLIND.step = 'measure'; await reload(); if (!pages.some(function(p) { return p.result && p.result.geo; })) { await measureDucts(false); }
+    while (measuring || running) await new Promise(function(r) { setTimeout(r, 3000); });
+    BLIND.step = 'price'; await reload(); await price();
+    BLIND.step = 'bench';
+    var ex = await supabaseClient.from('est_ai_bench').select('id').eq('session_id', session.id).maybeSingle(), bid = ex.data && ex.data.id;
+    if (!bid) { var ins = await supabaseClient.from('est_ai_bench').insert((window.NWOrg ? NWOrg.stamp : function(x) { return x; })({ session_id: session.id, name: nm, truth: {}, sort_order: 100, truth_src: 'estimate:' + (truthIds || [estId]).join('+') })).select('id').single(); if (ins.error) throw new Error(ins.error.message); bid = ins.data.id; }
+    var lines = []; for (var ti = 0; ti < (truthIds || [estId]).length; ti++) { var lr = await supabaseClient.from('estimate_line_items').select('category,description,quantity,unit').eq('estimate_id', (truthIds || [estId])[ti]).limit(5000); lines = lines.concat(lr.data || []); }
+    var got = NWEngine.truthFromEstimate(lines);
+    await supabaseClient.from('est_ai_bench').update({ truth: got.truth, truth_src: 'estimate:' + (truthIds || [estId]).join('+') }).eq('id', bid);
+    BLIND.step = 'done'; BLIND.secs = Math.round((Date.now() - BLIND.t0) / 1000); BLIND.truth = got.truth; BLIND.cost = pages.reduce(function(s, p) { return s + (Number(p.cost) || 0); }, 0);
+    return BLIND;
   }
   // ─── e-mail intake: the Edge Function made the session + file rows and the script uploaded the PDFs to Storage; the pages are split
   // and their text counted here, the same way an upload does it (files with a storage path and no page count yet) ───
@@ -1841,9 +1885,9 @@ var AE = (function() {
     toast('Estimate ready ✓' + (skippedCats.length ? ' — ' + skippedCats.join(', ').replace(/_/g, ' ') + ' stay with the takeoff' : '')); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=540"></script>
+<script src="sw-register.js?v=541"></script>
 </body>
 </html>

@@ -828,6 +828,24 @@
     OS = OS || orgSettings();
     return Object.assign({}, STD, { ductSD: OS.duct_sd != null ? OS.duct_sd : STD.ductSD, pipeSD: OS.pipe_sd != null ? OS.pipe_sd : STD.pipeSD, tab: OS.tab != null ? OS.tab : STD.tab, lift: OS.lift != null ? OS.lift : STD.lift });
   }
+  // The estimator's own takeoff of a job (Bid Board estimate_line_items) as benchmark truth: what the plans were taken off as, per
+  // metric the AI also measures. Lines are the priced takeoff lines (layer-synced), so quantities are the estimator's final numbers.
+  function truthFromEstimate(lines) {
+    var t = { duct_ft: 0, pipe_ft: 0, outlets_ea: 0, linear_ft: 0, vav_ea: 0, damper_ea: 0, equipment_ea: 0, louver_ea: 0 }, n = 0, q;
+    (lines || []).forEach(function (l) {
+      var cat = String(l.category || ''), d = String(l.description || '').toLowerCase(), u = String(l.unit || '').toLowerCase(); q = Number(l.quantity) || 0; if (!q) return; n++;
+      if (cat === 'ductwork') { if (/^(lf|ft)$/.test(u)) t.duct_ft += q; }
+      else if (cat === 'pipework') { if (/^(lf|ft)$/.test(u) && !/wet[- ]?tap/.test(d)) t.pipe_ft += q; }
+      else if (cat === 'equipment_install') { if (u === 'ea') t.equipment_ea += q; }
+      else if (/linear|slot/.test(d) && /^(lf|ft)$/.test(u)) t.linear_ft += q;
+      else if (u === 'ea' && /vav|fan[- ]?powered|\bfpb\b/.test(d)) t.vav_ea += q;
+      else if (u === 'ea' && /damper/.test(d)) t.damper_ea += q;
+      else if (u === 'ea' && /louver/.test(d)) t.louver_ea += q;
+      else if (cat === 'air_outlets' && u === 'ea' && (/diffuser|grille|register/.test(d) || /^\d{1,2}\s*x\s*\d{1,2}\b/.test(d))) t.outlets_ea += q;
+    });
+    Object.keys(t).forEach(function (k) { t[k] = Math.round(t[k] * 10) / 10; });
+    return { truth: t, lines: n };
+  }
   function build(pages, opts) {
     opts = opts || {};
     if (opts.corrections) pages = applyCorrections(pages, opts.corrections);
@@ -1139,6 +1157,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, typicalMults: typicalMults, floorList: floorList, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
+  window.NWEngine = { build: build, collect: collect, typicalMults: typicalMults, floorList: floorList, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, truthFromEstimate: truthFromEstimate, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
     applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();
