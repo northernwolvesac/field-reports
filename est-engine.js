@@ -664,7 +664,7 @@
           }
           if (!coarseDup && !weakGeo && !mergeGeo && r.geo && r.geo.total_ft > 0) {
             // measured from the drawing's own lines (geo-takeoff.js) — the AI's eyeball figure is kept only as a cross-check
-            geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt });
+            geoCheck.push({ sheet: sh, geo: r.geo.total_ft * GEO_FITTINGS, ai: aiFt, why: r.geo.anchored ? 'dense sheet — measured on the runs connected to a size label; ducts without a label nearby are left out, check the plan' : undefined });
             addFittings(sh, r.geo.fittings);
             Object.keys(r.geo.sizes || {}).forEach(function (sz) {
               var z = sizeOf(sz); if (!z) return;

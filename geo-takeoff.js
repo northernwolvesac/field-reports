@@ -629,8 +629,12 @@
       var textScales = Object.keys(found).map(Number).sort(function (p, q) { return found[q] - found[p] || q - p; });
       if (D.forceScale) textScales = [D.forceScale];   // offline experiments (inches per foot)
       var labs = [];
+      // "36/12" (width/height, Tribeca M-112: 14 of the sheet's 49 duct labels) — read as WxH when the sheet carries at least 4 of them
+      var SLASH_RE = /^\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*$/, slashN = 0;
+      D.text.forEach(function (t) { var s = SLASH_RE.exec(t.str); if (s && +s[1] >= 6 && +s[1] <= 96 && +s[2] >= 4 && +s[2] <= 40 && !((+s[2] === 4 || +s[2] === 8 || +s[2] === 16) && +s[1] < +s[2])) slashN++; });
       D.text.forEach(function (t) {
         var a = SIZE_RE.exec(t.str), r = a ? null : ROUND_RE.exec(t.str);
+        if (!a && !r && slashN >= 4) { var s2 = SLASH_RE.exec(t.str); if (s2 && +s2[1] >= 6 && +s2[1] <= 96 && +s2[2] >= 4 && +s2[2] <= 40 && !((+s2[2] === 4 || +s2[2] === 8 || +s2[2] === 16) && +s2[1] < +s2[2])) a = s2; }
         if (!a && !r) return;
         var w = +(a ? a[1] : r[1]), h = a ? +a[2] : w;
         if (w < 4 || h < 3) return;
@@ -770,7 +774,7 @@
       // no style has convincing label evidence and the one that is left is background-sized (Parkinson's: 4,700 ft of "pairs" for 49 labels): no number
       // a single-line drawing (Parkinson's: every duct one 1.68-pt line, the size beside it with a short leader; BOSS; Vesey) has no
       // wall pairs to vote with — the line style most labels point at (leader end on it, or the label right beside it) is the duct style
-      var singleSty = null, keepTot0 = topHit < thr ? stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0) : 0;
+      var anchored = false, singleSty = null, keepTot0 = topHit < thr ? stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0) : 0;
       if (topHit < thr && !D.forceStyle && keepTot0 > 50 * Math.max(labs.length, 20)) (function () {
         var lead = [];
         for (var i = 0; i < n; i++) {
@@ -798,7 +802,10 @@
       if (singleSty) { keep = [singleSty]; proven = [singleSty]; topHit = thr; scaleFrom = scaleFrom + '+single'; }   // its own pairs (the lined trunks) are proven duct too, not 'extra'
       if (topHit < thr && !D.forceStyle) {
         var keepTot = stats.filter(function (q) { return keep.indexOf(q[2]) >= 0; }).reduce(function (a, q) { return a + q[1]; }, 0);
-        if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
+        // a dense sheet whose background (building walls, grid) draws in the duct pen: pairs by the hundred but the size labels still sit on real runs —
+        // anchored mode keeps only the runs connected to a labelled piece (Tribeca M-112: 76k glyphs, 4,000 ft of pairs, 49 labels)
+        if (keepTot > 50 * Math.max(labs.length, 20) && labs.length >= 12 && top > 0 && !D.noAnchored) anchored = true;
+        else if (keepTot > 50 * Math.max(labs.length, 20)) return { error: 'no duct style fits the size labels (' + Math.round(keepTot) + ' ft of line pairs for ' + labs.length + ' labels) — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, debug: stats.slice().sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], Math.round(x[6] * 100) / 100]; }) };
       }
       if (D.forceStyle) keep = [D.forceStyle];   // offline experiments
       var S = []; keep.forEach(function (k) { bySty[k].forEach(function (s) { var ns = norm(s); if (proven.indexOf(k) < 0) ns.extra = true; ns.sk = k; S.push(ns); }); });
@@ -856,7 +863,7 @@
       // a width-matching label from far away ("20x10": 394 ft in the title block of 645 Madison) but never touch a labelled duct.
       var orphanFt = 0, extraFt = 0;
       (function () {
-        if (!pcs.some(function (p) { return p.extra; }) && (D.noOrphan || !pcs.some(function (p) { return p.via === 'label'; }))) return;
+        if (!pcs.some(function (p) { return p.extra; }) && ((D.noOrphan && !anchored) || !pcs.some(function (p) { return p.via === 'label'; }))) return;
         var comp = pcs.map(function (_, i) { return i; }), E2 = pcs.map(function (p) { return ends(p, ptft); });
         function find(i) { while (comp[i] !== i) { comp[i] = comp[comp[i]]; i = comp[i]; } return i; }
         for (var i = 0; i < pcs.length; i++) for (var j = i + 1; j < pcs.length; j++) {
@@ -883,12 +890,12 @@
           if (dm2 <= gap2) comp[find(i2)] = find(j2);
         }
         var ok = {}; pcs.forEach(function (p, i) {
-          if (p.via === 'label' || labs.some(function (l) { return ptSeg(l.cx, l.cy, [E2[i][0][0], E2[i][0][1], E2[i][1][0], E2[i][1][1]]) <= 10 * ptft; })) ok[find(i)] = true;
+          if (p.via === 'label' || labs.some(function (l) { return ptSeg(l.cx, l.cy, [E2[i][0][0], E2[i][0][1], E2[i][1][0], E2[i][1][1]]) <= (anchored ? 4 : 10) * ptft; })) ok[find(i)] = true;
         });
         var compFt = {}; pcs.forEach(function (p, i) { var r = find(i); compFt[r] = (compFt[r] || 0) + p.len_ft; });
         // only short stray bits go (title-block table rules, a legend swatch, a gridline: ≤ 30 ft per chain — Belmont A1C's revision table gave 44 ft of
         // "12x6"); a long run that happens to sit far from every label stays (60 ft cost A1a its real 44 ft)
-        var orphanMax = D.orphanMax !== undefined ? D.orphanMax : 30;
+        var orphanMax = anchored ? 0 : D.orphanMax !== undefined ? D.orphanMax : 30;
         pcs = pcs.filter(function (p, i) { var r = find(i); if (ok[r] || compFt[r] > orphanMax) return true; orphanFt += p.len_ft; if (D.debugOrphans) D.debugOrphans.push([p.size, p.via, Math.round(p.len_ft * 10) / 10, Math.round(p.w_in), Math.round(compFt[r]), Math.round(p.cx), Math.round(p.cy)]); return false; });
       })();
       // the same stretch of duct must not be counted twice: three parallel lines pair up as (a,b), (b,c) and (a,c); a layer drawn twice gives
@@ -1018,7 +1025,7 @@
       var labHit = labsIn.filter(function (l) { return segsAll.some(function (s) { return Math.abs(l.cx - (s[0] + s[2]) / 2) <= Math.abs(s[2] - s[0]) / 2 + 6 * ptft && Math.abs(l.cy - (s[1] + s[3]) / 2) <= Math.abs(s[3] - s[1]) / 2 + 6 * ptft && ptSeg(l.cx, l.cy, s) <= s[4] + 4 * ptft; }); }).length;
       if (labs.length < 8 && total > 0 && wf > 0.8 * total)
         return { error: 'only ' + labs.length + ' size labels for ' + Math.round(total) + ' ft of paired lines — geometry not trusted', ptft: ptft, labels: labs.length, riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN };
-      return { ptft: ptft, scale_from: scaleFrom, systems: systems, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
+      return { ptft: ptft, scale_from: scaleFrom, anchored: anchored || undefined, systems: systems, orphan_ft: Math.round(orphanFt * 10) / 10, extra_dropped_ft: Math.round(extraFt * 10) / 10, dup_ft: Math.round(dupFt * 10) / 10, sizes: sizes, total_ft: Math.round(total * 10) / 10, single_ft: Math.round(sf * 10) / 10, width_ft: Math.round(wf * 10) / 10, wide_unlabeled_ft: Math.round(wideFt * 10) / 10, stub_dropped_ft: Math.round(stubFt * 10) / 10, rect_lone_ft: Math.round(rectIsoFt * 10) / 10, width_dropped_ft: Math.round(widthDropFt * 10) / 10,
         styles: keep, labels: labs.length, labels_hit: labHit, pieces: all.length, single_style: !!singleSty, fittings: fittings, linear: linearBands(D, ptft), slots: slotGlyphs(D, ptft), bar_slots: barSlots(D, ptft), fill_bars: fillBars(D, ptft), riser_sizes: riserN ? riserSizes : undefined, riser_ft: riserFt, riser_n: riserN, zone_ft: Math.round(zoneFt * 10) / 10, match_ft: Math.round(matchFt * 10) / 10, zone_skipped: zoneSkipped, zones: ZN ? ZN.zones.length : 0, match_lines: ZN ? ZN.matches.length : 0,
         xy: D.wantPieces ? all.map(function (p) { return p.kind === 'single' ? { k: 's', size: p.size, len: p.len_ft, segs: p.xy } : { k: 'd', size: p.size, via: p.via || '', ex: p.extra ? 1 : 0, len: p.len_ft, w: p.w_in, cx: p.cx, cy: p.cy, ux: p.ux, uy: p.uy }; }) : undefined,
         debug: stats.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 8).map(function (x) { return [Math.round(x[0]), Math.round(x[1]), x[2], Math.round(x[3]), x[4], x[5], x[6]]; }) };
