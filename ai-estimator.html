@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=552"></script>
-<script src="auth.js?v=552"></script>
-<script src="est-org.js?v=552"></script>
-<script src="est-totals.js?v=552"></script>
-<script src="nw-duct-weight.js?v=552"></script>
+<script src="supabase-config.js?v=554"></script>
+<script src="auth.js?v=554"></script>
+<script src="est-org.js?v=554"></script>
+<script src="est-totals.js?v=554"></script>
+<script src="nw-duct-weight.js?v=554"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=552"></script>
-<script src="nw-email.js?v=552"></script>
-<script src="est-engine.js?v=552"></script>
-<script src="geo-takeoff.js?v=552"></script>
+<script src="email-utils.js?v=554"></script>
+<script src="nw-email.js?v=554"></script>
+<script src="est-engine.js?v=554"></script>
+<script src="geo-takeoff.js?v=554"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1658,6 +1658,12 @@ var AE = (function() {
   var EXISTING_RE = /existing|to remain|not new|demolish|demo\b|relocat|by others|n\.?i\.?c\b|\(e\)/i;
   function readerRuns(p) { var r = p.result || {}; return (r.duct_runs || []).filter(function(x) { return x.size && Number(x.lf) > 0 && !EXISTING_RE.test((x.notes || '') + ' ' + x.size); }); }
   function readerDevices(p) { var r = p.result || {}; return (r.air_devices || []).filter(function(a) { return a.tag && Number(a.qty) > 0 && !EXISTING_RE.test(a.notes || '') && !(window.NWEngine && NWEngine.symbolRowDropped && NWEngine.symbolRowDropped(a, p)); }); }
+  // every damper word printed on a sheet — the AI's own census: FSD (fire-smoke), FD (fire), SMD (smoke), MD / MOD (motorized), VD / MVD (volume). Read from the PDF text layer and the OCR word list
+  // of an outlined / scanned sheet ("/ FSD", "1 FSD" and "FSD." count too); each hit becomes a count mark on the plan
+  var DAMPER_KINDS = [{ re: /^[^A-Z0-9]{0,2}\d?\s?F\.?S\.?D\b\.?(\s?-?\d+)?$/i, name: 'FSD — fire-smoke damper', code: 'FSD' }, { re: /^[^A-Z0-9]{0,2}F\.?D\b\.?(\s?-?\d+)?$/i, name: 'FD — fire damper', code: 'FD' }, { re: /^[^A-Z0-9]{0,2}S\.?M\.?D\b\.?(\s?-?\d+)?$/i, name: 'SMD — smoke damper', code: 'SMD' },
+    { re: /^[^A-Z0-9]{0,2}(M\.?D|MOD)\b\.?(\s?-?\d+)?$/i, name: 'MD — motorized damper', code: 'MD' }, { re: /^[^A-Z0-9]{0,2}(M?VD)\b\.?(\s?-?\d+)?$/i, name: 'VD — volume damper', code: 'VD' }];
+  function damperKind(str) { var s = String(str || '').trim(); if (!s || s.length > 8) return null; for (var i = 0; i < DAMPER_KINDS.length; i++) if (DAMPER_KINDS[i].re.test(s)) return DAMPER_KINDS[i]; return null; }
+  function damperWordsOf(p) { var r = p.result || {}, n = 0; (r.ocr_words || []).forEach(function(w) { if (w && damperKind(w[0])) n++; }); var dv = ((p.tag_counts || {}).devices) || {}; Object.keys(dv).forEach(function(k) { if (damperKind(k)) n += Number(dv[k]) || 0; }); return n; }
   function scalePtft(res) { var m = /(\d+(?:\/\d+)?)\s*["\u201d]\s*=\s*1\s*['\u2019]/.exec(String((res || {}).scale || '')); if (!m) return 0; var inch = m[1].indexOf('/') > 0 ? Number(m[1].split('/')[0]) / Number(m[1].split('/')[1]) : Number(m[1]); return inch > 0 ? inch * 72 : 0; }
   function runSize(x) { var z = NWEngine.sizeOf ? NWEngine.sizeOf(x.size) : null; if (z) return z.round ? z.w + '"Ø' : z.w + 'x' + z.h; var m = /(\d{1,2})\s*[xX]\s*(\d{1,2})/.exec(String(x.size)); if (m) return m[1] + 'x' + m[2]; var r = /(\d{1,2})/.exec(String(x.size)); return r && (x.shape === 'round' || /["”]?\s*(Ø|ø|dia)/i.test(x.size)) ? r[1] + '"Ø' : null; }
   async function toTakeoff() {
@@ -1665,7 +1671,7 @@ var AE = (function() {
     if (!session.estimate_id) { toast('Create the estimate first'); return; }
     var estId = session.estimate_id;
     var list = pages.filter(function(p) { var r = p.result || {}; return (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || ((isPipePlan(p) || isDuctPlan(p)) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0)
-      || (isDuctPlan(p) && p.status === 'done' && (readerRuns(p).length || readerDevices(p).length)); });
+      || (isDuctPlan(p) && p.status === 'done' && (readerRuns(p).length || readerDevices(p).length || damperWordsOf(p))); });
     // nothing measured (no geometry on the plans): the plans still go to the Takeoff, where the estimator traces or auto-measures
     var noGeo = !list.length;
     if (noGeo) { list = pages.filter(function(p) { var f0 = files.find(function(x) { return x.id === p.file_id; }) || {}; return f0.kind !== 'quote' && f0.kind !== 'specs' && f0.storage_path && p.status !== 'error'; }); if (!list.length) { toast('No drawing sheets on this session yet'); return; } }
@@ -1740,7 +1746,7 @@ var AE = (function() {
         if (r.error) throw new Error(r.error.message); layers.push(r.data); made++; return r.data;
       }
       // 3 · the drawing geometry again, this time keeping every piece, laid on the plan
-      var rows = [], scales = [];
+      var rows = [], scales = [], dampTotals = {};
       for (var i = 0; i < list.length; i++) {
         var p = list[i], res = p.result || {}, d = dwg[p.file_id];
         bridging = 'Laying out ' + (res.sheet_no || 'p' + p.page_no) + ' (' + (i + 1) + ' / ' + list.length + ')…'; render();
@@ -1757,7 +1763,7 @@ var AE = (function() {
         var mk = function(l, pts, ft, ptft, extra) { return Object.assign({ drawing_id: d.id, page_number: p.page_no, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: ptft || null, label: 'auto' }, extra || {}); };
         var ptft = null, laidDuct = 0, textItems = null;
         if (isDuctPlan(p) && res.geo && res.geo.total_ft > 0) {
-          var data = withLabels(await NWGeo.extract(page), p); data.wantPieces = true; var g = await NWGeo.measure(data); textItems = data.text;
+          var data = withLabels(res.geo.raster ? await NWGeo.rasterize(page, { sc: 1.5 }) : await NWGeo.extract(page), p); data.wantPieces = true; var g = await NWGeo.measure(data); textItems = data.text;
           if (g && !g.error && g.xy) { ptft = g.ptft; laidDuct = g.xy.length;
             for (var k = 0; k < g.xy.length; k++) { var pc = g.xy[k], sz = String(pc.size || ''), round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x');
               var name = round ? dim[0] + 'x' + dim[0] + ' ' + F.round : sz + ' ' + F.rect, l = await layerFor(name, 'ductwork', 'Default Group', null, sz, false);
@@ -1765,13 +1771,13 @@ var AE = (function() {
               else (pc.segs || []).forEach(function(s) { rows.push(mk(l, [V(s[0], s[1]), V(s[2], s[3])], Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft, ptft)); }); } }
         }
         if ((isPipePlan(p) || isDuctPlan(p)) && res.geo_pipe && res.geo_pipe.total_ft > 0) {
-          var pdata = withLabels(await NWGeo.extract(page), p); pdata.wantPieces = true; var pp = await NWGeo.measurePipes(pdata);
+          var pdata = withLabels((res.geo_pipe.raster || (res.geo && res.geo.raster)) ? await NWGeo.rasterize(page, { sc: 1.5 }) : await NWGeo.extract(page), p); pdata.wantPieces = true; var pp = await NWGeo.measurePipes(pdata);
           if (pp && !pp.error && pp.xy) { ptft = ptft || pp.ptft;
             for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
               var pl = await layerFor(cd ? size + ' condensate drain' : size + ' copper pipe & 1" insulation', 'pipework', 'Pipes', cd ? [size + '%pvc%', size + ' copper pipe & 1" insulation'] : null, size, cd);
               rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / pp.ptft, pp.ptft)); } }
         }
-        if (isDuctPlan(p) && (readerRuns(p).length || readerDevices(p).length)) {
+        if (isDuctPlan(p) && (readerRuns(p).length || readerDevices(p).length || damperWordsOf(p))) {
           ptft = ptft || scalePtft(res);
           if (!textItems) { try { textItems = withLabels(await NWGeo.extract(page), p).text; } catch (eT) { textItems = res.ocr_labels || []; } }
           // every OCR word is an anchor too (device tags on an outlined-text sheet are only there), unless a label already sits at that spot
@@ -1798,7 +1804,18 @@ var AE = (function() {
               lastAnchor[wKey] = { x: cx + la.dir[0] * h2, y: cy + la.dir[1] * h2, dir: la.dir, sz: sz }; }
             else { var sp = stripPt(); rows.push(mk(l, [sp, [sp[0] + ft * ptft, sp[1]]], ft, ptft, { notes: 'AI read: ' + ft + ' ft of ' + sz + ' — length from the sheet reader; no size label found on the sheet to place it at' })); }
           }
-          var devs = readerDevices(p);
+          // damper census: one count mark at every damper word on the sheet (per kind, own layer) — the reader's FSD / MD rows are replaced by it on sheets where words were found
+          var dampHits = [];
+          (textItems || []).forEach(function(t) { var kd = damperKind(t.str); if (kd && !t.word) dampHits.push({ kd: kd, x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2 }); });
+          (res.ocr_words || []).forEach(function(w) { var kd = w && damperKind(w[0]); if (!kd) return; if (dampHits.some(function(h) { return Math.abs(h.x - w[1]) < 6 && Math.abs(h.y - w[2]) < 6; })) return; dampHits.push({ kd: kd, x: w[1], y: w[2] }); });
+          var dampKinds = {};
+          for (var dh = 0; dh < dampHits.length; dh++) {
+            var hit = dampHits[dh], dl0 = await countLayerFor(hit.kd.name, { type: 'damper' });
+            dampKinds[hit.kd.code] = (dampKinds[hit.kd.code] || 0) + 1;
+            rows.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'count', points: [V(hit.x, hit.y)], computed_value: 1, computed_unit: 'ea', layer_id: dl0.id, layer_category: dl0.category, color: dl0.color, scale_pixels_per_foot: ptft || null, label: 'auto', notes: 'AI census: "' + hit.kd.code + '" printed here on ' + (res.sheet_no || 'the sheet') + ' (' + dampHits.length + ' damper words on this sheet)' });
+          }
+          dampTotals[res.sheet_no || 'p' + p.page_no] = dampKinds;
+          var devs = readerDevices(p).filter(function(dv) { return !(dampHits.length && /fsd|motorized_damper|damper/i.test(String(dv.type || ''))); });
           for (var di = 0; di < devs.length; di++) {
             var dv = devs[di], tag = String(dv.tag).toUpperCase().trim(), qty = Math.round(Number(dv.qty)), type = String(dv.type || 'air device');
             var dname = tag + ' — ' + type + (dv.size && !/schedule|plan|see /i.test(dv.size) ? ' ' + dv.size : ''), dl = await countLayerFor(dname, dv);
@@ -1845,7 +1862,8 @@ var AE = (function() {
         cloudZones.forEach(function(c, i) { zs0.push({ id: 'ai_' + stamp + '_' + i, name: 'Cloud ' + (i + 1) + ' · ' + c.sheet, color: '#dc2626', d: c.d, p: c.p, pts: c.pts }); });
         await supabaseClient.from('estimates').update({ settings: Object.assign({}, st0, { takeoff_page_mult: pmap, takeoff_zones: zs0 }) }).eq('id', estId);
       } catch (eSet) { console.warn('[bridge] settings', eSet); }
-      toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + ' on ' + list.length + ' plans, ' + made + ' layers' + (nTyp ? ', ' + nTyp + ' typical sheet' + (nTyp === 1 ? '' : 's') + ' ×N' : '') + (cloudZones.length ? ', ' + cloudZones.length + ' clouds → zones (Actions → Zones report)' : '') + ' — opening the takeoff');
+      var dampN = rows.filter(function(r) { return /^AI census/.test(r.notes || ''); }).length;
+      toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + (dampN ? ' (' + dampN + ' damper marks)' : '') + ' on ' + list.length + ' plans, ' + made + ' layers' + (nTyp ? ', ' + nTyp + ' typical sheet' + (nTyp === 1 ? '' : 's') + ' ×N' : '') + (cloudZones.length ? ', ' + cloudZones.length + ' clouds → zones (Actions → Zones report)' : '') + ' — opening the takeoff');
       setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
     } catch (e) { toast('Takeoff: ' + (e.message || e)); }
     bridging = ''; render();
@@ -1893,6 +1911,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=552"></script>
+<script src="sw-register.js?v=554"></script>
 </body>
 </html>
