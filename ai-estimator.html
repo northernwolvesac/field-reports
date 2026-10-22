@@ -14,15 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=537"></script>
-<script src="auth.js?v=537"></script>
-<script src="est-org.js?v=537"></script>
-<script src="est-totals.js?v=537"></script>
+<script src="supabase-config.js?v=540"></script>
+<script src="auth.js?v=540"></script>
+<script src="est-org.js?v=540"></script>
+<script src="est-totals.js?v=540"></script>
+<script src="nw-duct-weight.js?v=540"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=537"></script>
-<script src="nw-email.js?v=537"></script>
-<script src="est-engine.js?v=537"></script>
-<script src="geo-takeoff.js?v=537"></script>
+<script src="email-utils.js?v=540"></script>
+<script src="nw-email.js?v=540"></script>
+<script src="est-engine.js?v=540"></script>
+<script src="geo-takeoff.js?v=540"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -365,6 +366,8 @@ var AE = (function() {
     if (r.geo_pipe && r.geo_pipe.error) bits.push('📐 ' + r.geo_pipe.error);
     if (r.geo_riser && r.geo_riser.total_ft) bits.push('📐 ' + Math.round(r.geo_riser.total_ft) + ' ft vertical pipe (risers)');
     if (r.geo_riser && r.geo_riser.error) bits.push('📐 ' + r.geo_riser.error);
+    var tm = typicalOf(p);
+    if (tm && (tm.n > 1 || tm.unknown || tm.why === 'set on the sheet row')) bits.unshift('<a href="#" onclick="event.stopPropagation();AE.setSheetMult(\'' + p.id + '\');return false" title="' + esc(tm.unknown ? 'TYPICAL plan — the title does not say which floors: click to set how many' : 'Every quantity on this sheet counts × ' + tm.n + ' (' + tm.why + (tm.floors ? ': floors ' + tm.floors.join(', ') : '') + ') — click to change') + '"><b>' + (tm.unknown ? '×? typical' : '×' + tm.n + (tm.why === 'sheet title' ? ' typical' : '')) + '</b></a>');
     var tc = p.tag_counts && p.tag_counts.tags ? Object.keys(p.tag_counts.tags).length : 0;
     return '<tr class="click" onclick="AE.showPage(\'' + p.id + '\')"><td class="muted">' + (f.kind === 'quote' ? 'Q' : p.page_no) + '</td>' +
       '<td><b>' + esc(p.sheet_no || r.quote_no || '') + '</b> ' + esc(p.sheet_title || r.vendor || f.file_name || '') + '</td>' +
@@ -387,6 +390,19 @@ var AE = (function() {
   }
   function closeModal() { $('modal').classList.remove('open'); }
 
+  // typical floors per sheet: what the engine reads off the title, or the estimator's ×N (session.result.sheet_mult {pageId: N}; 0 = back to auto)
+  function typicalOf(p) { if (!window.NWEngine || !NWEngine.typicalMults) return null; var all = NWEngine.typicalMults(pages.filter(function(x) { return x.status === 'done'; }), (session.result || {}).sheet_mult); return all[p.id] || null; }
+  async function setSheetMult(pid) {
+    var p = pages.find(function(x) { return x.id === pid; }); if (!p) return;
+    var cur = typicalOf(p), ans = prompt((p.sheet_no || 'This sheet') + ' stands for how many identical floors? (e.g. 8 for a typical plan of floors 3-10; 1 = count once; empty = read it from the title)', cur && !cur.unknown ? String(cur.n) : '');
+    if (ans === null) return;
+    var sm = Object.assign({}, (session.result || {}).sheet_mult || {}), n = Number(String(ans).replace(/[^0-9.]/g, ''));
+    if (!String(ans).trim()) delete sm[pid]; else if (n >= 1 && n <= 200) sm[pid] = Math.round(n); else { toast('Enter a number from 1 to 200'); return; }
+    session.result = Object.assign({}, session.result || {}, { sheet_mult: sm });
+    await supabaseClient.from('ai_est_sessions').update({ result: session.result }).eq('id', session.id);
+    if (session.status === 'priced') await price(); else render();
+    toast((p.sheet_no || 'Sheet') + ': ' + (sm[pid] ? '× ' + sm[pid] : 'read from the title'));
+  }
   async function saveFloors(v) {
     session.floors = Number(v) || null;
     await supabaseClient.from('ai_est_sessions').update({ floors: session.floors }).eq('id', session.id);
@@ -1357,9 +1373,9 @@ var AE = (function() {
     var n = await loadNorms();
     // sheets read before the text-layer freeze existed: apply it now (and keep it)
     pages.forEach(function(p) { if (p.status === 'done' && freezeDevices(p)) supabaseClient.from('ai_est_pages').update({ result: p.result }).eq('id', p.id).then(function() {}); });
-    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr, equipmentPrices: (session.result || {}).equipment_prices || {}, settings: orgSettings() });
+    var eng = NWEngine.build(pages, { norms: n, floors: session.floors, ofci: $('ofci').checked, highRise: $('highRise').checked, ductSpec: (session.result || {}).duct_spec || null, corrections: corrections, pipeSr: !!(session.result || {}).pipe_sr, sheetMult: (session.result || {}).sheet_mult || null, equipmentPrices: (session.result || {}).equipment_prices || {}, settings: orgSettings() });
     var res = Object.assign({}, session.result || {}, {
-      engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, ductSystems: eng.ductSystems, normsLoaded: n.length, at: new Date().toISOString() },
+      engine: { lines: eng.lines, totals: eng.totals, flags: eng.flags, floors: eng.floors, sdBasis: eng.sdBasis, pipeSheets: eng.pipeSheets, ductCheck: eng.ductCheck, ductSystems: eng.ductSystems, fittings: eng.fittings || null, pipeFittings: eng.pipeFittings || null, typical: eng.typical || null, normsLoaded: n.length, at: new Date().toISOString() },
       ofci: $('ofci').checked, highRise: $('highRise').checked });
     session.result = res; session.status = 'priced';
     await supabaseClient.from('ai_est_sessions').update({ result: res, status: 'priced', updated_at: new Date().toISOString() }).eq('id', session.id);
@@ -1433,7 +1449,7 @@ var AE = (function() {
   // Quantities export — what the plans gave, before any price: duct ft per size (plan + risers), pipe per service / size, air devices
   // per type / tag (linear slot ft), equipment per tag (schedule vs plans), the sheets each came from. Opens in Excel.
   function exportQuantities() {
-    var C; try { C = NWEngine.collect(NWEngine.applyCorrections(pages, corrections), { pipeSr: !!(session.result || {}).pipe_sr }); } catch (e) { toast('Collect failed: ' + e.message); return; }
+    var C; try { C = NWEngine.collect(NWEngine.applyCorrections(pages, corrections), { pipeSr: !!(session.result || {}).pipe_sr, sheetMult: (session.result || {}).sheet_mult || null }); } catch (e) { toast('Collect failed: ' + e.message); return; }
     function q(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
     function row(a) { return a.map(q).join(','); }
     function uniq(a) { return a.filter(function(x, i) { return a.indexOf(x) === i; }); }
@@ -1450,6 +1466,13 @@ var AE = (function() {
     Object.keys(F.rows || {}).sort(function(a, b) { var A = F.rows[a], B = F.rows[b]; return (A.type > B.type) - (A.type < B.type) || B.count - A.count; }).forEach(function(k) { var f = F.rows[k]; out.push(row(['Fittings', FT[f.type] || f.type, f.size, f.type, f.count, 'ea', '', uniq(f.sheets || []).join(' ')])); });
     var PF = C.pipeFittings || { rows: {} }, PFT = { valve: 'Valve', elbow: 'Pipe elbow', tee: 'Pipe tee (run > branch)', reducer: 'Pipe reducer (from > to)', cross: 'Pipe cross' }, PFO = { valve: 0, elbow: 1, tee: 2, reducer: 3, cross: 4 };
     Object.keys(PF.rows || {}).sort(function(a, b) { var A = PF.rows[a], B = PF.rows[b]; return (PFO[A.type] - PFO[B.type]) || B.count - A.count; }).forEach(function(k) { var f = PF.rows[k]; out.push(row(['Pipe fittings', PFT[f.type] || f.type, f.size, f.type, f.count, 'ea', '', uniq(f.sheets || []).join(' ')])); });
+    // sheet metal + insulation per duct size (nw-duct-weight SMACNA gauge, est-totals insulation of the session's duct family) — the shop's
+    // pounds and Energy Plus's square feet straight from the AI takeoff
+    var famQ = NWEngine.DUCT_FAMILIES[NWEngine.familyFor((session.result || {}).duct_spec || null)] || {}, lbTot = 0, linTot = 0, wrapTot = 0;
+    dk.forEach(function(k) { var d = C.duct[k], nm = d.shape === 'round' ? String(d.size).replace(/["”Ø]/g, '') + 'x' + String(d.size).replace(/["”Ø]/g, '') + ' ' + (famQ.round || 'round') : d.size + ' ' + (famQ.rect || 'rectangular');
+      var w = window.NWDuct ? NWDuct.weightOf(d.shape === 'round' ? String(d.size).replace(/["”]/g, '') + '"Ø' : d.size) : null, ins = window.nwInsulationOf ? nwInsulationOf({ description: nm }, 'ductwork', 'ft') : null;
+      if (w) { lbTot += d.lf * w.lb_ft; out.push(row(['Sheet metal', (d.shape === 'round' ? 'Round ' : 'Rectangular ') + w.gauge + ' ga · ' + w.lb_ft + ' lb/ft', d.size, d.shape, Math.round(d.lf * w.lb_ft), 'lb', '', uniq(d.sheets || []).join(' ')])); }
+      if (ins && ins.unit === 'sq ft') { var sf = d.lf * ins.qtyUnit; if (ins.liner) linTot += sf; else wrapTot += sf; out.push(row(['Insulation', ins.label, d.size, d.shape, Math.round(sf), 'sq ft', '', uniq(d.sheets || []).join(' ')])); } });
     var ductFt = dk.reduce(function(s, k) { return s + C.duct[k].lf; }, 0), pipeFt = pk.reduce(function(s, k) { return s + C.pipe[k].lf; }, 0);
     var outlets = 0, linFt = 0; Object.keys(C.devices || {}).forEach(function(k) { var d = C.devices[k]; if (/diffuser|grille|register/.test(d.type)) outlets += d.qty; else if (d.type === 'linear') linFt += d.lf || d.qty * 4; });
     var reviewed = corrections.filter(function(c) { return c.status && c.status !== 'new'; }).length;
@@ -1458,6 +1481,9 @@ var AE = (function() {
     out.push(row(['Summary', 'Pipework', '', '', Math.round(pipeFt), 'ft', Math.round((C.pipeRisers || {}).ft || 0) || '', '']));
     out.push(row(['Summary', 'Air outlets', '', '', Math.round(outlets), 'ea', '', ''])); out.push(row(['Summary', 'Linear diffusers', '', '', Math.round(linFt), 'ft', '', '']));
     out.push(row(['Summary', 'Equipment tags', '', '', Object.keys(eq).length, 'ea', '', '']));
+    if (lbTot) out.push(row(['Summary', 'Sheet metal', '', 'SMACNA gauge + 25 % fittings', Math.round(lbTot), 'lb', '', '']));
+    if (linTot || wrapTot) out.push(row(['Summary', 'Duct insulation', '', 'liner ' + Math.round(linTot) + ' sq ft / wrap ' + Math.round(wrapTot) + ' sq ft', Math.round(linTot + wrapTot), 'sq ft', '', '']));
+    (C.typical || []).forEach(function(t) { if (t.n > 1) out.push(row(['Summary', 'Typical floors', t.sheet, (t.floors ? 'floors ' + t.floors.join(', ') : '') + ' · ' + t.why, t.n, '× sheet', '', t.sheet])); });
     if (F.n_total) out.push(row(['Summary', 'Duct fittings', '', F.n_elbows + ' elbows / ' + F.n_tees + ' tees / ' + F.n_transitions + ' transitions (counted on the measured duct, priced within the per-ft rate)', F.n_total, 'ea', '', ''])); if (PF.n_total) out.push(row(['Summary', 'Pipe fittings & valves', '', PF.n_valves + ' valves / ' + PF.n_elbows + ' elbows / ' + PF.n_tees + ' tees / ' + PF.n_reducers + ' reducers / ' + PF.n_crosses + ' crosses (counted on the measured piping, priced within the per-ft rate)', PF.n_total, 'ea', '', ''])); out.push(row(['Summary', 'Review decisions logged', '', '', reviewed, 'items', '', '']));
     var org = window.NWOrg && NWOrg.current(); out.push(''); out.push(q((session.name || '') + (session.location ? ' — ' + session.location : '') + ' · AI takeoff quantities of ' + new Date().toLocaleDateString('en-US') + (org ? ' · ' + org.name : '')));
     saveBlob(new Blob(['\ufeff' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }), fileStem().replace(' — AI estimate', ' — AI quantities') + '.csv');
@@ -1637,7 +1663,7 @@ var AE = (function() {
       // the auto-marks are re-created with new ids: review decisions on the old runs no longer point at anything (device / equipment decisions stay)
       try { await supabaseClient.from('est_ai_corrections').delete().eq('estimate_id', estId).in('kind', ['duct', 'pipe', 'riser']); } catch (eC) {}
       // 2 · layers by size, rates from the catalog; the duct family comes from the spec reading
-      var famKey = NWEngine.familyFor((session.result || {}).duct_spec || null), F = NWEngine.DUCT_FAMILIES[famKey], made = 0;
+      var famKey = NWEngine.familyFor((session.result || {}).duct_spec || null), F = NWEngine.DUCT_FAMILIES[famKey], made = 0, cloudZones = [];
       async function layerFor(name, cat, group, patterns, size, cd) {
         var l = layers.find(function(x) { return x.name.toLowerCase() === name.toLowerCase(); });
         if (l && (Number(l.unit_material_cost) || Number(l.unit_labor_hours))) return l;
@@ -1671,6 +1697,14 @@ var AE = (function() {
         bridging = 'Laying out ' + (res.sheet_no || 'p' + p.page_no) + ' (' + (i + 1) + ' / ' + list.length + ')…'; render();
         var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, page = await pdf.getPage(1), vp = page.getViewport({ scale: 1 });
         var V = function(x, y) { var q = vp.convertToViewportPoint(x, y); return [q[0], q[1]]; };
+        // revision clouds / markup polygons drawn on the PDF (a CO set: "price only what is in the red bubbles") → Takeoff zones
+        try { (await page.getAnnotations()).forEach(function(a) {
+          var pts = null, vs = a.vertices, rc = a.rect, col = a.color ? Array.prototype.slice.call(a.color) : null;
+          if ((a.subtype === 'Polygon' || a.subtype === 'PolyLine') && vs && vs.length) pts = typeof vs[0] === 'number' ? vs.reduce(function(o, v, i) { if (i % 2) o[o.length - 1].push(v); else o.push([v]); return o; }, []) : vs.map(function(v) { return Array.isArray(v) ? v : [v.x, v.y]; });
+          else if (a.subtype === 'Ink' && a.inkLists && a.inkLists[0] && a.inkLists[0].length > 2) { var il = a.inkLists[0]; pts = typeof il[0] === 'number' ? il.reduce(function(o, v, i) { if (i % 2) o[o.length - 1].push(v); else o.push([v]); return o; }, []) : il.map(function(v) { return Array.isArray(v) ? v : [v.x, v.y]; }); }
+          else if (a.subtype === 'Square' && rc && col && col[0] > 150 && col[1] < 100 && col[2] < 100) pts = [[rc[0], rc[1]], [rc[2], rc[1]], [rc[2], rc[3]], [rc[0], rc[3]]];
+          if (pts && pts.length >= 3) cloudZones.push({ d: d.id, p: p.page_no, sheet: res.sheet_no || 'p' + p.page_no, pts: pts.map(function(q) { var v = V(q[0], q[1]); return [Math.round(v[0] * 10) / 10, Math.round(v[1] * 10) / 10]; }) });
+        }); } catch (eAnn) { console.warn('[bridge] annotations', eAnn); }
         var mk = function(l, pts, ft, ptft, extra) { return Object.assign({ drawing_id: d.id, page_number: p.page_no, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: ptft || null, label: 'auto' }, extra || {}); };
         var ptft = null, laidDuct = 0, textItems = null;
         if (isDuctPlan(p) && res.geo && res.geo.total_ft > 0) {
@@ -1751,8 +1785,18 @@ var AE = (function() {
         var gone = stale.filter(function(id) { return !keep[id]; });
         if (gone.length) { await supabaseClient.from('estimate_line_items').delete().eq('estimate_id', estId).in('layer_id', gone); await supabaseClient.from('estimate_takeoff_layers').delete().in('id', gone); layers = layers.filter(function(l) { return gone.indexOf(l.id) < 0; }); }
       } catch (eS) {} }
-      var nCnt = rows.filter(function(r) { return r.tool_type === 'count'; }).length;
-      toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + ' on ' + list.length + ' plans, ' + made + ' layers — opening the takeoff');
+      var nCnt = rows.filter(function(r) { return r.tool_type === 'count'; }).length, nTyp = 0;
+      // typical floors → the Takeoff's per-sheet ×N, the clouds → zones (AI zones replaced, the estimator's own zones kept)
+      try {
+        var TMs = NWEngine.typicalMults ? NWEngine.typicalMults(pages.filter(function(x) { return x.status === 'done'; }), (session.result || {}).sheet_mult) : {};
+        var es0 = await supabaseClient.from('estimates').select('settings').eq('id', estId).single(), st0 = (es0.data && es0.data.settings && typeof es0.data.settings === 'object') ? es0.data.settings : {};
+        var pmap = Object.assign({}, st0.takeoff_page_mult || {});
+        list.forEach(function(p) { var t = TMs[p.id], d0 = dwg[p.file_id]; if (d0 && t && t.n > 1) { pmap[d0.id + ':' + p.page_no] = t.n; nTyp++; } });
+        var zs0 = (Array.isArray(st0.takeoff_zones) ? st0.takeoff_zones : []).filter(function(z) { return !/^ai_/.test(String(z.id)); }), stamp = Date.now().toString(36);
+        cloudZones.forEach(function(c, i) { zs0.push({ id: 'ai_' + stamp + '_' + i, name: 'Cloud ' + (i + 1) + ' · ' + c.sheet, color: '#dc2626', d: c.d, p: c.p, pts: c.pts }); });
+        await supabaseClient.from('estimates').update({ settings: Object.assign({}, st0, { takeoff_page_mult: pmap, takeoff_zones: zs0 }) }).eq('id', estId);
+      } catch (eSet) { console.warn('[bridge] settings', eSet); }
+      toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + ' on ' + list.length + ' plans, ' + made + ' layers' + (nTyp ? ', ' + nTyp + ' typical sheet' + (nTyp === 1 ? '' : 's') + ' ×N' : '') + (cloudZones.length ? ', ' + cloudZones.length + ' clouds → zones (Actions → Zones report)' : '') + ' — opening the takeoff');
       setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
     } catch (e) { toast('Takeoff: ' + (e.message || e)); }
     bridging = ''; render();
@@ -1797,9 +1841,9 @@ var AE = (function() {
     toast('Estimate ready ✓' + (skippedCats.length ? ' — ' + skippedCats.join(', ').replace(/_/g, ' ') + ' stay with the takeoff' : '')); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=537"></script>
+<script src="sw-register.js?v=540"></script>
 </body>
 </html>

@@ -299,6 +299,60 @@
   }
   function sheetLabels(groups) { return Object.keys(groups).map(function (k) { var v = groups[k]; return v.length > 1 ? k + ' (' + v.join(' + ') + ')' : v[0]; }); }
 
+
+  // ─── typical floors (Russ 2026-10-21 "everything feeds AI"): a plan sheet titled TYPICAL … FLOORS 3-10 / 3RD THRU 10TH / 29, 30 & 31
+  // stands for N floors — every quantity read or measured on it counts N times. Only a sheet that says TYPICAL; a floor that has its own
+  // (non-typical) sheet in the set is not claimed twice (Snowflake M-529 / 530 / 531 each carry "FLOORS 29, 30, 31" in the key plan).
+  // over = session.result.sheet_mult {pageId: N} — the estimator's ×N on the sheet row wins (also on sheets that do not say TYPICAL).
+  function floorList(t) {
+    t = String(t || '').toUpperCase().replace(/[–—]/g, '-');
+    if (!/FLOOR|FLR|LEVEL|LVL/.test(t)) return [];
+    var m = /(\d{1,3})(?:ST|ND|RD|TH)?\s*(?:FL(?:OO)?R?S?\.?|LEVELS?)?\s*(?:-|THRU|THROUGH|TO)\s*(?:FL(?:OO)?R\.?|LEVEL|LVL)?\s*(\d{1,3})(?:ST|ND|RD|TH)?/.exec(t);
+    if (m) { var a = +m[1], b = +m[2]; if (b > a && b - a <= 80) { var out = []; for (var i = a; i <= b; i++) out.push(i); return out; } }
+    var l = /(?:FLOORS?|FLRS?\.?|LEVELS?)\s*((?:\d{1,3}(?:ST|ND|RD|TH)?\s*(?:,|&|AND)\s*)+\d{1,3})/.exec(t) || /((?:\d{1,3}(?:ST|ND|RD|TH)?\s*(?:,|&|AND)\s*)+\d{1,3}(?:ST|ND|RD|TH)?)\s*(?:FLOORS?|FLRS?|LEVELS?)/.exec(t);
+    if (l) { var nums = l[1].match(/\d{1,3}/g).map(Number); return nums.filter(function (v, i) { return nums.indexOf(v) === i; }); }
+    return [];
+  }
+  function typicalMults(pages, over) {
+    over = over || {}; var own = {}, out = {};
+    var TYPRE = /TYPICAL|\bTYP\b\.?/i;
+    pages.forEach(function (p) { var r = p.result || {}, t = (r.sheet_title || p.sheet_title || '') + ' ' + (r.floor || ''); if (TYPRE.test(t)) return; var f = String(r.floor || '').replace(/\D/g, ''); if (f) own[+f] = 1; });
+    pages.forEach(function (p) {
+      var r = p.result || {}, t = (r.sheet_title || p.sheet_title || '') + ' ' + (r.floor || ''), o = Number(over[p.id]);
+      if (o >= 1) { out[p.id] = { n: o, why: 'set on the sheet row' }; return; }
+      if (!TYPRE.test(t) || !p.result || p.result.parse_error) return;
+      var type = r.sheet_type || p.sheet_type || ''; if (!/plan|enlarged/.test(type) && !(type === 'other' && /plan/i.test(t))) return;
+      var fl = floorList(t).filter(function (f) { return !own[f]; });
+      out[p.id] = fl.length >= 2 ? { n: fl.length, floors: fl, why: 'sheet title' } : { n: 1, unknown: true };
+    });
+    return out;
+  }
+  // a sheet's reading × N: every summed quantity (reader rows, measured feet / sizes / risers / fittings, slot and linear census); shares,
+  // labels and scales stay as they are
+  function scaleSheet(r, n) {
+    function mulObj(o) { if (!o || typeof o !== 'object') return o; var c = {}; Object.keys(o).forEach(function (k) { c[k] = typeof o[k] === 'number' ? o[k] * n : o[k]; }); return c; }
+    function rows(a, keys) { return Array.isArray(a) ? a.map(function (x) { var c = Object.assign({}, x); keys.forEach(function (k) { if (c[k] != null && c[k] !== '' && isFinite(Number(c[k]))) c[k] = Number(c[k]) * n; }); return c; }) : a; }
+    function fit(f) { if (!f) return f; var c = Object.assign({}, f); ['elbows', 'tees', 'transitions', 'reducers', 'crosses', 'valves'].forEach(function (k) { if (c[k]) c[k] = mulObj(c[k]); }); Object.keys(c).forEach(function (k) { if (/^n_/.test(k) && typeof c[k] === 'number') c[k] *= n; }); return c; }
+    var c = Object.assign({}, r, { typical_mult: n });
+    c.duct_runs = rows(r.duct_runs, ['lf']); c.pipe_runs = rows(r.pipe_runs, ['lf']); c.air_devices = rows(r.air_devices, ['qty', 'linear_ft']); c.equipment = rows(r.equipment, ['qty']);
+    if (r.wet_taps) c.wet_taps = Number(r.wet_taps) * n;
+    if (r.geo) {
+      var g = Object.assign({}, r.geo);
+      ['total_ft', 'riser_ft', 'riser_n', 'single_ft', 'width_ft', 'unsized_ft'].forEach(function (k) { if (typeof g[k] === 'number') g[k] *= n; });
+      g.sizes = mulObj(g.sizes); g.riser_sizes = mulObj(g.riser_sizes); g.fittings = fit(g.fittings);
+      if (g.slots) g.slots = Object.assign({}, g.slots, { ft: (g.slots.ft || 0) * n, n: (g.slots.n || 0) * n, lens: mulObj(g.slots.lens) });
+      if (g.bar_slots) { var bl = g.bar_slots.list || [], rep = []; for (var i = 0; i < n; i++) rep = rep.concat(bl); g.bar_slots = Object.assign({}, g.bar_slots, { n: (g.bar_slots.n || 0) * n, ft: (g.bar_slots.ft || 0) * n, list: rep }); }
+      if (g.linear) { var L = {}; Object.keys(g.linear).forEach(function (k) { L[k] = Object.assign({}, g.linear[k], { ft: (g.linear[k].ft || 0) * n, n: (g.linear[k].n || 0) * n }); }); g.linear = L; }
+      c.geo = g;
+    }
+    if (r.geo_pipe) {
+      var gp = Object.assign({}, r.geo_pipe);
+      ['total_ft', 'riser_ft', 'riser_n', 'single_ft', 'paired_ft', 'dashed_ft'].forEach(function (k) { if (typeof gp[k] === 'number') gp[k] *= n; });
+      gp.sizes = mulObj(gp.sizes); gp.riser_sizes = mulObj(gp.riser_sizes); gp.single_sizes = mulObj(gp.single_sizes); gp.pipe_fittings = fit(gp.pipe_fittings);
+      c.geo_pipe = gp;
+    }
+    return c;
+  }
   function collect(pages, opts) {
     opts = opts || {};
     // tags that are never air devices however the reader typed them (BOSS: 60 sprinkler heads "SP" came back as grilles)
@@ -308,6 +362,13 @@
     }
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote'; });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
+    var TM = typicalMults(sheets, opts.sheetMult), typical = [];
+    sheets = sheets.map(function (p) {
+      var t = TM[p.id]; if (!t) return p;
+      var shN = p.result.sheet_no || p.sheet_no || ('p' + p.page_no);
+      typical.push({ sheet: shN, page_id: p.id, n: t.n, floors: t.floors || null, why: t.why || '', unknown: !!t.unknown });
+      return t.n > 1 ? Object.assign({}, p, { result: scaleSheet(p.result, t.n) }) : p;
+    });
     var symDropped = [], colourBars = [], noLenEa = [], unitMounted = [];
     var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, fittings = { elbows: {}, tees: {}, transitions: {}, n_elbows: 0, n_tees: 0, n_transitions: 0, n_total: 0, sheets: [], rows: {} }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
@@ -671,7 +732,7 @@
     });
     return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
-      rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, pipeFittings: pipeFit, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
+      rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, pipeFittings: pipeFit, typical: typical, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
 
   // ── reviewer decisions (Takeoff → AI review tab, table est_ai_corrections) ──────────────────────────────
@@ -857,6 +918,10 @@
       if (g.weak) { flags.push({ category: 'ductwork', item: 'Duct length ' + g.sheet, flag: 'drawing geometry (' + g.weak + ' ft, ' + g.labels + ' labels, ' + (g.why || 'mostly width-guessed') + ') not trusted — AI reading ' + Math.round(g.ai) + ' ft used' }); return; }
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
+    });
+    (C.typical || []).forEach(function (t) {
+      if (t.unknown) flags.push({ category: 'ductwork', item: 'Typical floors', flag: t.sheet + ' is a TYPICAL plan but its title does not say which floors — counted once; set ×N on the sheet row' });
+      else if (t.n > 1) flags.push({ category: 'ductwork', item: 'Typical floors', flag: t.sheet + ' counted × ' + t.n + (t.floors ? ' (floors ' + t.floors[0] + '–' + t.floors[t.floors.length - 1] + (t.floors.length !== t.floors[t.floors.length - 1] - t.floors[0] + 1 ? ': ' + t.floors.join(', ') : '') + ')' : '') + ' — ' + (t.why || 'sheet title') + '; every duct, pipe, device and plan equipment row on it is multiplied. Shop drawings / T&B still count the plan sheet once — change Floors if they go per floor' });
     });
     if (C.pipeFittings && C.pipeFittings.n_total) {
       var PF = C.pipeFittings, pl = function (n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); };
@@ -1053,6 +1118,7 @@
     });
     grouped.forEach(function (g) { if (g.n > 1) { g.item = g.n + ' lines (' + g.items.slice(0, 3).map(function (s) { return String(s).split(' — ')[0]; }).join(', ') + (g.n > 3 ? '…' : '') + ')'; } });
     return { lines: lines, totals: totals, flags: grouped, collected: C, floors: floors, sdBasis: sdBasis, pipeSheets: pipeFl, ductCheck: ductCheck, ductSystems: Object.keys(ductSystems).length ? ductSystems : undefined, fittings: C.fittings && C.fittings.n_total ? { n_elbows: C.fittings.n_elbows, n_tees: C.fittings.n_tees, n_transitions: C.fittings.n_transitions, n_total: C.fittings.n_total, sheets: C.fittings.sheets } : null,
+      typical: (C.typical || []).length ? C.typical : null,
       pipeFittings: C.pipeFittings && C.pipeFittings.n_total ? { n_elbows: C.pipeFittings.n_elbows, n_tees: C.pipeFittings.n_tees, n_reducers: C.pipeFittings.n_reducers, n_crosses: C.pipeFittings.n_crosses, n_valves: C.pipeFittings.n_valves, n_total: C.pipeFittings.n_total, sheets: C.pipeFittings.sheets } : null };
   }
 
@@ -1073,6 +1139,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
+  window.NWEngine = { build: build, collect: collect, typicalMults: typicalMults, floorList: floorList, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
     applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();
