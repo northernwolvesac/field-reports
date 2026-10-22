@@ -235,7 +235,19 @@
       var r = root(i), bx = boxes[r] || [Infinity, Infinity, -Infinity, -Infinity];
       boxes[r] = [Math.min(bx[0], t.x0), Math.min(bx[1], t.y0), Math.max(bx[2], t.x1), Math.max(bx[3], t.y1)];
     });
+    // a size stacked over 2-4 short lines along a narrow run ("20" / "x" / "6", 260 Madison M-101) is one label: joined top to bottom
+    var stk = {};
+    text.forEach(function (t, i) { (stk[root(i)] = stk[root(i)] || []).push(t); });
+    var joinedLabels = [];
+    Object.keys(stk).forEach(function (r) {
+      var g = stk[r]; if (g.length < 2 || g.length > 4 || g.some(function (t) { return t.str.length > 4 || t._l.dx !== g[0]._l.dx || t._l.dy !== g[0]._l.dy; })) return;
+      var ord = g.slice().sort(function (a, b) { return b._l.p - a._l.p; }), js = ord.map(function (t) { return t.str; }).join('');
+      if (!/[xX×]/.test(js) || !(M_SIZE_RE.test(js) || M_ROUND_RE.test(js))) return;
+      var bx = boxes[r];
+      joinedLabels.push({ str: js.replace(/\s+/g, ''), x0: bx[0], y0: bx[1], x1: bx[2], y1: bx[3], dir: g[0].dir, block: bx });
+    });
     text.forEach(function (t, i) { t.block = boxes[root(i)]; delete t._l; });
+    text = text.concat(joinedLabels);
     // nothing beyond the page box counts (Whaam: a 45-ft "10x10" run sat left of the sheet's edge, in the clipped-off margin)
     var pv = page.view || null;
     if (pv) { var pb = [pv[0], pv[1], pv[2], pv[3]]; segs = segs.map(function (g) { var c = clipSeg(g, pb); return c ? c.concat([g[4]]) : null; }).filter(Boolean); }
@@ -259,6 +271,19 @@
   function isSizeLabel(s) { return M_SIZE_RE.test(s) || M_ROUND_RE.test(s); }
   function isPipeLabel(s) { return M_PIPE_RE.test(s); }
   function hasScale(s) { return M_SCALE_RE.test(s || ''); }
+  // "PROVIDE 17'-6" LINEAR SLOT DIFFUSER WITH (2) 27"LX10"HX10"W PLENUM …" / "PROVIDE 14'-3" LINEAR SLOT RETURN": each callout carries the length of one slot run
+  // (260 Madison M-101: 17 callouts = 316 ft of the estimator's 387). Supply and return are summed apart; a callout printed twice on a sheet counts once.
+  function linearCallouts(txt) {
+    var s = String(txt || '').replace(/\s+/g, ' '), re = /(\d+)\s*['’]\s*-?\s*(\d+)?(?:\s*\d\/\d)?\s*["”]?\s+(?:LONG\s+)?LINEAR\s+(?:SLOT\s+)?(DIFFUSER|RETURN|GRILLE|SUPPLY|EXHAUST|REGISTER)/gi, m, out = { n: 0, ft: 0, supply_ft: 0, return_ft: 0, lens: {} }, seen = {};
+    while ((m = re.exec(s))) {
+      var ft = +m[1] + (m[2] ? +m[2] / 12 : 0); if (!(ft >= 2 && ft <= 60)) continue;
+      var ret = /RETURN|EXHAUST/i.test(m[3]), key = ft.toFixed(2) + (ret ? 'R' : 'S') + s.slice(re.lastIndex, re.lastIndex + 40);
+      if (seen[key]) continue; seen[key] = 1;
+      out.n++; out.ft += ft; if (ret) out.return_ft += ft; else out.supply_ft += ft; var lk = String(Math.round(ft * 2) / 2); out.lens[lk] = (out.lens[lk] || 0) + 1;
+    }
+    out.ft = Math.round(out.ft * 10) / 10; out.supply_ft = Math.round(out.supply_ft * 10) / 10; out.return_ft = Math.round(out.return_ft * 10) / 10;
+    return out;
+  }
   function slashSize(s) {
     return String(s || '').replace(/(^|[^\d\/.-])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d\/"”])/g, function (m, pre, a, b) {
       a = +a; b = +b; if (a < 4 || b < 4 || a > 96 || b > 40) return m;   // duct depths stop at 40"; "24/72" is a sheet index
@@ -2495,5 +2520,5 @@
   function measurePipes(data) { data.mode = 'pipes'; return measure(data); }
   function measureRisers(data) { data.mode = 'risers'; return measure(data); }
   window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, symbolCensus: symbolCensus, glyphFamilies: glyphFamilies, glyphText: glyphText, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
-    isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, _worker: workerMain };   // _worker: for offline tests
+    isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, linearCallouts: linearCallouts, _worker: workerMain };   // _worker: for offline tests
 })();

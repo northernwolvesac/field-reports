@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=541"></script>
-<script src="auth.js?v=541"></script>
-<script src="est-org.js?v=541"></script>
-<script src="est-totals.js?v=541"></script>
-<script src="nw-duct-weight.js?v=541"></script>
+<script src="supabase-config.js?v=542"></script>
+<script src="auth.js?v=542"></script>
+<script src="est-org.js?v=542"></script>
+<script src="est-totals.js?v=542"></script>
+<script src="nw-duct-weight.js?v=542"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=541"></script>
-<script src="nw-email.js?v=541"></script>
-<script src="est-engine.js?v=541"></script>
-<script src="geo-takeoff.js?v=541"></script>
+<script src="email-utils.js?v=542"></script>
+<script src="nw-email.js?v=542"></script>
+<script src="est-engine.js?v=542"></script>
+<script src="geo-takeoff.js?v=542"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -684,7 +684,7 @@ var AE = (function() {
         data.riserFt = Number((session.result || {}).floor_height) || 12;   // floor-to-floor height for the UP / DN risers (session card)
         var g = riser ? await NWGeo.measureRisers(data) : pipes ? await NWGeo.measurePipes(data) : await NWGeo.measure(data);
         geo = g.error ? { error: g.error, ocr: ocrInfo || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, at: new Date().toISOString() } :
-          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, fittings: g.fittings && g.fittings.n_total ? g.fittings : undefined, pipe_fittings: g.pipe_fittings && g.pipe_fittings.n_total ? g.pipe_fittings : undefined, systems: g.systems || undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
+          { sizes: g.sizes, total_ft: g.total_ft, single_ft: g.single_ft, width_ft: g.width_ft, ptft: g.ptft, scale_from: g.scale_from, labels: g.labels, labels_hit: g.labels_hit, zone_ft: g.zone_ft || undefined, match_ft: g.match_ft || undefined, single_style: g.single_style || undefined, riser_sizes: g.riser_sizes, riser_ft: g.riser_ft || undefined, riser_n: g.riser_n || undefined, unsized_ft: g.unsized_ft, levels: g.levels, linear: g.linear || undefined, slots: g.slots || undefined, fittings: g.fittings && g.fittings.n_total ? g.fittings : undefined, pipe_fittings: g.pipe_fittings && g.pipe_fittings.n_total ? g.pipe_fittings : undefined, systems: g.systems || undefined, callouts: (!pipes && !riser && NWGeo.linearCallouts(data.fullText).n >= 2) ? NWGeo.linearCallouts(data.fullText) : undefined, ocr: ocrInfo || undefined, at: new Date().toISOString() };
         // refrigerant / water piping drawn on the HVAC plan itself: measured too when the AI saw pipe runs on this sheet, and kept only when the
         // two agree within a factor of 3-4 (duct lines and walls look like pipes to the line follower)
         if (!riser && !pipes && !g.error) {
@@ -1888,6 +1888,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=541"></script>
+<script src="sw-register.js?v=542"></script>
 </body>
 </html>

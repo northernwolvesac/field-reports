@@ -370,7 +370,7 @@
       return t.n > 1 ? Object.assign({}, p, { result: scaleSheet(p.result, t.n) }) : p;
     });
     var symDropped = [], colourBars = [], noLenEa = [], unitMounted = [];
-    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, fittings = { elbows: {}, tees: {}, transitions: {}, n_elbows: 0, n_tees: 0, n_transitions: 0, n_total: 0, sheets: [], rows: {} }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {};
+    var sched = {}, planEq = {}, devices = {}, slotUsed = {}, slotSheets = {}, duct = {}, pipe = {}, demo = [], notes = [], questions = [], rig = [], floors = {}, wetTaps = 0, skipped = [], risers = [], pipeFloors = {}, geoCheck = [], ductSheets = {}, pipeSheets = {}, schedVav = {}, ductRisers = { n: 0, ft: 0, sheets: [] }, pipeRisers = { n: 0, ft: 0, sheets: [] }, fittings = { elbows: {}, tees: {}, transitions: {}, n_elbows: 0, n_tees: 0, n_transitions: 0, n_total: 0, sheets: [], rows: {} }, srSheets = [], srDoubled = [], srSingle = [], devCheck = [], linGeoUsed = {}, linGeoSheets = {}, linCallouts = { n: 0, ft: 0, sheets: [] };
     // the air-device schedule names what each plan tag is: a plan row tagged "A1" is whatever the schedule says A1 is (BOSS: A1 / A2 / A3 /
     // R1 / R2 are 4-ft, 2-ft, 4-ft linear slots the reader typed as diffusers; B1 / B2 / R3 are diffusers and a grille)
     var schedDev = {};
@@ -431,6 +431,16 @@
     });
     // enlarged plans carry the duct takeoff only when they replace a coarse overall plan (or nothing else was measurable)
     var useEnlargedGeo = Object.keys(coarseSet).length > 0 || ductGeoPlans === 0;
+    // …or when they add ducts the overall plans do not show (Burlington Navy Yard: M2.0 = round trunks 12-24"Ø, M2.1 = the 6x8 / 8x12 branches
+    // to the units; the estimator took off both = 621 ft): the enlarged plan's duct sizes barely occur on the overall plans
+    var overallFt = {}; sheets.forEach(function (p) { var r = p.result, t = r.sheet_type || p.sheet_type || ''; if (t !== 'duct_plan' || !(r.geo && r.geo.sizes)) return; Object.keys(r.geo.sizes).forEach(function (k) { overallFt[k] = (overallFt[k] || 0) + Number(r.geo.sizes[k] || 0); }); });
+    var enlargedExtra = {};
+    sheets.forEach(function (p) {
+      var r = p.result, t = r.sheet_type || p.sheet_type || '';
+      if (t !== 'enlarged' || !(r.geo && r.geo.total_ft >= 60 && r.geo.sizes) || (r.geo.labels || 0) < 8 || !Object.keys(overallFt).length) return;
+      var tot = 0, ov = 0; Object.keys(r.geo.sizes).forEach(function (k) { var f = Number(r.geo.sizes[k] || 0); tot += f; ov += Math.min(f, overallFt[k] || 0); });
+      if (tot > 0 && ov / tot < 0.3) enlargedExtra[r.sheet_no || ('p' + p.page_no)] = 1;
+    });
     sheets.forEach(function (p) {
       var r = p.result, sh = r.sheet_no || ('p' + p.page_no), type = r.sheet_type || p.sheet_type || '';
       var isDemo = type === 'demo' || /removal|demo/i.test(r.sheet_title || '');
@@ -479,10 +489,11 @@
       if (type === 'schedule') (r.air_devices || []).forEach(function (a) { if (/vav|fpb/i.test(a.type || '') && a.tag) expandTags(a.tag).forEach(function (t) { schedVav[norm(t)] = 1; }); });
       // quantities come from the floor plans only; enlarged plans, details, risers and controls repeat what the plans show
       var takeoffSheet = type === 'duct_plan' || type === 'pipe_plan' || (type === 'other' && /plan/i.test(r.sheet_title || '') && !/enlarged/i.test(r.sheet_title || ''));
-      if (!isDemo && !takeoffSheet && ((r.duct_runs || []).length || (r.pipe_runs || []).length || (r.air_devices || []).length))
+      if (!isDemo && !takeoffSheet && !(type === 'enlarged' && (useEnlargedGeo || enlargedExtra[sh]) && r.geo && r.geo.total_ft > 0) && ((r.duct_runs || []).length || (r.pipe_runs || []).length || (r.air_devices || []).length))
         skipped.push(sh + ' (' + (type || 'sheet') + ')');
-      var enlargedGeoSheet = !takeoffSheet && type === 'enlarged' && useEnlargedGeo && r.geo && r.geo.total_ft > 0;
+      var enlargedGeoSheet = !takeoffSheet && type === 'enlarged' && (useEnlargedGeo || enlargedExtra[sh]) && r.geo && r.geo.total_ft > 0;
       if (!isDemo && (takeoffSheet || enlargedGeoSheet)) {
+        if (takeoffSheet && r.geo && r.geo.callouts && r.geo.callouts.ft > 0) { linCallouts.n += r.geo.callouts.n; linCallouts.ft += r.geo.callouts.ft; linCallouts.sheets.push(sh + ' (' + r.geo.callouts.n + ')'); }
         // air-device census of this sheet: what the reader counted vs the device tags in the PDF text layer ("C (150)", "D (200) TYP. 3")
         if (takeoffSheet && (r.air_devices || []).length) {
           var dtags = (p.tag_counts && p.tag_counts.devices) || {}, tagN = 0, cfmOnly = Number(dtags['(cfm only)'] || 0), aiN = 0, aiCfm = 0;
@@ -730,7 +741,7 @@
       (r.scope_notes || []).forEach(function (n) { if (n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
-    return { devCheck: devCheck, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
+    return { devCheck: devCheck, linCallouts: linCallouts, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
       rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, pipeFittings: pipeFit, typical: typical, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
@@ -1076,6 +1087,11 @@
       if (qo.linear) { ao.linear = qo.linear; ao.linearGuess = false; }
       if (qo.vavd) ao.vavd = qo.vavd;
       if (qo.fpb) ao.fpb = qo.fpb;
+    }
+    // slot lengths printed in the plan callouts ("PROVIDE 17'-6" LINEAR SLOT DIFFUSER …") when the reader / geometry carried fewer feet
+    if (C.linCallouts && C.linCallouts.ft > 1.15 * ao.linear && !(qo.lines && qo.linear)) {
+      flags.push({ category: 'air devices', item: 'Linear diffusers — plan callouts', flag: Math.round(C.linCallouts.ft) + ' ft of slot diffuser / return named in the callouts (' + C.linCallouts.n + ' on ' + C.linCallouts.sheets.join(', ') + '); the rows carried ' + Math.round(ao.linear) + ' ft — priced by the callouts, check typical (TYP) multipliers' });
+      ao.linear = Math.round(C.linCallouts.ft * 10) / 10; ao.linearGuess = false; aoBasis += ' — slot lengths from the plan callouts';
     }
     if (ao.outlet) add('air_outlets', 'Diffusers / grilles / registers', ao.outlet, 'ea', 0, STD.airOutlet, 'Air Outlets Standards — 1.6 hr each' + aoBasis);
     if (ao.linear) add('air_outlets', 'Linear diffusers', ao.linear, 'lf', 0, STD.linearPerFt, 'Air Outlets Standards — 0.8 hr/ft' + aoBasis, ao.linearGuess ? { flag: 'some lengths not shown — counted 4 ft per piece; check the plans' } : null);
