@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=550"></script>
-<script src="auth.js?v=550"></script>
-<script src="est-org.js?v=550"></script>
-<script src="est-totals.js?v=550"></script>
-<script src="nw-duct-weight.js?v=550"></script>
+<script src="supabase-config.js?v=552"></script>
+<script src="auth.js?v=552"></script>
+<script src="est-org.js?v=552"></script>
+<script src="est-totals.js?v=552"></script>
+<script src="nw-duct-weight.js?v=552"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=550"></script>
-<script src="nw-email.js?v=550"></script>
-<script src="est-engine.js?v=550"></script>
-<script src="geo-takeoff.js?v=550"></script>
+<script src="email-utils.js?v=552"></script>
+<script src="nw-email.js?v=552"></script>
+<script src="est-engine.js?v=552"></script>
+<script src="geo-takeoff.js?v=552"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -673,7 +673,8 @@ var AE = (function() {
           if (nLab < (pipes ? 6 : 15) && (data.glyphs || []).length > 150) {
             var cached = !all && p.result && p.result.ocr_labels;
             var tagHints = ((p.result && p.result.air_devices) || []).map(function(a) { return String(a.tag || '').toUpperCase().replace(/[^A-Z0-9-]/g, ''); }).filter(function(t) { return /^[A-Z]{1,3}-?\d{0,2}[A-Z]?$/.test(t); });
-            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: 2, shortNear: pipes ? 0 : 40, reader: aiReader, tagHints: tagHints, dpi: data.raster ? 150 : undefined,
+            var ocr = cached ? { items: cached, cached: true } : await NWGeo.ocrLabels(pg1, data, { maxLetters: pipes ? 14 : 10, minLetters: 2, shortNear: pipes ? 0 : 40, reader: data.raster ? undefined : aiReader, tagHints: tagHints, dpi: data.raster ? 150 : undefined,   // a scan's crops are clean (letter boxes whitened): the local Tesseract reads them in ~40 s a sheet, the vision reader's 8 round trips took 3+ min
+              
               onProgress: function (d, n) { measuring = 'Reading labels (OCR) on ' + (p.sheet_no || 'sheet ' + p.page_no) + ': ' + d + ' / ' + n + ' words…'; render(); } });
             ocrItems = ocr.items;
             data.text = data.text.concat(ocr.items);
@@ -1892,6 +1893,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=550"></script>
+<script src="sw-register.js?v=552"></script>
 </body>
 </html>
