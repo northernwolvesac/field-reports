@@ -5,87 +5,96 @@ Clearstory change notification BC0006, "Backcharge to Northern Wolves for labor 
 Wolves for STO Labor and supervision overtime, to date, while they worked overtime in a attempt to keep our schedule.
 To date we have 48 hrs Labor OT and 40 hrs supervision." No files, no dates, no names, no task descriptions.
 
-Sources: the four email logs in `email logs/` (every STO / NW Snowflake thread, project start to 10/23, read in full by
-period, verbatim quotes with message ids), `Subcontract 11010174015 (text).txt` (executed 6/11 STO, 6/15 NW, $2,350,000),
-LOI / NTP 5/29/2026 (Drive SnowFlake / Contract).
+**Decision (Ruslan, 10/23): reject in full.**
 
-## 1. Contract
+Sources: the four email logs in `email logs/` (every STO / NW Snowflake thread, project start to 10/23, verbatim quotes
+with message ids), `Subcontract 11010174015 (text).txt` (executed 6/11 STO, 6/15 NW, $2,350,000), LOI / NTP 5/29/2026,
+STO schedule 5/24/26 (`../source/STO Schedule 5.24.26.pdf`), Ruslan's corrections of 10/23.
+
+## 1. STO schedule 5/24/26 vs what happened (HVAC ductwork, all areas)
+
+| Activity | STO schedule 5/24/26 | Actual / cause |
+|---|---|---|
+| Award trades | 5/21 - 6/10 | LOI 5/29; subcontract signed STO 6/11, NW 6/15 |
+| Tin sketching | 3 days, 6/11 - 6/15 (all floors at once) | Starts the day the subcontract was issued |
+| Shop drawing approval | 2 wks, 6/16 - 6/29 | Never approved in the schedule window: 29th R&R 6/22, 30th R&R 6/29, 31st R&R 7/6; R&R called for spiral oval vs contract rectangular; NW RFI 6/22 answered 7/6 (rectangular); revised shops 7/13; still not approved 7/21 |
+| Ductwork install | 3 wks, 6/30 - 7/20 | 29th: install stopped 6/29 by STO (28th floor tenant), 2 hrs/day, drilling 6-8 am only, full access 7/8; deliveries 6 pm only; dock blocked 7/10; temp pipe in the main duct route (7/16 - 8/4); awnings not on drawings (7/16) |
+| Testing | 3 days, 7/21 - 7/23 (medium pressure) | Building engineer changed the test at the 7/31-8/4 meeting: all duct incl. low pressure branches up to the FPBs, capped and sealed -> needed FPBs installed first. NW passed the actual test the first time on 29, then 30/31 the following week |
+| Insulation | 2 wks, 7/24 - 8/6 | Followed the test |
+| Drywall (insulation & drywall) | 7/14 - 7/27 (open areas), 7/17 - 8/7 (conf rooms) | Scheduled to overlap ductwork; STO 7/14: Newport released to sheetrock 7/21 "will not stop and wait" |
+| Temp loop removal | 9/25 - 9/28 (after sprinkler hydro 9/18) | Temp piping on 29 was in the duct route in July/August, i.e. the schedule itself kept the temp loop until late September |
+| CRAC lead time | 14 wks to 9/16 | Factory: ship 10/16, then 11/12 (BC004 withdrawn by STO) |
+| Start-ups / commissioning / balancing | 10/19 - 11/2 / 11/2 - 11/16 / 11/9 - 11/20 | STO's own 8/14 recap still tracked the same back-end dates (10/19 start-ups, 11/2 commissioning, 11/9 balancing) -> no project-level delay as of mid-August |
+| Substantial completion | 12/18/26 | Unchanged as far as the emails show |
+
+Points: (a) the schedule gave 2 weeks for shop approval and a 3-day sketch starting the day of award, all floors in
+parallel; (b) it did not account for the R&R cycle, the 2-week RFI, or the 28th floor tenant restriction on 29;
+(c) the drywall and temp loop dates in the same schedule conflict with the ductwork window; (d) end milestones held.
+
+## 2. Contract
 
 - **1.7 (LOI 1.3)**: if NW fails to maintain the schedule "as reasonably determined by Structure Tone", NW shall "at its
   own cost and expense, furnish such additional labor and services or work on an additional and/or overtime basis".
-  -> obliges NW to put **its own** men on overtime. It does not make NW pay STO's own laborers or supervision.
-- **1.16**: if NW fails to supply sufficient workers / prosecute the Work / correct defective Work, STO may "employ
-  labor, equipment, materials and supervision to complete or correct the Work" and deduct the cost.
-  -> covers STO labor doing **NW's Work** (complete or correct it). STO must show what NW work their laborers did.
-- **1.9**: Subcontract Total includes NW's own supervision. STO's own supervision is STO general conditions.
-- **1.8**: NW delay claims need written notice within 3 days, else time-extension right waived; no delay damages.
-  NW's delay explanations were emails, not 1.23 formal notices -> weak for a counter-claim, still usable as facts.
-- **1.23**: notices in writing (personal, certified mail, fax, courier). STO's own "formal notice" of 8/11 was an email.
-- **Exhibit A scope item 2**: "piping and associated accessories, including **overtime brazing**" -> brazing OT is
-  base scope (building rules), not evidence of delay.
-- No schedule exhibit. Schedule referenced = "Snowflake STO Schedule 5.24.26.pdf" (Samuel, 5/26, "to assist in
-  buyout"), msg 19fb581d91319295 / thread 19e64694315449d1 - not yet pulled.
+  -> NW's own overtime. NW (subs) worked every Saturday July - September plus extended hours.
+- **1.16**: STO may "employ labor, equipment, materials and supervision to complete or correct the Work" of NW and
+  deduct. -> STO must show its laborers did NW's Work. Not shown.
+- **1.9**: NW price includes NW supervision. STO supervision is STO general conditions.
+- **1.8 / 1.23**: NW delay notices were emails, not formal notices -> no counter-claim; facts still stand.
+- **Exhibit A scope item 2**: "piping ... including **overtime brazing**" -> brazing OT is base scope (building rules).
+- No schedule exhibit in the subcontract; the 5/24/26 schedule was sent 5/26 "to assist in buyout process".
 
-## 2. Facts for NW
+## 3. Facts for NW
 
-1. **STO's own reason for Saturday premium time was noise complaints, for three trades.** 7/28 James McMullin to
-   Newport, Northern Wolves and Five Borough (msg 19fa886788a1ce58): "premium time cost to work full crews on
-   Saturday Aug 1st on the 29th floor ... to help us with the time lost due to noise complaints on that floor during
-   the week." STO asked NW to price it; NW priced COP-SF-04 $9,816 (msg 19faf03670cc11d7). STO overtime that day is
-   STO's condition, not NW delay.
-2. **29th floor access restricted by the building / floor below.** No install 6/29 (28th floor offices), 2 hrs/day,
-   drilling and hanging 6-8 am only (7/1 minutes), full green light only 7/8 (Ruslan 7/21, Christino 7/9 "noise
-   restrictions from the floor below"), restrictions still changing 7/30 ("until 9am"). Deliveries 6 pm only; 7/10
-   two trucks could not get into the dock.
-3. **Design / approval delays.** Shop drawings back R&R; RFI on exposed main duct 6/22, answered 7/6 - held all medium
-   pressure fabrication (Christino 7/14). Metal awnings not on the drawings (Alan 7/16, MEC4 7/30). Temp pipe blocking
-   the 29th main (7/16, still 8/4). Building engineer's new leak-test method 8/4 (FPBs needed before final test).
-   Bulletin 3 drawings 8/11 changed installed ductwork (COP-SF-05). RFI 3 open 6/23-8/25; RFI 6 two weeks waiting for
-   the chief engineer (vacation), answered 8/25; RFI 4/5 unanswered in August; Addendum 2 with no piping details.
-   Bulletin 4, perimeter linear diffusers, restroom outlets (10/14), extra FSDs added later.
-4. **Other trades and STO were working nights / premium anyway.** Mark 7/14: "We are working at night each night with
-   other trades". Newport and Five Borough on the same Saturday 8/1.
-5. **NW already worked overtime at its own cost (1.7 satisfied).** Saturdays 7/11 (STO requested, Christino 7/8), and
-   NW crews helping Bunker 8/1, 8/8, 8/15, 8/22 (2-7 men). Ruslan 7/21 to STO: "absorbing the delay through overtime,
-   Saturday work, and fabricating in parallel with unfinalized approvals". Pipe crew longer weekday hours and
-   Saturdays, premium absorbed (9/11).
-6. **STO's own recap 8/14**: "We're making good progress". Milestones of 8/7 were not agreed (Christino 8/18).
-7. Vendor / third-party: CRAC factory delay to 11/12 (BC004 withdrawn on that basis); Siemens valve labels, BMS
-   graphics and thermostats holding balancing (10/19).
-8. Safety record: July 85 (#14/188), August 99 (#2/49), September 91.7 (top tier).
+1. **STO's Saturday 8/1 premium was STO's own choice, for noise complaints, three trades.** 7/28 McMullin to Newport,
+   NW, Five Borough (msg 19fa886788a1ce58): "premium time cost to work full crews on Saturday Aug 1st on the 29th floor
+   ... to help us with the time lost due to noise complaints on that floor during the week." NW priced it in
+   Clearstory (CR00023 / COP-SF-04, $9,816); **STO voided it without a reason**. STO cannot void NW's premium for that
+   day and then charge NW for its own premium the same days.
+2. **NW's 7/21 recap email to STO** (Ruslan, msg 19f86b369e0ac56e, to Mark, Samuel, Marc, Antonio, Brian, Jonathan,
+   James, Alan, Leyann) laid out the R&R and RFI timeline and the 29th floor stop, and said NW was "absorbing the delay
+   through overtime, Saturday work, and fabricating in parallel with unfinalized approvals". STO was told in writing,
+   in July, why the schedule dates were not achievable and that NW was already on premium time.
+3. **29th floor = active office below (28th floor).** Strong noise complaints all summer; install stopped 6/29,
+   2 hrs/day until 7/8, still restricted 7/30 ("until 9am"). The only way to progress 29 was overtime and Saturdays -
+   which NW's subs did every Saturday from July to September at NW's cost.
+4. **Duct leak test**: STO's requirement was medium pressure only; the building engineer then required all ductwork incl.
+   low pressure branches up to the FPBs, capped and sealed, which forced waiting for FPBs. NW passed the actual test
+   **first time** on 29, and on 30/31 the week after.
+5. **Design changes**: Bulletin 3 (8/11) changed installed ductwork (COP-SF-05); RFI 3 open 6/23 - 8/25, RFI 6 waited two
+   weeks for the chief engineer (answered 8/25); **September: EOR showed the wrong pipe risers - NW urgently rerouted
+   and reconnected to the correct risers; work done in September, CO still not approved for billing**; Bulletin 4
+   thermostats, perimeter linear diffusers, restroom outlets (10/14), extra FSDs.
+6. **Other trades worked nights / premium throughout.** Mark 7/14: "We are working at night each night with other
+   trades". Electricians, sprinkler, plumbing, carpentry active throughout.
+7. STO's own 8/14 recap: "We're making good progress", back-end milestones unchanged.
+8. Third parties: CRAC factory delay (BC004 withdrawn); Siemens valve labels / graphics / thermostats.
+9. Safety record: July 85 (#14/188), August 99 (#2/49), September 91.7 (top tier).
 
-## 3. Facts against NW (expect STO to use them)
+## 4. STO statements and NW's answer
 
-- **8/11 Mark Vetterlein, written notice** (msg 19ff0c53a7293584): "We are tracking our laborers time for covering the
-  premium time and will be sending you charges for this- please take this as formal notice". Same email: "You have
-  missed every single date on the project". BC0006 is the follow-through - "no notice" is not an argument.
-- 8/17 DeLuca: "clear case for dates not being met per the contract schedule". 8/18 Leyann: "four weeks behind
-  schedule", painting pushed. 8/25 Mark: NW "not due to receive payment for any premium time".
-- July manpower complaints: 7/14 "ghost town", 7/15 two pieces installed, 7/28 "9 pieces in one day", supervision
-  questioned 7/30. Internally 7/27: 8 men on site vs 16 needed.
-- Quality: 7/24 pressure test failed (seam leaks); 29th duct test failed first try in August; isolators installed
-  before approval; BMS submittal late.
-- Sept/Oct piping: "8 schedule pushes" (9/28), "10th schedule push" (10/20), Mark 10/5 "Take this as your formal
-  notice" (claims from other trades), 10/14 no foreman / lead fitter banned by building engineers, insulator only 10/21.
+| STO says | Answer |
+|---|---|
+| 8/11 Mark: tracking laborers' premium time, "formal notice"; "missed every single date" | Dates came from a schedule that ignored the R&R cycle, the RFI and the 28th floor restriction (NW 7/21 email). NW already on Saturdays / OT at own cost. Notice by email, not 1.23. |
+| 8/18 "four weeks behind" | Behind a 5/24 buyout schedule that had shop approval by 6/29; approvals never came in that window. |
+| July manpower complaints ("ghost town") | Floor 29 restricted to 2 hrs/day until 7/8; crews could not work full days there. |
+| 7/24 / Aug test failures | The test requirement changed (building engineer: all duct incl. LP branches to the FPBs). The formal test under that requirement passed the first time on 29, then 30/31 (Ruslan). Expect STO to cite the 7/24 seam leaks - do not raise testing in the reply. |
+| 10/14 lead fitter banned by building engineers | False - not banned; the building engineer confirmed it. |
+| 10/14 Andrei / Ruslan not onsite | Andrei on site weekly or every other week. |
+| 10/20 "10th schedule push", insulation | Insulation was done; remaining items are quality touch-ups = punch list. |
+| 9/12 leak (BC002/BC003), ceiling grid, deck drilling | Accepted and signed by NW - closed, not related to BC0006. |
 
-## 4. Position
+## 5. Position (full rejection)
 
-1. **Reject as submitted / request substantiation** (no admission): daily breakdown - dates, names, trade, hours,
-   rate, the specific NW Work performed, location, and the STO authorization for each shift; timesheets and daily
-   reports. Under 1.16 only labor that completed or corrected NW's Work can be deducted.
-2. **Supervision 40 hrs - reject.** STO supervision on premium days is STO general conditions; nothing in the
-   Subcontract passes STO's own supervision overtime to a subcontractor.
-3. **Labor 48 hrs - reject for any shift tied to the 8/1 (and similar) STO-wide premium days** called for noise
-   complaints / building restrictions, and any time spent on other trades, protection, cleaning, or GC logistics.
-4. NW met 1.7 by working its own overtime at its own cost (Saturdays, extended hours, helpers to Bunker).
-5. Causes outside NW control (access, RFIs, Bulletin 3, building engineer requirements, vendor) - state as facts, no
-   counter-claim under 1.8.
-6. Commercial fallback (decide internally): if STO substantiates hours that clearly did NW work, consider offsetting
-   only those, net of NW premium time STO itself requested (COP-SF-04 $9,816 status to confirm).
+1. Reject BC0006 in full.
+2. No backup: no dates, names, hours, rates, work performed, authorization. 1.16 needs labor that completed or corrected
+   NW Work - none identified.
+3. STO supervision (40 hrs) is STO general conditions - not chargeable.
+4. STO premium days were STO decisions for building / noise conditions affecting all trades; STO itself asked NW to
+   price premium time for 8/1 and then voided it.
+5. NW complied with 1.7 - its own overtime and Saturdays at its own cost, July - September.
+6. Schedule 5/24/26 did not include the R&R / RFI / 28th floor restriction; end milestones were held.
 
-## 5. Open items
+## 6. Open items
 
-- Which period / dates does BC0006 cover (STO did not say)? Ask in the response.
-- COP-SF-04 ($9,816, Sat 8/1 premium at STO request) - approved, rejected, or still in Clearstory?
-- Pull "Snowflake STO Schedule 5.24.26.pdf" (msg 19fb581d91319295) and STO meeting minutes 8/12, 9/16, 9/23, 10/22.
-- NW Saturday sign-in sheets / T&M tickets (Ruslan 7/29: weekly T&M every Monday, Saturday headcount emails).
+- NW sub Saturday sign-ins / T&M: not in hand; ask subs (Bunker, pipe sub) if STO pushes back.
+- Pipe riser reroute CO (September, EOR wrong risers) - still pending approval; reference it.

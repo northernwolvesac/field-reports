@@ -128,3 +128,9 @@ STO's own 7/28 request for Sat 8/1 premium crews (3 trades) was for "noise compl
 NW's own overtime and STO labor completing NW Work - not STO supervision. Schedule 5.24.26 not yet pulled.
 Subcontract #11010174015: $2,350,000, STO 6/11 / NW 6/15; LOI 5/29; no schedule exhibit; scope includes "overtime
 brazing".
+10/23 Ruslan: reject BC0006 in full. COP-SF-04 / CR00023 ($9,816, STO-requested Sat 8/1 premium) was voided by STO
+with no reason. STO schedule 5/24/26 saved to `source/` (shop approval by 6/29, duct 6/30-7/20, test 7/21-23; back end
+unchanged: start-ups 10/19, balancing 11/9, substantial completion 12/18). Corrections from Ruslan: lead fitter was not
+banned (engineer confirmed), Andrei on site weekly / biweekly, duct test passed first time under the engineer's revised
+requirement, Oct insulation items are punch list, BC002/BC003 accepted and closed; Sept pipe riser reroute (EOR wrong
+risers) CO still unapproved.
