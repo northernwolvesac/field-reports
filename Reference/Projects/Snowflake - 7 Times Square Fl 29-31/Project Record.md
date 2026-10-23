@@ -118,3 +118,13 @@ Christino 10/19 (installed work, ceilings, entry 12x8 stub, vanity wet wall conn
   odor control unit) asks for "0-10 VDC BMS fan speed control" and dirty filter DP switches, but schedule note 12 says
   unit installation and all wiring by others, note 13 media field installed by others, note 14 isolators / hardware by
   others. Our ATC submittal extract (13 of 145 pages) has nothing on it; the full R0 was not checked.
+
+## 7. BC0006 - STO back charge for labor / supervision overtime (Clearstory, created 10/23, due 10/29)
+
+48 hrs labor OT + 40 hrs supervision, no backup. Folder `BC0006 Backcharge/`: position memo, draft response (not
+sent), subcontract text, and email logs for every STO / NW Snowflake thread from project start to 10/23 (4 periods,
+verbatim quotes). Key: Mark Vetterlein 8/11 written "formal notice" that STO tracks its laborers' premium time;
+STO's own 7/28 request for Sat 8/1 premium crews (3 trades) was for "noise complaints"; subcontract 1.7 / 1.16 cover
+NW's own overtime and STO labor completing NW Work - not STO supervision. Schedule 5.24.26 not yet pulled.
+Subcontract #11010174015: $2,350,000, STO 6/11 / NW 6/15; LOI 5/29; no schedule exhibit; scope includes "overtime
+brazing".
