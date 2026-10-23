@@ -113,3 +113,8 @@ supply diffusers C (Titus FL-15-HT) approx. 17 LF each, 4 LF active, approx. 45 
 10/19: price per drawing (~17 LF each), same pricing basis as the perimeter CO. Siemens covers pneumatic tubing
 for 5 FSDs only - the new 30th floor FSD needs a Siemens add; access doors excluded by Siemens. Field check sent to
 Christino 10/19 (installed work, ceilings, entry 12x8 stub, vanity wet wall connection - likely toilet exhaust riser).
+- Air purification BAS-30-1,2 (Bioclimatic MC 880, Food Prep / Serving 30th; checked 10/23): NOT in Siemens scope -
+  proposal 10559656 exclusion 9 "Air Purification System", not in the p.4 equipment count. Spec M-102 (F, ceiling
+  odor control unit) asks for "0-10 VDC BMS fan speed control" and dirty filter DP switches, but schedule note 12 says
+  unit installation and all wiring by others, note 13 media field installed by others, note 14 isolators / hardware by
+  others. Our ATC submittal extract (13 of 145 pages) has nothing on it; the full R0 was not checked.
