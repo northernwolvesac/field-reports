@@ -259,4 +259,35 @@
   window.requireRole = requireRole;
   window.initAuthUI = initAuthUI;
 
+  // ─── App support: error buffer + ⚑ button (2026-10-24) ────────────
+  // The last console errors ride along with a support ticket (nw-support.js); the button opens the
+  // "Problem / Suggestion" form on every signed-in page (not inside embedded iframes, not on login).
+  (function () {
+    var buf = window.__nwErrors = window.__nwErrors || [];
+    function push(o) { try { buf.push(Object.assign({ at: new Date().toISOString() }, o)); if (buf.length > 40) buf.splice(0, buf.length - 40); } catch (e) {} }
+    var ce = console.error;
+    console.error = function () { try { push({ type: 'console', msg: Array.prototype.map.call(arguments, function (a) { return a && a.stack ? a.stack : (typeof a === 'object' ? JSON.stringify(a) : String(a)); }).join(' ').slice(0, 600) }); } catch (e) {} return ce.apply(console, arguments); };
+    window.addEventListener('error', function (e) { push({ type: 'error', msg: String(e.message || '').slice(0, 400), src: (e.filename || '') + ':' + (e.lineno || '') }); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; push({ type: 'promise', msg: String(r && (r.stack || r.message) || r).slice(0, 400) }); });
+    function addButton() {
+      try { if (window.self !== window.top) return; } catch (e) { return; }
+      if (/\/(login|install|report-view)\.html/i.test(location.pathname) || document.getElementById('nwSupportBtn')) return;
+      var signed = false; try { signed = !!sessionStorage.getItem(AUTH_PROFILE_KEY) || Object.keys(localStorage).some(function (k) { return /^sb-.*-auth-token$/.test(k); }); } catch (e) {}
+      if (!signed) return;
+      var b = document.createElement('button');
+      b.id = 'nwSupportBtn'; b.type = 'button'; b.title = 'Problem / Suggestion → App Support'; b.setAttribute('aria-label', 'Report a problem or suggestion');
+      b.textContent = '⚑';
+      b.style.cssText = 'position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:2147482000;width:34px;height:34px;padding:0;border-radius:50%;border:1px solid #d1d5db;background:#fff;color:#1f2933;font-size:16px;line-height:32px;text-align:center;cursor:pointer;opacity:.55;box-shadow:0 2px 8px rgba(0,0,0,.12)';
+      b.onmouseenter = function () { b.style.opacity = '1'; }; b.onmouseleave = function () { b.style.opacity = '.55'; };
+      b.onclick = function () {
+        if (window.NWSupport) return window.NWSupport.open();
+        var sc = document.createElement('script'); sc.src = 'nw-support.js'; sc.onload = function () { window.NWSupport && window.NWSupport.open(); };
+        document.head.appendChild(sc);
+      };
+      document.body.appendChild(b);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addButton); else addButton();
+    window.addEventListener('load', addButton);
+  })();
+
 })();
