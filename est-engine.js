@@ -694,7 +694,11 @@
             var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [] };
             o.lf += Number(x.lf || 0); o.sheets.push(sh); var xs = {}; xs[sysNorm(x.system)] = 1; addSys(o, Number(x.lf || 0), xs);
           });
-          if (takeoffSheet && r.geo_pipe && r.geo_pipe.total_ft > 0) {
+          // a scanned piping sheet whose traced lines cover well under the reader's own feet (Sunrise M2014: 691 traced / 1,510 read / 1,664 the estimator's — the
+          // pipe labels of a scan are small and the tracer only follows the labelled pairs) keeps the reader's runs; a vector sheet's geometry is never second-guessed here
+          var aiPipe0 = (r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
+          var pipeGeoOk = !!(r.geo_pipe && r.geo_pipe.total_ft > 0) && !(r.geo_pipe.raster && aiPipe0 >= 300 && r.geo_pipe.total_ft < 0.6 * aiPipe0);
+          if (takeoffSheet && pipeGeoOk) {
             // measured from the piping plan's own lines (geo-takeoff.js); the AI reading stays a cross-check
             var aiP = (r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0);
             geoCheck.push({ sheet: sh, geo: r.geo_pipe.total_ft, ai: aiP, what: 'Pipe' });
@@ -728,8 +732,8 @@
             });
             pipeRisers.n += r.geo_pipe.riser_n || 0; pipeRisers.ft += r.geo_pipe.riser_ft || 0; pipeRisers.sheets.push(sh + ' (' + (r.geo_pipe.riser_n || 0) + ')');
           }
-          if (takeoffSheet && !(r.geo_pipe && r.geo_pipe.total_ft > 0) && (r.pipe_runs || []).length) pipeAiSheets.push({ sheet: sh, ft: Math.round((r.pipe_runs || []).reduce(function (a, x) { return a + Number(x.lf || 0); }, 0)), why: (r.geo_pipe && r.geo_pipe.error) || 'no piping geometry' });
-          if (takeoffSheet && !(r.geo_pipe && r.geo_pipe.total_ft > 0)) (r.pipe_runs || []).forEach(function (x) {
+          if (takeoffSheet && !pipeGeoOk && (r.pipe_runs || []).length) pipeAiSheets.push({ sheet: sh, ft: Math.round(aiPipe0), why: (r.geo_pipe && r.geo_pipe.error) || (r.geo_pipe && r.geo_pipe.raster ? 'scanned sheet: traced ' + Math.round(r.geo_pipe.total_ft) + ' ft, far under the reader' : 'no piping geometry') });
+          if (takeoffSheet && !pipeGeoOk) (r.pipe_runs || []).forEach(function (x) {
             var k = (x.service || '') + '|' + (x.size || '') + '|' + (x.material || '');
             var o = pipe[k] = pipe[k] || { service: x.service || '', size: x.size || '', material: x.material || '', lf: 0, sheets: [] };
             o.lf += Number(x.lf || 0); o.sheets.push(sh);
