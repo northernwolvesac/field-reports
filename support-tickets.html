@@ -9,10 +9,10 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <title>App Support — Northern Wolves AC</title>
-<link rel="stylesheet" href="styles.css?v=556">
+<link rel="stylesheet" href="styles.css?v=559">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=556"></script>
-<script src="auth.js?v=556"></script>
+<script src="supabase-config.js?v=559"></script>
+<script src="auth.js?v=559"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 60px; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 0 14px; }
@@ -36,7 +36,7 @@
   .tk-h .main span { font-size: 12px; color: #6b7280; }
   .pill { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; border: 1px solid #d1d5db; color: #374151; white-space: nowrap; }
   .pill.new, .pill.in_progress { border-color: #93c5fd; color: #1d4ed8; } .pill.fixed, .pill.answered, .pill.closed { border-color: #86efac; color: #15803d; }
-  .pill.needs_russ { border-color: #fcd34d; color: #b45309; } .pill.approved { border-color: #a5b4fc; color: #4338ca; } .pill.declined, .pill.error { border-color: #fecaca; color: #b91c1c; }
+  .pill.needs_russ, .pill.ready { border-color: #fcd34d; color: #b45309; } .pill.approved { border-color: #a5b4fc; color: #4338ca; } .pill.declined, .pill.error { border-color: #fecaca; color: #b91c1c; }
   .tk-b { display: none; border-top: 1px solid #f0f1f3; padding: 12px 14px; font-size: 13px; color: #374151; }
   .tk.open .tk-b { display: block; }
   .tk-b pre { white-space: pre-wrap; word-break: break-word; background: #f7f8fa; border-radius: 8px; padding: 10px; font: 13px/1.45 -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 6px 0 10px; }
@@ -64,12 +64,13 @@
 <script>
 (function () {
   'use strict';
-  var sb = window.supabaseClient, me = null, isAdm = false, rows = [], filter = new URLSearchParams(location.search).get('status') || 'open';
-  var LABEL = { new: 'New', in_progress: 'In progress', fixed: 'Fixed', answered: 'Answered', needs_russ: 'Needs Ruslan', approved: 'Approved', declined: 'Declined', closed: 'Closed', error: 'Error' };
+  var sb = window.supabaseClient, me = null, isAdm = false, rows = [], filter = new URLSearchParams(location.search).get('status') || 'decide';
+  var APPROVERS = ['ruslan@northernwolvesac.com', 'alikhan@northernwolvesac.com'];   // same list as the Edge Function
+  var LABEL = { new: 'New', in_progress: 'In progress', ready: 'Fix ready — approve?', fixed: 'Fixed', answered: 'Answered', needs_russ: 'Needs decision', approved: 'Approved — in work', declined: 'Declined', closed: 'Closed', error: 'Error' };
   var KIND = { bug: 'Bug', idea: 'Suggestion', question: 'Question' };
   var GROUPS = [
-    { k: 'open', t: 'Open', test: function (r) { return ['new', 'in_progress', 'approved', 'error'].indexOf(r.status) >= 0; } },
-    { k: 'needs_russ', t: 'Needs Ruslan', cls: 'amb', test: function (r) { return r.status === 'needs_russ'; } },
+    { k: 'decide', t: 'To approve', cls: 'amb', test: function (r) { return ['ready', 'needs_russ', 'error'].indexOf(r.status) >= 0; } },
+    { k: 'open', t: 'In work', test: function (r) { return ['new', 'in_progress', 'approved'].indexOf(r.status) >= 0; } },
     { k: 'done', t: 'Done', cls: 'grn', test: function (r) { return ['fixed', 'answered', 'closed'].indexOf(r.status) >= 0; } },
     { k: 'declined', t: 'Declined', test: function (r) { return r.status === 'declined'; } },
     { k: 'error', t: 'Errors', cls: 'red', test: function (r) { return r.status === 'error'; } },
@@ -96,11 +97,13 @@
     L.innerHTML = list.map(function (r) {
       var hist = (r.history || []).slice(-8).map(function (h) { return esc(when(h.at)) + ' — ' + esc(h.event) + (h.status ? ' ' + esc(LABEL[h.status] || h.status) : '') + (h.by ? ' · ' + esc(h.by) : '') + (h.note ? ' · “' + esc(h.note) + '”' : ''); }).join('<br>');
       var adm = isAdm ? '<div class="decide">' +
+        (r.status === 'ready' ? '<input placeholder="Note (optional)" data-note="' + r.ticket_no + '"><button class="btn sm grn" data-act="approved" data-no="' + r.ticket_no + '">Approve &amp; deploy</button><button class="btn sm red" data-act="declined" data-no="' + r.ticket_no + '">Reject</button>' : '') +
         (r.status === 'needs_russ' || r.status === 'error' || r.status === 'new' ? '<input placeholder="Note for the AI engineer / the reporter (optional)" data-note="' + r.ticket_no + '"><button class="btn sm grn" data-act="approved" data-no="' + r.ticket_no + '">Approve</button><button class="btn sm red" data-act="declined" data-no="' + r.ticket_no + '">Decline</button>' : '') +
         (r.status === 'error' || r.status === 'new' || r.status === 'approved' ? '<button class="btn sm light" data-act="retry" data-no="' + r.ticket_no + '">Hand off again</button>' : '') + '</div>' : '';
       return '<div class="tk" data-no="' + r.ticket_no + '"><div class="tk-h"><span class="no">T' + r.ticket_no + '</span><div class="main"><b>' + esc(r.title || (r.body || '').slice(0, 90)) + '</b><span>' + esc(KIND[r.kind] || r.kind) + ' · ' + esc(r.reporter_name || r.reporter_email || '') + ' · ' + esc(when(r.created_at)) + (r.source === 'email' ? ' · e-mail' : '') + '</span></div><span class="pill ' + r.status + '">' + esc(LABEL[r.status] || r.status) + '</span></div>' +
         '<div class="tk-b"><pre>' + esc(r.body) + '</pre>' +
         (r.resolution ? '<b>Result</b><pre>' + esc(r.resolution) + '</pre>' : '') +
+        (r.pr_url ? '<div class="meta"><a href="' + esc(r.pr_url) + '" target="_blank" rel="noopener">See the code change (PR #' + esc(r.pr_number) + ') ↗</a></div>' : '') +
         '<div class="meta">' + (r.fixed_version ? 'Fixed in ' + esc(r.fixed_version) + ' · ' : '') + (r.page_url ? 'Page: ' + esc(r.page_url) + ' · ' : '') + (r.app_version ? 'App ' + esc(r.app_version) : '') + '</div>' +
         (r.screenshot_path ? '<div data-shot="' + esc(r.screenshot_path) + '"></div>' : '') +
         adm + (hist ? '<div class="hist">' + hist + '</div>' : '') + '</div></div>';
@@ -115,7 +118,7 @@
     var r = await sb.functions.invoke('support', { body: body });
     btn.disabled = false;
     if (r.error || !r.data || !r.data.ok) { toast('Failed: ' + ((r.data && r.data.error) || (r.error && r.error.message) || 'no answer')); return; }
-    toast(a === 'approved' ? 'T' + no + ' approved — sent to the AI support engineer' : a === 'declined' ? 'T' + no + ' declined' : 'T' + no + ' handed off again');
+    toast(r.data.deployed ? 'T' + no + ' deployed' + (r.data.version ? ' in ' + r.data.version : '') : r.data.rebuilding ? 'T' + no + ': the fix must be rebuilt on the latest app — sent back to the AI engineer' : a === 'approved' ? 'T' + no + ' approved — sent to the AI support engineer' : a === 'declined' ? 'T' + no + ' declined' : 'T' + no + ' handed off again');
     load();
   }
   document.getElementById('q').addEventListener('input', render);
@@ -124,9 +127,10 @@
     var sc = document.createElement('script'); sc.src = 'nw-support.js'; sc.onload = function () { window.NWSupport.open(); }; document.head.appendChild(sc);
   };
   requireAuth().then(async function () {
-    var p = await getAuthProfile(); me = p; isAdm = !!(p && p.role === 'admin');
-    if (!isAdm) { filter = filter === 'open' ? 'all' : filter; document.getElementById('sub').textContent = 'Your tickets — answers also come by e-mail from app.ai.support@northernwolvesac.com'; }
-    load();
+    var p = await getAuthProfile(); me = p; var ses = await sb.auth.getSession(); var em = String((ses.data && ses.data.session && ses.data.session.user && ses.data.session.user.email) || (p && p.email) || '').toLowerCase(); isAdm = APPROVERS.indexOf(em) >= 0;
+    var tq = Number(new URLSearchParams(location.search).get('t')) || 0; if (tq) { filter = 'all'; document.getElementById('q').value = ''; }
+    if (!isAdm) { filter = filter === 'open' || filter === 'decide' ? 'all' : filter; document.getElementById('sub').textContent = 'Your tickets — answers also come by e-mail from app.ai.support@northernwolvesac.com'; }
+    await load(); if (tq) { var el = document.querySelector('.tk[data-no="' + tq + '"]'); if (el) { el.querySelector('.tk-h').click(); el.scrollIntoView({ block: 'center' }); } }
     try { sb.channel('support-tickets').on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, function () { load(); }).subscribe(); } catch (e) {}
   }).catch(function () {});
 })();
