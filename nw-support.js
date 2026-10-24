@@ -71,9 +71,16 @@
           action: 'submit', kind: kind, title: box.querySelector('#nws-title').value.trim(), body: body,
           page_url: location.href.slice(0, 500), user_agent: navigator.userAgent + ' · ' + window.innerWidth + 'x' + window.innerHeight,
           app_version: ver, console_errors: (window.__nwErrors || []).slice(-30), screenshot_path: shotPath } });
-        if (r.error) throw new Error(r.error.message || String(r.error));
-        if (!r.data || !r.data.ok) throw new Error((r.data && r.data.error) || 'no answer');
-        msg.className = 'nws-msg ok'; msg.textContent = L.ok.replace('{n}', r.data.ticket_no);
+        var no = r.data && r.data.ok ? r.data.ticket_no : null;
+        if (!no) {   // the support service is not reachable → keep the ticket in the database anyway (Support page shows it)
+          var ins = await sb.from('support_tickets').insert({ source: 'app', reporter_id: uid, reporter_email: ses.data.session.user.email || null,
+            kind: kind, title: box.querySelector('#nws-title').value.trim().slice(0, 200) || null, body: body.slice(0, 8000),
+            page_url: location.href.slice(0, 500), user_agent: (navigator.userAgent + ' · ' + window.innerWidth + 'x' + window.innerHeight).slice(0, 400),
+            app_version: ver, console_errors: (window.__nwErrors || []).slice(-30), screenshot_path: shotPath, status: 'new' }).select('ticket_no').single();
+          if (ins.error) throw new Error(ins.error.message);
+          no = ins.data.ticket_no;
+        }
+        msg.className = 'nws-msg ok'; msg.textContent = L.ok.replace('{n}', no);
         sendBtn.style.display = 'none'; box.querySelector('.nws-cancel').textContent = 'OK';
       } catch (e) {
         msg.className = 'nws-msg err'; msg.textContent = L.err + (e && e.message ? e.message : e);
