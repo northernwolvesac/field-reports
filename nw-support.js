@@ -7,10 +7,10 @@
   'use strict';
   if (window.NWSupport) return;
   var T = {
-    en: { title: 'Problem / Suggestion', bug: 'Something is broken', idea: 'Suggestion / upgrade', question: 'Question', what: 'What happened? What did you expect?', subj: 'Short title (optional)', shot: 'Attach a screenshot (optional)', send: 'Send', cancel: 'Cancel', sending: 'Sending…', ok: 'Ticket T{n} sent. You will get an e-mail from app.ai.support@ with updates.', mine: 'My tickets', err: 'Could not send: ', need: 'Please describe the problem' },
-    ru: { title: 'Проблема / Предложение', bug: 'Что-то не работает', idea: 'Предложение / улучшение', question: 'Вопрос', what: 'Что случилось? Что вы ожидали?', subj: 'Короткий заголовок (необязательно)', shot: 'Приложить скриншот (необязательно)', send: 'Отправить', cancel: 'Отмена', sending: 'Отправляю…', ok: 'Заявка T{n} отправлена. Ответы придут на почту от app.ai.support@.', mine: 'Мои заявки', err: 'Не удалось отправить: ', need: 'Опишите, пожалуйста, проблему' },
-    uk: { title: 'Проблема / Пропозиція', bug: 'Щось не працює', idea: 'Пропозиція / покращення', question: 'Питання', what: 'Що сталося? Що ви очікували?', subj: 'Короткий заголовок (необовʼязково)', shot: 'Додати скріншот (необовʼязково)', send: 'Надіслати', cancel: 'Скасувати', sending: 'Надсилаю…', ok: 'Заявку T{n} надіслано. Відповіді прийдуть на пошту від app.ai.support@.', mine: 'Мої заявки', err: 'Не вдалося надіслати: ', need: 'Опишіть, будь ласка, проблему' },
-    es: { title: 'Problema / Sugerencia', bug: 'Algo no funciona', idea: 'Sugerencia / mejora', question: 'Pregunta', what: '¿Qué pasó? ¿Qué esperaba?', subj: 'Título corto (opcional)', shot: 'Adjuntar captura (opcional)', send: 'Enviar', cancel: 'Cancelar', sending: 'Enviando…', ok: 'Ticket T{n} enviado. Recibirá correos de app.ai.support@.', mine: 'Mis tickets', err: 'No se pudo enviar: ', need: 'Describa el problema, por favor' }
+    en: { title: 'Problem / Suggestion', bug: 'Something is broken', idea: 'Suggestion / upgrade', question: 'Question', what: 'What happened? What did you expect?', subj: 'Short title (optional)', shot: 'Attach a screenshot (optional)', send: 'Send', cancel: 'Cancel', sending: 'Sending…', ok: 'Ticket T{n} sent. You will get an e-mail from app.ai.support@ with updates.', saved: 'Ticket T{n} saved. You can follow it under My tickets.', mine: 'My tickets', err: 'Could not send: ', need: 'Please describe the problem' },
+    ru: { title: 'Проблема / Предложение', bug: 'Что-то не работает', idea: 'Предложение / улучшение', question: 'Вопрос', what: 'Что случилось? Что вы ожидали?', subj: 'Короткий заголовок (необязательно)', shot: 'Приложить скриншот (необязательно)', send: 'Отправить', cancel: 'Отмена', sending: 'Отправляю…', ok: 'Заявка T{n} отправлена. Ответы придут на почту от app.ai.support@.', saved: 'Заявка T{n} сохранена. Статус — в «Мои заявки».', mine: 'Мои заявки', err: 'Не удалось отправить: ', need: 'Опишите, пожалуйста, проблему' },
+    uk: { title: 'Проблема / Пропозиція', bug: 'Щось не працює', idea: 'Пропозиція / покращення', question: 'Питання', what: 'Що сталося? Що ви очікували?', subj: 'Короткий заголовок (необовʼязково)', shot: 'Додати скріншот (необовʼязково)', send: 'Надіслати', cancel: 'Скасувати', sending: 'Надсилаю…', ok: 'Заявку T{n} надіслано. Відповіді прийдуть на пошту від app.ai.support@.', saved: 'Заявку T{n} збережено. Статус — у «Мої заявки».', mine: 'Мої заявки', err: 'Не вдалося надіслати: ', need: 'Опишіть, будь ласка, проблему' },
+    es: { title: 'Problema / Sugerencia', bug: 'Algo no funciona', idea: 'Sugerencia / mejora', question: 'Pregunta', what: '¿Qué pasó? ¿Qué esperaba?', subj: 'Título corto (opcional)', shot: 'Adjuntar captura (opcional)', send: 'Enviar', cancel: 'Cancelar', sending: 'Enviando…', ok: 'Ticket T{n} enviado. Recibirá correos de app.ai.support@.', saved: 'Ticket T{n} guardado. Puede seguirlo en Mis tickets.', mine: 'Mis tickets', err: 'No se pudo enviar: ', need: 'Describa el problema, por favor' }
   };
   function lang() { var l = ''; try { l = localStorage.getItem('nw_lang') || ''; } catch (e) {} l = (l || document.documentElement.lang || navigator.language || 'en').slice(0, 2).toLowerCase(); return T[l] ? l : 'en'; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -71,7 +71,7 @@
           action: 'submit', kind: kind, title: box.querySelector('#nws-title').value.trim(), body: body,
           page_url: location.href.slice(0, 500), user_agent: navigator.userAgent + ' · ' + window.innerWidth + 'x' + window.innerHeight,
           app_version: ver, console_errors: (window.__nwErrors || []).slice(-30), screenshot_path: shotPath } });
-        var no = r.data && r.data.ok ? r.data.ticket_no : null;
+        var no = r.data && r.data.ok ? r.data.ticket_no : null, viaService = !!no;
         if (!no) {   // the support service is not reachable → keep the ticket in the database anyway (Support page shows it)
           var ins = await sb.from('support_tickets').insert({ source: 'app', reporter_id: uid, reporter_email: ses.data.session.user.email || null,
             kind: kind, title: box.querySelector('#nws-title').value.trim().slice(0, 200) || null, body: body.slice(0, 8000),
@@ -80,7 +80,7 @@
           if (ins.error) throw new Error(ins.error.message);
           no = ins.data.ticket_no;
         }
-        msg.className = 'nws-msg ok'; msg.textContent = L.ok.replace('{n}', no);
+        msg.className = 'nws-msg ok'; msg.textContent = (viaService ? L.ok : L.saved).replace('{n}', no);
         sendBtn.style.display = 'none'; box.querySelector('.nws-cancel').textContent = 'OK';
       } catch (e) {
         msg.className = 'nws-msg err'; msg.textContent = L.err + (e && e.message ? e.message : e);
