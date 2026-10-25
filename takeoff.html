@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=539">
+<link rel="stylesheet" href="procore-ui.css?v=561">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=539"></script>
-<script src="auth.js?v=539"></script>
-<script src="est-totals.js?v=539"></script>
-<script src="procore-ui.js?v=539"></script>
+<script src="supabase-config.js?v=561"></script>
+<script src="auth.js?v=561"></script>
+<script src="est-totals.js?v=561"></script>
+<script src="procore-ui.js?v=561"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=539"></script>
-<script src="est-drawings.js?v=539"></script>
-<script src="nw-catalog-picker.js?v=539"></script>
-<script src="nw-duct-weight.js?v=539"></script>
-<script src="geo-takeoff.js?v=539"></script>
-<script src="est-engine.js?v=541"></script>
+<script src="bid-actions.js?v=561"></script>
+<script src="est-drawings.js?v=561"></script>
+<script src="nw-catalog-picker.js?v=561"></script>
+<script src="nw-duct-weight.js?v=561"></script>
+<script src="geo-takeoff.js?v=561"></script>
+<script src="est-engine.js?v=561"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -468,7 +468,9 @@ requireAuth().catch(function(){});
     payload = payload || {};
     if (cmd === 'newLayer') openLayerModal(null);
     else if (cmd === 'openPlan') { var i = plans.findIndex(function(p) { return p.drawing.id === payload.drawingId && (!payload.page || p.page === Number(payload.page)); }); if (i >= 0) openPlan(i); }
-    else if (cmd === 'refresh') { loadLayers().then(loadDrawings).then(renderAll); }   // loadDrawings re-derives `meas` for the open plan
+    else if (cmd === 'refresh') { loadLayers().then(loadDrawings).then(renderAll); }
+    else if (cmd === 'flush') { flushSync(); }
+    else if (cmd === 'refreshLayers') { loadLayers().then(function() { allMeas = allMeas.filter(function(m) { return !m.layer_id || layerById(m.layer_id); }); meas = meas.filter(function(m) { return !m.layer_id || layerById(m.layer_id); }); if (activeLayerId && !layerById(activeLayerId)) activeLayerId = null; renderAll(); }); }   // estimate-side changes: layers only (deleting a layer there cascades to its marks)   // loadDrawings re-derives `meas` for the open plan
     else if (cmd === 'export') exportPdf();
     else if (cmd === 'actions') openActionsMenu($('actionsBtn'));
     else if (cmd === 'showEstimate') showEstimate();
@@ -890,10 +892,17 @@ requireAuth().catch(function(){});
     if (r.error) { toast(r.error.message, 'error'); return; }
     ids.forEach(function(id) { var l = layerById(id); if (l) l.group_name = g; }); groupEntry(g, true).collapsed = false; saveGroups(); renderAll(); scheduleSync();
   }
+  // two-way sync: the estimate lines of deleted layers go with them (the FK would only unlink them). Returns an error message or null.
+  async function deleteLinesOf(layerIds) {
+    if (!syncOk || !layerIds || !layerIds.length) return null;
+    var d = await sb.from('estimate_line_items').delete().eq('estimate_id', estimateId).in('layer_id', layerIds);
+    return d.error ? 'Could not delete the estimate items: ' + d.error.message : null;
+  }
   async function deleteLayers(ids) {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
     var n = allMeas.filter(function(m) { return ids.indexOf(m.layer_id) >= 0; }).length;
-    if (!await P.confirm({ title: 'Delete ' + ids.length + ' layer(s)', message: 'This removes the layer definitions' + (n ? ' and their ' + n + ' marks' : '') + '. Estimate lines linked to them are unlinked.', okLabel: 'Delete', danger: true })) return;
+    if (!await P.confirm({ title: 'Delete ' + ids.length + ' layer(s)', message: 'This removes the layer definitions' + (n ? ' and their ' + n + ' marks' : '') + ' and their items on the Estimating tab.', okLabel: 'Delete', danger: true })) return;
+    var dl0 = await deleteLinesOf(ids); if (dl0) { toast(dl0, 'error'); return; }
     var r = await sb.from('estimate_takeoff_layers').delete().in('id', ids);
     if (r.error) { toast(r.error.message, 'error'); return; }
     layers = layers.filter(function(l) { return ids.indexOf(l.id) < 0; }); allMeas = allMeas.filter(function(m) { return ids.indexOf(m.layer_id) < 0; }); meas = meas.filter(function(m) { return ids.indexOf(m.layer_id) < 0; });
@@ -929,12 +938,13 @@ requireAuth().catch(function(){});
     var target = g + ' (copy)', rows = ls.map(function(l, i) { var c = stripLayer(l); c.group_name = target; c.sort_order = layers.length + i; return c; });
     var r = await sb.from('estimate_takeoff_layers').insert(rows).select();
     if (r.error) { toast(r.error.message, 'error'); return; }
-    layers = layers.concat(r.data); groupEntry(target, true); saveGroups(); renderAll(); toast(r.data.length + ' layers copied to "' + target + '"', 'success');
+    layers = layers.concat(r.data); groupEntry(target, true); saveGroups(); renderAll(); scheduleSync(); toast(r.data.length + ' layers copied to "' + target + '"', 'success');
   }
   async function deleteGroup(g) {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
     var ls = groupLayers(g), ids = ls.map(function(l) { return l.id; }), n = allMeas.filter(function(m) { return ids.indexOf(m.layer_id) >= 0; }).length;
-    if (!await P.confirm({ title: 'Delete group "' + g + '"', message: ls.length + ' layer(s) and ' + n + ' mark(s) will be deleted.', okLabel: 'Delete', danger: true })) return;
+    if (!await P.confirm({ title: 'Delete group "' + g + '"', message: ls.length + ' layer(s), ' + n + ' mark(s) and their items on the Estimating tab will be deleted.', okLabel: 'Delete', danger: true })) return;
+    if (ids.length) { var dl2 = await deleteLinesOf(ids); if (dl2) { toast(dl2, 'error'); return; } }
     if (ids.length) { var r = await sb.from('estimate_takeoff_layers').delete().eq('estimate_id', estimateId).eq('group_name', g); if (r.error) { toast(r.error.message, 'error'); return; } }
     layers = layers.filter(function(l) { return ids.indexOf(l.id) < 0; }); allMeas = allMeas.filter(function(m) { return ids.indexOf(m.layer_id) < 0; }); meas = meas.filter(function(m) { return ids.indexOf(m.layer_id) < 0; });
     groupOrder = groupOrder.filter(function(x) { return x.name !== g; }); saveGroups(); if (ids.indexOf(activeLayerId) >= 0) activeLayerId = null; renderAll(); scheduleSync();
@@ -1101,7 +1111,8 @@ requireAuth().catch(function(){});
     var l = layerById(id); if (!l) return;
     if (!me.canEdit) { toast('Read-only', 'error'); return; }
     var n = allMeas.filter(function(m) { return m.layer_id === l.id; }).length;
-    if (!await P.confirm({ title: 'Delete layer', message: '"' + l.name + '"' + (n ? ' and its ' + n + ' marks' : '') + ' will be deleted.', okLabel: 'Delete', danger: true })) return;
+    if (!await P.confirm({ title: 'Delete layer', message: '"' + l.name + '"' + (n ? ' and its ' + n + ' marks' : '') + ' will be deleted, and its item on the Estimating tab too.', okLabel: 'Delete', danger: true })) return;
+    var dl1 = await deleteLinesOf([l.id]); if (dl1) { toast(dl1, 'error'); return; }
     var r = await sb.from('estimate_takeoff_layers').delete().eq('id', l.id);
     if (r.error) { toast(r.error.message, 'error'); return; }
     layers = layers.filter(function(x) { return x.id !== l.id; }); allMeas = allMeas.filter(function(m) { return m.layer_id !== l.id; }); meas = meas.filter(function(m) { return m.layer_id !== l.id; });
@@ -1194,7 +1205,7 @@ requireAuth().catch(function(){});
       if (rows.length === 1) { pickCatalog(fromCatalogItem(rows[0])); return; }
       var g = $('lGroup') ? $('lGroup').value : 'Default Group', ins = rows.map(function(x, i) { var row = NWCatalogPicker.toLayer(x, { group: g, estimateId: estimateId }); row.estimate_id = estimateId; row.group_name = row.group_name || g; row.sort_order = layers.length + i; row.color = row.color || COLORS[(layers.length + i) % COLORS.length]; row.symbol = row.symbol || SYMBOLS[i % 5][0]; row.labor_crew_type = row.labor_crew_type || CAT_CREW[row.category] || 'sm'; row.line_width = row.line_width || 3; return row; });
       var r = await sb.from('estimate_takeoff_layers').insert(ins).select(); if (r.error) { toast(r.error.message, 'error'); return; }
-      layers = layers.concat(r.data); groupEntry(g, true).collapsed = false; if (createDlg) createDlg.close(); renderAll(); toast(r.data.length + ' layers created', 'success');
+      layers = layers.concat(r.data); groupEntry(g, true).collapsed = false; if (createDlg) createDlg.close(); renderAll(); scheduleSync(); toast(r.data.length + ' layers created', 'success');
     } });
   }
   function fromCatalogItem(x) { catCache[x.id] = x; return { id: x.id, name: x.name, desc: x.description || '', meta: catMeta(x), unit: x.unit || '', cost: Number(x.unit_cost || 0), min: Number(x.unit_labor_min || 0), waste: Number(x.waste_pct || 0), cat: x.nw_category, type: x.takeoff_type, src: 'catalog' }; }
@@ -1210,7 +1221,7 @@ requireAuth().catch(function(){});
     if (r.error) { toast(r.error.message, 'error'); return; }
     if (!r.data.params || typeof r.data.params !== 'object') r.data.params = {};
     layers.push(r.data); groupEntry(r.data.group_name, true).collapsed = false;
-    var d = createDlg; createDlg = null; d.close(); selectLayer(r.data.id); renderAll();
+    var d = createDlg; createDlg = null; d.close(); selectLayer(r.data.id); renderAll(); scheduleSync();
   }
 
   // ─── catalog typeahead (est_catalog_items, falls back to est_norms) ───
@@ -2377,20 +2388,28 @@ requireAuth().catch(function(){});
 
   // ═══════════════════════ takeoff → estimate live sync ═══════════════════════
   var syncTimer = null, syncing = false, syncAgain = false;
-  function scheduleSync() { if (!me.canEdit) return; clearTimeout(syncTimer); syncTimer = setTimeout(function() { syncLayerLines().catch(function(e) { console.warn('sync', e); }); }, 2000); }
+  function scheduleSync() { if (!me.canEdit) return; clearTimeout(syncTimer); syncTimer = setTimeout(function() { syncLayerLines().catch(function(e) { console.warn('sync', e); }); }, 700); }
+  // run the pending sync now (tab switch / page hidden) and tell the parent when the estimate lines are up to date
+  function flushSync() { clearTimeout(syncTimer); return syncLayerLines().catch(function(e) { console.warn('sync', e); }).then(function() { if (EMBED) P.emit('synced', { estimateId: estimateId }); }); }
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') { if (syncTimer && me.canEdit) flushSync(); return; }
+    if (!EMBED && est) { loadLayers().then(loadDrawings).then(renderAll).catch(function(e) { console.warn('refresh', e); }); }   // the estimate may have changed in another tab
+  });
   // the rate-bearing part of a synced line, as a short tag kept in the line's notes ("[r:xxxx]") — tells the next sync whether
   // the layer's rates changed since we last wrote the line, so an estimator's price / description edits in the grid survive
   var RATE_KEYS = ['description', 'group_name', 'category', 'catalog_item_id', 'unit_material_cost', 'unit_labor_hours', 'labor_crew_type', 'unit'];
   function ratesHash(row) { var s = RATE_KEYS.map(function(k) { return row[k] == null ? '' : String(row[k]); }).join('|'), h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
   function notesHash(notes) { var m = /\[r:([a-z0-9]+)\]/.exec(notes || ''); return m ? m[1] : null; }
   function lineFromLayer(l, t, qty) {
-    var row = { category: l.category, description: l.name, group_name: l.group_name || 'Default Group', quantity: qty, unit: lineUnit(l.takeoff_type),
+    var fromEst = !!(l.params && l.params.from_estimate);
+    var row = { category: l.category, description: l.name, group_name: l.group_name || 'Default Group', quantity: qty, unit: (l.params && l.params.line_unit) || lineUnit(l.takeoff_type),
       unit_material_cost: Math.round(Number(l.unit_material_cost || 0) * (1 + Number(l.waste_pct || 0) / 100) * 10000) / 10000, unit_labor_hours: Math.round(Number(l.unit_labor_hours || 0) * Number(l.labor_factor || 1) * 10000) / 10000,
       labor_crew_type: l.labor_crew_type || CAT_CREW[l.category] || 'sm', is_firm: true, is_wet_tap: /wet[- ]?tap/i.test(l.name), catalog_item_id: l.catalog_item_id || null };
+    if (fromEst) { row.notes = ((l.notes || '') + ' [r:' + ratesHash(row) + ']').trim(); return row; }   // created on the Estimating tab: its own notes
     row.notes = 'Takeoff: ' + t.marks + ' marks on ' + t.pages + ' plan(s)' + (l.extra_count ? ' + ' + l.extra_count + ' by hand' : '') + (l.waste_pct ? ', ' + l.waste_pct + '% waste' : '') + (Number(l.labor_factor) !== 1 ? ', labor ×' + l.labor_factor : '') + ' [from PDF takeoff] [r:' + ratesHash(row) + ']';
     return row;
   }
-  // one estimate line per layer with quantity ≠ 0, matched by layer_id (idempotent); removed when the quantity returns to 0.
+  // one estimate line per layer — also at quantity 0 (two-way sync 2026-10-24) — matched by layer_id (idempotent); the line goes when the layer is deleted.
   // Like Procore, the takeoff drives the QUANTITY of an existing line: rates / description are rewritten only when the layer's
   // own rates changed since the last sync (rates tag in notes) — or on an explicit Roll up (force).
   async function syncLayerLines(force) {
@@ -2403,7 +2422,6 @@ requireAuth().catch(function(){});
       var by = {}; (ex.data || []).forEach(function(r) { by[r.layer_id] = r; });
       var inserts = [], deletes = [], updates = [];
       layers.forEach(function(l) { var t = layerTotals(l), qty = Math.round(t.qty * 100) / 100, cur = by[l.id];
-        if (!qty) { if (cur) deletes.push(cur.id); return; }
         var row = lineFromLayer(l, t, qty);
         if (cur) {
           var prevHash = notesHash(cur.notes), ratesChanged = !!force || (prevHash !== null && prevHash !== ratesHash(row));   // no tag yet (line from an older sync) → quantity only, the tag is added now
@@ -3114,6 +3132,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=539"></script>
+<script src="sw-register.js?v=561"></script>
 </body>
 </html>

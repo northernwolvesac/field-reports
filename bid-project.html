@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=381">
+<link rel="stylesheet" href="procore-ui.css?v=561">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=381"></script>
-<script src="auth.js?v=381"></script>
-<script src="est-totals.js?v=381"></script>
-<script src="procore-ui.js?v=381"></script>
+<script src="supabase-config.js?v=561"></script>
+<script src="auth.js?v=561"></script>
+<script src="est-totals.js?v=561"></script>
+<script src="procore-ui.js?v=561"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=381"></script>
-<script src="est-drawings.js?v=381"></script>
-<script src="nw-proposal.js?v=381"></script>
+<script src="bid-actions.js?v=561"></script>
+<script src="est-drawings.js?v=561"></script>
+<script src="nw-proposal.js?v=561"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -388,6 +388,7 @@ requireAuth().catch(function(){});
   var frames = { takeoff: null, estimating: null };
   var frameReady = { takeoff: false, estimating: false };
   var pendingCmds = { takeoff: [], estimating: [] };
+  var frameDirty = { takeoff: false, estimating: false };   // the other tab wrote something since this one was last shown
   var schemaMissing = false;
 
   function rootId() { return currentEstimate ? currentEstimate.id : paramId; }
@@ -584,8 +585,14 @@ requireAuth().catch(function(){});
     renderTabs();
     if (tab === 'overview') { loadEstSummary(); }
     if (tab === 'documents') { loadDocs(); }
-    if (tab === 'takeoff') { ensureFrame('takeoff'); }
-    if (tab === 'estimating') { ensureFrame('estimating'); }
+    var hadTk = !!frames.takeoff, hadEs = !!frames.estimating;
+    if (tab === 'takeoff') { ensureFrame('takeoff'); if (hadTk && frameDirty.takeoff) { frameDirty.takeoff = false; sendCmd('takeoff', 'refreshLayers'); } }
+    if (tab === 'estimating') {
+      ensureFrame('estimating');
+      // two-way sync: the takeoff writes its pending changes first, then the estimate reloads its lines ('synced' below)
+      if (hadTk && frameReady.takeoff && prevTab === 'takeoff') sendCmd('takeoff', 'flush');
+      else if (hadEs && frameDirty.estimating) { frameDirty.estimating = false; sendCmd('estimating', 'reloadLines'); }
+    }
     if (tab === 'proposal') { openProposal(); }
     if (frameMode) sizeFrames();
   }
@@ -646,7 +653,10 @@ requireAuth().catch(function(){});
         q.forEach(function(m) { frames[key].contentWindow.postMessage(m, '*'); });
       }
       sizeFrames();
+    } else if (d.event === 'synced') {
+      if (currentTab === 'estimating' && frames.estimating) { frameDirty.estimating = false; sendCmd('estimating', 'reloadLines'); }
     } else if (d.event === 'totals') {
+      if (key === 'takeoff') frameDirty.estimating = true; else if (key === 'estimating') frameDirty.takeoff = true;
       linesCache = null;
       if (PC.estStrip && typeof PC.estStrip.refresh === 'function') PC.estStrip.refresh();
       refreshVersionSettings();   // the iframe may have written settings.markups / manual_groups / es_settings
@@ -1894,6 +1904,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=381"></script>
+<script src="sw-register.js?v=561"></script>
 </body>
 </html>

@@ -97,8 +97,8 @@
     } else if (mg && typeof mg === 'object' && mg[groupName] != null) {
       m = (typeof mg[groupName] === 'object') ? mg[groupName].multiplier : mg[groupName];
     }
-    m = (m === null || m === undefined || m === '') ? 1 : num(m);
-    return m > 0 ? m : 1;
+    m = (m === null || m === undefined || m === '') ? 1 : Number(m);
+    return isFinite(m) && m >= 0 ? m : 1;   // 0 is allowed: the group stays in the estimate but is not priced
   }
 
   // Every Procore grid column for one line. ctx: {groupMultiplier, rates, settings} (rates/settings are optional caches).
@@ -153,7 +153,8 @@
     var materialDropped = installCat && !countInstall;
 
     var qty = num(line.quantity);
-    var gm = (ctx.groupMultiplier === null || ctx.groupMultiplier === undefined) ? 1 : num(ctx.groupMultiplier) || 1;
+    var gmRaw = (ctx.groupMultiplier === null || ctx.groupMultiplier === undefined || ctx.groupMultiplier === '') ? 1 : Number(ctx.groupMultiplier);
+    var gm = isFinite(gmRaw) && gmRaw >= 0 ? gmRaw : 1;
     var totalQty = qty * gm;
     if (flag(es.round_ea) && /^ea$/i.test(unit.trim())) totalQty = Math.round(totalQty);
 

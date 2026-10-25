@@ -301,8 +301,8 @@
     } else if (mg && typeof mg === 'object' && mg[groupName] != null) {
       m = (typeof mg[groupName] === 'object') ? mg[groupName].multiplier : mg[groupName];
     }
-    m = (m === null || m === undefined || m === '') ? 1 : num(m);
-    return m > 0 ? m : 1;
+    m = (m === null || m === undefined || m === '') ? 1 : Number(m);
+    return isFinite(m) && m >= 0 ? m : 1;
   }
 
   function isTaxable(line) {
@@ -331,7 +331,7 @@
     var unitTotal = matU + labU + ohU;
     var profit = 0;
     if (typeof window.nwLineTotals === 'function') {
-      var lt = window.nwLineTotals(line, est, { groupMultiplier: mult || 1 }) || {};
+      var lt = window.nwLineTotals(line, est, { groupMultiplier: mult == null ? 1 : mult }) || {};
       profit = num(lt.profit) + num(lt.laborProfit);
     }
     return {

@@ -11,22 +11,22 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=536">
+<link rel="stylesheet" href="procore-ui.css?v=561">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=536"></script>
-<script src="auth.js?v=536"></script>
-<script src="est-totals.js?v=536"></script>
-<script src="procore-ui.js?v=536"></script>
-<script src="nw-catalog-picker.js?v=536"></script>
-<script src="nw-duct-weight.js?v=536"></script>
-<script src="nw-proposal.js?v=536"></script>
-<script src="bid-actions.js?v=536"></script>
+<script src="supabase-config.js?v=561"></script>
+<script src="auth.js?v=561"></script>
+<script src="est-totals.js?v=561"></script>
+<script src="procore-ui.js?v=561"></script>
+<script src="nw-catalog-picker.js?v=561"></script>
+<script src="nw-duct-weight.js?v=561"></script>
+<script src="nw-proposal.js?v=561"></script>
+<script src="bid-actions.js?v=561"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=536"></script>
-<script src="nw-email.js?v=536"></script>
+<script src="email-utils.js?v=561"></script>
+<script src="nw-email.js?v=561"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -555,7 +555,7 @@ requireAuth().catch(function(){});
     { key: 'uom_labor',        label: 'UoM (Labor Time)',   visible: true,  width: 110 },
     { key: 'labor_rate',       label: 'Labor Rate',         visible: true,  width: 100, num: true, money: true, editable: 'labor_rate', type: 'money', cond: 'ilr', rate: true },
     { key: 'difficulty',       label: 'Difficulty Factor',  visible: true,  width: 110, num: true, editable: 'labor_factor', type: 'num', rate: true },
-    { key: 'total_labor_time', label: 'Total Labor Time',   visible: true,  width: 120, num: true, agg: 'totalLaborTime', hrs: true },
+    { key: 'total_labor_time', label: 'Total Labor Time',   visible: true,  width: 120, num: true, agg: 'totalLaborTime', hrs: true, editable: 'total_labor', type: 'num', rate: true },
     { key: 'labor_cost',       label: 'Labor Cost',         visible: true,  width: 110, num: true, money: true, agg: 'laborCost' },
     { key: 'labor_margin',     label: 'Labor Margin',       visible: false, width: 100, num: true, aggPct: 'laborMarginPct' },
     { key: 'labor_markup',     label: 'Labor Markup',       visible: true,  width: 100, num: true, editable: 'labor_markup_pct', type: 'pct', rate: true },
@@ -604,6 +604,9 @@ requireAuth().catch(function(){});
   var cmdBound = false;            // PC.onCmd(handleCmd) registered (embed only, once per page)
   // Columns takeoff.html syncLayerLines() rewrites on every layer-linked line (layer_id) — read-only here, see est-totals.js header
   var LAYER_FIELDS = ['subtotal_cost','quantity','unit_material_cost','unit_labor_hours','unit','group_name','description','category','catalog_item_id','notes','waste_pct','labor_factor'];
+  // two-way sync (2026-10-24): on a takeoff-linked line these fields are written to the layer as well, so the takeoff follows the estimate.
+  // Quantity goes through the layer's Extra quantity (click → Change quantity); Notes are the takeoff's own unless the item was created here.
+  var LAYER_THROUGH = ['description', 'group_name', 'category', 'unit_labor_hours', 'unit', 'catalog_item_id', 'total_labor'];
   var ASSEMBLY_FOLDER = 'NW Assemblies';   // est_catalog_folders name seeded by procore-ui-schema.sql
 
   var state = {
@@ -840,13 +843,15 @@ requireAuth().catch(function(){});
   };
   function manualGroups() {
     var mg = getSettings().manual_groups;
-    if (Array.isArray(mg)) return mg.filter(function(g) { return g && g.name; }).map(function(g) { return { name: g.name, multiplier: num(g.multiplier) || 1 }; });
+    if (Array.isArray(mg)) return mg.filter(function(g) { return g && g.name; }).map(function(g) { return { name: g.name, multiplier: multOf(g.multiplier) }; });
     return [];
   }
+  // a group multiplier may be 0 (group kept in the estimate but not priced); empty / invalid = 1
+  function multOf(v) { if (v === null || v === undefined || v === '') return 1; var n = Number(v); return isFinite(n) && n >= 0 ? n : 1; }
   function groupMultiplier(name) {
     if (window.nwGroupMultiplier) return nwGroupMultiplier(currentEst, name);
     var g = manualGroups().find(function(x) { return x.name === name; });
-    return g ? (g.multiplier || 1) : 1;
+    return g ? g.multiplier : 1;
   }
   function lineGroup(li) {
     if (li.group_name) return li.group_name;
@@ -1172,6 +1177,7 @@ requireAuth().catch(function(){});
         if (bad) console.warn('group_name back-fill', bad.error.message);
       } catch (e) { console.warn('group_name back-fill', e); }
     }
+    try { await linkNewLinesToTakeoff(); } catch (e) { console.warn('takeoff link', e); }
   }
   async function loadVersions() {
     var r = await supabaseClient.from('estimates').select('id, name, version_label, version_number, parent_estimate_id')
@@ -1181,7 +1187,8 @@ requireAuth().catch(function(){});
   async function loadLayers() {
     layers = []; layerById = {};
     try {
-      var r = await supabaseClient.from('estimate_takeoff_layers').select('id, name, group_name, color, takeoff_type, multiplier, drop_length_ft, rise, run, extra_count').eq('estimate_id', currentEst.id);
+      var r = await supabaseClient.from('estimate_takeoff_layers').select('id, name, group_name, color, takeoff_type, multiplier, drop_length_ft, rise, run, extra_count, labor_factor, params').eq('estimate_id', currentEst.id);
+      if (r.error) r = await supabaseClient.from('estimate_takeoff_layers').select('id, name, group_name, color, takeoff_type, multiplier, drop_length_ft, rise, run, extra_count, labor_factor').eq('estimate_id', currentEst.id);
       if (!r.error) layers = r.data || [];
     } catch (e) {}
     layers.forEach(function(l) { layerById[l.id] = l; });
@@ -1293,8 +1300,14 @@ requireAuth().catch(function(){});
     }
     else if (cmd === 'showEstimate') { $('mainView').scrollIntoView(); }
     else if (cmd === 'refresh') renderEstimate(currentEst.id);
+    else if (cmd === 'reloadLines') { loadLines().then(loadLayers).then(refreshAll); }
   }
   function openMenu(anchor, items) { if (window.PC && PC.menu) return PC.menu(anchor, items); }
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState !== 'visible' || isEmbed || !currentEst) return;
+    if (document.querySelector('.cell-in')) return;   // never under an open inline edit
+    loadLines().then(loadLayers).then(refreshAll).catch(function(e) { console.warn('refresh', e); });
+  });
 
   // stage pill → estimates.bid_stage (+ legacy status sync)
   async function changeStage(key) {
@@ -1472,7 +1485,7 @@ requireAuth().catch(function(){});
       return byKey[key];
     }
     if (state.groupMode === 'manual') {
-      manualGroups().forEach(function(g) { get(g.name, g.name, g.multiplier || 1, true, null); });
+      manualGroups().forEach(function(g) { get(g.name, g.name, g.multiplier, true, null); });
       currentLines.forEach(function(li) { var g = lineGroup(li); get(g, g, groupMultiplier(g), true, null); });
       if (!groups.length) get(DEFAULT_GROUP, DEFAULT_GROUP, 1, true, null);
     } else {
@@ -1603,7 +1616,7 @@ requireAuth().catch(function(){});
   function layerLocked(li) { return !!(li && li.layer_id); }
   function layerLockHint(li) {
     var l = layerForLine(li);
-    return 'From takeoff layer' + (l && l.name ? ' "' + l.name + '"' : '') + ' — click the quantity or the price to change it here, other fields on the Takeoff tab';
+    return 'From takeoff layer' + (l && l.name ? ' "' + l.name + '"' : '') + ' — changes here go to the takeoff layer too; the quantity = marks on the plans + Extra quantity';
   }
   function isCellEditable(col, li) {
     if (!canEdit || !col.editable) return false;
@@ -1611,11 +1624,16 @@ requireAuth().catch(function(){});
     if (col.editable === 'subtotal_cost' && li && lineTotals(li).materialDropped) return false;   // material not priced on this line
     if (SCHEMA_FIELDS.indexOf(col.editable) >= 0 && !schemaOk) return false;
     if (col.rate && isLocked()) return false;
-    if (layerLocked(li) && LAYER_FIELDS.indexOf(col.editable) >= 0 && !isLayerPriceField(col.editable)) return false;
+    if (isCellLayerLocked(col, li)) return false;
     if (li && li._kids && li._kids.length && (col.agg || col.aggPct)) return false;   // folded assembly totals
     return true;
   }
-  function isCellLayerLocked(col, li) { return canEdit && !!col.editable && layerLocked(li) && LAYER_FIELDS.indexOf(col.editable) >= 0 && !isLayerPriceField(col.editable); }
+  function isCellLayerLocked(col, li) {
+    if (!canEdit || !col.editable || !layerLocked(li)) return false;
+    if (col.editable === 'quantity') return true;
+    if (col.editable === 'notes') { var l = layerForLine(li); return !(l && l.params && l.params.from_estimate); }
+    return false;
+  }
   // The price of a takeoff-linked line can be typed here (Unit Cost / Subtotal Item Cost): the number is written to the takeoff layer as well
   // (saveLayerUnitCost), so the layer, the takeoff panel and the line agree and the next sync keeps it.
   function isLayerPriceField(f) { return f === 'subtotal_cost' || f === 'unit_material_cost'; }
@@ -1833,6 +1851,7 @@ requireAuth().catch(function(){});
     if (f === 'subtotal_cost') return lineTotals(li).subtotalItemCost.toFixed(2);
     var v = li[f];
     if (f === 'labor_rate') v = lineTotals(li).laborRate;
+    if (f === 'total_labor') return String(Math.round(lineTotals(li).totalLaborTime * 100) / 100);
     if (f === 'labor_factor' && (v == null || v === '')) v = 1;
     if (col.type === 'pct') return (num(v) * 100).toFixed(2);
     if (col.type === 'money') return num(v).toFixed(2);
@@ -1920,6 +1939,15 @@ requireAuth().catch(function(){});
         moveFocus(next, td, li.id, col.key);
         return;
       }
+      if (f === 'total_labor') {
+        var tl = laborPatch(li, v);
+        if (tl.error) { showToast(tl.error, 'error'); td.innerHTML = orig; return; }
+        if (!tl.patch) { td.innerHTML = orig; moveFocus(next, td); return; }
+        if (layerLocked(li)) { var le3 = await saveLayerThrough(li, { unit_labor_hours: tl.patch.unit_labor_hours }); if (le3) { showToast('Could not save to the takeoff layer: ' + le3, 'error'); td.innerHTML = orig; return; } }
+        var rl = await supabaseClient.from('estimate_line_items').update(cleanPatch(tl.patch)).eq('id', li.id);
+        if (rl.error) { showToast('Save failed: ' + rl.error.message, 'error'); td.innerHTML = orig; return; }
+        Object.assign(li, tl.patch); updateRowAndTotals(li.id); moveFocus(next, td, li.id, col.key); return;
+      }
       var cur = li[f];
       var same = (col.type === 'text') ? ((cur == null ? '' : String(cur)) === (v == null ? '' : v))
                : (col.type === 'bool') ? (cur === v)
@@ -1930,6 +1958,10 @@ requireAuth().catch(function(){});
       if (f === 'unit_material_cost' && layerLocked(li)) {
         var le2 = await saveLayerUnitCost(li, v);
         if (le2) { showToast('Could not save the price to the takeoff layer: ' + le2, 'error'); td.innerHTML = orig; return; }
+      }
+      if (layerLocked(li) && (LAYER_THROUGH.indexOf(f) >= 0 || f === 'notes')) {
+        var lp = {}; lp[f] = v; var le4 = await saveLayerThrough(li, lp);
+        if (le4) { showToast('Could not save to the takeoff layer: ' + le4, 'error'); td.innerHTML = orig; return; }
       }
       var r = await supabaseClient.from('estimate_line_items').update(cleanPatch(patch)).eq('id', li.id);
       if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); td.innerHTML = orig; return; }
@@ -1975,7 +2007,6 @@ requireAuth().catch(function(){});
 
   function startItemRename(tr, id) {
     var li = lineById(id); if (!li || !tr) return;
-    if (layerLocked(li)) { showToast(layerLockHint(li)); return; }
     var td = tr.querySelector('td.c-name'), nm = td.querySelector('.nm');
     var inp = document.createElement('input'); inp.className = 'cell-in'; inp.style.width = '220px'; inp.value = li.description || '';
     nm.replaceWith(inp); inp.focus(); inp.select();
@@ -1984,6 +2015,7 @@ requireAuth().catch(function(){});
       if (done) return; done = true;
       var v = inp.value.trim();
       if (!v || v === li.description) { renderGrid(); return; }
+      if (layerLocked(li)) { var re = await saveLayerThrough(li, { description: v }); if (re) { showToast('Could not rename the takeoff layer: ' + re, 'error'); return; } }
       var r = await supabaseClient.from('estimate_line_items').update({ description: v, updated_at: nowIso() }).eq('id', id);
       if (r.error) { showToast('Rename failed: ' + r.error.message, 'error'); renderGrid(); return; }
       li.description = v; renderGrid();
@@ -2031,7 +2063,7 @@ requireAuth().catch(function(){});
     async function commit() {
       if (done) return; done = true;
       var v = Number(inp.value);
-      if (!isFinite(v) || v <= 0) { td.innerHTML = orig; return; }
+      if (!inp.value.trim() || !isFinite(v) || v < 0) { td.innerHTML = orig; return; }
       await saveSettings(function(s) {
         var mg = Array.isArray(s.manual_groups) ? s.manual_groups : [];
         var g = mg.find(function(x) { return x && x.name === key; });
@@ -2451,10 +2483,12 @@ requireAuth().catch(function(){});
   async function deleteLines(ids) {
     if (!canEdit || !ids.length) return;
     var names = ids.slice(0, 3).map(function(id) { var l = lineById(id); return l ? l.description : ''; }).filter(Boolean);
-    var ok = await pcConfirm({ title: 'Delete ' + (ids.length === 1 ? 'item' : ids.length + ' items'), message: (ids.length === 1 ? 'Delete "' + names[0] + '"?' : names.join(', ') + (ids.length > 3 ? ' and ' + (ids.length - 3) + ' more' : '') + ' will be removed from this estimate.'), okLabel: 'Delete', danger: true });
+    var linked = ids.map(lineById).filter(function(l) { return l && l.layer_id; });
+    var ok = await pcConfirm({ title: 'Delete ' + (ids.length === 1 ? 'item' : ids.length + ' items'), message: (ids.length === 1 ? 'Delete "' + names[0] + '"?' : names.join(', ') + (ids.length > 3 ? ' and ' + (ids.length - 3) + ' more' : '') + ' will be removed from this estimate.') + (linked.length ? ' ' + (linked.length === 1 ? 'Its takeoff layer' : 'Their ' + linked.length + ' takeoff layers') + ' (with the marks on the plans) will be deleted too.' : ''), okLabel: 'Delete', danger: true });
     if (!ok) return;
     var r = await supabaseClient.from('estimate_line_items').delete().in('id', ids);
     if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
+    var dl = await deleteLayersOf(linked); if (dl) showToast('Lines deleted, but the takeoff layers could not be: ' + dl, 'error');
     ids.forEach(function(id) { delete state.selected[id]; });
     showToast('Deleted', 'success');
     await loadLines(); refreshAll();
@@ -2462,14 +2496,12 @@ requireAuth().catch(function(){});
   async function deleteLine(id) { return deleteLines([id]); }
   async function moveLines(ids, target) {
     if (!canEdit || !ids.length) return;
-    // takeoff-linked lines keep the layer's group / category (takeoff.html would move them back)
-    var skipped = ids.filter(function(id) { return layerLocked(lineById(id)); }).length;
-    ids = ids.filter(function(id) { return !layerLocked(lineById(id)); });
-    if (skipped) showToast(skipped + ' takeoff item' + (skipped === 1 ? '' : 's') + ' not moved — change the layer group on the Takeoff tab');
-    if (!ids.length) return;
     var patch = { updated_at: nowIso() };
     if (state.groupMode === 'manual') { if (!schemaOk) { showToast('Run procore-ui-schema.sql to use manual groups', 'error'); return; } patch.group_name = target; }
     else patch.category = target;
+    // takeoff-linked lines: the layer moves with them (two-way sync)
+    var lp2 = state.groupMode === 'manual' ? { group_name: target } : { category: target };
+    for (var mi = 0; mi < ids.length; mi++) { var ml = lineById(ids[mi]); if (layerLocked(ml)) { var me2 = await saveLayerThrough(ml, lp2); if (me2) { showToast('Could not move the takeoff layer: ' + me2, 'error'); return; } } }
     var r = await supabaseClient.from('estimate_line_items').update(patch).in('id', ids);
     if (r.error) { showToast('Move failed: ' + r.error.message, 'error'); return; }
     currentLines.forEach(function(l) { if (ids.indexOf(l.id) >= 0) Object.assign(l, patch); });
@@ -2484,8 +2516,10 @@ requireAuth().catch(function(){});
     var r = await supabaseClient.from('estimate_line_items').insert(rows);
     if (r.error) { showToast('Copy failed: ' + r.error.message, 'error'); return; }
     if (move) {
+      var movedLines = ids.map(lineById).filter(Boolean);
       var d = await supabaseClient.from('estimate_line_items').delete().in('id', ids);
       if (d.error) { showToast('Moved copies, but delete failed: ' + d.error.message, 'error'); }
+      else { var dm = await deleteLayersOf(movedLines); if (dm) showToast('Moved, but the takeoff layers here could not be deleted: ' + dm, 'error'); }
     }
     showToast(rows.length + ' item' + (rows.length === 1 ? '' : 's') + (move ? ' moved' : ' copied'), 'success');
     state.selected = {};
@@ -2499,18 +2533,20 @@ requireAuth().catch(function(){});
     var rows = g.lines.map(function(li) { return cloneLine(li, { sort_order: ++sort, parent_id: null, layer_id: null, group_name: state.groupMode === 'manual' ? newName : lineGroup(li) }); });
     var r = await supabaseClient.from('estimate_line_items').insert(rows);
     if (r.error) { showToast('Copy failed: ' + r.error.message, 'error'); return; }
-    if (state.groupMode === 'manual' && schemaOk) await saveSettings(function(s) { var mg = Array.isArray(s.manual_groups) ? s.manual_groups : []; mg.push({ name: newName, multiplier: g.mult || 1 }); s.manual_groups = mg; });
+    if (state.groupMode === 'manual' && schemaOk) await saveSettings(function(s) { var mg = Array.isArray(s.manual_groups) ? s.manual_groups : []; mg.push({ name: newName, multiplier: g.mult == null ? 1 : g.mult }); s.manual_groups = mg; });
     showToast('Group copied', 'success');
     await loadLines(); refreshAll();
   }
   async function deleteGroup(g) {
     if (!canEdit) return;
-    var ok = await pcConfirm({ title: 'Delete group', message: 'Delete "' + g.name + '" and its ' + g.lines.length + ' cost item' + (g.lines.length === 1 ? '' : 's') + '?', okLabel: 'Delete', danger: true });
+    var gLinked = g.lines.filter(function(l) { return l.layer_id; }).length;
+    var ok = await pcConfirm({ title: 'Delete group', message: 'Delete "' + g.name + '" and its ' + g.lines.length + ' cost item' + (g.lines.length === 1 ? '' : 's') + '?' + (gLinked ? ' ' + gLinked + ' takeoff layer' + (gLinked === 1 ? '' : 's') + ' (with their marks) will be deleted too.' : ''), okLabel: 'Delete', danger: true });
     if (!ok) return;
     var ids = g.lines.map(function(l) { return l.id; });
     if (ids.length) {
       var r = await supabaseClient.from('estimate_line_items').delete().in('id', ids);
       if (r.error) { showToast('Delete failed: ' + r.error.message, 'error'); return; }
+      var dg = await deleteLayersOf(g.lines); if (dg) showToast('Items deleted, but the takeoff layers could not be: ' + dg, 'error');
     }
     if (g.manual && schemaOk) await saveSettings(function(s) { s.manual_groups = (Array.isArray(s.manual_groups) ? s.manual_groups : []).filter(function(x) { return !x || x.name !== g.name; }); });
     showToast('Group deleted', 'success');
@@ -2555,6 +2591,78 @@ requireAuth().catch(function(){});
     refreshAll();
   }
 
+  // Total Labor Time typed in the grid → the unit labor time that gives it (qty x group multiplier x difficulty factor; the insulation
+  // sub's field minutes that est-totals takes out of the unit time are kept as they are)
+  function laborPatch(li, v) {
+    if (!(v >= 0)) return { error: 'Enter hours (0 or more)' };
+    var lt = lineTotals(li), diff = num(li.labor_factor) || 1;
+    if (Math.abs(lt.totalLaborTime - v) < 0.005) return { patch: null };
+    if (!(lt.totalQty > 0)) return { error: 'Set a quantity first — the hours are divided across it' };
+    var eff = lt.totalLaborTime / (lt.totalQty * diff), adj = num(li.unit_labor_hours) - eff;
+    var unit = Math.max(0, v / (lt.totalQty * diff) + (adj > 0 ? adj : 0));
+    return { patch: { unit_labor_hours: Math.round(unit * 10000) / 10000, updated_at: nowIso() } };
+  }
+  // Write a takeoff-linked line's change to its layer (two-way sync). patch keys are line fields; returns an error message or null.
+  async function saveLayerThrough(li, patch) {
+    if (!li || !li.layer_id) return null;
+    var lr = await supabaseClient.from('estimate_takeoff_layers').select('id, labor_factor, params').eq('id', li.layer_id).maybeSingle();
+    if (lr.error && /params/.test(lr.error.message)) lr = await supabaseClient.from('estimate_takeoff_layers').select('id, labor_factor').eq('id', li.layer_id).maybeSingle();
+    if (lr.error) return lr.error.message;
+    if (!lr.data) return null;   // the layer is gone (deleted on the Takeoff tab) — the line is just a line
+    var L = lr.data, up = {};
+    if ('description' in patch) up.name = patch.description || 'Item';
+    if ('group_name' in patch) up.group_name = patch.group_name || DEFAULT_GROUP;
+    if ('category' in patch) up.category = patch.category;
+    if ('catalog_item_id' in patch) up.catalog_item_id = patch.catalog_item_id || null;
+    if ('unit_labor_hours' in patch) up.unit_labor_hours = Math.round(num(patch.unit_labor_hours) / (num(L.labor_factor) || 1) * 10000) / 10000;
+    if ('notes' in patch && L.params && L.params.from_estimate) up.notes = patch.notes || null;
+    if ('unit' in patch && 'params' in L) up.params = Object.assign({}, L.params || {}, { line_unit: patch.unit || null });
+    if (!Object.keys(up).length) return null;
+    var u = await supabaseClient.from('estimate_takeoff_layers').update(up).eq('id', L.id);
+    if (u.error) return u.error.message;
+    var cl = layerById[L.id]; if (cl) Object.assign(cl, up);
+    return null;
+  }
+  // Two-way sync: every item added on this tab (catalog, + Item, import, copy, quote …) becomes a takeoff layer too, so it shows on the
+  // Takeoff tab and its quantity can be measured there. Its quantity starts as the layer's Extra quantity. Lines created before the
+  // two-way sync went live (LINK_SINCE) and assembly components stay plain estimate lines.
+  var LINK_SINCE = Date.parse('2026-10-24T12:00:00Z'), linking = false;
+  var LINK_COLORS = ['#1a66e0', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#ef4444', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
+  async function linkNewLinesToTakeoff() {
+    if (!canEdit || linking || !schemaOk || !currentEst) return false;
+    var todo = currentLines.filter(function(li) { return li && !li.layer_id && !li.parent_id && Date.parse(li.created_at || 0) >= LINK_SINCE; });
+    if (!todo.length) return false;
+    linking = true;
+    try {
+      var mx = await supabaseClient.from('estimate_takeoff_layers').select('sort_order').eq('estimate_id', currentEst.id).order('sort_order', { ascending: false }).limit(1).maybeSingle();
+      if (mx.error) return false;   // no takeoff schema
+      var so = (mx.data ? num(mx.data.sort_order) : 0) + 1;
+      var rows = todo.map(function(li, i) {
+        var u = String(li.unit || '').toLowerCase(), t = /^(lf|ft|feet|foot|linear)/.test(u) ? 'linear' : (/^(sf|sq|sqft)/.test(u) ? 'area' : 'count');
+        return { estimate_id: currentEst.id, name: li.description || 'Item', group_name: li.group_name || lineGroup(li), takeoff_type: t, category: li.category || 'equipment',
+          labor_crew_type: li.labor_crew_type || CAT_CREW[li.category] || 'sm', unit: t === 'linear' ? 'ft' : (t === 'area' ? 'sqft' : 'ea'),
+          unit_material_cost: num(li.unit_material_cost), unit_labor_hours: num(li.unit_labor_hours), waste_pct: 0, multiplier: 1, drop_length_ft: 0, labor_factor: 1,
+          rise: 0, run: 12, extra_count: num(li.quantity), line_width: 3, color: LINK_COLORS[(so + i) % LINK_COLORS.length], symbol: 'circle', notes: li.notes || null,
+          catalog_item_id: li.catalog_item_id || null, sort_order: so + i, is_visible: true, params: { from_estimate: true, line_unit: li.unit || null, line_id: li.id } };
+      });
+      var ins = await supabaseClient.from('estimate_takeoff_layers').insert(rows).select('id');
+      if (ins.error && /params/.test(ins.error.message)) { rows.forEach(function(r) { delete r.params; }); ins = await supabaseClient.from('estimate_takeoff_layers').insert(rows).select('id'); }
+      if (ins.error) { console.warn('takeoff link', ins.error.message); return false; }
+      var made = ins.data || [], queue = todo.map(function(li, i) { return { li: li, layer: made[i] }; }).filter(function(x) { return x.layer; });
+      async function worker() { while (queue.length) { var x = queue.shift(); var u2 = await supabaseClient.from('estimate_line_items').update({ layer_id: x.layer.id }).eq('id', x.li.id).is('layer_id', null).select('id'); if (!u2.error && u2.data && u2.data.length) x.li.layer_id = x.layer.id; else await supabaseClient.from('estimate_takeoff_layers').delete().eq('id', x.layer.id); } }   // linked meanwhile by another open tab → drop our duplicate layer
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      await loadLayers();
+      return true;
+    } finally { linking = false; }
+  }
+  // Two-way sync: deleting estimate lines that came from the takeoff deletes their layers (and the layers' marks) as well — otherwise the
+  // takeoff would put the line back on its next sync. Returns an error message or null.
+  async function deleteLayersOf(lines) {
+    var ids = []; (lines || []).forEach(function(li) { if (li && li.layer_id && ids.indexOf(li.layer_id) < 0) ids.push(li.layer_id); });
+    if (!ids.length) return null;
+    var d = await supabaseClient.from('estimate_takeoff_layers').delete().in('id', ids);
+    return d.error ? d.error.message : null;
+  }
   // A layer-linked line's unit cost = the layer's unit material cost × (1 + waste %) (takeoff.html lineFromLayer). A price typed in the grid goes back
   // into the layer (divided by the waste factor) so the takeoff's own totals match and syncLayerLines does not write the old price over it.
   // Returns an error message or null.
@@ -2593,6 +2701,18 @@ requireAuth().catch(function(){});
     li.quantity = v;
     showToast('Quantity set to ' + v + (unit ? ' ' + unit : '') + ' — ' + (Math.round(extra * 100) / 100) + ' by hand + ' + (Math.round(fromMarks * 100) / 100) + ' from the plans', 'success');
     refreshAll();
+  }
+
+  // set a layer-linked line's total quantity without a prompt: Extra quantity = total − marks on the plans
+  async function setLayerQuantity(li, v) {
+    var lr = await supabaseClient.from('estimate_takeoff_layers').select('id, name, multiplier, drop_length_ft, rise, run, extra_count, takeoff_type').eq('id', li.layer_id).maybeSingle();
+    if (lr.error) return lr.error.message;
+    if (!lr.data) return null;
+    var mr = await supabaseClient.from('estimate_measurements').select('layer_id, tool_type, computed_value, drops, deduct, drawing_id, page_number').eq('layer_id', lr.data.id);
+    if (mr.error) return mr.error.message;
+    var fromMarks = 0; (mr.data || []).forEach(function(m) { fromMarks += markQtyAll(m, lr.data); });
+    var u = await supabaseClient.from('estimate_takeoff_layers').update({ extra_count: Math.round((v - fromMarks) * 10000) / 10000 }).eq('id', lr.data.id);
+    return u.error ? u.error.message : null;
   }
 
   // ── Cost Catalog picker (NWCatalogPicker) ────────────────────────────────
@@ -2756,7 +2876,13 @@ requireAuth().catch(function(){});
     if (!patch.description) { showToast('Name is required', 'error'); return; }
     patch = cleanPatch(patch);
     var editing = editingLineId ? lineById(editingLineId) : null;
-    if (layerLocked(editing)) LAYER_FIELDS.forEach(function(k) { delete patch[k]; });   // takeoff owns these
+    if (layerLocked(editing)) {   // two-way sync: name / group / category / unit / labor / price go to the layer; quantity via Extra quantity
+      var lpm = {}; ['description', 'group_name', 'category', 'unit', 'unit_labor_hours', 'notes'].forEach(function(k) { if (k in patch && String(patch[k] == null ? '' : patch[k]) !== String(editing[k] == null ? '' : editing[k])) lpm[k] = patch[k]; });
+      var lme = await saveLayerThrough(editing, lpm); if (lme) { showToast('Could not save to the takeoff layer: ' + lme, 'error'); return; }
+      if (Math.abs(num(patch.unit_material_cost) - num(editing.unit_material_cost)) > 1e-9) { var lpe = await saveLayerUnitCost(editing, patch.unit_material_cost); if (lpe) { showToast('Could not save the price to the takeoff layer: ' + lpe, 'error'); return; } }
+      if (Math.abs(num(patch.quantity) - num(editing.quantity)) > 1e-9) { var lqe = await setLayerQuantity(editing, num(patch.quantity)); if (lqe) { showToast('Could not change the takeoff quantity: ' + lqe, 'error'); return; } }
+      var lyr = layerForLine(editing); if (!(lyr && lyr.params && lyr.params.from_estimate)) delete patch.notes;   // takeoff-made notes are rewritten by the sync
+    }
     var btn = $('lSave');
     btn.disabled = true; btn.textContent = 'Saving…';
     var r;
@@ -3727,6 +3853,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=536"></script>
+<script src="sw-register.js?v=561"></script>
 </body>
 </html>
