@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=559"></script>
-<script src="auth.js?v=559"></script>
-<script src="est-org.js?v=559"></script>
-<script src="est-totals.js?v=559"></script>
-<script src="nw-duct-weight.js?v=559"></script>
+<script src="supabase-config.js?v=564"></script>
+<script src="auth.js?v=564"></script>
+<script src="est-org.js?v=564"></script>
+<script src="est-totals.js?v=564"></script>
+<script src="nw-duct-weight.js?v=564"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=559"></script>
-<script src="nw-email.js?v=559"></script>
-<script src="est-engine.js?v=559"></script>
-<script src="geo-takeoff.js?v=559"></script>
+<script src="email-utils.js?v=564"></script>
+<script src="nw-email.js?v=564"></script>
+<script src="est-engine.js?v=564"></script>
+<script src="geo-takeoff.js?v=564"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1849,6 +1849,18 @@ var AE = (function() {
         if (ptft) scales.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(ptft) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ptft, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' });
         pdf.destroy();
       }
+      // refrigerant line sets: not drawn on the plans (Sunrise Rye Brook: the estimator's 9,099 ft of "refrigerant lines (2 pipes)" run along the chases to each indoor unit by judgement) — the engine's
+      // per-indoor-unit budget becomes a by-hand quantity on its own layer (no marks; the note avoids "from the AI Estimator" so the stale-layer cleanup below keeps it)
+      var refAllow = 0;
+      try {
+        var rel = (((session.result || {}).engine || {}).lines || []).find(function(x) { return /^Refrigerant line sets/.test(x.description || ''); });
+        if (rel && Number(rel.quantity) > 0) {
+          var rname = 'refrigerant lines (2 pipes) w/ insulation', rlayer = layers.find(function(x) { return x.name.toLowerCase() === rname; });
+          if (!rlayer) rlayer = await layerFor(rname, 'pipework', 'Pipes', ['refrigerant lines (2 pipes)%'], null, false);
+          var ru = await supabaseClient.from('estimate_takeoff_layers').update({ extra_count: Math.round(Number(rel.quantity)), notes: 'AI allowance: ' + rel.quantity + ' ft (' + (rel.refrig_units || '?') + ' indoor units × ' + Math.round(Number(rel.quantity) / (rel.refrig_units || 1)) + ' ft) — not drawn on the plans, confirm routing' }).eq('id', rlayer.id);
+          if (!ru.error) refAllow = Math.round(Number(rel.quantity));
+        }
+      } catch (eRef) { console.warn('[bridge] refrigerant allowance', eRef); }
       bridging = 'Saving ' + rows.length + ' marks…'; render();
       var all = scales.concat(rows);
       for (var c = 0; c < all.length; c += 200) { var ins2 = await supabaseClient.from('estimate_measurements').insert(all.slice(c, c + 200)); if (ins2.error) throw new Error(ins2.error.message); }
@@ -1877,7 +1889,7 @@ var AE = (function() {
         cloudZones.forEach(function(c, i) { zs0.push({ id: 'ai_' + stamp + '_' + i, name: 'Cloud ' + (i + 1) + ' · ' + c.sheet, color: '#dc2626', d: c.d, p: c.p, pts: c.pts }); });
         await supabaseClient.from('estimates').update({ settings: Object.assign({}, st0, { takeoff_page_mult: pmap, takeoff_zones: zs0 }) }).eq('id', estId);
       } catch (eSet) { console.warn('[bridge] settings', eSet); }
-      var dampN = rows.filter(function(r) { return /^AI census/.test(r.notes || ''); }).length;
+      var dampN = rows.filter(function(r) { return /^AI census/.test(r.notes || ''); }).length;   // refAllow ft of refrigerant lines go on as a by-hand quantity
       toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + (dampN ? ' (' + dampN + ' damper marks)' : '') + ' on ' + list.length + ' plans, ' + made + ' layers' + (nTyp ? ', ' + nTyp + ' typical sheet' + (nTyp === 1 ? '' : 's') + ' ×N' : '') + (cloudZones.length ? ', ' + cloudZones.length + ' clouds → zones (Actions → Zones report)' : '') + ' — opening the takeoff');
       setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
     } catch (e) { toast('Takeoff: ' + (e.message || e)); }
@@ -1926,6 +1938,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=559"></script>
+<script src="sw-register.js?v=564"></script>
 </body>
 </html>

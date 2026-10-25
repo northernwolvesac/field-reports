@@ -1006,20 +1006,21 @@
     if (C.wetTaps) add('pipework', 'Wet-tap connection' + (C.wetTaps > 1 ? 's' : ''), C.wetTaps, 'ea', STD.wetTap, 0, 'Standard — $10,000 per connection (sub)', { is_wet_tap: true, labor_crew_type: 'none' });
     // VRF / split indoor units need a line set and a condensate drain even when the plans show no piping (Kastriot, Sky Zone: 307 ft
     // refrigerant + 273 ft 1" copper for 12 indoor units) — budget 25 ft + 20 ft per unit, flagged
-    var vrfUnits = 0, refrigFt = 0;
+    var REFRIG_FT_PER_UNIT = 63, vrfUnits = 0, refrigFt = 0;   // median of 15 Bid Board jobs with "refrigerant lines (2 pipes)" lines and an indoor-unit count (2026-10-24)
     Object.keys(C.pipe).forEach(function (k) { if (/refrig|rs\/rl|\brl\b|\brs\b/i.test(C.pipe[k].service || '')) refrigFt += C.pipe[k].lf || 0; });
     var vrfTags = Object.keys(C.sched); Object.keys(C.planEq).forEach(function (t) { if (!C.sched[t]) vrfTags.push(t); });
     vrfTags.forEach(function (tag) {
       var s = C.sched[tag] || C.planEq[tag], about = ((s.type || '') + ' ' + (s.notes || '') + ' ' + tag).toLowerCase();
-      if (!/vrf|vrv|ductless|cassette|mini[- ]?split|split system|indoor unit|wall[- ]mounted unit/.test(about)) return;
-      if (/condens|outdoor|heat pump unit|rooftop|branch selector|\bbs-|\bcu-|existing|to remain/.test(about)) return;
+      // fan-coil / split systems count too (Sunrise Rye Brook: AC-1…AC-5 "condensing unit / fan coil system", 72 units) — PTACs, cabinet / unit heaters and air handlers carry no line sets
+      if (!/vrf|vrv|ductless|cassette|mini[- ]?split|split system|indoor unit|wall[- ]mounted unit|fan[- ]?coil|\bfcu\b/.test(about)) return;
+      if (/condens(?!ing unit \/ fan)|outdoor|heat pump unit|rooftop|branch selector|\bbs-|\bcu-|existing|to remain|ptac|packaged terminal|cabinet heater|unit heater|air handl|ahu/.test(about)) return;
       vrfUnits += Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1);
     });
     if (vrfUnits && refrigFt < 10 * vrfUnits) {
       hasPipe = true;
-      var rr = pipeRate(R, { service: 'refrigerant' }), cr = pipeRate(R, { size: '1"', material: 'copper', service: 'cd' }), needFt = vrfUnits * 25 - refrigFt;
+      var rr = pipeRate(R, { service: 'refrigerant' }), cr = pipeRate(R, { size: '1"', material: 'copper', service: 'cd' }), needFt = vrfUnits * REFRIG_FT_PER_UNIT - refrigFt;
       add('pipework', 'Refrigerant line sets — ' + vrfUnits + ' VRF / split indoor unit' + (vrfUnits > 1 ? 's' : '') + ' (budget ' + Math.round(needFt) + ' ft)', needFt, 'lf', rr.cost, rr.hrs,
-        rr.basis + ' · budget 25 ft per indoor unit, no refrigerant piping read on the plans', { is_firm: false, flag: 'refrigerant piping not on the plans — 25 ft per indoor unit budgeted; confirm routing' });
+        rr.basis + ' · budget ' + REFRIG_FT_PER_UNIT + ' ft per indoor unit, no refrigerant piping read on the plans', { is_firm: false, refrig_units: vrfUnits, flag: 'refrigerant piping not on the plans — ' + REFRIG_FT_PER_UNIT + ' ft per indoor unit budgeted (NWAC jobs with refrigerant lines: median 63 ft per indoor unit, quartiles 31-238; Sunrise Rye Brook 126); confirm routing' });
       add('pipework', 'Condensate 1" copper — ' + vrfUnits + ' VRF / split indoor unit' + (vrfUnits > 1 ? 's' : '') + ' (budget ' + vrfUnits * 20 + ' ft)', vrfUnits * 20, 'lf', cr.cost, cr.hrs,
         cr.basis + ' · budget 20 ft per indoor unit', { is_firm: false });
     }
