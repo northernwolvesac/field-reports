@@ -14,16 +14,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=565"></script>
-<script src="auth.js?v=565"></script>
-<script src="est-org.js?v=565"></script>
-<script src="est-totals.js?v=565"></script>
-<script src="nw-duct-weight.js?v=565"></script>
+<script src="supabase-config.js?v=568"></script>
+<script src="auth.js?v=568"></script>
+<script src="est-org.js?v=568"></script>
+<script src="est-totals.js?v=568"></script>
+<script src="nw-duct-weight.js?v=568"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=565"></script>
-<script src="nw-email.js?v=565"></script>
-<script src="est-engine.js?v=565"></script>
-<script src="geo-takeoff.js?v=565"></script>
+<script src="email-utils.js?v=568"></script>
+<script src="nw-email.js?v=568"></script>
+<script src="est-engine.js?v=568"></script>
+<script src="geo-takeoff.js?v=568"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1855,7 +1855,7 @@ var AE = (function() {
       try {
         var rel = (((session.result || {}).engine || {}).lines || []).find(function(x) { return /^Refrigerant line sets/.test(x.description || ''); });
         if (rel && Number(rel.quantity) > 0) {
-          var rname = 'refrigerant lines (2 pipes) w/ insulation', rlayer = layers.find(function(x) { return x.name.toLowerCase() === rname; });
+          var rname = 'refrigerant lines (2 pipes) w/ insulation', rlayer = layers.find(function(x) { return /^refrigerant lines \(2 pipes\)/i.test(x.name); });   // the catalog names it "… 2/ insulation", so an exact name match made a second layer every run
           if (!rlayer) rlayer = await layerFor(rname, 'pipework', 'Pipes', ['refrigerant lines (2 pipes)%'], null, false);
           var ru = await supabaseClient.from('estimate_takeoff_layers').update({ extra_count: Math.round(Number(rel.quantity)), notes: 'AI allowance: ' + rel.quantity + ' ft (' + (rel.refrig_units || '?') + ' indoor units × ' + Math.round(Number(rel.quantity) / (rel.refrig_units || 1)) + ' ft) — not drawn on the plans, confirm routing' }).eq('id', rlayer.id);
           if (!ru.error) { refAllow = Math.round(Number(rel.quantity)); rlayer.notes = 'AI allowance'; rlayer.extra_count = refAllow; }   // the in-memory copy too: the stale-layer cleanup below reads its notes
@@ -1938,6 +1938,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=565"></script>
+<script src="sw-register.js?v=568"></script>
 </body>
 </html>
