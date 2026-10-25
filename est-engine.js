@@ -1016,7 +1016,8 @@
       var s = C.sched[tag] || C.planEq[tag], about = ((s.type || '') + ' ' + (s.notes || '') + ' ' + tag).toLowerCase();
       // fan-coil / split systems count too (Sunrise Rye Brook: AC-1…AC-5 "condensing unit / fan coil system", 72 units) — PTACs, cabinet / unit heaters and air handlers carry no line sets
       if (!/vrf|vrv|ductless|cassette|mini[- ]?split|split system|indoor unit|wall[- ]mounted unit|fan[- ]?coil|\bfcu\b/.test(about)) return;
-      if (/condens(?!ing unit \/ fan)|outdoor|heat pump unit|rooftop|branch selector|\bbs-|\bcu-|existing|to remain|ptac|packaged terminal|cabinet heater|unit heater|air handl|ahu/.test(about)) return;
+      // the notes only decide "existing / to remain" — Sunrise AC-1 is an indoor unit whose note reads "assoc. outdoor unit field-assigned"
+      if (/existing|to remain/.test(about) || /condens(?!ing unit \/ fan)|outdoor|heat pump unit|rooftop|branch selector|\bbs-|\bcu-|ptac|packaged terminal|cabinet heater|unit heater|air handl|ahu/.test(((s.type || '') + ' ' + tag).toLowerCase())) return;
       vrfUnits += Math.max(1, (C.planEq[tag] && (C.planEq[tag].qtyAll || C.planEq[tag].qty)) || s.qty || 1);
     });
     if (vrfUnits && refrigFt < 10 * vrfUnits) {
