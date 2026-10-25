@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=561">
+<link rel="stylesheet" href="procore-ui.css?v=562">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=561"></script>
-<script src="auth.js?v=561"></script>
-<script src="est-totals.js?v=561"></script>
-<script src="procore-ui.js?v=561"></script>
+<script src="supabase-config.js?v=562"></script>
+<script src="auth.js?v=562"></script>
+<script src="est-totals.js?v=562"></script>
+<script src="procore-ui.js?v=562"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=561"></script>
-<script src="est-drawings.js?v=561"></script>
-<script src="nw-catalog-picker.js?v=561"></script>
-<script src="nw-duct-weight.js?v=561"></script>
-<script src="geo-takeoff.js?v=561"></script>
-<script src="est-engine.js?v=561"></script>
+<script src="bid-actions.js?v=562"></script>
+<script src="est-drawings.js?v=562"></script>
+<script src="nw-catalog-picker.js?v=562"></script>
+<script src="nw-duct-weight.js?v=562"></script>
+<script src="geo-takeoff.js?v=562"></script>
+<script src="est-engine.js?v=562"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -409,6 +409,7 @@ requireAuth().catch(function(){});
     await checkSyncSchema();
     await loadDrawings();
     renderAll();
+    scheduleSync();   // two-way sync: reconcile on open (layers made on the Estimating tab or by the AI bridge, zero-quantity layers without a line)
     // ?layer=<id> (link from the Estimating grid): open that layer's properties on the Additional Parameters tab, where the Extra quantity is
     var wantLayer = new URLSearchParams(location.search).get('layer');
     if (wantLayer && layerById(wantLayer)) setTimeout(function() { openLayerPopover(wantLayer, document.querySelector('[data-lmenu="' + wantLayer + '"]')); popTab = 'params'; renderPopover(); }, 400);
@@ -3132,6 +3133,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=561"></script>
+<script src="sw-register.js?v=562"></script>
 </body>
 </html>
