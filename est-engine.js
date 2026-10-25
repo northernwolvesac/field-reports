@@ -490,6 +490,9 @@
           f[type] = (f[type] || 0) + Number(e.qty || 1); q.sheets.push(sh);
           var perFloor = Object.keys(q.per).map(function (k) { return Math.max.apply(null, Object.values(q.per[k])); });
           q.qty = /\d/.test(tag) ? Math.max.apply(null, perFloor) : perFloor.reduce(function (a, b) { return a + b; }, 0);   // BOSS AHU-1 on M-100 + M-101, Esquire RTU-1 on floor + roof = 1 each
+          // every floor's units added up (enlarged-plan copies are on the 'multiple' floor and only count when nothing else was read) — a fan coil / split tag repeated on every floor is one unit per mark, which the refrigerant allowance needs
+          var flKeys = Object.keys(q.per), realFl = flKeys.filter(function (k) { return k !== 'multiple'; });
+          q.qtyAll = (realFl.length ? realFl : flKeys).reduce(function (a, k) { return a + Math.max.apply(null, Object.values(q.per[k])); }, 0);
           if (!q.type && e.type) q.type = e.type;
           if (!q.notes && e.notes) q.notes = e.notes;
           if (!q.weight_lb && e.weight_lb) q.weight_lb = e.weight_lb;
@@ -1014,7 +1017,7 @@
       // fan-coil / split systems count too (Sunrise Rye Brook: AC-1…AC-5 "condensing unit / fan coil system", 72 units) — PTACs, cabinet / unit heaters and air handlers carry no line sets
       if (!/vrf|vrv|ductless|cassette|mini[- ]?split|split system|indoor unit|wall[- ]mounted unit|fan[- ]?coil|\bfcu\b/.test(about)) return;
       if (/condens(?!ing unit \/ fan)|outdoor|heat pump unit|rooftop|branch selector|\bbs-|\bcu-|existing|to remain|ptac|packaged terminal|cabinet heater|unit heater|air handl|ahu/.test(about)) return;
-      vrfUnits += Math.max(1, (C.planEq[tag] && C.planEq[tag].qty) || s.qty || 1);
+      vrfUnits += Math.max(1, (C.planEq[tag] && (C.planEq[tag].qtyAll || C.planEq[tag].qty)) || s.qty || 1);
     });
     if (vrfUnits && refrigFt < 10 * vrfUnits) {
       hasPipe = true;
