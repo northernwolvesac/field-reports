@@ -30,7 +30,7 @@ condenser water, served by a duty/standby pump pair CWP-xx-1,2 (Grundfos CRE 3-2
 - `Grundfos CRE duty-standby guide (from Dolphin).pdf`, `Grundfos CRE terminal diagram (from Dolphin).pdf`: Barry's replies.
 - `PO NWAC1276-SF-BHVAC (Bunker).pdf`, `Bunker HVAC CO 1.00.pdf`: sheet metal sub.
 
-## 1. CW pumps and BMS (Siemens) - status 09/28
+## 1. CW pumps and BMS (Siemens) - status 10/26
 
 **Decision:** decline Siemens Alternate 3 (lead/lag panels, $8,400). Each pump pair runs duty/standby with the
 Grundfos built-in multipump function ("Alternating operation, energy", Grundfos recommends; "time" not
@@ -65,6 +65,14 @@ minimum flow and Low-flow stop setting with all CRAC valves closed, is a minimum
 after power loss; DP sensor range (0-15 vs 0-25 psi).
 
 **Waiting on:** Barry's answers; Siemens R1 of the ATC submittal (Ruslan sends the Siemens email).
+
+**10/24 Siemens reply (Brendan, ~1 month after our 9/28 email):** "Without a lead lag panel as per the specs, we would
+need to install a siemens panel on each floor ... approx. 50k per floor times 3 floors", offers a formal proposal.
+Answered none of the 9/28 itemized points. Our position: contradicts their own proposal 10559656 - p.6 CW pumps "Lead
+Lag panel provided by others", Exclusion 5 (furnishing lead/lag panels), Exclusion 6 (no base BMS pump control),
+Alternate 3 prices a lead/lag DDC panel at $2,800 each ($8,400 for 3 vs $150k). Lead/lag is done by the Grundfos
+built-in multipump function (approved pump submittal), so no panel. Do not ask for the formal proposal; reply asking
+for point-by-point answers to 9/28 and ATC submittal R1 (reply draft offered 10/26, not sent).
 
 ## 2. Pump bypass valve, detail HD-053 (M-903)
 
@@ -134,3 +142,6 @@ unchanged: start-ups 10/19, balancing 11/9, substantial completion 12/18). Corre
 banned (engineer confirmed), Andrei on site weekly / biweekly, duct test passed first time under the engineer's revised
 requirement, Oct insulation items are punch list, BC002/BC003 accepted and closed; Sept pipe riser reroute (EOR wrong
 risers) CO still unapproved.
+10/26: BC0006 in Clearstory shows $0.00, no backup. Ruslan: wait for STO to issue the updated BC, then respond with the
+draft. Suggested a one-line Clearstory comment before 10/29 (not accepted, will respond to the substantiated BC);
+do not click No Cost Impact or Create COR.
