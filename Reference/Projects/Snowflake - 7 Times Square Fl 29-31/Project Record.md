@@ -66,13 +66,16 @@ after power loss; DP sensor range (0-15 vs 0-25 psi).
 
 **Waiting on:** Barry's answers; Siemens R1 of the ATC submittal (Ruslan sends the Siemens email).
 
-**10/24 Siemens reply (Brendan, ~1 month after our 9/28 email):** "Without a lead lag panel as per the specs, we would
+**10/26 Siemens reply (Brendan, 4 weeks after our 9/28 email; follow-ups 10/5, 10/7, 10/26; 10/7 he said the
+submittal was being redrawn):** "Without a lead lag panel as per the specs, we would
 need to install a siemens panel on each floor ... approx. 50k per floor times 3 floors", offers a formal proposal.
 Answered none of the 9/28 itemized points. Our position: contradicts their own proposal 10559656 - p.6 CW pumps "Lead
 Lag panel provided by others", Exclusion 5 (furnishing lead/lag panels), Exclusion 6 (no base BMS pump control),
 Alternate 3 prices a lead/lag DDC panel at $2,800 each ($8,400 for 3 vs $150k). Lead/lag is done by the Grundfos
 built-in multipump function (approved pump submittal), so no panel. Do not ask for the formal proposal; reply asking
-for point-by-point answers to 9/28 and ATC submittal R1 (reply draft offered 10/26, not sent).
+for point-by-point answers to 9/28 and ATC submittal R1. Note: base scope p.5 already says Siemens wires the pumps
+to and installs a "manufacturer provided Lead / Lag panel" -> the Grundfos built-in controller is that manufacturer
+lead/lag. Reply drafted in Gmail 10/26 (same thread; asks for R1 by 10/30, offers a call with Barry) - not sent yet.
 
 ## 2. Pump bypass valve, detail HD-053 (M-903)
 
