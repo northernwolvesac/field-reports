@@ -132,6 +132,19 @@ sequence but not shown anywhere. 300B labels fl. 31 panels as CWP-29.
 dispute. Blockers: NC spring-return valves (V-1/V-2, CRAC isolation) need power or manual open; CRAC enable contact must
 be fan/enable not compressor (flow switch 4k vs pumps start on unit 3a); HD-053 bypass position; no DP sensor -> constant
 curve. Ruslan sent the Siemens reply 10/27; waiting for their answer.
+**Off-the-shelf panel option (web research 10/27, from search listings; full data sheets not read - watts.com and
+lit.stromquist.com blocked here):**
+- Tekmar 132 Pump Sequencer (standby / 2-stage), 120 V: demand input, flow proof input, pump 1 / pump 2 contacts, alert
+  contact; standby mode: no flow proof within 10-30 s (DIP) -> lead off, standby on, alert; equal run-time rotation
+  (settings list shows 48/96/144/168 h) and exercising. About $780-1,100 each. Best fit.
+- Heat-Timer PLL / PLL Elite (Stromquist), 120 V, 12 W: lead rotation, proof-of-flow per pump (1-call/2-flow mode),
+  failed pump locked out until reset, alarm. Base PLL about $730 (list $1,088).
+- iO-LL (iO HVAC Controls), 24 VAC, about $125: run-time alternation only; failover not confirmed. Too basic.
+Wiring idea with Tekmar 132: pumps stand-alone (no GENIbus multipump), each on its own DP sensor; pump contact -> that
+pump's DI1/GND; leak detector NC contact in series with that pump's contact (leak -> pump stops -> no flow -> standby +
+alert); two flow switches paralleled into flow proof; alert -> horn/strobe + autodialer. CRAC enable -> demand. Needs
+120 V circuit, enclosure, horn/strobe. Strategy: if NW furnishes this, it is the "lead/lag panel provided by others"
+Siemens base scope p.5 already installs, powers and wires.
 **Panel power:** any added panel needs 120 V control power. M-102 ATC spec: "All control power, wiring and transformers
 for dampers, actuators, VAV boxes, control panels, etc. to be provided by the controls contractor from a source
 designated by the electrical contractor. Circuits for control devices have been designated in the electrical panel
