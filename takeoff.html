@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=569">
+<link rel="stylesheet" href="procore-ui.css?v=571">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=569"></script>
-<script src="auth.js?v=569"></script>
-<script src="est-totals.js?v=569"></script>
-<script src="procore-ui.js?v=569"></script>
+<script src="supabase-config.js?v=571"></script>
+<script src="auth.js?v=571"></script>
+<script src="est-totals.js?v=571"></script>
+<script src="procore-ui.js?v=571"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=569"></script>
-<script src="est-drawings.js?v=569"></script>
-<script src="nw-catalog-picker.js?v=569"></script>
-<script src="nw-duct-weight.js?v=569"></script>
-<script src="geo-takeoff.js?v=569"></script>
-<script src="est-engine.js?v=569"></script>
+<script src="bid-actions.js?v=571"></script>
+<script src="est-drawings.js?v=571"></script>
+<script src="nw-catalog-picker.js?v=571"></script>
+<script src="nw-duct-weight.js?v=571"></script>
+<script src="geo-takeoff.js?v=571"></script>
+<script src="est-engine.js?v=571"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -3105,7 +3105,7 @@ requireAuth().catch(function(){});
   // ═══════════════════════ upload / export / analyze ═══════════════════════
   async function uploadPdfs(ev) {
     var files = Array.prototype.slice.call(ev.target.files || []); ev.target.value = ''; if (!files.length) return; if (!me.canEdit) { toast('Read-only', 'error'); return; }
-    var res = await EstDrawings.upload(rootId, files, { uploadedBy: me.id, onProgress: function(info) { if (info.stage === 'split') toast(info.file.name + ' is over 48 MB — splitting it into parts (storage limit 50 MB per file)…'); if (info.stage === 'upload') toast('Uploading ' + info.file.name + ' (' + (info.index + 1) + '/' + info.total + ')…'); } });
+    var res = await EstDrawings.upload(rootId, files, { uploadedBy: me.id, onProgress: function(info) { if (info.stage === 'split') toast(info.file.name + ' is over 95 MB — splitting it into parts (storage limit 100 MB per file)…'); if (info.stage === 'upload') toast('Uploading ' + info.file.name + ' (' + (info.index + 1) + '/' + info.total + ')…'); } });
     res.errors.forEach(function(e) { toast(e.message, 'error'); });
     var n = plans.length; await loadDrawings(); if (plans.length > n) await openPlan(n); if (res.rows.length) toast(res.rows.length + ' plan(s) uploaded', 'success'); renderAll();
   }
@@ -3225,6 +3225,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=569"></script>
+<script src="sw-register.js?v=571"></script>
 </body>
 </html>

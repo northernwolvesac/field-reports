@@ -142,9 +142,9 @@
     return out;
   }
 
-  // ─── big drawing sets (Alissultan 2026-10-26): storage takes at most 50 MB per file (Supabase global limit while the spend cap is on),
-  // so a larger PDF is split into page ranges of ≤ 48 MB — "<name> - Part 1 of 3 (p1-40).pdf" … — uploaded one after the other ───
-  var MAX_UPLOAD = 48 * 1024 * 1024;
+  // ─── big drawing sets (Alissultan 2026-10-26): the estimate-drawings bucket takes at most 100 MB per file (global limit 500 MB since the
+  // spend cap went off), so a larger PDF is split into page ranges of ≤ 95 MB — "<name> - Part 1 of 2 (p1-40).pdf" … — uploaded one after the other ───
+  var MAX_UPLOAD = 95 * 1024 * 1024;
   var PDFLIB_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
   function ensurePdfLib() {
     if (window.PDFLib) return Promise.resolve(window.PDFLib);
@@ -170,7 +170,7 @@
         if (bytes.length <= MAX_UPLOAD || cnt === 1) break;
         cnt = Math.max(1, Math.floor(cnt * MAX_UPLOAD / bytes.length * 0.9));
       }
-      if (bytes.length > MAX_UPLOAD) throw new Error(file.name + ': page ' + (start + 1) + ' alone is larger than 48 MB');
+      if (bytes.length > MAX_UPLOAD) throw new Error(file.name + ': page ' + (start + 1) + ' alone is larger than ' + Math.round(MAX_UPLOAD / 1048576) + ' MB');
       parts.push({ bytes: bytes, from: start + 1, to: start + cnt });
       start += cnt;
     }
