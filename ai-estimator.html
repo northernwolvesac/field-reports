@@ -14,17 +14,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=575"></script>
-<script src="auth.js?v=575"></script>
-<script src="est-org.js?v=575"></script>
-<script src="est-totals.js?v=575"></script>
-<script src="nw-duct-weight.js?v=575"></script>
-<script src="nw-standards.js?v=575"></script>
+<script src="supabase-config.js?v=576"></script>
+<script src="auth.js?v=576"></script>
+<script src="est-org.js?v=576"></script>
+<script src="est-totals.js?v=576"></script>
+<script src="nw-duct-weight.js?v=576"></script>
+<script src="nw-standards.js?v=576"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=575"></script>
-<script src="nw-email.js?v=575"></script>
-<script src="est-engine.js?v=575"></script>
-<script src="geo-takeoff.js?v=575"></script>
+<script src="email-utils.js?v=576"></script>
+<script src="nw-email.js?v=576"></script>
+<script src="est-engine.js?v=576"></script>
+<script src="geo-takeoff.js?v=576"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1288,10 +1288,10 @@ var AE = (function() {
     if (book) {
       DB_GROUPS.forEach(function(gn, gi) {
         var ts = DB_TOPICS.filter(function(t) { return t.g === gi; }); if (!ts.length) return;
-        h += '<div style="margin-top:12px"><b style="font-size:12.5px">' + esc(gn) + '</b>';
+        h += '<div style="margin-top:12px;text-align:left"><b style="font-size:12.5px">' + esc(gn) + '</b>';
         ts.forEach(function(t) {
           var x = T[t.id] || {}, def = dbDefault(t.id), srcs = (x.sources || []).slice(0, 3);
-          h += '<div style="margin-top:6px;padding:8px 10px;background:#f8fafc;border-radius:8px"><div><b>' + esc(t.t) + '</b> ' + (x.found ? '<span class="st" style="background:#dcfce7;color:#166534">in the documents</span>' : '<span class="st" style="background:#fef3c7;color:#92400e">not specified' + (def ? ' — industry default' : '') + '</span>') + '</div>' +
+          h += '<div style="margin-top:6px;padding:8px 10px;background:#f8fafc;border-radius:8px;text-align:left"><div><b>' + esc(t.t) + '</b> ' + (x.found ? '<span class="st" style="background:#dcfce7;color:#166534">in the documents</span>' : '<span class="st" style="background:#fef3c7;color:#92400e">not specified' + (def ? ' — industry default' : '') + '</span>') + '</div>' +
             (x.found ? '<div style="margin-top:3px">' + mdLite(x.answer || '') + '</div>' + (srcs.length ? '<div class="basis">' + srcs.map(function(s) { return esc((s.sheet || 'sheet') + ' p.' + (s.page || '')); }).join(' · ') + '</div>' : '') : '') +
             (!x.found && def ? '<div class="basis" style="margin-top:3px">' + esc(def) + ' <i>(default — to verify)</i></div>' : '') + '</div>';
         });
@@ -2040,6 +2040,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, runDatabook: runDatabook, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=575"></script>
+<script src="sw-register.js?v=576"></script>
 </body>
 </html>
