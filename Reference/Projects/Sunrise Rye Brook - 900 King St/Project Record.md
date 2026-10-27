@@ -195,3 +195,9 @@ sprinklers; pool designer for heater scope.
 | VE-12 | Delete 47 VAV + reheat; RTUs single-zone for big common spaces, VRF/ductless for small rooms | VRF kW TBD (less than reheat) |
 | VE-13 | Basement/BOH on VRF/ductless heat pumps where needed, electric freeze heaters only; delete FCUs | ~20-40 kW |
 | VE-14 | Apartment bath/kitchen exhaust ducted to DOAS exhaust (Northport model), delete ~283 TX-A fans and wall caps | negative (fans deleted) |
+
+## Summary of changes sent to Callahan (10/27/2026)
+- Boilers 3 -> 2, boiler / primary pumps deleted, 20 HW FCUs -> 9 electric unit heaters, HW cabinet heaters -> 10
+  electric, VAV 47 -> 30 (26 electric reheat, 4 cooling only), BMS by ABM removed (standalone; essential-systems BMS
+  alternate pending), townhouses one system each $1,750,000 (was $2,600,000). Customer file with marked drawings:
+  `VE Changes/VE Changes - Sunrise Rye Brook.pdf`.
