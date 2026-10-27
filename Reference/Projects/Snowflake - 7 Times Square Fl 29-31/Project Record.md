@@ -128,6 +128,10 @@ motor terminals. Flow switches (RE-2..5, flow alarms to DXR), leak detectors (to
 already on the Siemens DXR side, not in the panel. So in their own submittal the panel does only lead/lag + DP speed
 control = what the multipump function does. Local A/V alarm (3c/3d) and 1-in-4 h timer (3f) are copied into the 300C
 sequence but not shown anywhere. 300B labels fl. 31 panels as CWP-29.
+**Start-up plan (10/27):** `CW pump start-up plan.md` - run each floor for the CRAC start-up independent of the Siemens
+dispute. Blockers: NC spring-return valves (V-1/V-2, CRAC isolation) need power or manual open; CRAC enable contact must
+be fan/enable not compressor (flow switch 4k vs pumps start on unit 3a); HD-053 bypass position; no DP sensor -> constant
+curve. Ruslan sent the Siemens reply 10/27; waiting for their answer.
 **Panel power:** any added panel needs 120 V control power. M-102 ATC spec: "All control power, wiring and transformers
 for dampers, actuators, VAV boxes, control panels, etc. to be provided by the controls contractor from a source
 designated by the electrical contractor. Circuits for control devices have been designated in the electrical panel
