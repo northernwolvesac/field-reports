@@ -120,6 +120,14 @@ Barry draft replaced again 10/27: panel question now explains why (Siemens says 
 the pump controller does not cover; comparison only, pumps unchanged) and lists functions a-f (start from AC contact +
 auto restart, duty/standby 150 h, loss-of-flow changeover + local A/V alarm, leak stop + changeover + alarm, 1 h in 4 h
 exercise, dry contacts to BMS/autodialer), plus model, price per panel x3, lead time, power and enclosure.
+**Siemens ATC R0 (7/22) sheets 300-300C, checked 10/27:** one "CWP-xx-1&2 LEAD LAG PANEL" box per floor, by others,
+not in the 300C BOM, no model, no power source shown. Siemens lands only: system enable (RE-x-1 from CRAC unit status),
+VFD-1/2 run and speed from separate "VFD panels" (note 2 "VFD mounted in ceiling near pump set" - do not exist, VFD is
+integral), DPTE-1, CS-1/CS-2 status. Terminal numbers on the panel box (2/6, 4/6, 12/18, 10/20) are the Grundfos CRE
+motor terminals. Flow switches (RE-2..5, flow alarms to DXR), leak detectors (to DXR / AD) and pump valves (RE-1) are
+already on the Siemens DXR side, not in the panel. So in their own submittal the panel does only lead/lag + DP speed
+control = what the multipump function does. Local A/V alarm (3c/3d) and 1-in-4 h timer (3f) are copied into the 300C
+sequence but not shown anywhere. 300B labels fl. 31 panels as CWP-29.
 **Panel power:** any added panel needs 120 V control power. M-102 ATC spec: "All control power, wiring and transformers
 for dampers, actuators, VAV boxes, control panels, etc. to be provided by the controls contractor from a source
 designated by the electrical contractor. Circuits for control devices have been designated in the electrical panel
