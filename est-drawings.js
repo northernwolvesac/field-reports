@@ -142,6 +142,43 @@
     return out;
   }
 
+  // ─── big drawing sets (Alissultan 2026-10-26): storage takes at most 50 MB per file (Supabase global limit while the spend cap is on),
+  // so a larger PDF is split into page ranges of ≤ 48 MB — "<name> - Part 1 of 3 (p1-40).pdf" … — uploaded one after the other ───
+  var MAX_UPLOAD = 48 * 1024 * 1024;
+  var PDFLIB_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+  function ensurePdfLib() {
+    if (window.PDFLib) return Promise.resolve(window.PDFLib);
+    return new Promise(function (res, rej) {
+      var s = document.createElement('script'); s.src = PDFLIB_URL;
+      s.onload = function () { window.PDFLib ? res(window.PDFLib) : rej(new Error('pdf-lib did not load')); };
+      s.onerror = function () { rej(new Error('pdf-lib did not load')); };
+      document.head.appendChild(s);
+    });
+  }
+  async function splitLargePdf(file) {
+    var L = await ensurePdfLib();
+    var src = await L.PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+    var n = src.getPageCount(), base = String(file.name).replace(/\.pdf$/i, ''), parts = [], start = 0;
+    var per = Math.max(1, Math.floor(n * MAX_UPLOAD * 0.85 / file.size));
+    while (start < n) {
+      var cnt = Math.min(per, n - start), bytes = null;
+      for (;;) {
+        var out = await L.PDFDocument.create(), idx = [];
+        for (var k = start; k < start + cnt; k++) idx.push(k);
+        (await out.copyPages(src, idx)).forEach(function (p) { out.addPage(p); });
+        bytes = await out.save({ useObjectStreams: true });
+        if (bytes.length <= MAX_UPLOAD || cnt === 1) break;
+        cnt = Math.max(1, Math.floor(cnt * MAX_UPLOAD / bytes.length * 0.9));
+      }
+      if (bytes.length > MAX_UPLOAD) throw new Error(file.name + ': page ' + (start + 1) + ' alone is larger than 48 MB');
+      parts.push({ bytes: bytes, from: start + 1, to: start + cnt });
+      start += cnt;
+    }
+    return parts.map(function (p, i) {
+      return new File([p.bytes], base + ' - Part ' + (i + 1) + ' of ' + parts.length + ' (p' + p.from + (p.to > p.from ? '-' + p.to : '') + ').pdf', { type: 'application/pdf' });
+    });
+  }
+
   // ─── upload ──────────────────────────────────────────────────────────
   async function upload(rootId, fileList, opts) {
     opts = opts || {};
@@ -157,6 +194,12 @@
       var file = files[i], info = { index: i, total: files.length, file: file, stage: 'upload', row: null, error: null };
       try {
         if (!isPdf(file)) throw new Error(file.name + ': only PDF drawings can be uploaded');
+        if (file.size > MAX_UPLOAD) {
+          info.stage = 'split'; progress(info);
+          var partFiles = await splitLargePdf(file);
+          files.splice.apply(files, [i, 1].concat(partFiles));   // the parts take the big file's place, in page order
+          file = files[i]; info = { index: i, total: files.length, file: file, stage: 'upload', row: null, error: null, splitFrom: info.file.name, parts: partFiles.length };
+        }
         progress(info);
         var path = storagePath(rootId, file.name);
         var up = await client.storage.from(BUCKET).upload(path, file, { cacheControl: '3600', upsert: false, contentType: 'application/pdf' });

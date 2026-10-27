@@ -945,6 +945,69 @@
     });
   }
 
+  // ── page picker before the download (Alikhan 2026-10-26): every page of the finished PDF (cover + proposal + appendix) as a
+  // thumbnail with a checkbox; "Download selected" keeps only the ticked pages. Resolves the bytes to save, or null = cancelled. ──
+  var pickCss = false;
+  function pickPages(bytes) {
+    var P = window.PC;
+    if (!P || typeof P.modal !== 'function' || !window.PDFLib || !window.PDFLib.PDFDocument) return Promise.resolve(bytes);
+    var L = window.PDFLib;
+    return L.PDFDocument.load(bytes, { ignoreEncryption: true }).then(function (src) {
+      var n = src.getPageCount();
+      if (n < 2) return bytes;
+      if (!pickCss) {
+        pickCss = true;
+        var st = document.createElement('style');
+        st.textContent = '.nwp-pk-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px}.nwp-pk-bar a{color:var(--pc-link,#1a66e0);cursor:pointer}' +
+          '.nwp-pk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;max-height:62vh;overflow:auto;padding:2px}' +
+          '.nwp-pk-pg{display:flex;flex-direction:column;gap:6px;cursor:pointer;border:2px solid var(--pc-border,#e5e7eb);border-radius:6px;padding:6px;background:#fff}' +
+          '.nwp-pk-pg.on{border-color:var(--pc-link,#1a66e0);background:#f3f7ff}.nwp-pk-pg .im{aspect-ratio:8.5/11;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#6b7280;font-size:12px;overflow:hidden}' +
+          '.nwp-pk-pg .im img{width:100%;height:100%;object-fit:contain;display:block}.nwp-pk-pg span{font-size:12.5px;display:flex;align-items:center;gap:6px}';
+        document.head.appendChild(st);
+      }
+      return new Promise(function (resolve) {
+        var done = false, body = document.createElement('div'), cells = '';
+        for (var i = 0; i < n; i++) cells += '<label class="nwp-pk-pg on"><div class="im" data-im="' + i + '">Page ' + (i + 1) + '</div><span><input type="checkbox" checked data-pg="' + i + '"> Page ' + (i + 1) + '</span></label>';
+        body.innerHTML = '<div class="nwp-pk-bar"><span id="nwpPkCount"></span><span style="flex:1"></span><a data-all="1">Select all</a><span>·</span><a data-all="0">Clear</a></div><div class="nwp-pk-grid">' + cells + '</div>';
+        function picked() { return Array.prototype.map.call(body.querySelectorAll('input[data-pg]:checked'), function (c) { return +c.getAttribute('data-pg'); }); }
+        function count() { body.querySelector('#nwpPkCount').textContent = picked().length + ' of ' + n + ' pages selected'; }
+        body.addEventListener('change', function (e) { var c = e.target.closest && e.target.closest('input[data-pg]'); if (c) { c.closest('.nwp-pk-pg').classList.toggle('on', c.checked); count(); } });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-all]'), function (a) { a.onclick = function () { var on = a.getAttribute('data-all') === '1';
+          Array.prototype.forEach.call(body.querySelectorAll('input[data-pg]'), function (c) { c.checked = on; c.closest('.nwp-pk-pg').classList.toggle('on', on); }); count(); }; });
+        count();
+        P.modal({ title: 'Download PDF — choose the pages', body: body, size: 'lg', noAutofocus: true, buttons: [
+          { label: 'Cancel', onClick: function () { done = true; resolve(null); } },
+          { label: 'Download all pages', onClick: function () { done = true; resolve(bytes); } },
+          { label: 'Download selected', primary: true, onClick: function () {
+              var keep = picked();
+              if (!keep.length) { toast('Pick at least one page', 'error'); return false; }
+              done = true;
+              if (keep.length === n) { resolve(bytes); return; }
+              resolve(L.PDFDocument.create().then(function (out) {
+                return out.copyPages(src, keep).then(function (pgs) { pgs.forEach(function (p) { out.addPage(p); }); return out.save(); });
+              }));
+            } }
+        ], onClose: function () { if (!done) resolve(null); } });
+        // thumbnails (pdf.js through est-drawings.js when the page has it)
+        var lib = window.pdfjsLib ? Promise.resolve(window.pdfjsLib) : (window.EstDrawings && EstDrawings.ensurePdfjs ? EstDrawings.ensurePdfjs() : Promise.reject(new Error('no pdf.js')));
+        lib.then(function (pdfjs) { return pdfjs.getDocument({ data: bytes.slice(0) }).promise; }).then(function (pdf) {
+          var chain = Promise.resolve();
+          for (var k = 1; k <= n; k++) (function (k) {
+            chain = chain.then(function () { if (done) return; return pdf.getPage(k).then(function (pg) {
+              var v1 = pg.getViewport({ scale: 1 }), v = pg.getViewport({ scale: 300 / v1.width });
+              var c = document.createElement('canvas'); c.width = Math.ceil(v.width); c.height = Math.ceil(v.height);
+              var cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+              return pg.render({ canvasContext: cx, viewport: v }).promise.then(function () {
+                var box = body.querySelector('[data-im="' + (k - 1) + '"]'); if (box) box.innerHTML = '<img src="' + c.toDataURL('image/jpeg', 0.8) + '">';
+              });
+            }); });
+          })(k);
+          return chain;
+        }).catch(function (e) { console.warn('[nw-proposal] page thumbnails', e); });
+      });
+    });
+  }
+
   function exportPdf(paperEl, opts) {
     opts = opts || {};
     if (typeof paperEl === 'string') paperEl = document.querySelector(paperEl);
@@ -984,6 +1047,9 @@
         return chain.then(function () { return out.save(); });
       });
     }).then(function (finalBytes) {
+      return opts.pickPages ? pickPages(finalBytes) : finalBytes;
+    }).then(function (finalBytes) {
+      if (!finalBytes) { toast('Download cancelled'); return null; }
       downloadBlob(new Blob([finalBytes], { type: 'application/pdf' }), filename);
       toast(filename + ' downloaded', 'success');
       return finalBytes;

@@ -6,20 +6,20 @@
 <meta name="theme-color" content="#f5f6f7">
 <title>Takeoff — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=562">
+<link rel="stylesheet" href="procore-ui.css?v=569">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=562"></script>
-<script src="auth.js?v=562"></script>
-<script src="est-totals.js?v=562"></script>
-<script src="procore-ui.js?v=562"></script>
+<script src="supabase-config.js?v=569"></script>
+<script src="auth.js?v=569"></script>
+<script src="est-totals.js?v=569"></script>
+<script src="procore-ui.js?v=569"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="bid-actions.js?v=562"></script>
-<script src="est-drawings.js?v=562"></script>
-<script src="nw-catalog-picker.js?v=562"></script>
-<script src="nw-duct-weight.js?v=562"></script>
-<script src="geo-takeoff.js?v=562"></script>
-<script src="est-engine.js?v=562"></script>
+<script src="bid-actions.js?v=569"></script>
+<script src="est-drawings.js?v=569"></script>
+<script src="nw-catalog-picker.js?v=569"></script>
+<script src="nw-duct-weight.js?v=569"></script>
+<script src="geo-takeoff.js?v=569"></script>
+<script src="est-engine.js?v=569"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -196,6 +196,32 @@
   .tfile span { color: var(--pc-muted, #6b7280); }
   .tk-doc-dd { max-width: 260px; }
   .tk-doc-dd #docLabel, .tk-plan-dd #planLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; display: inline-block; vertical-align: bottom; }
+  /* Drawing Sources panel (Alikhan 2026-10-26, Procore look): files | pages of the picked file | preview of the hovered page */
+  .tk-src { position: fixed; z-index: 1200; background: #fff; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 6px; box-shadow: 0 12px 32px rgba(15,23,42,.18); display: flex; flex-direction: column; width: min(980px, calc(100vw - 24px)); height: min(460px, calc(100vh - 90px)); font-size: 12.5px; color: var(--pc-text, #1f2933); }
+  .tk-src-head { padding: 10px 12px 8px; border-bottom: 1px solid var(--pc-border, #e5e7eb); flex: none; }
+  .tk-src-crumb { font-size: 12px; color: var(--pc-muted, #6b7280); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tk-src-crumb b { color: var(--pc-text, #1f2933); font-weight: 600; }
+  .tk-src-search { position: relative; }
+  .tk-src-search input { width: 100%; box-sizing: border-box; height: 30px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; padding: 0 30px 0 9px; font: inherit; }
+  .tk-src-search span { position: absolute; right: 7px; top: 6px; color: var(--pc-muted, #6b7280); }
+  .tk-src-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 30%) minmax(0, 32%); }
+  .tk-src-col { overflow-y: auto; border-right: 1px solid var(--pc-border, #e5e7eb); padding: 4px 0; }
+  .tk-src-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
+  .tk-src-row:hover { background: var(--pc-secondary, #f0f1f3); }
+  .tk-src-row.on { background: var(--pc-row-active, #e8f0fe); border-left-color: var(--pc-link, #1a73e8); }
+  .tk-src-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tk-src-row .ct { flex: none; color: var(--pc-muted, #6b7280); font-size: 11.5px; }
+  .tk-src-row .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
+  .tk-src-row.cur .nm { font-weight: 600; }
+  .tk-src-prev { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; padding: 12px; background: #f8fafc; overflow: hidden; border-right: 0; }
+  .tk-src-prev .im { width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid var(--pc-border, #e5e7eb); border-radius: 4px; color: var(--pc-muted, #6b7280); }
+  .tk-src-prev .im img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .tk-src-prev .cap { width: 100%; font-size: 12px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tk-src-prev .cap small { display: block; color: var(--pc-muted, #6b7280); }
+  .tk-src-foot { flex: none; display: flex; align-items: center; gap: 14px; padding: 7px 12px; border-top: 1px solid var(--pc-border, #e5e7eb); font-size: 12px; color: var(--pc-muted, #6b7280); }
+  .tk-src-foot label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--pc-text, #1f2933); }
+  .tk-src-foot a { color: var(--pc-link, #1a73e8); cursor: pointer; }
+  .tk-src-empty { padding: 16px 12px; color: var(--pc-muted, #6b7280); }
   .tk-status { padding: 5px 12px; font-size: 11px; color: #475569; background: #fff; border-top: 1px solid var(--pc-border, #e5e7eb); display: flex; gap: 14px; align-items: center; min-height: 18px; flex: none; }
   .tk-status b { color: var(--pc-text, #1f2933); }
   .tk-status .kbd { font-family: 'Courier New', monospace; background: var(--pc-secondary, #f0f1f3); border: 1px solid var(--pc-border, #e5e7eb); border-radius: 4px; padding: 0 5px; font-size: 10px; }
@@ -299,7 +325,7 @@
     <div class="tk-toolbar">
       <button class="tk-ib" id="prevPlan" title="Previous plan (PageUp)"></button>
       <button class="tk-ib" id="nextPlan" title="Next plan (PageDown)"></button>
-      <button class="pc-btn pc-btn-secondary tk-doc-dd" id="docBtn" title="Switch document (file) — each file keeps its own pages, takeoff marks and notes"><span id="docLabel">No file</span><span id="docCaret"></span></button>
+      <button class="pc-btn pc-btn-secondary tk-doc-dd" id="docBtn" title="Drawing Sources — pick a file and a page (preview before opening); each file keeps its own pages, takeoff marks and notes"><span id="docLabel">No file</span><span id="docCaret"></span></button>
       <button class="pc-btn pc-btn-secondary tk-plan-dd" id="planBtn"><span id="planLabel">— No plans yet —</span><span id="planCaret"></span></button>
       <button class="pc-btn pc-btn-outline tk-mult" id="multBtn" title="Typical floors — this sheet counts × N (one typical plan for several identical floors)" disabled>×1</button>
       <button class="pc-btn pc-btn-ghost" id="compareBtn" title="Overlay another plan"></button>
@@ -1382,6 +1408,71 @@ requireAuth().catch(function(){});
       return { label: d.filename, hint: (d.page_count || 1) + ' pg' + (hasMarkup(tot) ? ' · ' + pg + ' marked' : ''), checked: !!(cur && cur.drawing.id === d.id), onClick: function() {
         var i = lastPage[d.id] != null && plans[lastPage[d.id]] && plans[lastPage[d.id]].drawing.id === d.id ? lastPage[d.id] : plans.findIndex(function(q) { return q.drawing.id === d.id; }); if (i >= 0) openPlan(i); } }; }));
   }
+  // ─── Drawing Sources panel (Alikhan 2026-10-26 — Procore look): every uploaded file on its own row on the left, the picked
+  // file's pages in the middle, a preview of the page under the mouse on the right, so the right sheet is found without opening it.
+  // Click a page = open it. Search matches file names, sheet numbers and sheet titles. ───
+  var srcPanel = null;
+  function closeSources() { if (srcPanel) { srcPanel.el.remove(); document.removeEventListener('mousedown', srcPanel.outside, true); document.removeEventListener('keydown', srcPanel.key, true); srcPanel = null; } }
+  function openSources(anchor) {
+    if (!plans.length) { toast('No plans yet — upload the drawing set from the page menu'); return; }
+    if (srcPanel) { closeSources(); return; }
+    var cur = plans[planIdx], st = pageStats();
+    var S = { doc: cur ? cur.drawing.id : (drawings[0] && drawings[0].id), prev: planIdx >= 0 ? planIdx : null, q: '', seq: 0 };
+    var el = document.createElement('div'); el.className = 'tk-src';
+    el.innerHTML = '<div class="tk-src-head"><div class="tk-src-crumb">Drawing Sources › <b>' + esc((est && est.name) || 'Estimate') + '</b></div>' +
+      '<div class="tk-src-search"><input id="srcQ" placeholder="Search drawing (file, sheet number or title)" autocomplete="off"><span>' + ic('search', 16) + '</span></div></div>' +
+      '<div class="tk-src-body"><div class="tk-src-col" id="srcDocs"></div><div class="tk-src-col" id="srcPages"></div><div class="tk-src-prev" id="srcPrev"></div></div>' +
+      '<div class="tk-src-foot"><label><input type="checkbox" id="srcMarked"' + (marksOnly ? ' checked' : '') + '> Only pages with markups</label><span class="grow" style="flex:1"></span><span>● page has takeoff marks / notes / markups</span></div>';
+    document.body.appendChild(el);
+    var r = anchor.getBoundingClientRect(), w = el.offsetWidth;
+    el.style.left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12)) + 'px'; el.style.top = (r.bottom + 6) + 'px';
+    function pageText(q) { return (q.drawing.filename.replace(/\.pdf$/i, '') + ' - Page ' + q.page + ' ' + (q.sheet || '') + ' ' + (q.title || '')).toLowerCase(); }
+    function matchDoc(d) { if (!S.q) return true; if (d.filename.toLowerCase().indexOf(S.q) >= 0) return true; return plans.some(function(q) { return q.drawing.id === d.id && pageText(q).indexOf(S.q) >= 0; }); }
+    function pagesOf(id) { var out = []; plans.forEach(function(q, i) { if (q.drawing.id !== id) return; var o = st[q.drawing.id + ':' + q.page];
+      if (marksOnly && !hasMarkup(o) && i !== planIdx) return;
+      if (S.q && q.drawing.filename.toLowerCase().indexOf(S.q) < 0 && pageText(q).indexOf(S.q) < 0) return; out.push(i); }); return out; }
+    function renderDocs() {
+      var list = drawings.filter(matchDoc);
+      if (list.length && !list.some(function(d) { return d.id === S.doc; })) S.doc = list[0].id;
+      el.querySelector('#srcDocs').innerHTML = list.length ? list.map(function(d) {
+        var marked = 0; Object.keys(st).forEach(function(k) { if (k.indexOf(d.id + ':') === 0 && hasMarkup(st[k])) marked++; });
+        return '<div class="tk-src-row' + (d.id === S.doc ? ' on' : '') + (cur && cur.drawing.id === d.id ? ' cur' : '') + '" data-doc="' + d.id + '" title="' + esc(d.filename) + '">' + (marked ? '<span class="dot" title="' + marked + ' page(s) with markups"></span>' : '') +
+          '<span class="nm">' + esc(d.filename) + '</span><span class="ct">' + (d.page_count || 1) + '</span></div>'; }).join('') : '<div class="tk-src-empty">Nothing found</div>';
+      el.querySelectorAll('[data-doc]').forEach(function(row) { row.onclick = function() { S.doc = row.getAttribute('data-doc'); var pg = pagesOf(S.doc); S.prev = pg.indexOf(planIdx) >= 0 ? planIdx : (pg.length ? pg[0] : null); renderDocs(); renderPages(); renderPrev(); }; });
+    }
+    function renderPages() {
+      var pg = S.doc ? pagesOf(S.doc) : [];
+      el.querySelector('#srcPages').innerHTML = pg.length ? pg.map(function(i) { var q = plans[i], o = st[q.drawing.id + ':' + q.page];
+        return '<div class="tk-src-row' + (i === S.prev ? ' on' : '') + (i === planIdx ? ' cur' : '') + '" data-pi="' + i + '" title="' + esc(planLabel(q) + (hasMarkup(o) ? ' — ' + statText(o) : '')) + '">' + (hasMarkup(o) ? '<span class="dot"></span>' : '') +
+          '<span class="nm">' + esc(q.drawing.filename.replace(/\.pdf$/i, '') + ' - Page ' + q.page) + (q.sheet ? ' <span class="pc-muted">· ' + esc(q.sheet) + '</span>' : '') + '</span>' + (pageMult(q.drawing.id, q.page) > 1 ? '<span class="ct tk-xm">×' + pageMult(q.drawing.id, q.page) + '</span>' : '') + '</div>'; }).join('')
+        : '<div class="tk-src-empty">' + (marksOnly ? 'No pages with markups in this file' : 'No pages') + '</div>';
+      el.querySelectorAll('[data-pi]').forEach(function(row) { var i = +row.getAttribute('data-pi');
+        row.onmouseenter = function() { if (S.prev === i) return; S.prev = i; el.querySelectorAll('#srcPages .tk-src-row.on').forEach(function(x) { x.classList.remove('on'); }); row.classList.add('on'); renderPrev(); };
+        row.onclick = function() { closeSources(); openPlan(i); }; });
+      var on = el.querySelector('#srcPages .tk-src-row.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+    function renderPrev() {
+      var box = el.querySelector('#srcPrev'), q = S.prev != null ? plans[S.prev] : null, my = ++S.seq;
+      if (!q) { box.innerHTML = '<div class="im">No page</div>'; return; }
+      var o = st[q.drawing.id + ':' + q.page];
+      box.innerHTML = '<div class="im">' + (q.srcThumb ? '<img src="' + q.srcThumb + '">' : 'Loading preview…') + '</div><div class="cap"><b>' + esc(q.sheet || ('Page ' + q.page)) + '</b>' + (q.title ? ' — ' + esc(q.title) : '') + '<small>' + esc(q.drawing.filename) + ' · page ' + q.page + ' of ' + (q.drawing.page_count || 1) + (hasMarkup(o) ? ' · ' + statText(o) : '') + '</small></div>' +
+        '<button class="pc-btn pc-btn-primary" id="srcOpen">Open page</button>';
+      box.querySelector('#srcOpen').onclick = function() { closeSources(); openPlan(S.prev); };
+      if (q.srcThumb || !window.EstDrawings) return;
+      // a short pause so sweeping the mouse down the list renders only the page it stops on
+      setTimeout(function() { if (my !== S.seq || !srcPanel) return;
+        EstDrawings.thumbnail(q.drawing, q.page, 300).then(function(u) { q.srcThumb = u; if (my === S.seq && srcPanel) { var im = box.querySelector('.im'); if (im) im.innerHTML = '<img src="' + u + '">'; } })
+          .catch(function(e) { var im = box.querySelector('.im'); if (im && my === S.seq) im.textContent = 'Preview failed'; console.warn('preview', e); }); }, 120);
+    }
+    var qi = el.querySelector('#srcQ');
+    qi.oninput = function() { S.q = qi.value.trim().toLowerCase(); renderDocs(); var pg = pagesOf(S.doc); if (pg.indexOf(S.prev) < 0) S.prev = pg.length ? pg[0] : null; renderPages(); renderPrev(); };
+    el.querySelector('#srcMarked').onchange = function() { marksOnly = this.checked; try { localStorage.setItem('tk_marked', marksOnly ? '1' : '0'); } catch (e) {} renderThumbs(); renderPages(); };
+    srcPanel = { el: el,
+      outside: function(e) { if (!el.contains(e.target) && !anchor.contains(e.target)) closeSources(); },
+      key: function(e) { if (e.key === 'Escape') { e.stopPropagation(); closeSources(); } else if (e.key === 'Enter' && document.activeElement === qi && S.prev != null) { e.preventDefault(); var i = S.prev; closeSources(); openPlan(i); } } };
+    document.addEventListener('mousedown', srcPanel.outside, true); document.addEventListener('keydown', srcPanel.key, true);
+    renderDocs(); renderPages(); renderPrev(); setTimeout(function() { qi.focus(); }, 0);
+  }
   function getDoc(d) { return EstDrawings.doc(d); }
   // ─── sheet thumbnails (EstDrawings.thumbnail cache, rendered in the background) ───
   function renderThumbs() {
@@ -1427,6 +1518,7 @@ requireAuth().catch(function(){});
   async function openPlan(i) {
     if (i < 0 || i >= plans.length) return;
     var my = ++openSeq;
+    closeSources();
     planIdx = i; selectedIds.clear(); draft = []; draftDrops = []; measureLine = null; marquee = null; updatePlanLabel();
     var p = plans[i]; lastPage[p.drawing.id] = i;
     try { var doc = await getDoc(p.drawing); var page = await doc.getPage(p.page); } catch (e) { toast('Could not open the plan: ' + e.message, 'error'); return; }
@@ -3013,7 +3105,7 @@ requireAuth().catch(function(){});
   // ═══════════════════════ upload / export / analyze ═══════════════════════
   async function uploadPdfs(ev) {
     var files = Array.prototype.slice.call(ev.target.files || []); ev.target.value = ''; if (!files.length) return; if (!me.canEdit) { toast('Read-only', 'error'); return; }
-    var res = await EstDrawings.upload(rootId, files, { uploadedBy: me.id, onProgress: function(info) { if (info.stage === 'upload') toast('Uploading ' + info.file.name + ' (' + (info.index + 1) + '/' + info.total + ')…'); } });
+    var res = await EstDrawings.upload(rootId, files, { uploadedBy: me.id, onProgress: function(info) { if (info.stage === 'split') toast(info.file.name + ' is over 48 MB — splitting it into parts (storage limit 50 MB per file)…'); if (info.stage === 'upload') toast('Uploading ' + info.file.name + ' (' + (info.index + 1) + '/' + info.total + ')…'); } });
     res.errors.forEach(function(e) { toast(e.message, 'error'); });
     var n = plans.length; await loadDrawings(); if (plans.length > n) await openPlan(n); if (res.rows.length) toast(res.rows.length + ' plan(s) uploaded', 'success'); renderAll();
   }
@@ -3063,7 +3155,7 @@ requireAuth().catch(function(){});
     $('allEye').onclick = toggleAllVis; $('actionsBtn').onclick = function(e) { e.stopPropagation(); openActionsMenu(this); };
     $('leftCollapse').onclick = toggleLeft;
     $('modeLayers').onclick = function() { setReviewMode(false); }; $('modeReview').onclick = function() { setReviewMode(true); }; $('reviewPanel').addEventListener('click', onReviewClick);
-    $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); }; $('multBtn').onclick = function() { setPageMult(); }; $('docBtn').onclick = function(e) { e.stopPropagation(); openDocMenu(this); };
+    $('planBtn').onclick = function(e) { e.stopPropagation(); openPlanMenu(this); }; $('multBtn').onclick = function() { setPageMult(); }; $('docBtn').onclick = function(e) { e.stopPropagation(); openSources(this); };
     $('prevPlan').onclick = function() { openPlan(planIdx - 1); }; $('nextPlan').onclick = function() { openPlan(planIdx + 1); };
     $('compareBtn').onclick = function(e) { e.stopPropagation(); openCompareMenu(this); }; $('compareClose').onclick = function() { setCompare(-1); };
     $('openNewBtn').onclick = async function() { var p = plans[planIdx]; if (!p) return; try { window.open(await EstDrawings.signedUrl(p.drawing.storage_path), '_blank', 'noopener'); } catch (e) { toast(e.message, 'error'); } };
@@ -3133,6 +3225,6 @@ requireAuth().catch(function(){});
     get review() { return RV; }, reviewMode: setReviewMode, reviewSelect: rvSelect, reviewStep: rvStep };
 })();
 </script>
-<script src="sw-register.js?v=562"></script>
+<script src="sw-register.js?v=569"></script>
 </body>
 </html>
