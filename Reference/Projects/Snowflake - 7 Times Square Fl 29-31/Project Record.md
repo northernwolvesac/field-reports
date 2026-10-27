@@ -108,9 +108,14 @@ emailed Brendan + Brian the approved H-02.00 and the Grundfos IOM and proposed t
 instead of a lead/lag panel (`source/2026-06-29 NW to Siemens - multipump instead of lead-lag panel.pdf`); 07/09 Ruslan
 forwarded it again asking to confirm; no Siemens objection in the "Snowflake- job review" thread; ATC R0 came 07/22
 still drawn with a panel and separate VFDs. Added to the Siemens reply draft (replaced 10/27).
-Follow-up to Barry (same 9/28 thread): standby on external fault, 150 h alternation, auto restart, min flow / bypass,
-Grundfos duty/standby control box price per pair, start-up scope. Barry 9/28: standard start-up/programming, contractor
-runs interconnecting wiring, one pressure sensor per motor.
+Manuals checked 10/27 (see `Reference/Engineering Notes/Grundfos CRE duty-standby without a panel.md`): pumps have
+FM 300; standby takes over on an alarm incl. External fault; auto restart on power return; time alternation is daily at
+a set time, not 150 h (minor deviation from seq 3b); no 1-in-4 h exercise timer in the pump (met if CRACs run 24/7);
+DI "Flow switch" function is low-flow stop, not changeover - use External fault; Low-flow stop Not active. Only open
+item for Grundfos: relay 2 -> DI reliability (interposing relay if needed). Barry draft replaced 10/27: only start-up
+scope (multipump, DP sensors, I/O settings, price, notice) and a Grundfos duty/standby panel option/price; told him no
+factory questions. Barry 9/28: standard start-up/programming, contractor runs interconnecting wiring, one pressure
+sensor per motor; earlier same day "advanced programming or pump setup will be by others" - clarify.
 
 ## 2. Pump bypass valve, detail HD-053 (M-903)
 
