@@ -103,6 +103,11 @@ to CMTA via STO confirming the integrated duty/standby meets seq 3b.
 Add. 1 04/22, before the 06/02 proposal), no revisions; Ruslan OK to accept Alt 3 at $2,800/panel ($8,400) if Siemens
 needs a panel for the seq 3 functions; call Wed 10/28 or Thu 10/29. Attach `Siemens pump controls/Snowflake CW pumps -
 EOR contract documents.pdf` (M-101, M-102, M-401 highlighted + H-02.00 stamp; `build_eor_extract.py`) by hand.
+**June record (strongest point):** 06/26 Kastriot sent Siemens the pump cuts (Brendan's cut sheet request); 06/29 Ruslan
+emailed Brendan + Brian the approved H-02.00 and the Grundfos IOM and proposed the built-in multipump (IOM 7.49, GENIbus)
+instead of a lead/lag panel (`source/2026-06-29 NW to Siemens - multipump instead of lead-lag panel.pdf`); 07/09 Ruslan
+forwarded it again asking to confirm; no Siemens objection in the "Snowflake- job review" thread; ATC R0 came 07/22
+still drawn with a panel and separate VFDs. Added to the Siemens reply draft (replaced 10/27).
 Follow-up to Barry (same 9/28 thread): standby on external fault, 150 h alternation, auto restart, min flow / bypass,
 Grundfos duty/standby control box price per pair, start-up scope. Barry 9/28: standard start-up/programming, contractor
 runs interconnecting wiring, one pressure sensor per motor.
