@@ -85,7 +85,7 @@ panel; says discussing the items since September is not acceptance of added scop
 15th floor, 2024).
 **Our documents (checked 10/27):** no design change - the integrated controller IS the EOR design.
 - M-401 pump schedule: CWP-29/30/31-1,2 Grundfos CRE3, VFD yes, "TWO PUMPS PRIMARY-STANDBY". No panel scheduled.
-- M-102 spec 2.07.D (vertical in-line multistage pumps) item 5: "integrated variable frequency drive ... with a
+- M-101 spec 2.07.D (vertical in-line multistage pumps) item 5: "integrated variable frequency drive ... with a
   built-in pump system controller"; 15: remote on/off, fault relay, fieldbus RS485; 17: the PI controller is "a
   standard component of the integrated VFD motor ... supported by the pump manufacturer".
 - M-102 seq. 3b: "provide for lead/lag sequencing ... one pump running and the other as stand-by", 150 h cycling.
@@ -99,6 +99,13 @@ stand-alone lead/lag DDC panel "with software" at $2,800 - that is Siemens' own 
 **Next:** take the call with the documents above; ask Barry (Dolphin) to confirm what the built-in multipump covers
 (3a/3b/3c/3d, auto restart) and whether Grundfos offers a duty/standby control box and its price; if needed, an RFI
 to CMTA via STO confirming the integrated duty/standby meets seq 3b.
+10/27 drafts in Gmail (not sent): reply to Brendan/Alan - original EOR contract drawings (pricing set 04/03, M-401
+Add. 1 04/22, before the 06/02 proposal), no revisions; Ruslan OK to accept Alt 3 at $2,800/panel ($8,400) if Siemens
+needs a panel for the seq 3 functions; call Wed 10/28 or Thu 10/29. Attach `Siemens pump controls/Snowflake CW pumps -
+EOR contract documents.pdf` (M-101, M-102, M-401 highlighted + H-02.00 stamp; `build_eor_extract.py`) by hand.
+Follow-up to Barry (same 9/28 thread): standby on external fault, 150 h alternation, auto restart, min flow / bypass,
+Grundfos duty/standby control box price per pair, start-up scope. Barry 9/28: standard start-up/programming, contractor
+runs interconnecting wiring, one pressure sensor per motor.
 
 ## 2. Pump bypass valve, detail HD-053 (M-903)
 
