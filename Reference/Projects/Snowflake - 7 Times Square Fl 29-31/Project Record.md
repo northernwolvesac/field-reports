@@ -145,6 +145,20 @@ pump's DI1/GND; leak detector NC contact in series with that pump's contact (lea
 alert); two flow switches paralleled into flow proof; alert -> horn/strobe + autodialer. CRAC enable -> demand. Needs
 120 V circuit, enclosure, horn/strobe. Strategy: if NW furnishes this, it is the "lead/lag panel provided by others"
 Siemens base scope p.5 already installs, powers and wires.
+**Tekmar 132 checked against D 132 / C 132 (10/27, in `source/`):** 120 V 6 VA; NEMA 1 PVC base 6-5/8 x 7-9/16 x 2-13/16 in,
+indoor, mounts on its own (no extra enclosure). Pump Demand (1-2) and Flow Proof (5-6) are POWERED inputs (20-260 VAC
+applied), not dry contacts. Pump 1/2 (7-8, 9-10) and Alert A/B (13-14, 15-16) are isolated contacts rated 24-240 VAC.
+Stand-by mode: no flow proof within 10/30 s -> lead off, standby on, alert; standby also off if no flow -> both failed,
+Alert B, stays until Clear Alert pressed. One common flow proof input. Flow proof present 4 min with both pumps off ->
+error and the control STOPS. Rotation dial 12-168 h (150 h settable). Exercising = 10 s if a pump idle 3 days (not seq 3f).
+Alert Levels mode: A = one pump failed / non-critical, B = both pumps / flow proof device failed.
+Wiring adjustments needed: (1) interposing relays (low-level contact) between Tekmar pump contacts and Grundfos DI1
+(DC signal input); (2) 24 VAC transformer to power Demand and Flow Proof through the CRAC enable contact and flow
+switches; (3) flow proof per pump = flow switch in series with that pump's relay 2 "Pump running" (PELV, 24 VAC OK),
+both branches paralleled -> prevents false flow proof when building CW pressure pushes water through with pumps off
+(valves open 4 h/day per seq 4h) which would trip the 4-minute flow proof error; (4) leak detector NC in series with
+that pump's interposing relay coil; (5) Alert A+B -> horn/strobe (24 VAC) and Siemens autodialer input. Grundfos
+multipump not used; each pump stand-alone on its own DP sensor. Materials per floor ~ $1,100-1,400.
 **Panel power:** any added panel needs 120 V control power. M-102 ATC spec: "All control power, wiring and transformers
 for dampers, actuators, VAV boxes, control panels, etc. to be provided by the controls contractor from a source
 designated by the electrical contractor. Circuits for control devices have been designated in the electrical panel
