@@ -389,6 +389,31 @@
       s.onload = res; s.onerror = function () { rej(new Error('tesseract.js failed to load')); }; document.head.appendChild(s);
     });
   }
+  // Full-page text of a scanned notes / legend / detail sheet: the page is rendered at opts.dpi (200) and read in a grid of tiles
+  // (columns first: general notes are set in columns), each by the local Tesseract in single-column mode. Returns { lines, secs, tiles }.
+  async function ocrText(page, opts) {
+    opts = opts || {};
+    var t0 = Date.now(), scale = (opts.dpi || 200) / 72, vp = page.getViewport({ scale: scale }), W = Math.round(vp.width), H = Math.round(vp.height);
+    var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
+    var cols = opts.cols || Math.max(1, Math.round(W / 1300)), rows = opts.rows || Math.max(1, Math.round(H / 1700)), ov = 50, lines = [], n = 0;
+    await loadTesseract();
+    var worker = await Tesseract.createWorker('eng', 1, { logger: function () {} });
+    await worker.setParameters({ tessedit_pageseg_mode: '4', preserve_interword_spaces: '1' });
+    try {
+      for (var c = 0; c < cols; c++) for (var r = 0; r < rows; r++) {
+        var x0 = Math.max(0, Math.round(c * W / cols) - ov), x1 = Math.min(W, Math.round((c + 1) * W / cols) + ov), y0 = Math.max(0, Math.round(r * H / rows) - ov), y1 = Math.min(H, Math.round((r + 1) * H / rows) + ov);
+        var tile = document.createElement('canvas'); tile.width = x1 - x0; tile.height = y1 - y0;
+        tile.getContext('2d').drawImage(cv, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+        var rr = await worker.recognize(tile); tile.width = tile.height = 0; n++;
+        String((rr.data && rr.data.text) || '').split(/\n+/).forEach(function (l) { l = l.replace(/\s+/g, ' ').trim(); if (l.replace(/[^A-Za-z0-9]/g, '').length >= 3) lines.push(l); });
+        if (opts.onProgress) opts.onProgress(n, cols * rows);
+      }
+    } finally { try { await worker.terminate(); } catch (e) {} cv.width = cv.height = 0; }
+    return { lines: lines, secs: Math.round((Date.now() - t0) / 1000), tiles: n };
+  }
   // page: pdf.js page; D: from extract(); opts: { dpi, maxLetters, onProgress(done, total) }
   // word crops are composed ~30 per sheet and read with one Tesseract call (sparse text) — a background tab throttles every
   // worker round-trip to ~1 s, so per-word calls would take 15+ minutes per drawing
@@ -2622,6 +2647,6 @@
     return { segs: flat, styles: [{ key: '0,0,0|0.84|', col: [0, 0, 0], w: 0.84, dash: false }], text: [], fullText: '', glyphs: glyphs, rectSeg: [], bnd: [], symSegs: [], fills: [], raster: true, nSeg: segList.length };
   }
 
-  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, rasterize: rasterize, symbolCensus: symbolCensus, glyphFamilies: glyphFamilies, glyphText: glyphText, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, clusterWords: clusterWords, triageImages: triageImages,
+  window.NWGeo = { _dropParagraphs: dropParagraphs, extract: extract, rasterize: rasterize, symbolCensus: symbolCensus, glyphFamilies: glyphFamilies, glyphText: glyphText, measure: measure, measurePipes: measurePipes, measureRisers: measureRisers, ocrLabels: ocrLabels, ocrText: ocrText, clusterWords: clusterWords, triageImages: triageImages,
     isSizeLabel: isSizeLabel, isPipeLabel: isPipeLabel, hasScale: hasScale, linearCallouts: linearCallouts, _worker: workerMain };   // _worker: for offline tests
 })();

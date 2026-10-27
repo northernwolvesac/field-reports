@@ -14,17 +14,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=573"></script>
-<script src="auth.js?v=573"></script>
-<script src="est-org.js?v=573"></script>
-<script src="est-totals.js?v=573"></script>
-<script src="nw-duct-weight.js?v=573"></script>
-<script src="nw-standards.js?v=573"></script>
+<script src="supabase-config.js?v=574"></script>
+<script src="auth.js?v=574"></script>
+<script src="est-org.js?v=574"></script>
+<script src="est-totals.js?v=574"></script>
+<script src="nw-duct-weight.js?v=574"></script>
+<script src="nw-standards.js?v=574"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=573"></script>
-<script src="nw-email.js?v=573"></script>
-<script src="est-engine.js?v=573"></script>
-<script src="geo-takeoff.js?v=573"></script>
+<script src="email-utils.js?v=574"></script>
+<script src="nw-email.js?v=574"></script>
+<script src="est-engine.js?v=574"></script>
+<script src="geo-takeoff.js?v=574"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1364,7 +1364,17 @@ var AE = (function() {
       for (var i = 0; i < src.length; i++) {
         var p = src[i]; specIndexing = 'Indexing ' + (p.sheet_no || 'page ' + p.page_no) + ' (' + (i + 1) + '/' + src.length + ')…'; paintKeep();
         var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise, tc = await (await pdf.getPage(1)).getTextContent(); pdf.destroy();
-        var lines = pageLines(tc); if (lines.join(' ').length < 200) continue;
+        var lines = pageLines(tc);
+        if (lines.join(' ').length < 200) {   // a scanned notes / legend / detail sheet has no text layer: read the whole sheet by OCR once, keep the lines on the page read
+          var cached = (p.result || {}).ocr_text;
+          if (cached && cached.length) lines = cached;
+          else if (window.NWGeo && NWGeo.ocrText && /legend|schedule|details|specs|other/.test(String((p.result || {}).sheet_type || ''))) {
+            var pdf2 = await pdfjsLib.getDocument({ data: new Uint8Array(await pageBytes(p)) }).promise;
+            try { var o = await NWGeo.ocrText(await pdf2.getPage(1), { onProgress: function(d, t) { specIndexing = 'OCR ' + (p.sheet_no || 'page ' + p.page_no) + ' tile ' + d + '/' + t + ' (' + (i + 1) + '/' + src.length + ')…'; paintKeep(); } }); lines = o.lines; } finally { pdf2.destroy(); }
+            if (lines.length) { p.result = Object.assign({}, p.result || {}, { ocr_text: lines }); await supabaseClient.from('ai_est_pages').update({ result: p.result }).eq('id', p.id); }
+          }
+          if (lines.join(' ').length < 200) continue;
+        }
         var meta = { section: null }; var tm = lines.slice(0, 40).find(function(l) { return SEC_RE.test(l); }); if (!tm && (p.sheet_title || (p.result || {}).sheet_title)) meta.section = String(p.sheet_title || p.result.sheet_title).slice(0, 90);
         var rows = chunkLines(lines, meta).map(function(c) { return { session_id: session.id, page_id: p.id, sheet_no: p.sheet_no || (p.result || {}).sheet_no || null, page_no: p.page_no, section: c.section, clause: c.clause, chunk_no: c.chunk_no, content: c.content }; });
         for (var k = 0; k < rows.length; k += 100) { var ins = await supabaseClient.from('ai_est_spec_chunks').insert(rows.slice(k, k + 100)); if (ins.error) throw new Error(/ai_est_spec_chunks|does not exist|schema cache/i.test(ins.error.message) ? 'run ai-est-spec-schema.sql in Supabase first' : ins.error.message); }
@@ -2029,6 +2039,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, runDatabook: runDatabook, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=573"></script>
+<script src="sw-register.js?v=574"></script>
 </body>
 </html>
