@@ -75,7 +75,30 @@ Alternate 3 prices a lead/lag DDC panel at $2,800 each ($8,400 for 3 vs $150k). 
 built-in multipump function (approved pump submittal), so no panel. Do not ask for the formal proposal; reply asking
 for point-by-point answers to 9/28 and ATC submittal R1. Note: base scope p.5 already says Siemens wires the pumps
 to and installs a "manufacturer provided Lead / Lag panel" -> the Grundfos built-in controller is that manufacturer
-lead/lag. Reply drafted in Gmail 10/26 (same thread; asks for R1 by 10/30, offers a call with Barry) - not sent yet.
+lead/lag. Ruslan sent the reply 10/26 3:30 pm (edited; asked for a call Wed/Thu).
+
+**10/27 Siemens pushback.** Brendan (cc Alan Parrish, Brian Greda, Rachael Werner): disagrees; the scope was based on a
+manufacturer lead/lag panel; asks whether the "revised control arrangement" was reviewed and approved by the EOR and
+the customer; wants the EOR drawings and approval before any engineering or pricing; repeats ~$50k/floor for a Siemens
+panel; says discussing the items since September is not acceptance of added scope; offers a call. Alan Parrish:
+"Pump panels should come as part of the mechanical package, the BMS does not run the sequence" (same issue on 7TS
+15th floor, 2024).
+**Our documents (checked 10/27):** no design change - the integrated controller IS the EOR design.
+- M-401 pump schedule: CWP-29/30/31-1,2 Grundfos CRE3, VFD yes, "TWO PUMPS PRIMARY-STANDBY". No panel scheduled.
+- M-102 spec 2.07.D (vertical in-line multistage pumps) item 5: "integrated variable frequency drive ... with a
+  built-in pump system controller"; 15: remote on/off, fault relay, fieldbus RS485; 17: the PI controller is "a
+  standard component of the integrated VFD motor ... supported by the pump manufacturer".
+- M-102 seq. 3b: "provide for lead/lag sequencing ... one pump running and the other as stand-by", 150 h cycling.
+  Says sequencing, not a panel.
+- Pump submittal H-02.00: CMTA (Mike Sisti) 6/15/2026 "Make corrections as noted" (no resubmission); comments only on
+  vibration isolation, valves/trim, flow/head, DP at the riser tie-in. Nothing on controls.
+**Weak spot:** functions outside the pump controller still need a home - seq 3c local audio/visual alarm on flow loss,
+3d leak -> stop that pump and start standby, 3f 1 h every 4 h exercise timer, flow proving before AC start. These are
+in the ATC sequence on M-102 (controls scope), and Siemens already has a DXR per floor for leaks/valves. Alt 3 prices a
+stand-alone lead/lag DDC panel "with software" at $2,800 - that is Siemens' own price for a panel running this logic.
+**Next:** take the call with the documents above; ask Barry (Dolphin) to confirm what the built-in multipump covers
+(3a/3b/3c/3d, auto restart) and whether Grundfos offers a duty/standby control box and its price; if needed, an RFI
+to CMTA via STO confirming the integrated duty/standby meets seq 3b.
 
 ## 2. Pump bypass valve, detail HD-053 (M-903)
 
