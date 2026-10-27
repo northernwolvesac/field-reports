@@ -30,7 +30,7 @@ condenser water, served by a duty/standby pump pair CWP-xx-1,2 (Grundfos CRE 3-2
 - `Grundfos CRE duty-standby guide (from Dolphin).pdf`, `Grundfos CRE terminal diagram (from Dolphin).pdf`: Barry's replies.
 - `PO NWAC1276-SF-BHVAC (Bunker).pdf`, `Bunker HVAC CO 1.00.pdf`: sheet metal sub.
 
-## 1. CW pumps and BMS (Siemens) - status 09/28
+## 1. CW pumps and BMS (Siemens) - status 10/26
 
 **Decision:** decline Siemens Alternate 3 (lead/lag panels, $8,400). Each pump pair runs duty/standby with the
 Grundfos built-in multipump function ("Alternating operation, energy", Grundfos recommends; "time" not
@@ -65,6 +65,80 @@ minimum flow and Low-flow stop setting with all CRAC valves closed, is a minimum
 after power loss; DP sensor range (0-15 vs 0-25 psi).
 
 **Waiting on:** Barry's answers; Siemens R1 of the ATC submittal (Ruslan sends the Siemens email).
+
+**10/26 Siemens reply (Brendan, 4 weeks after our 9/28 email; follow-ups 10/5, 10/7, 10/26; 10/7 he said the
+submittal was being redrawn):** "Without a lead lag panel as per the specs, we would
+need to install a siemens panel on each floor ... approx. 50k per floor times 3 floors", offers a formal proposal.
+Answered none of the 9/28 itemized points. Our position: contradicts their own proposal 10559656 - p.6 CW pumps "Lead
+Lag panel provided by others", Exclusion 5 (furnishing lead/lag panels), Exclusion 6 (no base BMS pump control),
+Alternate 3 prices a lead/lag DDC panel at $2,800 each ($8,400 for 3 vs $150k). Lead/lag is done by the Grundfos
+built-in multipump function (approved pump submittal), so no panel. Do not ask for the formal proposal; reply asking
+for point-by-point answers to 9/28 and ATC submittal R1. Note: base scope p.5 already says Siemens wires the pumps
+to and installs a "manufacturer provided Lead / Lag panel" -> the Grundfos built-in controller is that manufacturer
+lead/lag. Ruslan sent the reply 10/26 3:30 pm (edited; asked for a call Wed/Thu).
+
+**10/27 Siemens pushback.** Brendan (cc Alan Parrish, Brian Greda, Rachael Werner): disagrees; the scope was based on a
+manufacturer lead/lag panel; asks whether the "revised control arrangement" was reviewed and approved by the EOR and
+the customer; wants the EOR drawings and approval before any engineering or pricing; repeats ~$50k/floor for a Siemens
+panel; says discussing the items since September is not acceptance of added scope; offers a call. Alan Parrish:
+"Pump panels should come as part of the mechanical package, the BMS does not run the sequence" (same issue on 7TS
+15th floor, 2024).
+**Our documents (checked 10/27):** no design change - the integrated controller IS the EOR design.
+- M-401 pump schedule: CWP-29/30/31-1,2 Grundfos CRE3, VFD yes, "TWO PUMPS PRIMARY-STANDBY". No panel scheduled.
+- M-101 spec 2.07.D (vertical in-line multistage pumps) item 5: "integrated variable frequency drive ... with a
+  built-in pump system controller"; 15: remote on/off, fault relay, fieldbus RS485; 17: the PI controller is "a
+  standard component of the integrated VFD motor ... supported by the pump manufacturer".
+- M-102 seq. 3b: "provide for lead/lag sequencing ... one pump running and the other as stand-by", 150 h cycling.
+  Says sequencing, not a panel.
+- Pump submittal H-02.00: CMTA (Mike Sisti) 6/15/2026 "Make corrections as noted" (no resubmission); comments only on
+  vibration isolation, valves/trim, flow/head, DP at the riser tie-in. Nothing on controls.
+**Weak spot:** functions outside the pump controller still need a home - seq 3c local audio/visual alarm on flow loss,
+3d leak -> stop that pump and start standby, 3f 1 h every 4 h exercise timer, flow proving before AC start. These are
+in the ATC sequence on M-102 (controls scope), and Siemens already has a DXR per floor for leaks/valves. Alt 3 prices a
+stand-alone lead/lag DDC panel "with software" at $2,800 - that is Siemens' own price for a panel running this logic.
+**Next:** take the call with the documents above; ask Barry (Dolphin) to confirm what the built-in multipump covers
+(3a/3b/3c/3d, auto restart) and whether Grundfos offers a duty/standby control box and its price; if needed, an RFI
+to CMTA via STO confirming the integrated duty/standby meets seq 3b.
+10/27 drafts in Gmail (not sent): reply to Brendan/Alan - original EOR contract drawings (pricing set 04/03, M-401
+Add. 1 04/22, before the 06/02 proposal), no revisions; Ruslan OK to accept Alt 3 at $2,800/panel ($8,400) if Siemens
+needs a panel for the seq 3 functions; call Wed 10/28 or Thu 10/29. Attach `Siemens pump controls/Snowflake CW pumps -
+EOR contract documents.pdf` (M-101, M-102, M-401 highlighted + H-02.00 stamp; `build_eor_extract.py`) by hand.
+**June record (strongest point):** 06/26 Kastriot sent Siemens the pump cuts (Brendan's cut sheet request); 06/29 Ruslan
+emailed Brendan + Brian the approved H-02.00 and the Grundfos IOM and proposed the built-in multipump (IOM 7.49, GENIbus)
+instead of a lead/lag panel (`source/2026-06-29 NW to Siemens - multipump instead of lead-lag panel.pdf`); 07/09 Ruslan
+forwarded it again asking to confirm; no Siemens objection in the "Snowflake- job review" thread; ATC R0 came 07/22
+still drawn with a panel and separate VFDs. Added to the Siemens reply draft (replaced 10/27).
+Manuals checked 10/27 (see `Reference/Engineering Notes/Grundfos CRE duty-standby without a panel.md`): pumps have
+FM 300; standby takes over on an alarm incl. External fault; auto restart on power return; time alternation is daily at
+a set time, not 150 h (minor deviation from seq 3b); no 1-in-4 h exercise timer in the pump (met if CRACs run 24/7);
+DI "Flow switch" function is low-flow stop, not changeover - use External fault; Low-flow stop Not active. Only open
+item for Grundfos: relay 2 -> DI reliability (interposing relay if needed). Barry draft replaced 10/27: only start-up
+scope (multipump, DP sensors, I/O settings, price, notice) and a Grundfos duty/standby panel option/price; told him no
+factory questions. Barry 9/28: standard start-up/programming, contractor runs interconnecting wiring, one pressure
+sensor per motor; earlier same day "advanced programming or pump setup will be by others" - clarify.
+Barry draft replaced again 10/27: panel question now explains why (Siemens says a panel is needed for the parts of seq 3
+the pump controller does not cover; comparison only, pumps unchanged) and lists functions a-f (start from AC contact +
+auto restart, duty/standby 150 h, loss-of-flow changeover + local A/V alarm, leak stop + changeover + alarm, 1 h in 4 h
+exercise, dry contacts to BMS/autodialer), plus model, price per panel x3, lead time, power and enclosure.
+**Siemens ATC R0 (7/22) sheets 300-300C, checked 10/27:** one "CWP-xx-1&2 LEAD LAG PANEL" box per floor, by others,
+not in the 300C BOM, no model, no power source shown. Siemens lands only: system enable (RE-x-1 from CRAC unit status),
+VFD-1/2 run and speed from separate "VFD panels" (note 2 "VFD mounted in ceiling near pump set" - do not exist, VFD is
+integral), DPTE-1, CS-1/CS-2 status. Terminal numbers on the panel box (2/6, 4/6, 12/18, 10/20) are the Grundfos CRE
+motor terminals. Flow switches (RE-2..5, flow alarms to DXR), leak detectors (to DXR / AD) and pump valves (RE-1) are
+already on the Siemens DXR side, not in the panel. So in their own submittal the panel does only lead/lag + DP speed
+control = what the multipump function does. Local A/V alarm (3c/3d) and 1-in-4 h timer (3f) are copied into the 300C
+sequence but not shown anywhere. 300B labels fl. 31 panels as CWP-29.
+**Start-up plan (10/27):** `CW pump start-up plan.md` - run each floor for the CRAC start-up independent of the Siemens
+dispute. Blockers: NC spring-return valves (V-1/V-2, CRAC isolation) need power or manual open; CRAC enable contact must
+be fan/enable not compressor (flow switch 4k vs pumps start on unit 3a); HD-053 bypass position; no DP sensor -> constant
+curve. Ruslan sent the Siemens reply 10/27; waiting for their answer.
+**Panel power:** any added panel needs 120 V control power. M-102 ATC spec: "All control power, wiring and transformers
+for dampers, actuators, VAV boxes, control panels, etc. to be provided by the controls contractor from a source
+designated by the electrical contractor. Circuits for control devices have been designated in the electrical panel
+schedules." Siemens base scope p.5: "Install and power manufacturer provided Lead / Lag panel" (power is theirs);
+general note 8 excludes power to 3rd party equipment unless noted. Need from STO/EC: a spare 120 V circuit near each
+pump pair (check E panel schedules; same power source as the pumps if they are on emergency/UPS).
+
 
 ## 2. Pump bypass valve, detail HD-053 (M-903)
 
@@ -104,3 +178,36 @@ delivered, factory will not take them back); all mains stay, price only the add 
   (strainers, valves, devices) gets removable / reusable insulation; H.4 - fittings, flanges and valves with
   pre-molded / pre-cut fitting covers. Insulate only after leak and pressure tests (F). CW piping 1-1/2" glass fiber
   with factory vapor barrier jacket (H.2); condensate and make-up 1"; HW 1-1/2" / 2". M-401 table per 2020 NYCECC.
+
+## 6. New CO - restroom air outlets (clouded sheets 10/14/2026) - status 10/19
+
+Folder `Reference/Change Orders/2026-10 Snowflake Bathroom Air Outlets/`. All six restrooms: 2 continuous linear
+supply diffusers C (Titus FL-15-HT) approx. 17 LF each, 4 LF active, approx. 45 LF new 12x8, 2 connections to existing,
+2 cable operated VD; 30th also a 24x8 FSD at Food Prep 30.12B. Quantity breakdown issued to Ruslan, no pricing.
+10/19: price per drawing (~17 LF each), same pricing basis as the perimeter CO. Siemens covers pneumatic tubing
+for 5 FSDs only - the new 30th floor FSD needs a Siemens add; access doors excluded by Siemens. Field check sent to
+Christino 10/19 (installed work, ceilings, entry 12x8 stub, vanity wet wall connection - likely toilet exhaust riser).
+- Air purification BAS-30-1,2 (Bioclimatic MC 880, Food Prep / Serving 30th; checked 10/23): NOT in Siemens scope -
+  proposal 10559656 exclusion 9 "Air Purification System", not in the p.4 equipment count. Spec M-102 (F, ceiling
+  odor control unit) asks for "0-10 VDC BMS fan speed control" and dirty filter DP switches, but schedule note 12 says
+  unit installation and all wiring by others, note 13 media field installed by others, note 14 isolators / hardware by
+  others. Our ATC submittal extract (13 of 145 pages) has nothing on it; the full R0 was not checked.
+
+## 7. BC0006 - STO back charge for labor / supervision overtime (Clearstory, created 10/23, due 10/29)
+
+48 hrs labor OT + 40 hrs supervision, no backup. Folder `BC0006 Backcharge/`: position memo, draft response (not
+sent), subcontract text, and email logs for every STO / NW Snowflake thread from project start to 10/23 (4 periods,
+verbatim quotes). Key: Mark Vetterlein 8/11 written "formal notice" that STO tracks its laborers' premium time;
+STO's own 7/28 request for Sat 8/1 premium crews (3 trades) was for "noise complaints"; subcontract 1.7 / 1.16 cover
+NW's own overtime and STO labor completing NW Work - not STO supervision. Schedule 5.24.26 not yet pulled.
+Subcontract #11010174015: $2,350,000, STO 6/11 / NW 6/15; LOI 5/29; no schedule exhibit; scope includes "overtime
+brazing".
+10/23 Ruslan: reject BC0006 in full. COP-SF-04 / CR00023 ($9,816, STO-requested Sat 8/1 premium) was voided by STO
+with no reason. STO schedule 5/24/26 saved to `source/` (shop approval by 6/29, duct 6/30-7/20, test 7/21-23; back end
+unchanged: start-ups 10/19, balancing 11/9, substantial completion 12/18). Corrections from Ruslan: lead fitter was not
+banned (engineer confirmed), Andrei on site weekly / biweekly, duct test passed first time under the engineer's revised
+requirement, Oct insulation items are punch list, BC002/BC003 accepted and closed; Sept pipe riser reroute (EOR wrong
+risers) CO still unapproved.
+10/26: BC0006 in Clearstory shows $0.00, no backup. Ruslan: wait for STO to issue the updated BC, then respond with the
+draft. Suggested a one-line Clearstory comment before 10/29 (not accepted, will respond to the substantiated BC);
+do not click No Cost Impact or Create COR.
