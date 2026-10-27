@@ -116,6 +116,17 @@ item for Grundfos: relay 2 -> DI reliability (interposing relay if needed). Barr
 scope (multipump, DP sensors, I/O settings, price, notice) and a Grundfos duty/standby panel option/price; told him no
 factory questions. Barry 9/28: standard start-up/programming, contractor runs interconnecting wiring, one pressure
 sensor per motor; earlier same day "advanced programming or pump setup will be by others" - clarify.
+Barry draft replaced again 10/27: panel question now explains why (Siemens says a panel is needed for the parts of seq 3
+the pump controller does not cover; comparison only, pumps unchanged) and lists functions a-f (start from AC contact +
+auto restart, duty/standby 150 h, loss-of-flow changeover + local A/V alarm, leak stop + changeover + alarm, 1 h in 4 h
+exercise, dry contacts to BMS/autodialer), plus model, price per panel x3, lead time, power and enclosure.
+**Panel power:** any added panel needs 120 V control power. M-102 ATC spec: "All control power, wiring and transformers
+for dampers, actuators, VAV boxes, control panels, etc. to be provided by the controls contractor from a source
+designated by the electrical contractor. Circuits for control devices have been designated in the electrical panel
+schedules." Siemens base scope p.5: "Install and power manufacturer provided Lead / Lag panel" (power is theirs);
+general note 8 excludes power to 3rd party equipment unless noted. Need from STO/EC: a spare 120 V circuit near each
+pump pair (check E panel schedules; same power source as the pumps if they are on emergency/UPS).
+
 
 ## 2. Pump bypass valve, detail HD-053 (M-903)
 
