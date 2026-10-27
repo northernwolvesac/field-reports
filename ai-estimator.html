@@ -14,17 +14,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=574"></script>
-<script src="auth.js?v=574"></script>
-<script src="est-org.js?v=574"></script>
-<script src="est-totals.js?v=574"></script>
-<script src="nw-duct-weight.js?v=574"></script>
-<script src="nw-standards.js?v=574"></script>
+<script src="supabase-config.js?v=575"></script>
+<script src="auth.js?v=575"></script>
+<script src="est-org.js?v=575"></script>
+<script src="est-totals.js?v=575"></script>
+<script src="nw-duct-weight.js?v=575"></script>
+<script src="nw-standards.js?v=575"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=574"></script>
-<script src="nw-email.js?v=574"></script>
-<script src="est-engine.js?v=574"></script>
-<script src="geo-takeoff.js?v=574"></script>
+<script src="email-utils.js?v=575"></script>
+<script src="nw-email.js?v=575"></script>
+<script src="est-engine.js?v=575"></script>
+<script src="geo-takeoff.js?v=575"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -1229,7 +1229,7 @@ var AE = (function() {
   //     each topic is answered from this bid's own passages (specqa, with citations); where the documents are silent the industry default (nw-standards.js: MSS SP-69, SMACNA ch. 5, ASHRAE 90.1) is shown, flagged
   var dbBusy = '';
   var DB_GROUPS = ['Drawings, symbols and notes', 'Ductwork', 'Piping', 'Hangers, anchors and seismic', 'Equipment, controls and close-out', 'Codes and scope'];
-  var DB_ASK = ' Answer in short bullet points that name the sheet or section; quote the exact words for sizes, thicknesses, classes and materials. If the passages do not say, answer only: NOT SPECIFIED.';
+  var DB_ASK = ' Answer in at most 8 short bullets (under 150 words in all) that name the sheet; quote the exact words for sizes, thicknesses, classes and materials. If the passages do not say, answer only: NOT SPECIFIED.', DB_ASK2 = ' Reply in at most 3 bullets, under 60 words. If the passages do not say, answer only: NOT SPECIFIED.';
   var DB_TOPICS = [
     { id: 'legend', g: 0, t: 'Legend and symbols', q: 'List the symbols in the legend that matter for a take-off: pipe and duct line types (single-line vs double-line, supply / return / exhaust, new / existing / demolish), valves, dampers, flow and control devices, diffuser and grille symbols, equipment symbols. What does each mean?' },
     { id: 'abbr', g: 0, t: 'Abbreviations', q: 'Which abbreviations are defined for services and devices (HWS, HWR, CHWS, CD, SA, RA, EA, OA, FSD, FD, SD, VD, MD, VAV and similar)?' },
@@ -1267,7 +1267,8 @@ var AE = (function() {
     for (var i = 0; i < DB_TOPICS.length; i++) {
       var tp = DB_TOPICS[i]; dbBusy = 'Reading ' + (i + 1) + ' / ' + DB_TOPICS.length + ' — ' + tp.t + '…'; paintKeep();
       try {
-        var r = await callFn({ action: 'specqa', session_id: session.id, question: tp.q + DB_ASK, history: [], user_name: me && me.name });
+        var r; try { r = await callFn({ action: 'specqa', session_id: session.id, question: tp.q + DB_ASK, history: [], user_name: me && me.name }); }
+        catch (e1) { if (!/output budget|max_tokens/i.test(String(e1.message))) throw e1; r = await callFn({ action: 'specqa', session_id: session.id, question: tp.q + DB_ASK2, history: [], user_name: me && me.name }); }
         var na = /^\s*NOT SPECIFIED\.?\s*$/i.test(String(r.answer || '')) || r.found === false;
         book.topics[tp.id] = { answer: r.answer, found: !na, sources: (r.sources || []).slice(0, 6), cost: r.cost || 0, at: new Date().toISOString() };
       } catch (e) { book.topics[tp.id] = { answer: 'Could not read: ' + e.message, found: false, sources: [], cost: 0 }; }
@@ -2039,6 +2040,6 @@ var AE = (function() {
   return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, runDatabook: runDatabook, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=574"></script>
+<script src="sw-register.js?v=575"></script>
 </body>
 </html>
