@@ -14,16 +14,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="supabase-config.js?v=568"></script>
-<script src="auth.js?v=568"></script>
-<script src="est-org.js?v=568"></script>
-<script src="est-totals.js?v=568"></script>
-<script src="nw-duct-weight.js?v=568"></script>
+<script src="supabase-config.js?v=573"></script>
+<script src="auth.js?v=573"></script>
+<script src="est-org.js?v=573"></script>
+<script src="est-totals.js?v=573"></script>
+<script src="nw-duct-weight.js?v=573"></script>
+<script src="nw-standards.js?v=573"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=568"></script>
-<script src="nw-email.js?v=568"></script>
-<script src="est-engine.js?v=568"></script>
-<script src="geo-takeoff.js?v=568"></script>
+<script src="email-utils.js?v=573"></script>
+<script src="nw-email.js?v=573"></script>
+<script src="est-engine.js?v=573"></script>
+<script src="geo-takeoff.js?v=573"></script>
 <style>
   body { padding-bottom: 40px; }
   .ae-wrap { max-width: 1280px; margin: 0 auto; }
@@ -359,6 +360,7 @@ var AE = (function() {
       (runStats ? '<div class="muted" style="margin-top:6px">▶ ' + esc(runProgress()) + '</div>' : '') +
       (pages.length ? '<table class="t" style="margin-top:10px"><tr><th>#</th><th>Sheet</th><th class="hide-m">Type</th><th>Found</th><th>Status</th><th class="n hide-m">$</th><th></th></tr>' + pages.map(pageRow).join('') + '</table>' : '<div class="muted" style="margin-top:8px">Upload the drawing set first.</div>') + '</div>' +
 
+      renderDatabook() +
       renderEquipment() +
       '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">4 · Estimate</h3><div class="row">' +
       '<label class="muted" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="ofci" ' + (res.ofci ? 'checked' : '') + '> Owner-furnished equipment (30% OH)</label>' +
@@ -1219,8 +1221,97 @@ var AE = (function() {
       var f = files.find(function(x) { return x.id === p.file_id; }) || {}, r = p.result || {}, t = r.sheet_type || p.sheet_type || '', title = String(r.sheet_title || p.sheet_title || '');
       if (f.kind === 'quote' || p.status === 'error') return false;
       if (f.kind === 'specs' || f.kind === 'addendum' || f.kind === 'rfi') return p.status !== 'skipped' || /specs|notes/i.test(t);
-      return p.status === 'done' && (t === 'specs' || t === 'legend' || t === 'schedule' || (t === 'other' && /note|general|index|requirement|scope/i.test(title)));
+      return p.status === 'done' && (t === 'specs' || t === 'legend' || t === 'schedule' || t === 'details' || (t === 'other' && /note|general|index|requirement|scope/i.test(title)));   // details: hanger / insulation / anchor details carry spec text on drawing-only bids
     });
+  }
+
+  // ─── Engineer's read: the bid documents are read like an engineer would BEFORE any quantity is taken — symbols, notes, construction, insulation, materials, hangers, anchors —
+  //     each topic is answered from this bid's own passages (specqa, with citations); where the documents are silent the industry default (nw-standards.js: MSS SP-69, SMACNA ch. 5, ASHRAE 90.1) is shown, flagged
+  var dbBusy = '';
+  var DB_GROUPS = ['Drawings, symbols and notes', 'Ductwork', 'Piping', 'Hangers, anchors and seismic', 'Equipment, controls and close-out', 'Codes and scope'];
+  var DB_ASK = ' Answer in short bullet points that name the sheet or section; quote the exact words for sizes, thicknesses, classes and materials. If the passages do not say, answer only: NOT SPECIFIED.';
+  var DB_TOPICS = [
+    { id: 'legend', g: 0, t: 'Legend and symbols', q: 'List the symbols in the legend that matter for a take-off: pipe and duct line types (single-line vs double-line, supply / return / exhaust, new / existing / demolish), valves, dampers, flow and control devices, diffuser and grille symbols, equipment symbols. What does each mean?' },
+    { id: 'abbr', g: 0, t: 'Abbreviations', q: 'Which abbreviations are defined for services and devices (HWS, HWR, CHWS, CD, SA, RA, EA, OA, FSD, FD, SD, VD, MD, VAV and similar)?' },
+    { id: 'notes', g: 0, t: 'General notes that change the scope', q: 'Which general notes change the mechanical scope or price: demolition and existing-to-remain, work by others, coordination with other trades, access and ceiling work, firestopping and sleeves, painting, temporary services, hoisting and phasing?' },
+    { id: 'duct_const', g: 1, t: 'Duct construction', q: 'How must the ductwork be built: material and gauge, pressure class (positive and negative), seal class, joint and reinforcement standard (SMACNA), shape (rectangular, round, spiral, flat oval) per system, factory-fabricated or field-fabricated?' },
+    { id: 'duct_ins', g: 1, t: 'Duct insulation and lining', q: 'What insulation does ductwork need: internal acoustic liner or external wrap or board, type, thickness, R-value, which systems (supply, return, exhaust, outside air, outdoor, exposed), jacketing or cladding, double-wall requirements?' },
+    { id: 'duct_acc', g: 1, t: 'Duct accessories', q: 'What duct accessories are required: volume dampers, fire / smoke / combination dampers (type and rating), access doors, turning vanes, flexible duct (maximum length, type), flexible connections, sound attenuators, leakage testing?' },
+    { id: 'pipe_mat', g: 2, t: 'Pipe materials and joints', q: 'For each piping service (heating hot water, chilled water, heat-pump loop, condensate drain, refrigerant, gas, steam, domestic if mechanical) what pipe material and class is required (copper Type K / L / M, black steel Sch 40 / 80, PVC, CPVC, PEX, stainless), and what joining method (brazed, soldered, press, grooved, welded, threaded) and fittings?' },
+    { id: 'pipe_ins', g: 2, t: 'Pipe insulation', q: 'What pipe insulation is required for each service: type (fiberglass, elastomeric, cellular glass, calcium silicate), thickness by pipe size, vapor barrier, jacket (ASJ, PVC, aluminum), exposed or outdoor or mechanical-room finish, refrigerant line insulation and covering?' },
+    { id: 'valves', g: 2, t: 'Valves and piping specialties', q: 'Which valves and piping specialties are required: ball / butterfly / gate / check / balancing valves, strainers, air vents and separators, expansion tanks, gauges and thermometers, flexible connectors, pressure rating, and who furnishes control valves?' },
+    { id: 'pipe_test', g: 2, t: 'Testing, cleaning and identification', q: 'What testing, flushing, chemical cleaning and water treatment, pipe identification / labeling, sleeves, escutcheons and firestopping are required for piping?' },
+    { id: 'pipe_hang', g: 3, t: 'Hangers and supports (pipe and duct)', q: 'What hangers and supports are required for pipe and ductwork: hanger types (clevis, trapeze, strap, riser clamp), rod sizes, maximum spacing by pipe size and material, insulation shields or saddles, MSS SP-58 / SMACNA references, support from structure?' },
+    { id: 'anchors', g: 3, t: 'Anchors, seismic and vibration', q: 'What anchors, inserts and attachments are required into concrete, deck or steel; what seismic restraint and bracing requirements apply (pipe, duct, equipment); what vibration isolation is required (spring or neoprene hangers, pads, inertia bases), housekeeping pads, roof curbs and rails?' },
+    { id: 'equip', g: 4, t: 'Equipment installation requirements', q: 'What equipment installation requirements are stated: curbs and rails, disconnects and starters (who furnishes), filters (MERV, spare sets), vibration isolators, startup by the manufacturer, rigging and crane notes?' },
+    { id: 'controls', g: 4, t: 'Controls and BMS', q: 'What is the controls / building-management scope: who furnishes and installs thermostats, sensors, actuators, VAV controllers and wiring; BACnet or other protocol; integration with the existing system?' },
+    { id: 'closeout', g: 4, t: 'TAB, commissioning and close-out', q: 'What testing, adjusting and balancing, commissioning, training, O&M manuals, as-built drawings and warranty are required, and who performs the TAB?' },
+    { id: 'codes', g: 5, t: 'Codes and standards named', q: 'Which codes and standards are named, with edition (NYC Mechanical Code, ASHRAE 90.1, NFPA 90A, SMACNA, ASME, MSS, UL, ASTM)?' },
+    { id: 'split', g: 5, t: 'By others, alternates and allowances', q: 'Which items are by others, owner-furnished, alternates, allowances or excluded from the mechanical contractor?' }
+  ];
+  function dbDefault(id) {
+    var S = window.NWStd; if (!S) return '';
+    function mat(s) { var m = S.pipeMaterialDefault(s); return m.material + (m.joints ? ' · ' + m.joints : ''); }
+    function ins(s, z) { var i = S.pipeInsulationDefault(s, z); return i ? i.thickness_in + '" ' + i.type : 'none'; }
+    if (id === 'pipe_mat') return 'Heating / chilled water: ' + mat('HWS') + '. Condensate: ' + mat('CD') + '. Refrigerant: ' + mat('REFRIGERANT') + '. Gas: ' + mat('GAS') + '.';
+    if (id === 'pipe_ins') return 'HW 180 °F: ' + ins('HWS', 1) + ' to 1-1/4", ' + ins('HWS', 2) + ' from 1-1/2"; CHW: ' + ins('CHWS', 1) + ' to 1-1/4", ' + ins('CHWS', 2) + ' from 1-1/2" (ASHRAE 90.1 Table 6.8.3-1, vapor barrier on chilled water); refrigerant suction insulated; heat-pump loop and gas not insulated.';
+    if (id === 'pipe_hang') { var a = S.pipeHanger('steel', 1), b = S.pipeHanger('steel', 2), c = S.pipeHanger('steel', 4), d = S.pipeHanger('copper', 1), e = S.pipeHanger('copper', 2); return 'Steel: ' + a.spacing_ft + ' ft to 1-1/4" (' + a.rod_in + '" rod), ' + b.spacing_ft + ' ft at 2", ' + c.spacing_ft + ' ft at 4" (' + c.rod_in + '" rod); copper: ' + d.spacing_ft + ' ft at 1", ' + e.spacing_ft + ' ft at 2"; PVC 4 ft (MSS SP-69). Duct: ' + S.ductHanger('rect').spacing_ft + ' ft rectangular, ' + S.ductHanger('round').spacing_ft + ' ft round (SMACNA ch. 5).'; }
+    if (id === 'anchors') return S.anchorDefault('concrete').type + '. ' + S.anchorDefault('steel').type + '.';
+    if (id === 'duct_const') return 'Galvanized G90, SMACNA gauges by pressure class (2" w.g. branches / returns, 4" w.g. mains), seal class A where the spec is silent on exposed / shaft ducts (nw-duct-weight.js).';
+    return '';
+  }
+  async function runDatabook() {
+    if (dbBusy) return;
+    if (!specChunks) { toast('Index the specs first (button in “Ask the specs”)'); return; }
+    var res = Object.assign({}, session.result || {}), book = Object.assign({ topics: {} }, res.databook || {});
+    for (var i = 0; i < DB_TOPICS.length; i++) {
+      var tp = DB_TOPICS[i]; dbBusy = 'Reading ' + (i + 1) + ' / ' + DB_TOPICS.length + ' — ' + tp.t + '…'; paintKeep();
+      try {
+        var r = await callFn({ action: 'specqa', session_id: session.id, question: tp.q + DB_ASK, history: [], user_name: me && me.name });
+        var na = /^\s*NOT SPECIFIED\.?\s*$/i.test(String(r.answer || '')) || r.found === false;
+        book.topics[tp.id] = { answer: r.answer, found: !na, sources: (r.sources || []).slice(0, 6), cost: r.cost || 0, at: new Date().toISOString() };
+      } catch (e) { book.topics[tp.id] = { answer: 'Could not read: ' + e.message, found: false, sources: [], cost: 0 }; }
+    }
+    book.at = new Date().toISOString(); res.databook = book; session.result = res;
+    await supabaseClient.from('ai_est_sessions').update({ result: res }).eq('id', session.id);
+    dbBusy = ''; toast('Engineer\'s read done: ' + DB_TOPICS.filter(function(t) { return (book.topics[t.id] || {}).found; }).length + ' of ' + DB_TOPICS.length + ' topics found in the documents'); render();
+  }
+  function renderDatabook() {
+    if (!pages.some(function(p) { return p.status === 'done'; })) return '';
+    var res = session.result || {}, book = res.databook || null, T = book ? book.topics || {} : {};
+    var found = DB_TOPICS.filter(function(t) { return (T[t.id] || {}).found; }).length;
+    var h = '<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">2b · Engineer\'s read — symbols, notes, materials, insulation, hangers</h3><div class="row">' +
+      '<span class="muted">' + (book ? found + ' of ' + DB_TOPICS.length + ' topics stated in the documents' + (book.at ? ' · ' + esc(String(book.at).slice(0, 10)) : '') : (specChunks > 0 ? 'not read yet (~$0.6)' : 'index the specs and notes first')) + '</span>' +
+      '<button class="btn" onclick="AE.runDatabook()" ' + (dbBusy || !specChunks || specChunks < 0 ? 'disabled' : '') + ' title="Ask the 17 engineer\'s questions of this bid\'s specs, notes, legend and detail sheets (about $0.03 each)">' + (dbBusy ? esc(dbBusy) : (book ? '↻ Re-read' : '📖 Read like an engineer')) + '</button></div></div>' +
+      '<p class="muted" style="margin:6px 0 0">Read this first, then trust the quantities: every topic is answered from this bid\'s own passages (with the sheet); where the documents are silent the industry default is shown and flagged — the specification always rules.</p>';
+    if (book) {
+      DB_GROUPS.forEach(function(gn, gi) {
+        var ts = DB_TOPICS.filter(function(t) { return t.g === gi; }); if (!ts.length) return;
+        h += '<div style="margin-top:12px"><b style="font-size:12.5px">' + esc(gn) + '</b>';
+        ts.forEach(function(t) {
+          var x = T[t.id] || {}, def = dbDefault(t.id), srcs = (x.sources || []).slice(0, 3);
+          h += '<div style="margin-top:6px;padding:8px 10px;background:#f8fafc;border-radius:8px"><div><b>' + esc(t.t) + '</b> ' + (x.found ? '<span class="st" style="background:#dcfce7;color:#166534">in the documents</span>' : '<span class="st" style="background:#fef3c7;color:#92400e">not specified' + (def ? ' — industry default' : '') + '</span>') + '</div>' +
+            (x.found ? '<div style="margin-top:3px">' + mdLite(x.answer || '') + '</div>' + (srcs.length ? '<div class="basis">' + srcs.map(function(s) { return esc((s.sheet || 'sheet') + ' p.' + (s.page || '')); }).join(' · ') + '</div>' : '') : '') +
+            (!x.found && def ? '<div class="basis" style="margin-top:3px">' + esc(def) + ' <i>(default — to verify)</i></div>' : '') + '</div>';
+        });
+        h += '</div>';
+      });
+    }
+    return h + renderBreakdown() + '</div>';
+  }
+  function dbSize(n) { var w = Math.floor(n + 1e-9), f = Math.round((n - w) * 8), d = 8; while (f && f % 2 === 0) { f /= 2; d /= 2; } return (w ? w + (f ? '-' + f + '/' + d : '') : f ? f + '/' + d : '0') + '"'; }
+  function renderBreakdown() {
+    var S = window.NWStd, L = (((session.result || {}).engine || {}).lines) || []; if (!S || !L.length) return '';
+    var b = S.breakdown(L); if (!b.pipes.length && !b.ducts.length) return '';
+    var h = '<div style="margin-top:14px"><b style="font-size:12.5px">Take-off breakdown — what each foot is made of</b> <span class="muted">(information only, prices unchanged; the documents above override these defaults)</span>';
+    if (b.pipes.length) h += '<table class="t" style="margin-top:6px"><tr><th>Service</th><th>Material</th><th class="n">Size</th><th class="n">Ft</th><th>Insulation</th><th>Hangers</th><th class="n">Hangers #</th></tr>' + b.pipes.map(function(r) {
+      return '<tr><td><b>' + esc(r.service) + '</b><div class="basis">' + esc(r.service_name) + '</div></td><td>' + esc(r.material) + '</td><td class="n">' + (r.size ? dbSize(r.size) : '') + '</td><td class="n">' + r.ft.toLocaleString() + '</td>' +
+        '<td>' + (r.insulation ? esc(r.insulation.thickness_in + '" ' + r.insulation.type) + '<div class="basis">' + esc(r.insulation.jacket) + '</div>' : '<span class="muted">none</span>') + '</td><td>' + r.hanger_spacing_ft + ' ft · ' + r.rod_in + '" rod</td><td class="n">' + r.hangers.toLocaleString() + '</td></tr>';
+    }).join('') + '</table>';
+    if (b.ducts.length) h += '<table class="t" style="margin-top:8px"><tr><th>Duct</th><th class="n">Ft</th><th>Hanger</th><th class="n">Spacing</th><th class="n">Hangers #</th></tr>' + b.ducts.map(function(r) {
+      return '<tr><td>' + (r.kind === 'rect' ? 'Rectangular' : r.kind === 'round' ? 'Round / spiral' : 'Flat oval') + '</td><td class="n">' + r.ft.toLocaleString() + '</td><td>' + esc(r.hanger) + '</td><td class="n">' + r.spacing_ft + ' ft</td><td class="n">' + r.hangers.toLocaleString() + '</td></tr>';
+    }).join('') + '</table>';
+    return h + '<div class="basis" style="margin-top:6px">Totals: ' + b.totals.pipe_ft.toLocaleString() + ' ft of pipe on ~' + b.totals.pipe_hangers.toLocaleString() + ' hangers · ' + b.totals.duct_ft.toLocaleString() + ' ft of duct on ~' + b.totals.duct_hangers.toLocaleString() + ' hangers (hangers = length ÷ spacing + 1 per size; the refrigerant allowance counts one shared hanger per run).</div></div>';
   }
   // text items → lines (same baseline, left to right), so headings and clause numbers stay on their own line
   // spec sheets are set in columns: a row of equal height is split where the gap between items is wide, the pieces are grouped into
@@ -1935,9 +2026,9 @@ var AE = (function() {
     toast('Estimate ready ✓' + (skippedCats.length ? ' — ' + skippedCats.join(', ').replace(/_/g, ' ') + ' stay with the takeoff' : '')); render();
   }
 
-  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
+  return { create: create, upload: upload, readAll: readAll, readOne: readOne, showPage: showPage, closeModal: closeModal, price: price, review: review, toEstimate: toEstimate, blindRun: blindRun, get blind() { return BLIND; }, exportPdf: exportPdf, exportCsv: exportCsv, exportQuantities: exportQuantities, saveFloorHeight: saveFloorHeight, linkEstimate: linkEstimate, linkSearch: linkSearch, linkTo: linkTo, saveFloors: saveFloors, setSheetMult: setSheetMult, useQuote: useQuote, measureDucts: measureDucts, readDuctSpec: readDuctSpec, setDuctFam: setDuctFam, setPipeSr: setPipeSr, toTakeoff: toTakeoff, indexSpecs: indexSpecs, runDatabook: runDatabook, askSpecs: askSpecs, qaPick: qaPick, setEqPrice: setEqPrice, requestQuotes: requestQuotes, sendRfq: sendRfq, pasteQuote: pasteQuote, submitPastedQuote: submitPastedQuote, showDiff: showDiff, compareAddendum: function(id) { var p = pages.find(function(x) { return x.id === id; }); if (p) addendumDiff(p).then(function() { render(); showDiff(id); }).catch(function(e) { toast('Compare: ' + e.message); }); }, runAddendumDiffs: runAddendumDiffs };
 })();
 </script>
-<script src="sw-register.js?v=568"></script>
+<script src="sw-register.js?v=573"></script>
 </body>
 </html>
