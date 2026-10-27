@@ -152,7 +152,11 @@ Stand-by mode: no flow proof within 10/30 s -> lead off, standby on, alert; stan
 Alert B, stays until Clear Alert pressed. One common flow proof input. Flow proof present 4 min with both pumps off ->
 error and the control STOPS. Rotation dial 12-168 h (150 h settable). Exercising = 10 s if a pump idle 3 days (not seq 3f).
 Alert Levels mode: A = one pump failed / non-critical, B = both pumps / flow proof device failed.
-Wiring adjustments needed: (1) interposing relays (low-level contact) between Tekmar pump contacts and Grundfos DI1
+Already in Siemens R0 (300/300C): RIBU1C relays RE-1..RE-5 per floor (15 total; shown under "LEAD LAG PUMP
+CONTROLLER" on 300 = mounted at the by-others panel): RE-1 pump valves, RE-2/3 and RE-4/5 driven by FS-1/FS-2; 24 VAC
+taken from the nearest FPB DXR for leak detectors and relays; 4 LT410 leak detectors, 1 DPTE, 2 CS per floor. NOT in R0:
+pump start relays, horn/strobe (seq 3c/3d), panel/enclosure, 120 V circuit, flow switches (shown FBO though proposal
+says furnish and wire). Wiring adjustments needed: (1) interposing relays (low-level contact) between Tekmar pump contacts and Grundfos DI1
 (DC signal input); (2) 24 VAC transformer to power Demand and Flow Proof through the CRAC enable contact and flow
 switches; (3) flow proof per pump = flow switch in series with that pump's relay 2 "Pump running" (PELV, 24 VAC OK),
 both branches paralleled -> prevents false flow proof when building CW pressure pushes water through with pumps off
