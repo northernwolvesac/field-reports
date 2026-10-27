@@ -11,22 +11,22 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=569">
+<link rel="stylesheet" href="procore-ui.css?v=570">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=569"></script>
-<script src="auth.js?v=569"></script>
-<script src="est-totals.js?v=569"></script>
-<script src="procore-ui.js?v=569"></script>
-<script src="nw-catalog-picker.js?v=569"></script>
-<script src="nw-duct-weight.js?v=569"></script>
-<script src="nw-proposal.js?v=569"></script>
-<script src="bid-actions.js?v=569"></script>
+<script src="supabase-config.js?v=570"></script>
+<script src="auth.js?v=570"></script>
+<script src="est-totals.js?v=570"></script>
+<script src="procore-ui.js?v=570"></script>
+<script src="nw-catalog-picker.js?v=570"></script>
+<script src="nw-duct-weight.js?v=570"></script>
+<script src="nw-proposal.js?v=570"></script>
+<script src="bid-actions.js?v=570"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=569"></script>
-<script src="nw-email.js?v=569"></script>
+<script src="email-utils.js?v=570"></script>
+<script src="nw-email.js?v=570"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -76,7 +76,7 @@
 
   /* grid table */
   .es-grid { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; color: #232729; }
-  .es-grid th, .es-grid td { border-bottom: 1px solid var(--pc-row-sep, #eceff3); padding: 0 8px; height: 48px; white-space: nowrap; vertical-align: middle; box-sizing: border-box; }
+  .es-grid th, .es-grid td { border-bottom: 1px solid var(--pc-row-sep, #eceff3); border-right: 0; padding: 0 8px; height: 48px; white-space: nowrap; vertical-align: middle; box-sizing: border-box; }
   .es-grid th { background: #f4f5f6; color: #232729; font-size: 12px; font-weight: 700; height: 48px; text-align: left; position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--pc-border, #e5e7eb); }
   .es-grid th .th-in { display: flex; align-items: center; gap: 4px; }
   .es-grid th .th-in .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; }
@@ -3858,6 +3858,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=569"></script>
+<script src="sw-register.js?v=570"></script>
 </body>
 </html>
