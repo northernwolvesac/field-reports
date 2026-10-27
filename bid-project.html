@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=571">
+<link rel="stylesheet" href="procore-ui.css?v=572">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=571"></script>
-<script src="auth.js?v=571"></script>
-<script src="est-totals.js?v=571"></script>
-<script src="procore-ui.js?v=571"></script>
+<script src="supabase-config.js?v=572"></script>
+<script src="auth.js?v=572"></script>
+<script src="est-totals.js?v=572"></script>
+<script src="procore-ui.js?v=572"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=571"></script>
-<script src="est-drawings.js?v=571"></script>
-<script src="nw-proposal.js?v=571"></script>
+<script src="bid-actions.js?v=572"></script>
+<script src="est-drawings.js?v=572"></script>
+<script src="nw-proposal.js?v=572"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -1468,7 +1468,7 @@ requireAuth().catch(function(){});
     try {
       // EstDrawings.upload never throws per file: it returns {rows, errors}; onProgress gets one {index,total,file,stage} object
       var res = await EstDrawings.upload(rootId(), pdfs, { onProgress: function(info) {
-        if (info && info.stage === 'split') toast(info.file.name + ' is over 95 MB — splitting it into parts (storage limit 100 MB per file)…');
+        if (info && info.stage === 'split') toast(info.file.name + ' is over 490 MB — splitting it into parts (storage limit 500 MB per file)…');
         if (info && info.total > 1 && info.stage === 'upload') toast('Uploading ' + (info.index + 1) + ' of ' + info.total + (info.file ? ' — ' + info.file.name : ''));
       } });
       var errs = (res && res.errors) || [], rows = (res && res.rows) || [];
@@ -1905,6 +1905,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=571"></script>
+<script src="sw-register.js?v=572"></script>
 </body>
 </html>

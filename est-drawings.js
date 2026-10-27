@@ -142,9 +142,9 @@
     return out;
   }
 
-  // ─── big drawing sets (Alissultan 2026-10-26): the estimate-drawings bucket takes at most 100 MB per file (global limit 500 MB since the
-  // spend cap went off), so a larger PDF is split into page ranges of ≤ 95 MB — "<name> - Part 1 of 2 (p1-40).pdf" … — uploaded one after the other ───
-  var MAX_UPLOAD = 95 * 1024 * 1024;
+  // ─── big drawing sets (Alissultan 2026-10-26): storage takes at most 500 MB per file (spend cap off, global + estimate-drawings bucket
+  // limit 500 MB since 2026-10-27), so a larger PDF is split into page ranges of ≤ 490 MB — "<name> - Part 1 of 2 (p1-40).pdf" … — uploaded one after the other ───
+  var MAX_UPLOAD = 490 * 1024 * 1024;
   var PDFLIB_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
   function ensurePdfLib() {
     if (window.PDFLib) return Promise.resolve(window.PDFLib);
