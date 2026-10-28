@@ -8,24 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=369"></script>
-<script src="auth.js?v=369"></script>
-<script src="labor-rates.js?v=369"></script>
-<script src="cloud-save.js?v=369"></script>
+<script src="supabase-config.js?v=577"></script>
+<script src="auth.js?v=577"></script>
+<script src="labor-rates.js?v=577"></script>
+<script src="cloud-save.js?v=577"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=369"></script>
-<script src="edit-utils.js?v=369"></script>
-<script src="project-utils.js?v=369"></script>
-<script src="customer-utils.js?v=369"></script>
+<script src="draft-utils.js?v=577"></script>
+<script src="edit-utils.js?v=577"></script>
+<script src="project-utils.js?v=577"></script>
+<script src="customer-utils.js?v=577"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=369"></script>
-<script src="nw-email.js?v=369"></script>
-<script src="ai-summary.js?v=369"></script>
-<script src="ai-chat.js?v=369"></script>
+<script src="email-utils.js?v=577"></script>
+<script src="nw-email.js?v=577"></script>
+<script src="ai-summary.js?v=577"></script>
+<script src="ai-chat.js?v=577"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=369"></script>
+<script src="pdf-utils.js?v=577"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -133,14 +133,15 @@ body{padding-bottom:100px}
         </select></div>
       <div class="field" id="lumpSumWrap" style="display:none"><label>Total ($)</label>
         <input type="number" step="0.01" id="lumpSumAmount" data-save placeholder="0.00" oninput="calcCosts()"></div>
-      <div class="field" id="ohpModeWrap"><label>OH &amp; P</label>
+      <!-- OH & P is not offered any more (Russ 2026-10-27): new COs = 'hide'; a CO saved earlier with 'show' keeps it so its total doesn't change -->
+      <div class="field" id="ohpModeWrap" style="display:none"><label>OH &amp; P</label>
         <select id="ohpMode" data-save onchange="applyCostMode()">
-          <option value="show">Show OH 13% + Profit 10% on materials</option>
           <option value="hide">Hide — OH&amp;P included in material costs</option>
+          <option value="show">Show OH 13% + Profit 10% on materials</option>
         </select></div>
     </div>
     <div id="lumpSumNote" style="display:none;font-size:11px;color:#94a3b8;margin:-4px 0 8px">The PDF shows only the total — no materials, labor, subcontractor or OH&amp;P breakdown.</div>
-    <div id="ohpHideNote" style="display:none;font-size:11px;color:#94a3b8;margin:-4px 0 8px">OH&amp;P is not shown: enter material costs with overhead and profit already included. The CO shows only the material and labor breakdown.</div>
+    <div id="ohpHideNote" style="display:none;font-size:11px;color:#94a3b8;margin:-4px 0 8px">Enter costs with overhead and profit already included — the CO shows them as entered.</div>
     <div id="itemizedCost">
     <label style="font-weight:700;font-size:13px;margin-bottom:6px;display:block">Parts &amp; Materials</label>
     <div id="partsList">
@@ -166,6 +167,11 @@ body{padding-bottom:100px}
     <label style="font-weight:700;font-size:13px;margin:16px 0 6px;display:block">Subcontractors</label>
     <div id="subsList"></div>
     <button class="btn btn-secondary btn-small" onclick="addSub()" style="margin-top:8px">+ Add Subcontractor</button>
+
+    <label style="font-weight:700;font-size:13px;margin:16px 0 6px;display:block">Custom</label>
+    <div style="font-size:11px;color:#94a3b8;margin:-2px 0 6px">Any other scope: type the description, the breakdown and the cost yourself.</div>
+    <div id="customList"></div>
+    <button class="btn btn-secondary btn-small" onclick="addCustom()" style="margin-top:8px">+ Add Custom Line</button>
     </div>
 
     <!-- COST SUMMARY -->
@@ -176,6 +182,7 @@ body{padding-bottom:100px}
       <div class="cost-row itemized-row ohp-row"><span>Materials Total</span><span id="costMaterialsTotal">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Labor</span><span id="costLabor">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Subcontractors</span><span id="costSubs">$0.00</span></div>
+      <div class="cost-row itemized-row"><span>Custom</span><span id="costCustom">$0.00</span></div>
       <div class="cost-row total"><span>TOTAL</span><span id="costTotal">$0.00</span></div>
     </div>
   </div>
@@ -412,6 +419,10 @@ async function syncCOToPrimeContract(projId) {
       var c = parseFloat(x.cost) || 0; if (!c) return;
       items.push({ description: 'SUBCONTRACTOR - ' + (x.name || 'SUB') + (x.trade ? ' (' + x.trade + ')' : '') + (x.desc ? ': ' + x.desc.split('\n')[0].slice(0, 80) : ''), amount: Math.round(creditSign(c) * 100) / 100 });
     });
+    collectCustomData().forEach(function(x) {
+      var c = parseFloat(x.cost) || 0; if (!c) return;
+      items.push({ description: (x.desc || 'CUSTOM').split('\n')[0].slice(0, 120).toUpperCase(), amount: Math.round(creditSign(c) * 100) / 100 });
+    });
     var amount = _coMoney((document.getElementById('costTotal') || {}).textContent);
     if (isLumpSum()) items = amount ? [{ description: 'TOTAL', amount: Math.round(amount * 100) / 100 }] : [];
     var desc = (v('changeDesc') || '').split('\n')[0].trim();
@@ -440,7 +451,7 @@ async function syncCOToPrimeContract(projId) {
 
 
 // ========== LIVE COST RECALC (qty, cost, hours, rate, subs) ==========
-['partsList','laborList','subsList'].forEach(function(id){
+['partsList','laborList','subsList','customList'].forEach(function(id){
   var el=document.getElementById(id);
   if(el){el.addEventListener('input',calcCosts);el.addEventListener('change',calcCosts);}
 });
@@ -471,8 +482,33 @@ function restoreSubs(list){
   (list||[]).forEach(function(x){addSub(x)});
 }
 (function restoreLocalSubs(){
-  try{var raw=localStorage.getItem(SAVE_KEY_DRAFT);if(!raw)return;var d=JSON.parse(raw);if(d&&d._subs&&d._subs.length)restoreSubs(d._subs);}catch(e){}
+  try{var raw=localStorage.getItem(SAVE_KEY_DRAFT);if(!raw)return;var d=JSON.parse(raw);if(d&&d._subs&&d._subs.length)restoreSubs(d._subs);if(d&&d._custom&&d._custom.length)restoreCustom(d._custom);}catch(e){}
 })();
+
+// ========== CUSTOM (free scope: description + typed breakdown + cost) ==========
+function addCustom(data){
+  data=data||{};
+  var q=function(x){return String(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')};
+  var r=document.createElement('div');r.className='custom-row';
+  r.style.cssText='border:1px solid var(--nw-border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--nw-section)';
+  r.innerHTML='<div style="display:flex;gap:6px;margin-bottom:6px">'+
+    '<input type="text" class="cus-desc" placeholder="Description" value="'+q(data.desc)+'" style="flex:3;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px">'+
+    '<input type="number" step="0.01" class="cus-cost" placeholder="$ Cost" value="'+q(data.cost)+'" oninput="calcCosts()" style="flex:1;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px">'+
+    '<button class="btn btn-danger btn-small" onclick="this.closest(\'.custom-row\').remove();calcCosts()" style="width:32px;padding:6px;flex:none">✕</button></div>'+
+    '<textarea class="cus-notes" placeholder="Breakdown — anything you want on the CO: items, quantities, prices, what is included / excluded…" style="width:100%;box-sizing:border-box;min-height:70px;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px;font-family:inherit">'+q(data.notes)+'</textarea>';
+  document.getElementById('customList').appendChild(r);
+  calcCosts();
+}
+function collectCustomData(){
+  var out=[];document.querySelectorAll('.custom-row').forEach(function(r){
+    var d={desc:r.querySelector('.cus-desc').value,cost:r.querySelector('.cus-cost').value,notes:r.querySelector('.cus-notes').value};
+    if(d.desc||d.cost||d.notes)out.push(d);
+  });return out;
+}
+function restoreCustom(list){
+  document.getElementById('customList').innerHTML='';
+  (list||[]).forEach(function(x){addCustom(x)});
+}
 
 // ========== PREFILL FROM PRIME CONTRACT ==========
 var _prefilledFor = null;
@@ -563,7 +599,7 @@ var _coStatus = 'submitted';
       coType: fd.coType,
       coRev: fd._revisionNumber || 1,
       lumpSumAmount: fd.lumpSumAmount,
-      ohpMode: fd.ohpMode || 'show'
+      ohpMode: fd.ohpMode || 'show'   // a CO saved before the OH&P choice existed always showed OH&P
     };
 
     Object.keys(fields).forEach(function(id) {
@@ -626,6 +662,7 @@ var _coStatus = 'submitted';
     }
 
     if (fd._subs) restoreSubs(fd._subs);
+    if (fd._custom) restoreCustom(fd._custom);
 
     // Set project picker if project ID stored
     if (fd._projectId && typeof selectProjectById === 'function') {
@@ -690,6 +727,7 @@ function calcCosts(){
   const matTotal=matRaw+oh+profit;
   let labor=0;document.querySelectorAll('.labor-row').forEach(r=>{const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;labor+=h*rt});
   let subs=0;document.querySelectorAll('.sub-row').forEach(r=>{subs+=parseFloat(r.querySelector('.sub-cost')?.value)||0});
+  let custom=0;document.querySelectorAll('.custom-row').forEach(r=>{custom+=parseFloat(r.querySelector('.cus-cost')?.value)||0});
   const S=creditSign;
   document.getElementById('costParts').textContent=usd(S(matRaw));
   document.getElementById('costOH').textContent=usd(S(oh));
@@ -697,7 +735,8 @@ function calcCosts(){
   document.getElementById('costMaterialsTotal').textContent=usd(S(matTotal));
   document.getElementById('costLabor').textContent=usd(S(labor));
   document.getElementById('costSubs').textContent=usd(S(subs));
-  document.getElementById('costTotal').textContent=usd(S(isLumpSum()?(parseFloat(document.getElementById('lumpSumAmount').value)||0):(matTotal+labor+subs)));
+  document.getElementById('costCustom').textContent=usd(S(custom));
+  document.getElementById('costTotal').textContent=usd(S(isLumpSum()?(parseFloat(document.getElementById('lumpSumAmount').value)||0):(matTotal+labor+subs+custom)));
   const tl=document.querySelector('.cost-row.total span');if(tl)tl.textContent=isCredit()?'TOTAL CREDIT':'TOTAL';
 }
 function isLumpSum(){return (document.getElementById('costMode')||{}).value==='lump'}
@@ -706,7 +745,6 @@ function applyCostMode(){
   var lump=isLumpSum(), hideOhp=isHideOhp();
   document.getElementById('itemizedCost').style.display=lump?'none':'';
   document.getElementById('lumpSumWrap').style.display=lump?'':'none';
-  document.getElementById('ohpModeWrap').style.display=lump?'none':'';
   document.getElementById('lumpSumNote').style.display=lump?'':'none';
   document.getElementById('ohpHideNote').style.display=hideOhp?'':'none';
   document.getElementById('creditNote').style.display=isCredit()?'':'none';
@@ -979,6 +1017,7 @@ function autoSave(){
   data._parts=[];document.querySelectorAll('.parts-row').forEach(r=>{data._parts.push({desc:r.querySelector('.part-desc')?.value||'',qty:r.querySelector('.part-qty')?.value||'',cost:r.querySelector('.part-cost')?.value||''})});
   data._labor=[];document.querySelectorAll('.labor-row').forEach(r=>{data._labor.push({tech:r.querySelector('.labor-tech')?.value||'',hrs:r.querySelector('.labor-hrs')?.value||'',rate:r.querySelector('.labor-rate')?.value||''})});
   data._subs=collectSubsData();
+  data._custom=collectCustomData();
   data._reportId=reportId;
   localStorage.setItem(SAVE_KEY_DRAFT,JSON.stringify(data));
 }
@@ -1009,6 +1048,7 @@ _coStatus: _coStatus || 'submitted',
 _parts: collectPartsData(),
 _labor: collectLaborData(),
 _subs: collectSubsData(),
+_custom: collectCustomData(),
 _photos: collectPhotosData()
 };
 }
@@ -1067,10 +1107,12 @@ function generatePDF(){
     if(labor.length){section('Labor');table(['Technician / trade','Hours','Rate','Amount'],labor,{1:{halign:'center',cellWidth:40},2:{halign:'right',cellWidth:80},3:{halign:'right',cellWidth:85}})}
     const subs=collectSubsData().map(x=>[(x.name||'')+(x.trade?' ('+x.trade+')':''),x.desc||'',money(creditSign(parseFloat(x.cost)||0))]);
     if(subs.length){section('Subcontractors');table(['Subcontractor','Scope / description','Amount'],subs,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
+    const custom=collectCustomData().map(x=>[x.desc||'',x.notes||'',money(creditSign(parseFloat(x.cost)||0))]);
+    if(custom.length){section('Custom');table(['Description','Breakdown','Amount'],custom,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
 
     section('Cost Summary');
     const t=id=>num(document.getElementById(id).textContent);
-    (isHideOhp()?[['Materials',t('costParts'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0]]:[['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0]]).forEach(r=>{
+    (isHideOhp()?[['Materials',t('costParts'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom',t('costCustom'),0]]:[['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom',t('costCustom'),0]]).filter(r=>r[0]!=='Custom'||r[1]).forEach(r=>{
       room(16);doc.setFont('helvetica',r[2]?'normal':'bold');doc.setFontSize(r[2]?9:10);doc.setTextColor(...(r[2]?mute:ink));
       doc.text(r[0],M+(r[2]?16:6),y);doc.text(money(r[1]),R-6,y,{align:'right'});y+=16});
     y+=4;
@@ -1353,9 +1395,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=369"></script>
-<script src="nw-drive.js?v=369"></script>
-<script src="nw-form-kit.js?v=369"></script>
-<script src="sw-register.js?v=369"></script>
+<script src="form-utils.js?v=577"></script>
+<script src="nw-drive.js?v=577"></script>
+<script src="nw-form-kit.js?v=577"></script>
+<script src="sw-register.js?v=577"></script>
 </body>
 </html>
