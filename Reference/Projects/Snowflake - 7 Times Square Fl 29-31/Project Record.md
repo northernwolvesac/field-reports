@@ -120,6 +120,12 @@ Barry draft replaced again 10/27: panel question now explains why (Siemens says 
 the pump controller does not cover; comparison only, pumps unchanged) and lists functions a-f (start from AC contact +
 auto restart, duty/standby 150 h, loss-of-flow changeover + local A/V alarm, leak stop + changeover + alarm, 1 h in 4 h
 exercise, dry contacts to BMS/autodialer), plus model, price per panel x3, lead time, power and enclosure.
+**10/28 Alan Parrish:** agrees to a call; "there is no panel, but something in the VFDs provides the rotation ... So there
+is still no BMS interaction for the rotation, correct?" Reply drafted 10/28 (not sent): correct - built-in multipump over
+GENIbus does rotation and standby; BMS scope stays as in their proposal (CRAC run contact to both pump starts, pump
+status/alarm to DXR + autodialer, flow switches and leak detectors to DXR plus a contact to that pump's fault input,
+V-1/V-2 and CRAC valves per 3d / 4g-4j, one DP transmitter per pump to AI1, local A/V alarm); call Thu 10/29 or Fri 10/30.
+Tekmar option not mentioned to Siemens yet.
 **Siemens ATC R0 (7/22) sheets 300-300C, checked 10/27:** one "CWP-xx-1&2 LEAD LAG PANEL" box per floor, by others,
 not in the 300C BOM, no model, no power source shown. Siemens lands only: system enable (RE-x-1 from CRAC unit status),
 VFD-1/2 run and speed from separate "VFD panels" (note 2 "VFD mounted in ceiling near pump set" - do not exist, VFD is
