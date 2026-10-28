@@ -8,12 +8,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=425"></script>
-<script src="nw-drive.js?v=425"></script>
-<script src="nw-drive-browser.js?v=425"></script>
-<script src="auth.js?v=425"></script>
-<script src="cloud-save.js?v=425"></script>
-<script src="schedule-utils.js?v=425"></script>
+<script src="supabase-config.js?v=583"></script>
+<script src="nw-drive.js?v=583"></script>
+<script src="nw-drive-browser.js?v=583"></script>
+<script src="auth.js?v=583"></script>
+<script src="cloud-save.js?v=583"></script>
+<script src="schedule-utils.js?v=583"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Projects — Northern Wolves AC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1471,6 +1471,29 @@ requireAuth().catch(function(){});
       (!done && action ? action : '') + '</div>';
   }
 
+  // The bid(s) won for this project (Bid Board estimate linked by estimates.project_id) → "Estimate" row with a link to the
+  // full estimate breakdown, so the PM can see every number behind the job (Russ 10/28/2026). Office roles only.
+  async function loadProjectEstimates(projectId) {
+    try {
+      var r = await supabaseClient.from('estimates').select('id,name,quote_number,total_sales,archived_at')
+        .eq('project_id', projectId).is('parent_estimate_id', null).eq('is_template', false).order('updated_at', { ascending: false });
+      if (currentProjectId !== projectId || r.error) return;
+      var list = (r.data || []).filter(function(e) { return !e.archived_at; });
+      var host = document.getElementById('detailInfo');
+      var old = document.getElementById('projEstimateRow'); if (old) old.remove();
+      if (!host || !list.length) return;
+      var money = function(v) { return v == null ? '' : ' · $' + Math.round(Number(v)).toLocaleString('en-US'); };
+      var row = document.createElement('div');
+      row.className = 'detail-info-row'; row.id = 'projEstimateRow';
+      row.innerHTML = '<div class="detail-info-label">Estimate</div><div class="detail-info-value">' + list.map(function(e) {
+        return '<a href="bid-project.html?id=' + e.id + '#estimating" style="color:#1a66e0;font-weight:600;text-decoration:none">📊 ' +
+          escHtml((e.quote_number ? 'Q' + e.quote_number + ' — ' : '') + (e.name || 'Estimate')) + escHtml(money(e.total_sales)) + ' · estimate breakdown →</a>';
+      }).join('<br>') + '</div>';
+      var notes = host.querySelector('.detail-notes');
+      if (notes) host.insertBefore(row, notes); else host.appendChild(row);
+    } catch (e) { console.warn('project estimates', e); }
+  }
+
   async function loadPrimeContract(projectId) {
     var body = document.getElementById('primeBody');
     var steps = document.getElementById('setupSteps');
@@ -1569,7 +1592,7 @@ requireAuth().catch(function(){});
     loadProjectReports(projectId);
     loadRFIs(projectId);
     loadSubmittals(projectId);
-    techCheck().then(function(tech) { if (!tech && !isLimitedUser) { loadChangeOrders(projectId); loadPrimeContract(projectId); } });
+    techCheck().then(function(tech) { if (!tech && !isLimitedUser) { loadChangeOrders(projectId); loadPrimeContract(projectId); loadProjectEstimates(projectId); } });
 
     // Show detail, hide list
     document.getElementById('listView').style.display = 'none';
@@ -2738,6 +2761,6 @@ requireAuth().catch(function(){});
 })();
 </script>
 
-<script src="sw-register.js?v=425"></script>
+<script src="sw-register.js?v=583"></script>
 </body>
 </html>

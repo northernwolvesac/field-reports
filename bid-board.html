@@ -13,13 +13,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=582">
+<link rel="stylesheet" href="procore-ui.css?v=583">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=582"></script>
-<script src="auth.js?v=582"></script>
-<script src="est-totals.js?v=582"></script>
-<script src="procore-ui.js?v=582"></script>
-<script src="bid-actions.js?v=582"></script>
+<script src="supabase-config.js?v=583"></script>
+<script src="auth.js?v=583"></script>
+<script src="est-totals.js?v=583"></script>
+<script src="procore-ui.js?v=583"></script>
+<script src="bid-actions.js?v=583"></script>
 <style>
   /* ═══════ Title row (PC.renderTitleRow) + helpers emitted by procore-ui.js ═══════
      Duplicated here as fallbacks so the page renders even if procore-ui.css lags. */
@@ -61,6 +61,11 @@
   .bb-stage.active .bb-stage-sum { color: var(--pc-link); }
   .bb-stage .pc-pill-new { align-self: flex-start; }
   .bb-pipeline .bb-strip-kebab { margin-left: auto; align-self: center; }
+  /* "Awarded" = every bid linked to one of our Projects, in any stage (Russ 10/28/2026) — set apart from the pipeline */
+  .bb-stage.bb-stage-awarded { margin-left: 8px; padding-left: 22px; border-left: 1px solid var(--pc-border); }
+  .bb-stage.bb-stage-awarded .bb-stage-name { color: #dc2626; font-weight: 600; }
+  .bb-stage.bb-stage-awarded.active { border-bottom-color: #dc2626; }
+  .bb-stage.bb-stage-awarded.active .bb-stage-sum { color: #dc2626; }
 
   /* ═══════ CARD: toolbar + table ═══════ */
   .bb-main { padding-top: 16px; padding-bottom: 32px; }
@@ -171,7 +176,8 @@ requireAuth().catch(function(){});
   'use strict';
 
   var STAGES = PC.STAGES;
-  var STAGE_LABEL = PC.STAGE_LABEL;
+  var STAGE_LABEL = Object.assign({}, PC.STAGE_LABEL, { awarded: 'Awarded' });
+  var AWARDED = 'awarded';   // virtual stage: bids linked to one of our Projects (estimates.project_id), whatever their bid_stage
   var PAGE_SIZE = 100;
 
   var currentUser = null, canEdit = false, userProfile = null;
@@ -468,7 +474,9 @@ requireAuth().catch(function(){});
   function recomputeCounts() {
     stageCounts = {}; stageSums = {}; newInvites = 0;
     STAGES.forEach(function(s){ stageCounts[s.key] = 0; stageSums[s.key] = 0; });
+    stageCounts[AWARDED] = 0; stageSums[AWARDED] = 0;
     estimates.forEach(function(e) {
+      if (isAwarded(e)) { stageCounts[AWARDED]++; stageSums[AWARDED] += Number(e._total_sales) || 0; }
       var st = e.bid_stage || 'estimating';
       if (stageCounts.hasOwnProperty(st)) {
         stageCounts[st]++;
@@ -505,6 +513,8 @@ requireAuth().catch(function(){});
       return '<div class="bb-stage' + (s.key === currentStage ? ' active' : '') + '" data-stage="' + s.key + '" role="tab">' +
         '<div class="bb-stage-name">' + s.label + ' (' + (stageCounts[s.key] || 0) + ')</div>' + second + '</div>';
     }).join('') +
+    '<div class="bb-stage bb-stage-awarded' + (currentStage === AWARDED ? ' active' : '') + '" data-stage="' + AWARDED + '" role="tab" title="Won jobs — bids linked to one of our Projects">' +
+      '<div class="bb-stage-name">Awarded (' + (stageCounts[AWARDED] || 0) + ')</div><div class="bb-stage-sum">' + PC.compact(stageSums[AWARDED] || 0) + '</div></div>' +
     '<button type="button" class="pc-btn pc-btn-ghost pc-btn-icon pc-kebab bb-strip-kebab" id="stripMenuBtn" aria-label="More">' + PC.icon('more_vert', 22) + '</button>';
     host.querySelectorAll('.bb-stage').forEach(function(el) {
       el.addEventListener('click', function() {
@@ -526,7 +536,8 @@ requireAuth().catch(function(){});
     var q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
     var estFilter = document.getElementById('estimatorFilter').value;
     var rows = estimates.filter(function(e) {
-      if (!q && (e.bid_stage || 'estimating') !== currentStage) return false;   // a search looks across every stage
+      if (!q && currentStage === AWARDED) { if (!isAwarded(e)) return false; }
+      else if (!q && (e.bid_stage || 'estimating') !== currentStage) return false;   // a search looks across every stage
       if (estFilter && e.estimator_name !== estFilter) return false;
       if (q) {
         var hay = [(e.name||''), (e.project_address||''), (e.client_name||''), (e.requester_company||''),
@@ -550,6 +561,7 @@ requireAuth().catch(function(){});
   }
 
   function projectName(e) { return e.project_id ? (projectNameById[e.project_id] || '') : ''; }
+  function isAwarded(e) { return !!projectName(e); }
 
   function renderTable() {
     var qNow = (document.getElementById('searchInput').value || '').trim();
@@ -635,7 +647,7 @@ requireAuth().catch(function(){});
     var isNew = isInvitationStage && (!e.bid_intent || e.bid_intent === 'undecided');
     var nameCell = '<a href="bid-project.html?id=' + e.id + '#overview">' + PC.esc(name) + '</a>' +
       (isNew ? '<span class="pc-pill pc-pill-new">New</span>' : '') +
-      (projectName(e) ? '<span class="pc-pill bb-pill-awarded" title="Won — project: ' + PC.esc(projectName(e)) + '">Awarded</span>' : '') +
+      (isAwarded(e) ? '<span class="pc-pill bb-pill-awarded" title="Won — project: ' + PC.esc(projectName(e)) + '">Awarded</span>' : '') +
       '<div class="sub">' + (e._desc_line ? PC.esc(e._desc_line) : '--') + '</div>';
 
     var req = e.requester_company ? PC.esc(e.requester_company) : '<span class="pc-muted">--</span>';
@@ -921,6 +933,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=582"></script>
+<script src="sw-register.js?v=583"></script>
 </body>
 </html>
