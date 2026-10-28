@@ -8,24 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=578"></script>
-<script src="auth.js?v=578"></script>
-<script src="labor-rates.js?v=578"></script>
-<script src="cloud-save.js?v=578"></script>
+<script src="supabase-config.js?v=579"></script>
+<script src="auth.js?v=579"></script>
+<script src="labor-rates.js?v=579"></script>
+<script src="cloud-save.js?v=579"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=578"></script>
-<script src="edit-utils.js?v=578"></script>
-<script src="project-utils.js?v=578"></script>
-<script src="customer-utils.js?v=578"></script>
+<script src="draft-utils.js?v=579"></script>
+<script src="edit-utils.js?v=579"></script>
+<script src="project-utils.js?v=579"></script>
+<script src="customer-utils.js?v=579"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=578"></script>
-<script src="nw-email.js?v=578"></script>
-<script src="ai-summary.js?v=578"></script>
-<script src="ai-chat.js?v=578"></script>
+<script src="email-utils.js?v=579"></script>
+<script src="nw-email.js?v=579"></script>
+<script src="ai-summary.js?v=579"></script>
+<script src="ai-chat.js?v=579"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=578"></script>
+<script src="pdf-utils.js?v=579"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -497,7 +497,7 @@ function addCustom(data){
     '<input type="text" class="cus-desc" placeholder="Description" value="'+q(data.desc)+'" style="flex:3;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px">'+
     '<input type="number" step="0.01" class="cus-cost" placeholder="$ Cost" value="'+q(data.cost)+'" oninput="calcCosts()" style="flex:1;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px">'+
     '<button class="btn btn-danger btn-small" onclick="this.closest(\'.custom-row\').remove();calcCosts()" style="width:32px;padding:6px;flex:none">✕</button></div>'+
-    '<textarea class="cus-notes" placeholder="Breakdown — anything you want on the CO: items, quantities, prices, what is included / excluded…" style="width:100%;box-sizing:border-box;min-height:70px;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px;font-family:inherit">'+q(data.notes)+'</textarea>';
+    '<textarea class="cus-notes" placeholder="Details (optional) — printed on the CO under the description" style="width:100%;box-sizing:border-box;min-height:70px;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:14px;font-family:inherit">'+q(data.notes)+'</textarea>';
   document.getElementById('customList').appendChild(r);
   calcCosts();
 }
@@ -1109,8 +1109,9 @@ function generatePDF(){
     if(labor.length){section('Labor');table(['Technician / trade','Hours','Rate','Amount'],labor,{1:{halign:'center',cellWidth:40},2:{halign:'right',cellWidth:80},3:{halign:'right',cellWidth:85}})}
     const subs=collectSubsData().map(x=>[(x.name||'')+(x.trade?' ('+x.trade+')':''),x.desc||'',money(creditSign(parseFloat(x.cost)||0))]);
     if(subs.length){section('Subcontractors');table(['Subcontractor','Scope / description','Amount'],subs,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
-    const custom=collectCustomData().map(x=>[x.desc||'',x.notes||'',money(creditSign(parseFloat(x.cost)||0))]);
-    if(custom.length){section('Custom Breakdown');table(['Description','Breakdown','Amount'],custom,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
+    // Russ 10/28/2026: no separate Breakdown column — the details print under the description, which gets the full width
+    const custom=collectCustomData().map(x=>[[x.desc||'',x.notes||''].filter(Boolean).join(String.fromCharCode(10)),money(creditSign(parseFloat(x.cost)||0))]);
+    if(custom.length){section('Custom Breakdown');table(['Description','Amount'],custom,{1:{halign:'right',cellWidth:85}})}
 
     section('Cost Summary');
     const t=id=>num(document.getElementById(id).textContent);
@@ -1397,9 +1398,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=578"></script>
-<script src="nw-drive.js?v=578"></script>
-<script src="nw-form-kit.js?v=578"></script>
-<script src="sw-register.js?v=578"></script>
+<script src="form-utils.js?v=579"></script>
+<script src="nw-drive.js?v=579"></script>
+<script src="nw-form-kit.js?v=579"></script>
+<script src="sw-register.js?v=579"></script>
 </body>
 </html>
