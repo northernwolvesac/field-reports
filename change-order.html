@@ -8,24 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=577"></script>
-<script src="auth.js?v=577"></script>
-<script src="labor-rates.js?v=577"></script>
-<script src="cloud-save.js?v=577"></script>
+<script src="supabase-config.js?v=578"></script>
+<script src="auth.js?v=578"></script>
+<script src="labor-rates.js?v=578"></script>
+<script src="cloud-save.js?v=578"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=577"></script>
-<script src="edit-utils.js?v=577"></script>
-<script src="project-utils.js?v=577"></script>
-<script src="customer-utils.js?v=577"></script>
+<script src="draft-utils.js?v=578"></script>
+<script src="edit-utils.js?v=578"></script>
+<script src="project-utils.js?v=578"></script>
+<script src="customer-utils.js?v=578"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=577"></script>
-<script src="nw-email.js?v=577"></script>
-<script src="ai-summary.js?v=577"></script>
-<script src="ai-chat.js?v=577"></script>
+<script src="email-utils.js?v=578"></script>
+<script src="nw-email.js?v=578"></script>
+<script src="ai-summary.js?v=578"></script>
+<script src="ai-chat.js?v=578"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=577"></script>
+<script src="pdf-utils.js?v=578"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -168,10 +168,12 @@ body{padding-bottom:100px}
     <div id="subsList"></div>
     <button class="btn btn-secondary btn-small" onclick="addSub()" style="margin-top:8px">+ Add Subcontractor</button>
 
-    <label style="font-weight:700;font-size:13px;margin:16px 0 6px;display:block">Custom</label>
-    <div style="font-size:11px;color:#94a3b8;margin:-2px 0 6px">Any other scope: type the description, the breakdown and the cost yourself.</div>
+    <div style="border-top:1px solid var(--nw-border);margin:20px 0 0;padding-top:14px">
+    <label style="font-weight:700;font-size:13px;margin:0 0 6px;display:block">Custom Breakdown</label>
+    <div style="font-size:11px;color:#94a3b8;margin:-2px 0 6px">Free scope — type the description, the breakdown and the cost yourself.</div>
     <div id="customList"></div>
-    <button class="btn btn-secondary btn-small" onclick="addCustom()" style="margin-top:8px">+ Add Custom Line</button>
+    <button class="btn btn-secondary btn-small" onclick="addCustom()" style="margin-top:8px">+ Add Custom Breakdown</button>
+    </div>
     </div>
 
     <!-- COST SUMMARY -->
@@ -182,7 +184,7 @@ body{padding-bottom:100px}
       <div class="cost-row itemized-row ohp-row"><span>Materials Total</span><span id="costMaterialsTotal">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Labor</span><span id="costLabor">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Subcontractors</span><span id="costSubs">$0.00</span></div>
-      <div class="cost-row itemized-row"><span>Custom</span><span id="costCustom">$0.00</span></div>
+      <div class="cost-row itemized-row"><span>Custom Breakdown</span><span id="costCustom">$0.00</span></div>
       <div class="cost-row total"><span>TOTAL</span><span id="costTotal">$0.00</span></div>
     </div>
   </div>
@@ -1108,11 +1110,11 @@ function generatePDF(){
     const subs=collectSubsData().map(x=>[(x.name||'')+(x.trade?' ('+x.trade+')':''),x.desc||'',money(creditSign(parseFloat(x.cost)||0))]);
     if(subs.length){section('Subcontractors');table(['Subcontractor','Scope / description','Amount'],subs,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
     const custom=collectCustomData().map(x=>[x.desc||'',x.notes||'',money(creditSign(parseFloat(x.cost)||0))]);
-    if(custom.length){section('Custom');table(['Description','Breakdown','Amount'],custom,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
+    if(custom.length){section('Custom Breakdown');table(['Description','Breakdown','Amount'],custom,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
 
     section('Cost Summary');
     const t=id=>num(document.getElementById(id).textContent);
-    (isHideOhp()?[['Materials',t('costParts'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom',t('costCustom'),0]]:[['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom',t('costCustom'),0]]).filter(r=>r[0]!=='Custom'||r[1]).forEach(r=>{
+    (isHideOhp()?[['Materials',t('costParts'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom breakdown',t('costCustom'),0]]:[['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom breakdown',t('costCustom'),0]]).filter(r=>r[0]!=='Custom breakdown'||r[1]).forEach(r=>{
       room(16);doc.setFont('helvetica',r[2]?'normal':'bold');doc.setFontSize(r[2]?9:10);doc.setTextColor(...(r[2]?mute:ink));
       doc.text(r[0],M+(r[2]?16:6),y);doc.text(money(r[1]),R-6,y,{align:'right'});y+=16});
     y+=4;
@@ -1395,9 +1397,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=577"></script>
-<script src="nw-drive.js?v=577"></script>
-<script src="nw-form-kit.js?v=577"></script>
-<script src="sw-register.js?v=577"></script>
+<script src="form-utils.js?v=578"></script>
+<script src="nw-drive.js?v=578"></script>
+<script src="nw-form-kit.js?v=578"></script>
+<script src="sw-register.js?v=578"></script>
 </body>
 </html>

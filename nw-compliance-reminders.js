@@ -29,7 +29,7 @@
     var today = iso(new Date());
 
     var r = await Promise.all([
-      supabaseClient.from('compliance_settings').select('notify_emails,lead_days').eq('id', 1).maybeSingle(),
+      supabaseClient.from('compliance_settings').select('*').eq('id', 1).maybeSingle(),
       supabaseClient.from('compliance_parties').select('id,name,email,coi_required,is_active').eq('is_active', true),
       supabaseClient.from('compliance_docs').select('id,party_id,doc_type,status,expiration_date').in('status', ['received', 'approved']).in('doc_type', TRACKED).not('expiration_date', 'is', null)
     ]);
@@ -49,6 +49,8 @@
     badge(due.filter(function(d) { return d.doc_type === 'coi'; }).length);
     if (!due.length) return;
 
+    // the daily 8 AM e-mail (Google Apps Script → compliance_daily_digest) covers it — no extra one-off digest from the browser
+    if (st.digest_last_run && Date.now() - new Date(st.digest_last_run).getTime() < 2 * 86400000) return;
     var key = 'nw_compliance_check';
     try { if (localStorage.getItem(key) === today) return; } catch (e) {}
 

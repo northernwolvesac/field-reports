@@ -9,14 +9,14 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <title>Subs &amp; Vendors Compliance — Northern Wolves AC</title>
-<link rel="stylesheet" href="styles.css?v=524">
+<link rel="stylesheet" href="styles.css?v=578">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=524"></script>
-<script src="auth.js?v=524"></script>
-<script src="nw-drive.js?v=524"></script>
+<script src="supabase-config.js?v=578"></script>
+<script src="auth.js?v=578"></script>
+<script src="nw-drive.js?v=578"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=524"></script>
-<script src="nw-email.js?v=524"></script>
+<script src="email-utils.js?v=578"></script>
+<script src="nw-email.js?v=578"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   body { background: #f7f8fa; padding-bottom: 60px; }
@@ -201,7 +201,16 @@
     <div class="fld full"><label>Certificate holder</label><input id="sHolder"></div>
     <div class="fld full"><label>Additional insured / notes (printed in requests)</label><textarea id="sNotes"></textarea></div>
   </div>
-  <div class="mact"><button class="btn light" id="sCancel">Cancel</button><button class="btn" id="sSave">Save</button></div>
+  <div class="mact"><button class="btn light" id="sDigest" style="margin-right:auto">⏰ Daily 8 AM reminder…</button><button class="btn light" id="sCancel">Cancel</button><button class="btn" id="sSave">Save</button></div>
+</div></div>
+<div class="modal-bg" id="dgModal"><div class="modal">
+  <h3>Daily reminder at 8 AM</h3>
+  <p style="font-size:13px;color:#475569;margin:0 0 8px">Every morning at 8 AM (New York time) the people in “Reminders go to” get one e-mail listing every expired certificate and every one that expires within the reminder window. Nothing is sent when everything is current.</p>
+  <ol style="font-size:13px;color:#475569;margin:0 0 10px;padding-left:18px"><li>Open <a href="https://script.google.com" target="_blank" rel="noopener">script.google.com</a> with the Google account that should send it → <b>New project</b>.</li>
+    <li>Paste the code below → Save → choose <b>setup</b> → <b>Run</b> → allow access.</li><li>The first e-mail goes out right away; after that every morning at 8.</li></ol>
+  <textarea id="dgCode" readonly style="width:100%;height:220px;font:11px/1.4 Consolas,monospace;box-sizing:border-box"></textarea>
+  <div id="dgState" style="font-size:12px;color:#64748b;margin-top:6px"></div>
+  <div class="mact"><button class="btn light" id="dgClose">Close</button><button class="btn" id="dgCopy">Copy code</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 
@@ -248,6 +257,9 @@ requireAuth().catch(function(){});
     $('btnSettings').addEventListener('click', function(e) { e.preventDefault(); openSettings(); });
     $('sCancel').addEventListener('click', function() { show('setModal', false); });
     $('sSave').addEventListener('click', saveSettings);
+    $('sDigest').addEventListener('click', function() { show('setModal', false); openDigest(); });
+    $('dgClose').addEventListener('click', function() { show('dgModal', false); });
+    $('dgCopy').addEventListener('click', function() { var t = $('dgCode'); t.select(); try { navigator.clipboard.writeText(t.value).then(function() { toast('Code copied'); }); } catch (e) { document.execCommand('copy'); toast('Code copied'); } });
     $('drClose').addEventListener('click', closeDrawer); $('drBg').addEventListener('click', closeDrawer);
     $('dCancel').addEventListener('click', function() { show('docModal', false); });
     $('dSave').addEventListener('click', saveDoc);
@@ -721,6 +733,67 @@ requireAuth().catch(function(){});
     $('sHolder').value = req.holder || ''; $('sNotes').value = req.notes || '';
     show('setModal', true);
   }
+  // ===== daily 8 AM reminder (Google Apps Script → compliance_daily_digest RPC) =====
+  function digestScript() {
+    var app = location.origin + location.pathname.replace(/[^\/]*$/, '');
+    return [
+      "// Northern Wolves AC — daily insurance (COI) reminder · Google Apps Script",
+      "// 1) script.google.com → New project → paste all of this → Save.",
+      "// 2) Select  setup  in the toolbar and press Run (allow 'send e-mail as you' + 'connect to an external service').",
+      "//    It sends today's list right away and then every morning at 8 AM (New York time) while any certificate is expired",
+      "//    or expires within the reminder window. Nothing is sent on days when everything is current.",
+      "var CFG = {",
+      "  rpc: '" + SUPABASE_URL + "/rest/v1/rpc/compliance_daily_digest',",
+      "  key: '" + SUPABASE_ANON_KEY + "',",
+      "  token: '" + (settings && settings.digest_token || '') + "',",
+      "  app: '" + app + "compliance.html?f=attention'",
+      "};",
+      "function setup() {",
+      "  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });",
+      "  ScriptApp.newTrigger('run').timeBased().everyDays(1).atHour(8).inTimezone('America/New_York').create();",
+      "  run();",
+      "}",
+      "function run() {",
+      "  var r = UrlFetchApp.fetch(CFG.rpc, { method: 'post', contentType: 'application/json', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key },",
+      "    payload: JSON.stringify({ p_token: CFG.token }), muteHttpExceptions: true });",
+      "  if (r.getResponseCode() >= 300) throw new Error('Compliance digest failed: ' + r.getContentText().slice(0, 300));",
+      "  var d = JSON.parse(r.getContentText()), items = d.items || [];",
+      "  if (!items.length) { Logger.log('All certificates are current — no e-mail today.'); return; }",
+      "  var LABEL = { coi: 'Certificate of insurance (COI)', workers_comp: \"Workers' comp\", disability: 'Disability / PFL', license: 'License' };",
+      "  function us(s) { var p = String(s).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }",
+      "  function days(s) { return Math.round((new Date(s + 'T12:00:00') - new Date(d.today + 'T12:00:00')) / 86400000); }",
+      "  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }",
+      "  var expired = items.filter(function (x) { return days(x.expires) < 0; }), soon = items.filter(function (x) { return days(x.expires) >= 0; });",
+      "  function rows(list, past) {",
+      "    return list.map(function (x) { var n = days(x.expires);",
+      "      return '<tr><td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb\"><b>' + esc(x.company) + '</b>' + (x.asap ? ' <span style=\"color:#b91c1c;font-weight:700\">ASAP</span>' : '') + '</td>' +",
+      "        '<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb\">' + LABEL[x.type] + '</td>' +",
+      "        '<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap\">' + (past ? 'expired ' + us(x.expires) : us(x.expires) + ' (in ' + n + ' day' + (n === 1 ? '' : 's') + ')') + '</td>' +",
+      "        '<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#6b7280\">' + (x.email ? esc(x.email) : 'no e-mail on file') + '</td></tr>'; }).join('');",
+      "  }",
+      "  function table(title, list, past) {",
+      "    return list.length ? '<h3 style=\"margin:18px 0 6px;font:700 15px Arial;color:' + (past ? '#b91c1c' : '#b45309') + '\">' + title + ' (' + list.length + ')</h3>' +",
+      "      '<table style=\"border-collapse:collapse;font:13px Arial;width:100%\">' + rows(list, past) + '</table>' : '';",
+      "  }",
+      "  var html = '<div style=\"font:14px Arial;color:#111\">Good morning,<br><br>These subcontractor / vendor certificates need to be renewed:' +",
+      "    table('Expired', expired, true) + table('Expiring within ' + d.lead_days + ' days', soon, false) +",
+      "    '<p style=\"margin-top:18px\">Open <a href=\"' + CFG.app + '\">Subs &amp; Vendors</a> in the app and press <b>Request</b> on each company — the e-mail to the company is prepared for you with our insurance requirements. ' +",
+      "    'When the new certificate comes in, upload it with <b>+ Doc</b> — the AI reads the dates and the company drops off this list.</p>' +",
+      "    '<p style=\"color:#6b7280;font-size:12px\">Sent every morning at 8 AM while anything is expired or expiring.</p></div>';",
+      "  var plain = 'Expired:\\n' + expired.map(function (x) { return '- ' + x.company + ' — ' + LABEL[x.type] + ' expired ' + us(x.expires); }).join('\\n') +",
+      "    '\\n\\nExpiring:\\n' + soon.map(function (x) { return '- ' + x.company + ' — ' + LABEL[x.type] + ' ' + us(x.expires); }).join('\\n') + '\\n\\n' + CFG.app;",
+      "  var subject = 'Insurance certificates: ' + [expired.length ? expired.length + ' expired' : '', soon.length ? soon.length + ' expiring' : ''].filter(String).join(', ') + ' — ' + us(d.today);",
+      "  GmailApp.sendEmail(d.notify, subject, plain, { htmlBody: html, name: 'Northern Wolves App' });",
+      "}"
+    ].join('\n');
+  }
+  function openDigest() {
+    $('dgCode').value = digestScript();
+    var last = settings && settings.digest_last_run;
+    $('dgState').textContent = !settings || !settings.digest_token ? 'Run compliance-daily-digest.sql in Supabase first.' :
+      last ? 'Last run: ' + fmt(String(last).slice(0, 10)) + ' ' + new Date(last).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Not installed yet.';
+    show('dgModal', true);
+  }
   async function saveSettings() {
     var nr = { gl_occurrence: num($('sGlOcc').value) || 0, gl_aggregate: num($('sGlAgg').value) || 0, auto_limit: num($('sAuto').value) || 0, umbrella_limit: num($('sUmb').value) || 0,
       wc: $('sWc').checked, dbl: $('sDbl').checked, additional_insured: $('sAi').checked, waiver_subrogation: $('sWos').checked, primary_noncontrib: $('sPnc').checked,
@@ -733,6 +806,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=524"></script>
+<script src="sw-register.js?v=578"></script>
 </body>
 </html>
