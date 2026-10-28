@@ -19,7 +19,7 @@ begin
     select distinct on (d.party_id, d.doc_type) d.party_id, d.doc_type, d.expiration_date
     from public.compliance_docs d join public.compliance_parties p on p.id = d.party_id
     where p.is_active and d.status in ('received', 'approved') and d.expiration_date is not null
-      and d.doc_type in ('coi', 'workers_comp', 'disability', 'license') and (d.doc_type <> 'coi' or p.coi_required)
+      and d.doc_type in ('coi', 'workers_comp', 'disability', 'license') and p.coi_required   -- 'no COI needed for now' = no reminders at all
     order by d.party_id, d.doc_type, d.expiration_date desc
   )
   select coalesce(jsonb_agg(jsonb_build_object('company', p.name, 'email', p.email, 'type', c.doc_type, 'expires', c.expiration_date,
