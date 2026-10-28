@@ -13,13 +13,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=461">
+<link rel="stylesheet" href="procore-ui.css?v=582">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=461"></script>
-<script src="auth.js?v=461"></script>
-<script src="est-totals.js?v=461"></script>
-<script src="procore-ui.js?v=461"></script>
-<script src="bid-actions.js?v=461"></script>
+<script src="supabase-config.js?v=582"></script>
+<script src="auth.js?v=582"></script>
+<script src="est-totals.js?v=582"></script>
+<script src="procore-ui.js?v=582"></script>
+<script src="bid-actions.js?v=582"></script>
 <style>
   /* ═══════ Title row (PC.renderTitleRow) + helpers emitted by procore-ui.js ═══════
      Duplicated here as fallbacks so the page renders even if procore-ui.css lags. */
@@ -77,6 +77,8 @@
   .pc-table td.bb-td-name { min-width: 240px; }
   .pc-table td.bb-td-name a { font-weight: 500; }
   .pc-table td.bb-td-name .pc-pill-new { margin-left: 6px; vertical-align: 1px; }
+  /* won bid = linked to one of our Projects (Russ 10/28/2026) */
+  .pc-pill.bb-pill-awarded { background: #dc2626; color: #fff; border: 0; font-size: 10px; padding: 2px 8px; margin-left: 6px; vertical-align: 1px; }
   .pc-table td.bb-td-info { width: 44px; }
   .pc-table td.bb-td-info .pc-btn { color: var(--pc-head); width: 28px; height: 28px; }
   .pc-table td.bb-td-status { white-space: nowrap; }
@@ -633,6 +635,7 @@ requireAuth().catch(function(){});
     var isNew = isInvitationStage && (!e.bid_intent || e.bid_intent === 'undecided');
     var nameCell = '<a href="bid-project.html?id=' + e.id + '#overview">' + PC.esc(name) + '</a>' +
       (isNew ? '<span class="pc-pill pc-pill-new">New</span>' : '') +
+      (projectName(e) ? '<span class="pc-pill bb-pill-awarded" title="Won — project: ' + PC.esc(projectName(e)) + '">Awarded</span>' : '') +
       '<div class="sub">' + (e._desc_line ? PC.esc(e._desc_line) : '--') + '</div>';
 
     var req = e.requester_company ? PC.esc(e.requester_company) : '<span class="pc-muted">--</span>';
@@ -918,6 +921,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=461"></script>
+<script src="sw-register.js?v=582"></script>
 </body>
 </html>
