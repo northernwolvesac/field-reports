@@ -8,24 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=579"></script>
-<script src="auth.js?v=579"></script>
-<script src="labor-rates.js?v=579"></script>
-<script src="cloud-save.js?v=579"></script>
+<script src="supabase-config.js?v=580"></script>
+<script src="auth.js?v=580"></script>
+<script src="labor-rates.js?v=580"></script>
+<script src="cloud-save.js?v=580"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=579"></script>
-<script src="edit-utils.js?v=579"></script>
-<script src="project-utils.js?v=579"></script>
-<script src="customer-utils.js?v=579"></script>
+<script src="draft-utils.js?v=580"></script>
+<script src="edit-utils.js?v=580"></script>
+<script src="project-utils.js?v=580"></script>
+<script src="customer-utils.js?v=580"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=579"></script>
-<script src="nw-email.js?v=579"></script>
-<script src="ai-summary.js?v=579"></script>
-<script src="ai-chat.js?v=579"></script>
+<script src="email-utils.js?v=580"></script>
+<script src="nw-email.js?v=580"></script>
+<script src="ai-summary.js?v=580"></script>
+<script src="ai-chat.js?v=580"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=579"></script>
+<script src="pdf-utils.js?v=580"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -162,6 +162,10 @@ body{padding-bottom:100px}
       </div>
     </div>
     <button class="btn btn-secondary btn-small" onclick="addLabor()" style="margin-top:8px">+ Add Labor</button>
+
+    <label style="font-weight:700;font-size:13px;margin:16px 0 6px;display:block">Project Management</label>
+    <div id="pmList"></div>
+    <button class="btn btn-secondary btn-small" onclick="addPm()" style="margin-top:8px">+ Add Project Management</button>
     <div class="ohp-row" style="font-size:11px;color:#94a3b8;margin-top:4px">Labor rates already include overhead &amp; profit — OH/Profit apply to materials only.</div>
 
     <label style="font-weight:700;font-size:13px;margin:16px 0 6px;display:block">Subcontractors</label>
@@ -183,6 +187,7 @@ body{padding-bottom:100px}
       <div class="cost-row itemized-row ohp-row" style="font-size:12px;color:#94a3b8"><span>&nbsp;&nbsp;Profit (10%)</span><span id="costProfit">$0.00</span></div>
       <div class="cost-row itemized-row ohp-row"><span>Materials Total</span><span id="costMaterialsTotal">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Labor</span><span id="costLabor">$0.00</span></div>
+      <div class="cost-row itemized-row"><span>Project Management</span><span id="costPM">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Subcontractors</span><span id="costSubs">$0.00</span></div>
       <div class="cost-row itemized-row"><span>Custom Breakdown</span><span id="costCustom">$0.00</span></div>
       <div class="cost-row total"><span>TOTAL</span><span id="costTotal">$0.00</span></div>
@@ -350,6 +355,14 @@ function laborTypeSelectHtml() {
 }
 function applyLaborType(sel) {
   var row = sel.closest('.labor-row'); if (!row) return;
+  var picked = sel.value && sel.value !== 'custom' ? (sel.options[sel.selectedIndex].getAttribute('data-label') || '') : '';
+  if (/^Project Manager/.test(picked) && row.closest('#laborList')) {   // Project Management is its own category (Russ 10/28/2026)
+    var hrs = (row.querySelector('.labor-hrs') || {}).value || '';
+    if (document.querySelectorAll('#laborList .labor-row').length > 1) row.remove(); else { row.querySelectorAll('input').forEach(function(i) { i.value = ''; }); sel.selectedIndex = 0; }
+    addPm({ tech: picked, hrs: hrs, rate: sel.value });
+    showToast('Moved to Project Management');
+    return;
+  }
   if (sel.value && sel.value !== 'custom') {
     row.querySelector('.labor-rate').value = sel.value;
     var tech = row.querySelector('.labor-tech');
@@ -417,6 +430,10 @@ async function syncCOToPrimeContract(projId) {
       var who = ((r.querySelector('.labor-tech') || {}).value || 'LABOR').trim();
       items.push({ description: 'LABOR - ' + who + ' (' + h + ' M/HRS @ $' + rt.toFixed(2) + ' PER M/HR)', amount: Math.round(creditSign(h * rt) * 100) / 100 });
     });
+    collectPmData().forEach(function(x) {
+      var h = parseFloat(x.hrs) || 0, rt = parseFloat(x.rate) || 0; if (!h || !rt) return;
+      items.push({ description: 'PROJECT MANAGEMENT - ' + (x.tech || 'PROJECT MANAGER').trim() + ' (' + h + ' HRS @ $' + rt.toFixed(2) + ' PER HR)', amount: Math.round(creditSign(h * rt) * 100) / 100 });
+    });
     collectSubsData().forEach(function(x) {
       var c = parseFloat(x.cost) || 0; if (!c) return;
       items.push({ description: 'SUBCONTRACTOR - ' + (x.name || 'SUB') + (x.trade ? ' (' + x.trade + ')' : '') + (x.desc ? ': ' + x.desc.split('\n')[0].slice(0, 80) : ''), amount: Math.round(creditSign(c) * 100) / 100 });
@@ -453,7 +470,7 @@ async function syncCOToPrimeContract(projId) {
 
 
 // ========== LIVE COST RECALC (qty, cost, hours, rate, subs) ==========
-['partsList','laborList','subsList','customList'].forEach(function(id){
+['partsList','laborList','pmList','subsList','customList'].forEach(function(id){
   var el=document.getElementById(id);
   if(el){el.addEventListener('input',calcCosts);el.addEventListener('change',calcCosts);}
 });
@@ -484,8 +501,50 @@ function restoreSubs(list){
   (list||[]).forEach(function(x){addSub(x)});
 }
 (function restoreLocalSubs(){
-  try{var raw=localStorage.getItem(SAVE_KEY_DRAFT);if(!raw)return;var d=JSON.parse(raw);if(d&&d._subs&&d._subs.length)restoreSubs(d._subs);if(d&&d._custom&&d._custom.length)restoreCustom(d._custom);}catch(e){}
+  try{var raw=localStorage.getItem(SAVE_KEY_DRAFT);if(!raw)return;var d=JSON.parse(raw);if(d&&d._subs&&d._subs.length)restoreSubs(d._subs);if(d&&d._custom&&d._custom.length)restoreCustom(d._custom);if(d&&d._pm&&d._pm.length)restorePm(d._pm);}catch(e){}
 })();
+
+// ========== PROJECT MANAGEMENT (own category, Project Manager rates — Russ 10/28/2026) ==========
+function pmTypeSelectHtml() {
+  var opts = (window.NW_LABOR_RATES ? window.NW_LABOR_RATES.options() : []).filter(function(o) { return o.role === 'Project Manager'; });
+  return '<select class="labor-type" onchange="applyPmType(this)" style="flex:1.3;padding:10px;border:1px solid var(--nw-border);border-radius:6px;font-size:13px;background:var(--nw-section)">' +
+    '<option value="">Rate…</option>' +
+    opts.map(function(o) { return '<option value="' + o.rate + '" data-label="' + o.label + '">' + o.label + ' ($' + o.rate + ')</option>'; }).join('') +
+    '<option value="custom">Custom rate</option></select>';
+}
+function applyPmType(sel) {
+  var row = sel.closest('.labor-row'); if (!row) return;
+  if (sel.value && sel.value !== 'custom') {
+    row.querySelector('.labor-rate').value = sel.value;
+    var tech = row.querySelector('.labor-tech'), lbl = sel.options[sel.selectedIndex].getAttribute('data-label') || '';
+    if (tech && (!tech.value || tech.getAttribute('data-auto') === '1')) { tech.value = lbl; tech.setAttribute('data-auto', '1'); }
+  }
+  calcCosts();
+}
+function addPm(data) {
+  data = data || {};
+  var q = function(x) { return String(x || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+  var r = document.createElement('div'); r.className = 'labor-row';
+  r.innerHTML = pmTypeSelectHtml() +
+    '<input type="text" placeholder="Project manager" class="labor-tech" value="' + q(data.tech) + '"' + (data.tech && /^Project Manager - /.test(data.tech) ? ' data-auto="1"' : '') + '>' +
+    '<input type="number" step="0.25" placeholder="Hrs" class="labor-hrs" style="width:60px" oninput="calcCosts()" value="' + q(data.hrs) + '">' +
+    '<input type="text" placeholder="$/hr" class="labor-rate" style="width:70px" oninput="calcCosts()" value="' + q(data.rate) + '">' +
+    '<button class="btn btn-danger btn-small" onclick="this.parentElement.remove();calcCosts()" style="width:32px;padding:6px;flex:none">✕</button>';
+  var sel = r.querySelector('.labor-type');
+  for (var i = 0; i < sel.options.length; i++) { if (data.rate && Number(sel.options[i].value) === Number(data.rate) && (sel.options[i].getAttribute('data-label') || '') === (data.tech || '')) { sel.selectedIndex = i; break; } }
+  document.getElementById('pmList').appendChild(r);
+  calcCosts();
+}
+function collectPmData() {
+  var out = []; document.querySelectorAll('#pmList .labor-row').forEach(function(r) {
+    var d = { tech: (r.querySelector('.labor-tech') || {}).value || '', hrs: (r.querySelector('.labor-hrs') || {}).value || '', rate: (r.querySelector('.labor-rate') || {}).value || '' };
+    if (d.tech || d.hrs || d.rate) out.push(d);
+  }); return out;
+}
+function restorePm(list) {
+  document.getElementById('pmList').innerHTML = '';
+  (list || []).forEach(function(x) { addPm(x); });
+}
 
 // ========== CUSTOM (free scope: description + typed breakdown + cost) ==========
 function addCustom(data){
@@ -665,6 +724,7 @@ var _coStatus = 'submitted';
 
     if (fd._subs) restoreSubs(fd._subs);
     if (fd._custom) restoreCustom(fd._custom);
+    if (fd._pm) restorePm(fd._pm);
 
     // Set project picker if project ID stored
     if (fd._projectId && typeof selectProjectById === 'function') {
@@ -727,8 +787,9 @@ function calcCosts(){
   const oh=isHideOhp()?0:matRaw*0.13;
   const profit=isHideOhp()?0:matRaw*0.10;
   const matTotal=matRaw+oh+profit;
-  let labor=0;document.querySelectorAll('.labor-row').forEach(r=>{const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;labor+=h*rt});
+  let labor=0;document.querySelectorAll('#laborList .labor-row').forEach(r=>{const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;labor+=h*rt});
   let subs=0;document.querySelectorAll('.sub-row').forEach(r=>{subs+=parseFloat(r.querySelector('.sub-cost')?.value)||0});
+  let pm=0;document.querySelectorAll('#pmList .labor-row').forEach(r=>{const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;pm+=h*rt});
   let custom=0;document.querySelectorAll('.custom-row').forEach(r=>{custom+=parseFloat(r.querySelector('.cus-cost')?.value)||0});
   const S=creditSign;
   document.getElementById('costParts').textContent=usd(S(matRaw));
@@ -736,9 +797,10 @@ function calcCosts(){
   document.getElementById('costProfit').textContent=usd(S(profit));
   document.getElementById('costMaterialsTotal').textContent=usd(S(matTotal));
   document.getElementById('costLabor').textContent=usd(S(labor));
+  document.getElementById('costPM').textContent=usd(S(pm));
   document.getElementById('costSubs').textContent=usd(S(subs));
   document.getElementById('costCustom').textContent=usd(S(custom));
-  document.getElementById('costTotal').textContent=usd(S(isLumpSum()?(parseFloat(document.getElementById('lumpSumAmount').value)||0):(matTotal+labor+subs+custom)));
+  document.getElementById('costTotal').textContent=usd(S(isLumpSum()?(parseFloat(document.getElementById('lumpSumAmount').value)||0):(matTotal+labor+pm+subs+custom)));
   const tl=document.querySelector('.cost-row.total span');if(tl)tl.textContent=isCredit()?'TOTAL CREDIT':'TOTAL';
 }
 function isLumpSum(){return (document.getElementById('costMode')||{}).value==='lump'}
@@ -770,7 +832,7 @@ function collectPartsData() {
 
 function collectLaborData() {
   var labor = [];
-  document.querySelectorAll('.labor-row').forEach(function(r) {
+  document.querySelectorAll('#laborList .labor-row').forEach(function(r) {
     labor.push({
       tech: (r.querySelector('.labor-tech') || {}).value || '',
       hrs: (r.querySelector('.labor-hrs') || {}).value || '',
@@ -1017,9 +1079,10 @@ function autoSave(){
     else if(el.id)data[el.id]=el.value;
   });
   data._parts=[];document.querySelectorAll('.parts-row').forEach(r=>{data._parts.push({desc:r.querySelector('.part-desc')?.value||'',qty:r.querySelector('.part-qty')?.value||'',cost:r.querySelector('.part-cost')?.value||''})});
-  data._labor=[];document.querySelectorAll('.labor-row').forEach(r=>{data._labor.push({tech:r.querySelector('.labor-tech')?.value||'',hrs:r.querySelector('.labor-hrs')?.value||'',rate:r.querySelector('.labor-rate')?.value||''})});
+  data._labor=[];document.querySelectorAll('#laborList .labor-row').forEach(r=>{data._labor.push({tech:r.querySelector('.labor-tech')?.value||'',hrs:r.querySelector('.labor-hrs')?.value||'',rate:r.querySelector('.labor-rate')?.value||''})});
   data._subs=collectSubsData();
   data._custom=collectCustomData();
+  data._pm=collectPmData();
   data._reportId=reportId;
   localStorage.setItem(SAVE_KEY_DRAFT,JSON.stringify(data));
 }
@@ -1051,6 +1114,7 @@ _parts: collectPartsData(),
 _labor: collectLaborData(),
 _subs: collectSubsData(),
 _custom: collectCustomData(),
+_pm: collectPmData(),
 _photos: collectPhotosData()
 };
 }
@@ -1105,8 +1169,10 @@ function generatePDF(){
   if(!lump){
     const parts=[];document.querySelectorAll('.parts-row').forEach(r=>{const d=r.querySelector('.part-desc')?.value;const q=parseFloat(r.querySelector('.part-qty')?.value)||1;const c=parseFloat(r.querySelector('.part-cost')?.value)||0;if(d)parts.push([d,String(q),money(creditSign(c)),money(creditSign(q*c))])});
     if(parts.length){section('Parts & Materials');table(['Item','Qty','Unit cost','Amount'],parts,{1:{halign:'center',cellWidth:40},2:{halign:'right',cellWidth:80},3:{halign:'right',cellWidth:85}})}
-    const labor=[];document.querySelectorAll('.labor-row').forEach(r=>{const t=r.querySelector('.labor-tech')?.value;const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;if(t)labor.push([t,String(h),money(rt),money(creditSign(h*rt))])});
+    const labor=[];document.querySelectorAll('#laborList .labor-row').forEach(r=>{const t=r.querySelector('.labor-tech')?.value;const h=parseFloat(r.querySelector('.labor-hrs')?.value)||0;const rt=parseFloat(r.querySelector('.labor-rate')?.value)||0;if(t)labor.push([t,String(h),money(rt),money(creditSign(h*rt))])});
     if(labor.length){section('Labor');table(['Technician / trade','Hours','Rate','Amount'],labor,{1:{halign:'center',cellWidth:40},2:{halign:'right',cellWidth:80},3:{halign:'right',cellWidth:85}})}
+    const pmRows=collectPmData().filter(x=>x.tech||parseFloat(x.hrs)).map(x=>{const h=parseFloat(x.hrs)||0,rt=parseFloat(x.rate)||0;return[x.tech||'Project Manager',String(h),money(rt),money(creditSign(h*rt))]});
+    if(pmRows.length){section('Project Management');table(['Role','Hours','Rate','Amount'],pmRows,{1:{halign:'center',cellWidth:40},2:{halign:'right',cellWidth:80},3:{halign:'right',cellWidth:85}})}
     const subs=collectSubsData().map(x=>[(x.name||'')+(x.trade?' ('+x.trade+')':''),x.desc||'',money(creditSign(parseFloat(x.cost)||0))]);
     if(subs.length){section('Subcontractors');table(['Subcontractor','Scope / description','Amount'],subs,{0:{cellWidth:150},2:{halign:'right',cellWidth:85}})}
     // Russ 10/28/2026: no separate Breakdown column — the details print under the description, which gets the full width
@@ -1115,7 +1181,7 @@ function generatePDF(){
 
     section('Cost Summary');
     const t=id=>num(document.getElementById(id).textContent);
-    (isHideOhp()?[['Materials',t('costParts'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom breakdown',t('costCustom'),0]]:[['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Subcontractors',t('costSubs'),0],['Custom breakdown',t('costCustom'),0]]).filter(r=>r[0]!=='Custom breakdown'||r[1]).forEach(r=>{
+    (isHideOhp()?[['Materials',t('costParts'),0],['Labor',t('costLabor'),0],['Project management',t('costPM'),0],['Subcontractors',t('costSubs'),0],['Custom breakdown',t('costCustom'),0]]:[['Materials',t('costParts'),0],['OH (13%)',t('costOH'),1],['Profit (10%)',t('costProfit'),1],['Materials total',t('costMaterialsTotal'),0],['Labor',t('costLabor'),0],['Project management',t('costPM'),0],['Subcontractors',t('costSubs'),0],['Custom breakdown',t('costCustom'),0]]).filter(r=>(r[0]!=='Custom breakdown'&&r[0]!=='Project management')||r[1]).forEach(r=>{
       room(16);doc.setFont('helvetica',r[2]?'normal':'bold');doc.setFontSize(r[2]?9:10);doc.setTextColor(...(r[2]?mute:ink));
       doc.text(r[0],M+(r[2]?16:6),y);doc.text(money(r[1]),R-6,y,{align:'right'});y+=16});
     y+=4;
@@ -1398,9 +1464,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=579"></script>
-<script src="nw-drive.js?v=579"></script>
-<script src="nw-form-kit.js?v=579"></script>
-<script src="sw-register.js?v=579"></script>
+<script src="form-utils.js?v=580"></script>
+<script src="nw-drive.js?v=580"></script>
+<script src="nw-form-kit.js?v=580"></script>
+<script src="sw-register.js?v=580"></script>
 </body>
 </html>
