@@ -8,24 +8,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0696D7">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=580"></script>
-<script src="auth.js?v=580"></script>
-<script src="labor-rates.js?v=580"></script>
-<script src="cloud-save.js?v=580"></script>
+<script src="supabase-config.js?v=581"></script>
+<script src="auth.js?v=581"></script>
+<script src="labor-rates.js?v=581"></script>
+<script src="cloud-save.js?v=581"></script>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Change Order — Northern Wolves AC</title>
-<script src="draft-utils.js?v=580"></script>
-<script src="edit-utils.js?v=580"></script>
-<script src="project-utils.js?v=580"></script>
-<script src="customer-utils.js?v=580"></script>
+<script src="draft-utils.js?v=581"></script>
+<script src="edit-utils.js?v=581"></script>
+<script src="project-utils.js?v=581"></script>
+<script src="customer-utils.js?v=581"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=580"></script>
-<script src="nw-email.js?v=580"></script>
-<script src="ai-summary.js?v=580"></script>
-<script src="ai-chat.js?v=580"></script>
+<script src="email-utils.js?v=581"></script>
+<script src="nw-email.js?v=581"></script>
+<script src="ai-summary.js?v=581"></script>
+<script src="ai-chat.js?v=581"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="pdf-utils.js?v=580"></script>
+<script src="pdf-utils.js?v=581"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -357,9 +357,9 @@ function applyLaborType(sel) {
   var row = sel.closest('.labor-row'); if (!row) return;
   var picked = sel.value && sel.value !== 'custom' ? (sel.options[sel.selectedIndex].getAttribute('data-label') || '') : '';
   if (/^Project Manager/.test(picked) && row.closest('#laborList')) {   // Project Management is its own category (Russ 10/28/2026)
-    var hrs = (row.querySelector('.labor-hrs') || {}).value || '';
+    var hrs = (row.querySelector('.labor-hrs') || {}).value || '', rate = sel.value;   // read before the Labor row is cleared
     if (document.querySelectorAll('#laborList .labor-row').length > 1) row.remove(); else { row.querySelectorAll('input').forEach(function(i) { i.value = ''; }); sel.selectedIndex = 0; }
-    addPm({ tech: picked, hrs: hrs, rate: sel.value });
+    addPm({ tech: picked, hrs: hrs, rate: rate });
     showToast('Moved to Project Management');
     return;
   }
@@ -1464,9 +1464,9 @@ function openChangeOrderAIChat() {
   });
 }
 </script>
-<script src="form-utils.js?v=580"></script>
-<script src="nw-drive.js?v=580"></script>
-<script src="nw-form-kit.js?v=580"></script>
-<script src="sw-register.js?v=580"></script>
+<script src="form-utils.js?v=581"></script>
+<script src="nw-drive.js?v=581"></script>
+<script src="nw-form-kit.js?v=581"></script>
+<script src="sw-register.js?v=581"></script>
 </body>
 </html>
