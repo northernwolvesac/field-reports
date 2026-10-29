@@ -248,3 +248,33 @@ risers) CO still unapproved.
 10/26: BC0006 in Clearstory shows $0.00, no backup. Ruslan: wait for STO to issue the updated BC, then respond with the
 draft. Suggested a one-line Clearstory comment before 10/29 (not accepted, will respond to the substantiated BC);
 do not click No Cost Impact or Create COR.
+
+**10/28: BC0006 DELETED in Clearstory by Mark Vetterlein** (notice 10/28 7:34 am, no message). Closed unless re-issued;
+the response draft stays in the folder.
+
+## 8. Change order approvals and billing (status 10/28)
+
+Pending in Clearstory, work done in September (Christino to Samuel 10/28; Samuel's answer 10/28):
+| COR | Description | STO status |
+|---|---|---|
+| COR#9 COP-SF-10BC | Damaged pipe riser | "Backcharge to other subs, we are working through with them" |
+| COR#7 | Mechanical riser piping relocated (EOR wrong risers) | Waiting on client |
+| COR#5 | Existing hot water riser mod | Waiting on client |
+| COR#3.1 | Bulletin #3 (COP-SF-05, $53,555 rev 5) | Held up by other sub pricing; "client has no issue with your cost. It will be approved" |
+
+Approved by Mark by email only, 10/28 (to Christino, cc STO): "FSDs snowflake" - "this change order is approved please
+make sure fsd's are ordered"; "bathroom duct snowflake" - "this price is approved to proceed - please let the team know
+when duct is due onsite". Christino asked Sam to approve them in Clearstory with the others.
+Mark 10/28: PC0043 (return air slot at service point) and PC0048 (relocate devices per RFI #47) will be voided unless
+explained - Christino: nothing for NW.
+
+**Contract rules (Subcontract 11010174015):**
+- 1.17: Changes adjust the price only "by written order prepared by Structure Tone"; pending final determination NW
+  must proceed "when so directed by Structure Tone". -> Mark's email = direction to proceed (keep it), not a CO.
+- Billing instructions: "Approved Change Orders" = only work "issued a signed Structure Tone, LLC Change Order". Work in
+  place not on the approved SOV: do not put it on the requisition; send a separate email with "Claim" in the subject +
+  job number, all backup and the authorization to proceed; follow up with PM / estimator.
+- 1.10 / 1.11: payment subject to receipt of payment from Owner (pay-when-paid, condition precedent). "Waiting on
+  client" means STO will not issue the SCO until the owner approves.
+- COR#9: the back charge to other subs is STO's recovery; it is not a condition of NW's change order.
+
