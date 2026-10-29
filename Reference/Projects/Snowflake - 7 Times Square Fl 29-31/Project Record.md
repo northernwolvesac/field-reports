@@ -265,9 +265,19 @@ the response draft stays in the folder.
 | 10 | Modify air outlets, core bathrooms, 3 floors | PC0062 | 10/21 | $46,605.50 | In Review | Mark email approval 10/28 |
 | 12 | Additional FSD room 3014, SKE-2 | PC0063 | 10/22 | $11,890.00 | In Review | Mark email approval 10/28 ("make sure FSDs are ordered") |
 
+Written approvals for 3.1 / 5 / 7 (PDFs in `source/`, 10/29 from Ruslan):
+- 3.1 Bulletin 3: Mark 8/27 "Bulletin 3 is approved. You're not proceeding?"; 8/28 "Christino you are approved - what more
+  do you need than this email?"; Mark 8/28 to Ruslan: "we released you all. There is a revision on the painting and
+  drywall end we are waiting on for formal signature"; Ruslan 8/28 "We will accept your email as approval and proceed."
+- 5 / 7 HW piping: Jimmy McMullin 9/3 "Please proceed with the change order work for both the corrective piping work on
+  29 and 31 ... The chief engineer approved your shop drawings today and BXP agreed to price and proceed"; Mark 9/9 "All
+  of the hot water piping relocates scope across the 3 change orders is approved. We just need accurate pricing with
+  back up attached to all of them to submit for signature" (3 COs = COR 4 approved, 5, 7).
+- COR 5 "Revise and Resubmit": backup already given, no revision needed (Ruslan 10/29). COR 9 $79,027 vs our $79,552.50:
+  will be revised (Ruslan 10/29).
 Completed and unbilled (3.1 + 5 + 7): $113,142.00. Email-approved, proceeding (10 + 12): $58,495.50.
-10/29: "Claim" email drafted to Mark + Sam (cc Christino, Andrei, Fatima), not sent - lists 3.1/5/7 as completed claim
-and 10/12 as proceeding per Mark's 10/28 direction, asks for signed STO Change Orders and a date for 3.1/5/7.
+10/29: "Claim" email re-drafted to Mark + Sam (cc Christino, Andrei, Fatima), not sent - cites the 8/27-28, 9/3, 9/9
+and 10/28 approvals, asks for signed STO Change Orders and a date for 3.1/5/7. Attach the 3 approval PDFs by hand.
 Mark 10/28: PC0043 (return air slot at service point) and PC0048 (relocate devices per RFI #47) will be voided unless
 explained - Christino: nothing for NW.
 
