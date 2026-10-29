@@ -11,19 +11,19 @@
 <meta name="theme-color" content="#0696D7">
 <title>Bid Project — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=572">
+<link rel="stylesheet" href="procore-ui.css?v=584">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=572"></script>
-<script src="auth.js?v=572"></script>
-<script src="est-totals.js?v=572"></script>
-<script src="procore-ui.js?v=572"></script>
+<script src="supabase-config.js?v=584"></script>
+<script src="auth.js?v=584"></script>
+<script src="est-totals.js?v=584"></script>
+<script src="procore-ui.js?v=584"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-<script src="bid-actions.js?v=572"></script>
-<script src="est-drawings.js?v=572"></script>
-<script src="nw-proposal.js?v=572"></script>
+<script src="bid-actions.js?v=584"></script>
+<script src="est-drawings.js?v=584"></script>
+<script src="nw-proposal.js?v=584"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -398,7 +398,7 @@ requireAuth().catch(function(){});
   function icon(n, s) { return PC.icon(n, s || 18); }
   function debounce(fn, ms) { var t; return function() { var a = arguments, c = this; clearTimeout(t); t = setTimeout(function() { fn.apply(c, a); }, ms); }; }
   function settingsOf(row) { return (row && row.settings && typeof row.settings === 'object') ? row.settings : {}; }
-  function viewOnly() { toast('View only — management or estimator role needed', 'error'); }
+  function viewOnly() { toast('View only — admin or estimator role needed', 'error'); }
   function money(n) { return PC.money(Number(n) || 0); }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1905,6 +1905,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=572"></script>
+<script src="sw-register.js?v=584"></script>
 </body>
 </html>

@@ -11,13 +11,13 @@
 <meta name="theme-color" content="#0696D7">
 <title>Cost Catalog — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=440">
+<link rel="stylesheet" href="procore-ui.css?v=584">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=440"></script>
-<script src="auth.js?v=440"></script>
-<script src="procore-ui.js?v=440"></script>
-<script src="nw-catalog-picker.js?v=440"></script>
-<script src="nw-duct-weight.js?v=441"></script>
+<script src="supabase-config.js?v=584"></script>
+<script src="auth.js?v=584"></script>
+<script src="procore-ui.js?v=584"></script>
+<script src="nw-catalog-picker.js?v=584"></script>
+<script src="nw-duct-weight.js?v=584"></script>
 <style>
   /* ── Cost Catalog page (Procore "Select catalog item" layout, rendered in-page) ── */
   .pc-page [hidden] { display: none !important; }
@@ -97,8 +97,8 @@ requireAuth().catch(function(){});
 (function() {
   'use strict';
 
-  // Same roles as PC.MGMT_ROLES (procore-ui.js); local copy only used when PC is not loaded.
-  var MGMT_ROLES = ['admin','manager','lead_pm','project_manager','apm','estimator'];
+  // Same roles as PC.EDIT_ROLES (procore-ui.js); local copy only used when PC is not loaded.
+  var MGMT_ROLES = ['admin','estimator'];
 
   // Exact <header class="dash-header"> block from index.html — used when PC.nwHeaderHtml is unavailable.
   var FALLBACK_HEADER =
@@ -284,6 +284,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=440"></script>
+<script src="sw-register.js?v=584"></script>
 </body>
 </html>

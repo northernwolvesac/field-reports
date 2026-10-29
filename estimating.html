@@ -11,22 +11,22 @@
 <meta name="theme-color" content="#0696D7">
 <title>Estimating — Northern Wolves AC</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=570">
+<link rel="stylesheet" href="procore-ui.css?v=584">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="supabase-config.js?v=570"></script>
-<script src="auth.js?v=570"></script>
-<script src="est-totals.js?v=570"></script>
-<script src="procore-ui.js?v=570"></script>
-<script src="nw-catalog-picker.js?v=570"></script>
-<script src="nw-duct-weight.js?v=570"></script>
-<script src="nw-proposal.js?v=570"></script>
-<script src="bid-actions.js?v=570"></script>
+<script src="supabase-config.js?v=584"></script>
+<script src="auth.js?v=584"></script>
+<script src="est-totals.js?v=584"></script>
+<script src="procore-ui.js?v=584"></script>
+<script src="nw-catalog-picker.js?v=584"></script>
+<script src="nw-duct-weight.js?v=584"></script>
+<script src="nw-proposal.js?v=584"></script>
+<script src="bid-actions.js?v=584"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="email-utils.js?v=570"></script>
-<script src="nw-email.js?v=570"></script>
+<script src="email-utils.js?v=584"></script>
+<script src="nw-email.js?v=584"></script>
 <style>
   /* ── page frame ─────────────────────────────────────────────── */
   body.pc-page { background: #f5f6f7; }
@@ -636,7 +636,7 @@ requireAuth().catch(function(){});
         currentUserRole = prof.data.role;
         currentUserName = prof.data.full_name || (user && user.email) || null;
         currentUserEmail = prof.data.email || (user && user.email) || null;
-        canEdit = (window.PC && PC.canEdit) ? !!PC.canEdit(prof.data) : MGMT_ROLES.indexOf(currentUserRole) >= 0;
+        canEdit = (window.PC && PC.canEdit) ? !!PC.canEdit(prof.data) : ['admin', 'estimator'].indexOf(currentUserRole) >= 0;
       } else if (user) {
         currentUserName = user.email || null;
         currentUserEmail = user.email || null;
@@ -942,7 +942,7 @@ requireAuth().catch(function(){});
 
     if (!ests.length) {
       wrap.innerHTML = '<div class="pc-empty">No estimates yet.<br>' +
-        (canEdit ? 'Click <b>+ New estimate</b> above to create your first bid.' : 'Ask a PM or admin to create one.') + '</div>';
+        (canEdit ? 'Click <b>+ New estimate</b> above to create your first bid.' : 'Ask an estimator or admin to create one.') + '</div>';
       return;
     }
 
@@ -3858,6 +3858,6 @@ requireAuth().catch(function(){});
   window.ES = { state: state, columns: COLUMNS, lines: function() { return currentLines; }, est: function() { return currentEst; }, totals: function() { return computeAllTotals(currentLines, currentEst); }, refresh: refreshAll, changeStatus: changeStatus, deleteLine: deleteLine };
 })();
 </script>
-<script src="sw-register.js?v=570"></script>
+<script src="sw-register.js?v=584"></script>
 </body>
 </html>

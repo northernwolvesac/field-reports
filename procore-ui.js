@@ -123,8 +123,10 @@
     ['equipment_install', 'Equipment Install'], ['air_outlets', 'Air Outlets Install'], ['services', 'Services']
   ];
   PC.MGMT_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm', 'estimator'];
+  // Who may change bids / estimates / takeoffs. PMs (role manager and the PM roles) only view them (Russ 10/28/2026).
+  PC.EDIT_ROLES = ['admin', 'estimator'];
   PC.canEdit = function (profile) {
-    return !!(profile && PC.MGMT_ROLES.indexOf(profile.role) >= 0);
+    return !!(profile && PC.EDIT_ROLES.indexOf(profile.role) >= 0);
   };
 
   /* ─── Floating menus ───────────────────────────────────────────────── */

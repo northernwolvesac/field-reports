@@ -13,13 +13,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="procore-ui.css?v=583">
+<link rel="stylesheet" href="procore-ui.css?v=584">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-config.js?v=583"></script>
-<script src="auth.js?v=583"></script>
-<script src="est-totals.js?v=583"></script>
-<script src="procore-ui.js?v=583"></script>
-<script src="bid-actions.js?v=583"></script>
+<script src="supabase-config.js?v=584"></script>
+<script src="auth.js?v=584"></script>
+<script src="est-totals.js?v=584"></script>
+<script src="procore-ui.js?v=584"></script>
+<script src="bid-actions.js?v=584"></script>
 <style>
   /* ═══════ Title row (PC.renderTitleRow) + helpers emitted by procore-ui.js ═══════
      Duplicated here as fallbacks so the page renders even if procore-ui.css lags. */
@@ -834,7 +834,7 @@ requireAuth().catch(function(){});
 
   /* ─── Create New Project ───────────────────────────────────────────── */
   async function openCreate(preselectId) {
-    if (!canEdit) { PC.toast('Only management and estimators can create bid projects', 'error'); return; }
+    if (!canEdit) { PC.toast('Only admins and estimators can create bid projects', 'error'); return; }
     var tpls = await loadTemplates();
     var def = tpls.filter(isDefaultTpl)[0];
     var sel = (typeof preselectId === 'string' && preselectId) ? preselectId : (def ? def.id : '');
@@ -933,6 +933,6 @@ requireAuth().catch(function(){});
   }
 })();
 </script>
-<script src="sw-register.js?v=583"></script>
+<script src="sw-register.js?v=584"></script>
 </body>
 </html>
