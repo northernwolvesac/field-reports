@@ -52,3 +52,21 @@ counts are checked against the PLENUM / CFM text inside each cloud. Clouds are f
 - `source/` - the three SD R2 PDFs.
 - Exclusions (Ruslan, 10/08): 1. soffit and ceiling openings, framing, access panels, patching and painting;
   2. relocation of lights, electrical wires, j-boxes or other trades' work discovered after the soffits are opened.
+
+## Rev 1 - CMTA markup 10/29/2026 (Brandon Shafran) - replaces the SD R2 scope
+Source: `source/2026-10-29 CMTA markup - Linear Diffuser Locations M-529 M-530 M-531 M-904.pdf` (Bulletin 3 sheets
+with red markups). Linear diffusers now only where highlighted red; all FL-10, (1) 2" slot:
+- 29th: Seventh Ave (4) 4'-0" x 300 CFM = 1200 CFM at the existing G(400) x3 on the 10" duct; W 42nd St (3) 4'-0" x 300
+  CFM = 900 CFM at the existing G(300) x3 on the 26x10. "Revise mounting angle of diffusers currently installed":
+  Broadway run 20x10 / 10", G(300) x5.
+- 30th: no linear diffusers. Revise mounting angle: 20x16 run, G(400) x3.
+- 31st: Seventh Ave on the 20x12: (1) 6'-0" x 400 CFM, (4) 4'-0" x 300 = 1200, (3) 4'-0" x 300 = 900; "Balance last
+  diffuser to 300 CFM". Revise mounting angle: south run 16x12 / 8", G(300) x5. "Lower this section of ductwork": east
+  diagonal 16x10 / 10" run with G(300) x3.
+- M-904: two details crossed out (DD grille to oval duct, centre of glass; field-condition detail). Remaining: DD grille
+  with integral air scoop damper mounted in duct at 22.5 deg, aimed at the base of glass (round duct) = the re-angle
+  detail; and the perimeter linear diffuser connection (lined plenum, equalizing grid, cable operated opposed blade VD
+  through the face, flat oval branch, 3" turning ledge).
+Totals: 15 linear diffusers (14 x 4' + 1 x 6' = 62 LF), 4,600 CFM; vs SD R2 49 LD / 13,500 CFM ($79,552.50; Clearstory
+COR 9 $79,027). Existing G grilles at the LD locations come out (29th 6, 31st about 5-6). Re-angle 13 grilles. Pricing
+of the new items (removal, re-angle, duct lowering, foreman/TAB/drawings) pending Ruslan.
