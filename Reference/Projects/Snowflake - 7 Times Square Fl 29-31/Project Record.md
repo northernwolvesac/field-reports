@@ -252,19 +252,22 @@ do not click No Cost Impact or Create COR.
 **10/28: BC0006 DELETED in Clearstory by Mark Vetterlein** (notice 10/28 7:34 am, no message). Closed unless re-issued;
 the response draft stays in the folder.
 
-## 8. Change order approvals and billing (status 10/28)
+## 8. Change order approvals and billing (status 10/29, Clearstory screenshot from Ruslan)
 
-Pending in Clearstory, work done in September (Christino to Samuel 10/28; Samuel's answer 10/28):
-| COR | Description | STO status |
-|---|---|---|
-| COR#9 COP-SF-10BC | Damaged pipe riser | "Backcharge to other subs, we are working through with them" |
-| COR#7 | Mechanical riser piping relocated (EOR wrong risers) | Waiting on client |
-| COR#5 | Existing hot water riser mod | Waiting on client |
-| COR#3.1 | Bulletin #3 (COP-SF-05, $53,555 rev 5) | Held up by other sub pricing; "client has no issue with your cost. It will be approved" |
+| COR | Title | Ref | Submitted | Amount | Clearstory | Note |
+|---|---|---|---|---|---|---|
+| 3.1 | Bulletin #3 | PC0032 | 08/17 | $53,555.00 | In Review | Done Sep/Oct, unbilled. Sam: held up by other sub pricing, "will be approved" |
+| 4 | Relocate existing HW pipes | PC0036 | 08/31 | $4,512.00 | Approved | |
+| 5 | Existing HW riser modifications | PC0040 | 09/08 | $8,368.00 | In Review / **Revise and Resubmit** | Done, unbilled. Sam: waiting on client. Find out what STO wants revised |
+| 7 | Mechanical riser piping re-route | PC0046 | 09/14 | $51,219.00 | In Review | Done, unbilled. Sam: waiting on client |
+| 8 | COP-SF-10 BC damaged riser 31st | BC0003 | 09/28 | $2,984.00 | In Review | Approved docs received (Ruslan 10/29); Sam's "COR#9 backcharge to other subs" was this one |
+| 9 | Linear diffusers in lieu of air outlets | CR0054 | 10/08 | $79,027.00 | In Review | Our breakdown total $79,552.50 - $525.50 difference, check |
+| 10 | Modify air outlets, core bathrooms, 3 floors | PC0062 | 10/21 | $46,605.50 | In Review | Mark email approval 10/28 |
+| 12 | Additional FSD room 3014, SKE-2 | PC0063 | 10/22 | $11,890.00 | In Review | Mark email approval 10/28 ("make sure FSDs are ordered") |
 
-Approved by Mark by email only, 10/28 (to Christino, cc STO): "FSDs snowflake" - "this change order is approved please
-make sure fsd's are ordered"; "bathroom duct snowflake" - "this price is approved to proceed - please let the team know
-when duct is due onsite". Christino asked Sam to approve them in Clearstory with the others.
+Completed and unbilled (3.1 + 5 + 7): $113,142.00. Email-approved, proceeding (10 + 12): $58,495.50.
+10/29: "Claim" email drafted to Mark + Sam (cc Christino, Andrei, Fatima), not sent - lists 3.1/5/7 as completed claim
+and 10/12 as proceeding per Mark's 10/28 direction, asks for signed STO Change Orders and a date for 3.1/5/7.
 Mark 10/28: PC0043 (return air slot at service point) and PC0048 (relocate devices per RFI #47) will be voided unless
 explained - Christino: nothing for NW.
 
