@@ -10,7 +10,9 @@ submittal H-02.00. All in `Reference/Projects/Snowflake - 7 Times Square Fl 29-3
   twisted shielded, screen to frame). "Enables the control of two pumps connected in parallel without the use of
   external controllers." Standby starts if the duty pump stops on an alarm. Each pump needs a check valve.
 - Alternation: "energy" (Grundfos recommends; changeover after about one day of energy difference) or "time"
-  (needs FM 300; you set the time of day for changeover, i.e. daily, not a run-hour interval like 150 h). "Backup
+  (you set the time of day for changeover, i.e. daily, not a run-hour interval like 150 h). The older IOM page in the
+  Dolphin guide says "time" needs FM 300; the current IOM 98358864 (09/2025) p.63 says FM310 or FM311 - so on FM 300
+  plan on "energy". "Backup
   operation" runs the backup pump briefly each day.
 - Either pump can be master only if each has its own pressure / DP sensor -> one sensor per pump (Barry 9/28).
 - Restart: the motor restarts by itself when voltage returns (IOM 5.1, over/undervoltage protection).

@@ -133,6 +133,10 @@ AutoDialer", start/stop and status, AC interlock; Exclusion 6 "except Leak Detec
 landlord BMS (on their 300C), their 300A already wires flow and leak alarms to DXRs; vendor: Dolphin 9/28 guide +
 "standard startup/programming can be used". To do: forward Barry's 9/28 email (msg with duty/standby guide) to Alan;
 send the Barry start-up scope draft so Dolphin confirms in writing that start-up sets up the multipump.
+**Siemens call Fri 10/30 10:00.** Meeting pack in `Siemens pump controls/Siemens call 10-30/` (`build_pack.py`):
+00 meeting sheet (goal, position, answers to Alan, scope split, questions, fallback, open 9/28 items, legend), 01 proposal
+highlighted, 02 R0 300-300C marked, 03 EOR docs, 04 H-02.00, 05 IOM extract, 06 Dolphin guide, 07 6/29 email, 08 Tekmar
+132; plus one combined PDF with bookmarks.
 **Siemens ATC R0 (7/22) sheets 300-300C, checked 10/27:** one "CWP-xx-1&2 LEAD LAG PANEL" box per floor, by others,
 not in the 300C BOM, no model, no power source shown. Siemens lands only: system enable (RE-x-1 from CRAC unit status),
 VFD-1/2 run and speed from separate "VFD panels" (note 2 "VFD mounted in ceiling near pump set" - do not exist, VFD is
