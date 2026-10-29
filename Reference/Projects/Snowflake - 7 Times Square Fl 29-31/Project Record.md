@@ -276,8 +276,11 @@ Written approvals for 3.1 / 5 / 7 (PDFs in `source/`, 10/29 from Ruslan):
 - COR 5 "Revise and Resubmit": backup already given, no revision needed (Ruslan 10/29). COR 9 $79,027 vs our $79,552.50:
   will be revised (Ruslan 10/29).
 Completed and unbilled (3.1 + 5 + 7): $113,142.00. Email-approved, proceeding (10 + 12): $58,495.50.
-10/29: "Claim" email re-drafted to Mark + Sam (cc Christino, Andrei, Fatima), not sent - cites the 8/27-28, 9/3, 9/9
-and 10/28 approvals, asks for signed STO Change Orders and a date for 3.1/5/7. Attach the 3 approval PDFs by hand.
+10/29: **Leonid takes the lead** (Ruslan). Sent Leonid the formal "Claim" email to send to Mark + Sam (cc Jimmy
+McMullin, Marc DeLuca, Christino, Andrei, Fatima, Ruslan): cites the 8/27-28, 9/3, 9/9 and 10/28 approvals, $113,142
+completed and unbilled, second billing cycle without payment, asks to expedite signed STO COs, expects all approved COs
+in the November requisition. Forwarded him the 5 approval emails as attachments. Ruslan's own claim draft deleted.
+Weekly follow-up by Leonid until signed COs are issued.
 Mark 10/28: PC0043 (return air slot at service point) and PC0048 (relocate devices per RFI #47) will be voided unless
 explained - Christino: nothing for NW.
 
