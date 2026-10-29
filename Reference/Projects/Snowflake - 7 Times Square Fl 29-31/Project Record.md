@@ -126,6 +126,13 @@ GENIbus does rotation and standby; BMS scope stays as in their proposal (CRAC ru
 status/alarm to DXR + autodialer, flow switches and leak detectors to DXR plus a contact to that pump's fault input,
 V-1/V-2 and CRAC valves per 3d / 4g-4j, one DP transmitter per pump to AI1, local A/V alarm); call Thu 10/29 or Fri 10/30.
 Tekmar option not mentioned to Siemens yet.
+**10/29 call with Alan, then Alan email 11:07:** no alarm point in documents/proposal; "sequence ... shows this is 100%
+standalone with no connection to the BMS at all"; asks if the VFD vendor confirmed the drives act as the lead/lag panel.
+Reply drafted (not sent): alarms are in their p.5 scope (flow switches, leak detectors "to alarm at BB BMS and Tenant
+AutoDialer", start/stop and status, AC interlock; Exclusion 6 "except Leak Detection"), seq 3c/3d local A/V + leak to
+landlord BMS (on their 300C), their 300A already wires flow and leak alarms to DXRs; vendor: Dolphin 9/28 guide +
+"standard startup/programming can be used". To do: forward Barry's 9/28 email (msg with duty/standby guide) to Alan;
+send the Barry start-up scope draft so Dolphin confirms in writing that start-up sets up the multipump.
 **Siemens ATC R0 (7/22) sheets 300-300C, checked 10/27:** one "CWP-xx-1&2 LEAD LAG PANEL" box per floor, by others,
 not in the 300C BOM, no model, no power source shown. Siemens lands only: system enable (RE-x-1 from CRAC unit status),
 VFD-1/2 run and speed from separate "VFD panels" (note 2 "VFD mounted in ceiling near pump set" - do not exist, VFD is
