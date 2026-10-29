@@ -18,7 +18,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="supabase-config.js?v=584"></script>
 <script src="auth.js?v=584"></script>
-<script src="est-totals.js?v=584"></script>
+<script src="est-totals.js?v=585"></script>
 <script src="procore-ui.js?v=584"></script>
 <script src="nw-catalog-picker.js?v=584"></script>
 <script src="nw-duct-weight.js?v=584"></script>
@@ -1090,6 +1090,7 @@ requireAuth().catch(function(){});
     } else {
       patch.created_by     = currentUserId;
       patch.estimator_name = currentUserName || 'Unassigned';
+      Object.assign(patch, nwEstStdRow(false, false));   // company standard rates (v585: OH&P 30 %, labor $65/h)
       res = await supabaseClient.from('estimates').insert(patch).select().single();
     }
     btn.disabled = false; btn.textContent = 'Save';
@@ -2851,7 +2852,7 @@ requireAuth().catch(function(){});
     var q  = num($('lQty').value);
     var mu = num($('lMatUnit').value);
     var lh = modalLaborHours();
-    var rate = (window.nwEstRates ? nwEstRates(currentEst || {}).labor : num(currentEst && currentEst.labor_rate) || 60);
+    var rate = (window.nwEstRates ? nwEstRates(currentEst || {}).labor : num(currentEst && currentEst.labor_rate) || NW_EST_STD.labor);
     var mat = q * mu, totalHrs = q * lh, lab = totalHrs * rate;
     $('liveHint').innerHTML =
       'Subtotal Item Cost <b>' + money(mat) + '</b> · Labor <b>' + fmtNum(totalHrs, 2) + ' hrs × ' + money(rate) + ' = ' + money(lab) + '</b> · Total Sales <b>' + money(mat + lab) + '</b>';
@@ -3309,7 +3310,8 @@ requireAuth().catch(function(){});
       return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + escHtml(label) + '</td><td>' + hrs + '</td><td>' + factor + '</td><td>' + waste + '</td><td>' + cost + '</td><td>' + mk + '</td><td>' + sales + '</td><td>' + profit + '</td></tr>';
     }
     var html =
-      '<div class="es-side-line">Global labor cost <b id="lrEdit" title="' + (locked ? 'Pricing locked' : 'Click to edit') + '">' + fmtNum(t.rates.labor, 2) + ' $/hr</b> &nbsp; Global labor sales rate <b id="lsrEdit" style="color:' + (locked ? '#4b5563' : '') + '">' + fmtNum(salesRate, 2) + ' $/hr</b></div>' +
+      '<div class="es-side-line">Global labor cost <b id="lrEdit" title="' + (locked ? 'Pricing locked' : 'Click to edit') + '">' + fmtNum(t.rates.labor, 2) + ' $/hr</b> &nbsp; Global labor sales rate <b id="lsrEdit" style="color:' + (locked ? '#4b5563' : '') + '">' + fmtNum(salesRate, 2) + ' $/hr</b>' +
+        ' &nbsp; <label class="es-switch" style="display:inline-block;vertical-align:middle" title="Prevailing wage job: labor at ' + fmtNum(NW_EST_STD.pwLabor, 0) + ' $/hr (off: ' + fmtNum(NW_EST_STD.labor, 0) + ' $/hr)"><input type="checkbox" id="pwToggle"' + (getSettings().prevailing_wage ? ' checked' : '') + (locked || !canEdit ? ' disabled' : '') + '><span></span></label> Prevailing wage</div>' +
       '<div class="es-sumtable-wrap"><table class="es-sumtable"><thead><tr><th>Catalog Item Type</th><th>Total Labor (hrs)</th><th>Difficulty Factor</th><th>Waste (%)</th><th>Total Cost ($)</th><th>Markup (%)</th><th>Total Sales ($)</th><th>Profit ($)</th></tr></thead><tbody>' +
         row('Labor', fmtNum(sm.labor.hours, 2) + ' hrs', '<span style="color:var(--pc-link)">' + fmtNum(sm.labor.factor, 2) + ' x</span>', '0 %', money(sm.labor.cost), fmtNum(sm.labor.markupPct * 100, 2) + ' %', money(sm.labor.sales), money(sm.labor.profit)) +
         row('Materials', '--', '--', fmtNum(sm.materials.waste * 100, 2) + ' %', money(sm.materials.cost), fmtNum(sm.materials.markupPct * 100, 2) + ' %', money(sm.materials.sales), money(sm.materials.profit)) +
@@ -3366,6 +3368,12 @@ requireAuth().catch(function(){});
     // bindings
     if (!locked) {
       $('lrEdit').addEventListener('click', function() { inlineRate($('lrEdit'), t.rates.labor, async function(v) { await saveMarkups({ labor_rate: v }); }); });
+      // prevailing wage: the switch sets the global labor cost to the PW rate (on) or the company rate (off); the flag stays in settings
+      $('pwToggle').addEventListener('change', async function(e) {
+        var on = e.target.checked;
+        if (!(await saveSettings(function(x) { x.prevailing_wage = on; }))) { e.target.checked = !on; return; }
+        await saveMarkups({ labor_rate: on ? NW_EST_STD.pwLabor : NW_EST_STD.labor });
+      });
       $('lsrEdit').addEventListener('click', function() { inlineRate($('lsrEdit'), salesRate, async function(v) { await saveSettings(function(x) { x.labor_sales_rate = v; }); refreshAll(); }); });
       host.querySelectorAll('[data-mkadd]').forEach(function(b) { b.addEventListener('click', function() { openMarkupDrawer(null, b.getAttribute('data-mkadd')); }); });
       host.querySelectorAll('[data-mkmenu]').forEach(function(b) {
@@ -3476,7 +3484,7 @@ requireAuth().catch(function(){});
         '<div class="pc-muted" style="font-size:11px;margin-top:4px">Basic = % of Subtotal · Compounds all Above = % of Subtotal + markups above · Selective Compounding is treated as Compounds all Above at NWAC</div></div>' +
       '<div class="pc-grid2"><div class="pc-field"><label class="pc-label">Percentage (%)</label><input class="pc-input" id="mkPct" type="number" step="0.001" value="' + (num(m.pct) * 100) + '"></div>' +
         '<div class="pc-field"><label class="pc-label">Lump sum ($)</label><input class="pc-input" id="mkAmt" type="number" step="0.01" value="' + num(m.amount) + '"' + (builtin ? ' disabled' : '') + '></div></div>' +
-      (id === 'overhead' ? '<div class="pc-field" style="display:flex;align-items:center;gap:10px"><label class="es-switch"><input type="checkbox" id="mkOfci"' + (currentEst.is_ofci ? ' checked' : '') + '><span></span></label><span>Owner-furnished equipment (OFCI) → 30 % overhead</span></div>' : '') +
+      (id === 'overhead' ? '<div class="pc-field" style="display:flex;align-items:center;gap:10px"><label class="es-switch"><input type="checkbox" id="mkOfci"' + (currentEst.is_ofci ? ' checked' : '') + '><span></span></label><span>Owner-furnished equipment (OFCI) → ' + Math.round(NW_EST_STD.ofciOverhead * 100) + ' % overhead</span></div>' : '') +
       '<div class="pc-field"><label class="pc-label">Application Criteria</label>' +
         '<label class="chk" style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="radio" name="mkScope" value="all"' + (crit.scope !== 'categories' ? ' checked' : '') + (builtin ? ' disabled' : '') + '> Entire Estimate</label>' +
         '<label class="chk" style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:4px"><input type="radio" name="mkScope" value="categories"' + (crit.scope === 'categories' ? ' checked' : '') + (builtin ? ' disabled' : '') + '> Specific Selections</label>' +
@@ -3498,7 +3506,7 @@ requireAuth().catch(function(){});
               if (id === 'overhead') {
                 var ofci = !!(q('#mkOfci') && q('#mkOfci').checked);
                 patch.is_ofci = ofci;
-                patch.overhead_pct = (ofci !== !!currentEst.is_ofci && Math.abs(pct - t.rates.overhead) < 1e-9) ? (ofci ? 0.30 : 0.20) : pct;
+                patch.overhead_pct = (ofci !== !!currentEst.is_ofci && Math.abs(pct - t.rates.overhead) < 1e-9) ? (ofci ? NW_EST_STD.ofciOverhead : NW_EST_STD.overhead) : pct;
               } else patch.miscellaneous_pct = pct;
               if (ctx && ctx.close) ctx.close(); else d.close();
               await saveMarkups(patch);

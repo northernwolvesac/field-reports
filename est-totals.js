@@ -7,7 +7,8 @@
 //                       falls back to the labor cost rate when the setting is empty / 0 → sales = cost)
 //   line Total Sales  = Subtotal Item Sales + Total Labor Sales
 //   Subtotal          = Σ line Total Sales             (optional / alternate lines excluded everywhere)
-//   Pre-Tax Markups   = on Subtotal: Overhead (20 %, 30 % OFCI), Miscellaneous (2 %), + settings.markups stage 'pre'
+//   Pre-Tax Markups   = on Subtotal: OH&P (30 %, 30 % OFCI), Miscellaneous (2 %), + settings.markups stage 'pre'
+//                       (company standard NW_EST_STD below; Ruslan 10/29/2026: OH&P 30 %, labor $65/h, prevailing wage $175/h)
 //   Taxes             = Materials Tax (8.875 % NY) on taxable material sales + Labor Tax (settings.labor_tax_rate, 0)
 //                       (taxable material sales = Σ line taxableSales of EVERY non-optional line, whatever its cost type,
 //                        so a wet-tap / services line with is_taxable = true is taxed like the grid says)
@@ -46,13 +47,13 @@
 // laborBreakdown counts hours by labor_crew_type only for the four known crews; a line with a null / '' crew is
 //   priced but not counted in any crew bucket (same as the pre-Procore formula).
 //
-// UNIT TEST (defaults: labor 60, overhead 20 %, misc 2 %, tax 8.875 %; no waste / markup / factor / extra markups):
-//   A  equipment  qty 2  unit_material_cost 1000  unit_labor_hours 4   → material 2000, 8 hrs, labor 480
-//   B  pipework   qty 1  unit_material_cost 500   unit_labor_hours 10  is_wet_tap → wetTap 500 + 600 = 1100
+// UNIT TEST (defaults since v585: labor 65, overhead 30 %, misc 2 %, tax 8.875 %; no waste / markup / factor / extra markups):
+//   A  equipment  qty 2  unit_material_cost 1000  unit_labor_hours 4   → material 2000, 8 hrs, labor 520
+//   B  pipework   qty 1  unit_material_cost 500   unit_labor_hours 10  is_wet_tap → wetTap 500 + 650 = 1150
 //   C  services   qty 1  unit_material_cost 1500  unit_labor_hours 0   → services 1500
-//   nwEstTotals([A,B,C], {})  →  materialTotal 2000 · labor 480 · laborHours 8 · wetTap 1100 · services 1500
-//     baseSubtotal 5080 · overhead 1016 · miscellaneous 101.60 · tax 177.50 · bidPrice = total = 6375.10
-//   (identical to the pre-Procore formula; see scratchpad/new/est-totals.test.js)
+//   nwEstTotals([A,B,C], {})  →  materialTotal 2000 · labor 520 · laborHours 8 · wetTap 1150 · services 1500
+//     baseSubtotal 5170 · overhead 1551 · miscellaneous 103.40 · tax 177.50 · bidPrice = total = 7001.90
+//   (before v585 - labor 60, overhead 20 % - the same lines gave 5080 / 1016 / 101.60 / 177.50 = 6375.10, as the pre-Procore formula)
 (function () {
   var TAXABLE_CATS = { equipment: true, ductwork: true, pipework: true };
   var KNOWN_CREWS = { sm: true, pipe: true, startup: true, other: true };
@@ -64,13 +65,22 @@
   function flag(v) { return v === true || v === 'true'; }
   function flagOn(v) { return !(v === false || v === 'false'); }   // default ON; only an explicit false turns it off
 
+  // Company bid standard for NEW estimates (Ruslan 10/29/2026): OH&P 30 %, labor $65/h, prevailing-wage labor $175/h.
+  // Saved estimates keep the rates stored on them (estimates.labor_rate / overhead_pct), so bids already submitted do not change.
+  var NW_EST_STD = { labor: 65, pwLabor: 175, overhead: 0.30, ofciOverhead: 0.30, misc: 0.02, tax: 0.08875 };
+  // rate columns for a new estimates row (OFCI from the flag); prevailing wage is the settings.prevailing_wage switch
+  function nwEstStdRow(ofci, pw) {
+    return { labor_rate: pw ? NW_EST_STD.pwLabor : NW_EST_STD.labor, overhead_pct: ofci ? NW_EST_STD.ofciOverhead : NW_EST_STD.overhead,
+             miscellaneous_pct: NW_EST_STD.misc };
+  }
+
   function nwEstRates(est) {
     est = est || {};
     return {
-      labor: Number(est.labor_rate || 60),
-      overhead: pct(est.overhead_pct, est.is_ofci ? 0.30 : 0.20),
-      misc: pct(est.miscellaneous_pct, 0.02),
-      tax: pct(est.tax_rate, 0.08875)
+      labor: Number(est.labor_rate || NW_EST_STD.labor),
+      overhead: pct(est.overhead_pct, est.is_ofci ? NW_EST_STD.ofciOverhead : NW_EST_STD.overhead),
+      misc: pct(est.miscellaneous_pct, NW_EST_STD.misc),
+      tax: pct(est.tax_rate, NW_EST_STD.tax)
     };
   }
 
@@ -481,6 +491,8 @@
   }
 
   window.nwEstRates = nwEstRates;
+  window.NW_EST_STD = NW_EST_STD;
+  window.nwEstStdRow = nwEstStdRow;
   window.nwEstSettings = nwEstSettings;
   window.nwGroupMultiplier = nwGroupMultiplier;
   window.nwLineTotals = nwLineTotals;

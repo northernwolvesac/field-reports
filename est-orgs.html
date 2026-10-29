@@ -12,7 +12,7 @@
 <script src="supabase-config.js?v=534"></script>
 <script src="auth.js?v=534"></script>
 <script src="est-org.js?v=534"></script>
-<script src="est-engine.js?v=541"></script>
+<script src="est-engine.js?v=585"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="email-utils.js?v=534"></script>
 <script src="nw-email.js?v=534"></script>
@@ -102,10 +102,10 @@ var OG = (function() {
     $('main').innerHTML = html;
   }
   // Estimating settings (est_orgs.settings) — what the AI estimate of this organisation is priced with; an empty field keeps the
-  // NWAC standard ($60/h, 20 % overhead / 30 % OFCI, 2 % misc, 8.875 % NY tax, rectangular 1" lining, $2,500 / $1,300 / $2,500 / $2,500)
+  // NWAC standard ($65/h, 30 % OH&P / 30 % OFCI since v585, 2 % misc, 8.875 % NY tax, rectangular 1" lining, $2,500 / $1,300 / $2,500 / $2,500)
   var SET_FIELDS = [
-    ['labor_rate', 'Labor rate $/h', 'number', 60, 1],
-    ['overhead_pct', 'Overhead %', 'pct', 20, 1],
+    ['labor_rate', 'Labor rate $/h', 'number', 65, 1],
+    ['overhead_pct', 'Overhead % (OH&P)', 'pct', 30, 1],
     ['ofci_overhead_pct', 'Overhead % when OFCI', 'pct', 30, 1],
     ['misc_pct', 'Miscellaneous %', 'pct', 2, 1],
     ['tax_rate', 'Sales tax % (material)', 'pct', 8.875, 1],

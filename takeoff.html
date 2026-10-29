@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=584"></script>
 <script src="auth.js?v=584"></script>
-<script src="est-totals.js?v=584"></script>
+<script src="est-totals.js?v=585"></script>
 <script src="procore-ui.js?v=584"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
@@ -19,7 +19,7 @@
 <script src="nw-catalog-picker.js?v=584"></script>
 <script src="nw-duct-weight.js?v=584"></script>
 <script src="geo-takeoff.js?v=584"></script>
-<script src="est-engine.js?v=584"></script>
+<script src="est-engine.js?v=585"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -427,7 +427,7 @@ requireAuth().catch(function(){});
     if (window.EstDrawings) EstDrawings.ensurePdfjs().catch(function(e) { console.warn(e); });
     await loadEstimate();
     rootId = est ? (est.parent_estimate_id || est.id) : estimateId;
-    laborRate = window.nwEstRates ? nwEstRates(est || {}).labor : Number((est && est.labor_rate) || 60);
+    laborRate = window.nwEstRates ? nwEstRates(est || {}).labor : Number((est && est.labor_rate) || 65);
     groupOrder = normGroups(settings().takeoff_groups);
     if (!EMBED) renderShell();
     buildChrome(); bindEvents(); fitHeight();

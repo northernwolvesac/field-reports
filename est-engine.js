@@ -3,7 +3,7 @@
 // Output lines use the estimate_line_items shape, so they drop straight into estimating.html.
 // Every line carries `basis` (where the number comes from) and `flag` (what a person must check).
 (function () {
-  var LABOR_RATE = 60;
+  var LABOR_RATE = 65;   // company bid labor rate since v585 (Ruslan 10/29/2026; est-totals.js NW_EST_STD)
   // Per-organisation estimating settings (est_orgs.settings, edited on est-orgs.html) — an empty value keeps the NWAC standard:
   //   labor_rate ($/h), overhead_pct / misc_pct / tax_rate (fractions, 0.2 = 20 %), ofci_overhead_pct (overhead when OFCI),
   //   duct_family (DUCT_FAMILIES key used when no spec was read), duct_sd / pipe_sd / tab / lift (services $ per plan sheet / per job)

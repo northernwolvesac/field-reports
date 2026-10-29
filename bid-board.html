@@ -17,7 +17,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-config.js?v=584"></script>
 <script src="auth.js?v=584"></script>
-<script src="est-totals.js?v=584"></script>
+<script src="est-totals.js?v=585"></script>
 <script src="procore-ui.js?v=584"></script>
 <script src="bid-actions.js?v=584"></script>
 <style>
@@ -877,6 +877,7 @@ requireAuth().catch(function(){});
       estimator_name: estimator,
       created_by: currentUser ? currentUser.id : null
     };
+    Object.assign(patch, nwEstStdRow(false, false));   // new bids (also from a template) get the company rates: v585 OH&P 30 %, labor $65/h
     var newId;
     try {
       if (templateId) {
