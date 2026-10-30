@@ -1,30 +1,82 @@
 # Seafarers - 18 Vesey St, New York, NY
 
-Seafarers International House renovation, 18 Vesey St (Manhattan Block 88 Lot 4). Dedicated project session started 10/30/2026.
-Status: in progress (review of Gmail and Drive underway 10/30/2026; sections below get filled in as it completes).
+Seafarers International House renovation, 18 Vesey St (Manhattan Block 88 Lot 4). DOB job M01244603 (S2 plumbing/gas,
+S4 fuel storage, S5 boiler). Dedicated project session started 10/30/2026; sources: Gmail (read-only) and the Drive folder below.
+Status: in progress. Owner wants the job "caught up"; KBD flagged manpower 10/26 ("no manpower onsite... critical point").
+
+Not the same job: Seafarers International House at 123 E 15th St (GC L&K Partners, job LK-25-0106) is a separate NWAC job.
+The owner's combined maintenance agreement P-2026-0006 Rev1 (sent 10/28, unsigned) covers both buildings; 18 Vesey visits
+start Spring 2027 after turnover (owner contact Lucas Mietlowski, sihnyc.org; NWAC Jonathan).
 
 ## People
-- GC: KBD Group. Peter Sawiris (PM, psawiris@kbd.group), also C. Bagnoli, J. Leshik, H. Sawiris, R. Merino.
-- NWAC: Whitney Bynoe (PM), Alikhan Ilyas (estimator / COs), Fatima (submittals / drafting), Leonid Leonidov (billing, Textura), Karen (office / accounting).
+- GC: KBD Group (Kajima Building & Design Group), River Edge NJ. Peter Sawiris (Superintendent, psawiris@kbd.group),
+  Janina Leshik (Sr. Project Engineer, submittals in Procore), Hanadi Sawiris (accounting / Textura), Craig Bagnoli, R. Merino.
+- Engineer of record: All City Engineering, P.C. ("ACE"). Architect: not yet identified.
+- NWAC: Whitney Bynoe (PM), Alikhan Ilyas (estimator / COs), Fatima (submittals / drafting), Leonid Leonidov (billing, Textura),
+  Karen (office / accounting), Ruslan.
 
-## Change orders (as of 10/14/2026)
-- 7 COPs submitted, none in the October billing template. COP-SVS-01 PTAC hot water coils; COP-SVS-02 split system / PTHP credit;
-  COP-SVS-03 split system (revised 9/14); COP-SVS-04 / -05 fuel oil credit / add were voided and replaced by CO #001 and CO #002
-  (fuel oil pipe), submitted through the app. Status with KBD pending.
+## Contract
+- KBD subcontract SC-30-26004-010 ("HVAC"), fully executed 5/8/2026 (also -010R in Drive). Change work 10% OH + 5% profit
+  (Exhibit R). Core drilling alternate $5,000.00. Warranty 1 yr labor and material. Permits not ours. Contract value: to confirm
+  from the subcontract PDF.
+- Billing through Textura. Draw 1 paid $141,550.00 (6/4). June draw rejected 6/26 ("missing all of the shop drawings").
+  Inv #02 / Draw 3 (June+July) paid ~8/26. Draw 4 $91,205.70 (9/17). Draw 5 $115,020.30 (10/29). October draw not yet submitted.
+  Invoice numbering differs between Leonid's and Karen's files; needs reconciling.
 
-## Open items (from KBD 10/12/2026 status request)
-- Line-set insulation incomplete in several areas (blocks ceiling close-up).
-- Duct insulation missing at exposed duct, 5th and 2nd floors.
-- PTACs: order / delivery / install dates owed to KBD (Whitney, still open 10/15).
-- Boiler: not tied in; KBD gas inspection waiting on it. Delivery date owed (Whitney, still open 10/15).
-- Fuel tank status, and F/O shop drawings (arch and engineer pushing; KBD wants material ETA and mobilization timeline).
-- Leonid asked KBD for the status of all COPs (10/14).
+## Scope (from emails; drawings review pending)
+- Ductwork sub-cellar to roof (shop drawings by All-City Sketchers).
+- PTAC-A / PTAC-B / PTHP-A floors 3-5; the 2 PTHPs replaced by a 3-ton multi-zone split system.
+- Roof: ERV, fans, curbs / rails (GC wants flashed-in Unistrut rails, NWAC proposed rubber feet).
+- Boiler (Ferguson PO NWAC1080-SVS, shipped to our office 7/10).
+- Generator fuel oil system (Core): 134-gal tank FOT-1, duplex pump set FOP-1, double-wall 1" supply / 1-1/2" return,
+  fill containment box RFB-5RMSS4-2. Tank delivery through the 10 Barclay garage (one week notice).
+- Boiler and fuel oil installation put out to bid by NWAC 10/23, due 10/28: PH Works, Abilene, A&C (asked for site visit and
+  extension), NJPD. Falcon email bounced 10/22. No award recorded.
 
-## Vendors / subs (partial)
-- General Insulation: insulation material invoices, PO "18 VESEY ST" (e.g. invoice S7392366.001).
-- Ferguson: PO NWAC1080-SVS. Core (core-es.com): PO NWAC1073, Core job 5622 (fuel oil submittal SBM5622).
-- Billd: material financing ($19,992.22 and $14,810.00 purchases approved).
-- PH Works (phworksinc.com) issued an ITB for "Boiler & Fuel Oil System", due 10/28/2026.
+## Subs and vendors
+- All-City Sketchers: shop drawings $9,000 (SM $4,500, MP $2,500, FO $2,000).
+- Core Engineered Solutions: PO NWAC1073 / Core order 5622, fuel oil tank, pump set, BRUGG double-wall piping. Invoice #5495
+  (June, piping). Tank and piping ready to ship 10/29 pending our payment; pump set early-mid November. Containment box $1,800 extra.
+- Ferguson: boiler and material; invoices 4675884, 4676208, 4697030, 4698950, 4581155, 4581155-1 financed through Billd MF_1.
+- Brothers Supply: PTACs, PO NWAC1076-SVS; $14,810.00 50% deposit (inv 101208-a) financed through Billd MF_2 (approved 10/30).
+  Hot water coils added $3,230.00 to our cost. PTAC release date unconfirmed.
+- Bush Sales: fire and fire/smoke dampers; order held until the account is current ($19,626.03, ~80 days).
+- General Insulation: invoices S7392366.001 and S7411673-S7412062; Karen asked to remove sales tax.
+- F.W. Webb invoice 98473896. Trane: tax-exempt ST-120.1 provided 7/15.
+- Billd: MF_1 $19,992.22 (approved 10/19; Billd warned the wrong ship-to address "raises red flags"), MF_2 $14,810.00.
+  Repayment terms are in the signed disclosure PDFs.
+
+## Change orders
+| # | Description | Amount | Status |
+|---|---|---|---|
+| COP-SVS-01 | Hot water coils for PTACs (sent 8/20) | see PDF | Disputed: KBD cites M-104.00 note tying PTACs to HW risers; we cite 1.5 kW electric heat in schedule |
+| COP-SVS-02 | Credit for PTHP units | see PDF | Pending |
+| COP-SVS-03 | Split system (revised 9/14, reduced $4,400 for 3-ton) | see PDF | Pending; submittal 230000-23 revise and resubmit |
+| CO #001 (was COP-SVS-04) | Credit, delete double-wall fuel oil piping | ($19,374.00) | Dead: KBD 10/13 "stick to the original"; we returned to double-wall 10/15. Withdraw formally |
+| CO #002 (was COP-SVS-05) | Carbon steel fuel oil piping instead | $7,100 material + welder 104 h + mechanic 128 h | Dead, as above |
+| - | Fuel oil containment box (requested 8/27) | $1,800 vendor | Status unknown |
+| - | Fire and fire/smoke damper pricing, new vs existing duct (KBD ask 10/29) | - | To price |
+
+None of the COPs were in the October billing template; Leonid asked KBD for status 10/14, no reply found.
+
+## Schedule commitments (Whitney to Peter, 10/26)
+RFIs and rubber-feet submittal 10/26; roof curbs/rails on site 10/29; boiler delivered 10/29; fuel oil fill and vent drawing 10/28;
+double-wall piping start 11/2; fuel tank week of 11/2; PTACs waiting on vendor. Still owed: boiler rig-in / tie-in / startup dates
+(KBD gas filing depends on it) and a manpower-by-week recovery plan.
+
+## Open items
+- PTAC order / delivery / install dates (Whitney).
+- Boiler rig-in, tie-in, startup dates for KBD's gas inspection (Whitney).
+- Award the boiler and fuel oil install sub (Ruslan / Alikhan).
+- Pay Core to release tank and piping (Ruslan).
+- Revised fuel oil fill and vent drawing; F/O shop drawing approval (Fatima / Whitney).
+- RFIs and rubber-feet submittal; recovery plan with manpower (Whitney).
+- Damper pricing (Alikhan); pay Bush to release dampers (Karen / Ruslan).
+- COP-SVS-01 dispute; split system resubmittal and COP-SVS-02/03 approval (Alikhan).
+- Formally withdraw CO #001 / #002; get containment box CO answered (Alikhan).
+- Line-set and duct insulation (5th / 2nd floor) to let KBD close ceilings (Whitney).
+- Submit the October draw; reconcile invoice numbering and Draw 3 amount; AR / retainage ledger (Leonid / Karen).
+- General Insulation tax-free reissue; Brothers Supply balance; Billd repayment schedule (Karen / Ruslan).
 
 ## Google Drive (folder "Seafarers 18 Vesey ST", id 1ksttctyaXc9fjhWbhDUzXYIfrSxu8tKV)
 - Root: tracking log xlsx, issued-for-bid drawings 2026-01-08, proposals, quotes, QC rev.
@@ -38,4 +90,4 @@ Status: in progress (review of Gmail and Drive underway 10/30/2026; sections bel
   `Proposal`; empty so far: Specs, As Builts, TAB Report, Reports, IOM & Warranty, Photos.
 
 ## Fuel oil system
-Full review in progress (10/30/2026), to be summarized here.
+Full Drive review in progress (10/30/2026), to be summarized here.
