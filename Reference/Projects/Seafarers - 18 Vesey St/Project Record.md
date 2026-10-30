@@ -90,6 +90,13 @@ double-wall piping start 11/2; fuel tank week of 11/2; PTACs waiting on vendor. 
   `Application for Payment` (Apps #01-#05, May-Sept 2026), `Purchase Orders`, `Quotes`, `RFI` (#01-#03, RFI#26 fuel oil fill location),
   `Proposal`; empty so far: Specs, As Builts, TAB Report, Reports, IOM & Warranty, Photos.
 
+## Boiler and floor heating
+Plan: `Boiler and Radiant Plan 2026-10-30.md`.
+- Boiler: Weil-McLain EG-75 (gas HW), approved NET 5/8, at our office since 7/10. Not rigged, piped or started; install sub not awarded.
+- Floor heat: ELECTRIC mats (Watts SunTouch, 13 kits / 350 sf) in the floor 3-5 bathrooms, at our office since 7/10, not installed.
+  Must go in before tile: check the tile status first.
+- Note: "18 Vesey Street Proposal REV1.pdf" in Drive is Highmark's ERV quote, not our proposal (ours is Quote 2759).
+
 ## Fuel oil system
 Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids in `notes/`). In short:
 - Serves the roof emergency generator only (boiler is gas). 134-gal tank FOT-1 and duplex pump set FOP-1 in sub-cellar,
