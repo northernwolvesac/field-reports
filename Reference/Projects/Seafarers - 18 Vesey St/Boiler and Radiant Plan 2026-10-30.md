@@ -48,6 +48,29 @@ Not reviewed: boiler sheets BE-001..BE-600 and fuel storage sheets FS / T001. Th
 - **Status:** delivered to our office 7/10. No sign of installation.
 - **Biggest risk:** mats go down before tile. If tile is already down in some bathrooms, those rooms need a fix and a cost decision.
 
+## BE sheets (read 10/30, `source/Seafarers IFB 2026-01-08 - Boiler BE sheets.pdf`)
+- **BE-401 schedule BOILER-1:** Weil-McLain EG-75, gas, 282 input / 237 MBH output, 130/200 F, 30 psig relief, 735 lb, 120/1/60 under 5 A.
+  No flue size or vent category.
+- **Existing boiler room on the roof (BE-103).**
+- **Existing to remain:**
+  - HWS/R piping and the 2 HW pumps
+  - combustion-air louver and motorized damper (reconnect, verify)
+  - exhaust duct (verify condition)
+  - 2" gas riser; new 650 CFH meter by S2
+  - emergency switch and CO / smoke detectors (verify, new if none)
+- **Not shown anywhere:** flue / liner / vent connector detail, expansion tank, makeup / backflow, air separator, pad.
+  Most likely existing to remain. Verify on the site walk.
+- **Distribution, floors 2-5 on the existing 1-1/4" HWS/R risers:**
+  - 2nd floor: remove radiators and cap the risers.
+  - 3rd-5th floors: tie to PTAC-A / B.
+  - 5th floor: remove convection heaters and cap.
+  - The removals and capping are piping work shown on the drawings, so they are ours. Add them to the plan.
+- **Notes that don't fit the EG-75:** condensate neutralization kit, "ventless gas train", "water-tube and cast iron",
+  "connect to vent, galvanized steel". Outdoor reset per NYCECC C403.4.1.5. Boiler room 2-hr noncombustible.
+- **Special inspections:** BC 1705.17, BC 1705.31 and TR-8 energy. BE-600 2.D says the PE special inspector is hired by this contractor.
+- **BE vs M504:** they contradict. M504 is an oil-fired steam boiler filed under S1. BE (S5) governs; confirm by RFI.
+- **Floor heat mats:** not on any BE or FS sheet; only M103 / M104 / M401.
+
 ## Gaps and risks
 1. Tile status in floor 3-5 bathrooms; mat quantity and sizes vs the actual rooms.
 2. Electrician has no circuit list (120 V, one circuit or GFCI per bathroom).
@@ -117,6 +140,6 @@ Not reviewed: boiler sheets BE-001..BE-600 and fuel storage sheets FS / T001. Th
 6. We wire the controls, outdoor sensor, pump and damper interlocks.
 7. Hydro test, fill and purge.
 8. Start-up with combustion analysis report.
-9. Connect PTAC HW coils as units arrive.
+9. Connect PTAC HW coils as units arrive. Remove the 2nd-floor radiators and 5th-floor convection heaters and cap the risers (BE sheets).
 10. Hand the S5 documents to the filing rep; closeout (O&M, warranty).
 11. Bill SOV lines 4 / 6 / 8 as each step finishes.

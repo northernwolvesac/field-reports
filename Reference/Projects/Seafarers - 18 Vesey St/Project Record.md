@@ -109,9 +109,10 @@ Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids 
   LV alarm wiring, roof flashing. Permits: not ours (Ruslan 10/30); the S4 filing still needs a licensed installer of record - confirm who.
 - Fill / vent pipe: Sch 40 black steel (threaded or welded); CPVC and B-vent not acceptable (see review).
 - ACE leak detection probe cable: comment is on the returned 19.2 FO-1 sheet (roof / riser area, next to the Brugg enclosure note),
-  Drive file 1uSMdNbKtAJfjTJuxWtZWIVxPn99dwy7u. Not on the M-sheets (FS sheets still unchecked). NWAC RFI #04 (10/30, not yet issued)
+  Drive file 1uSMdNbKtAJfjTJuxWtZWIVxPn99dwy7u. Not on any M or FS sheet (checked 10/30; FS show only the Brugg vacuum leak panel). NWAC RFI #04 (10/30, not yet issued)
   covers both the probe cable and the second 2-hr enclosure, citing the Brugg data sheet (UL 1369 2-hr rating, no monitoring
   required); proposes point sensors at the end fittings and a single enclosure, reserves a CO: `RFI-04 Leak Detection Cable/`. Core pricing request drafted in Gmail
   (options: 3 point sensors, or cable 50 ft / 200 ft). Not yet sent; RFI #04 still to be uploaded to Procore.
 - CO #002 (carbon steel incl. 2" fill) was never approved: status "Proposed", no customer signature (`source/CO #002 ...pdf`).
-- FS / T001 / BE sheets in the 51 MB bid set still need to be read.
+- FS / T001 / BE sheets read 10/30 (extracts in `source/`): single 2-hr enclosure, no leak cable, fill / vent on Vesey facade
+  (RFI#26 move = CO basis), fill / vent black steel per FS300 note 10, 150 psi test vs Brugg 145 psig rating to confirm.

@@ -129,3 +129,30 @@ This review covers every fuel oil file in the Drive folder "Seafarers 18 Vesey S
 - **"Two hour fire rating per UL 1369."** Use this against ACE's added second 2-hr enclosure.
 - **"No requirement for constant leak monitoring per UL 1369 for BRUGG FLEXWELL-HL."** Use this against ACE's probe cable
   comment (we already have vacuum monitoring on top of that).
+
+## 7. FS / T001 sheets (read 10/30 from the IFB set, `source/Seafarers IFB 2026-01-08 - Fuel Storage T001 FS sheets.pdf`)
+Detail: `notes/2026-10-30 FS and BE sheets review (working notes).md`.
+- **Leak detection:** no probe or leak cable on any FS sheet. FS101 "BRUGG VACUUM SYSTEM", FS300 "BRUGG VACUUM LEAK PANEL",
+  smoke detector per MC 1305.3.4, flow switch, overfill alarm box, fuel oil management / level control cabinet.
+  → ACE's probe cable is an addition (CO basis), unless ACE argues it is code-required.
+- **Enclosure:** single 2-hr. FS300: "FUEL OIL RISER SHALL BE 2 HR RATED SHEETROCK ENCLOSURE. 4" MIN. CLEAR ... SHAFT SHALL
+  CONTAIN ONLY FUEL OIL PIPING." Fill / vent get their own 2-hr enclosure in the sub-cellar and cellar.
+  → ACE's second layer is an addition.
+- **Fill / vent per contract:**
+  - 2" fill and 4" vent on the Vesey St facade, 1st floor, above the sprinkler connection (FS102).
+  - "2" WALL MOUNTED FUEL PORT", vent at least 2'-0" above it. MC 1305.6.2 / 1305.7.2 clearances.
+  - No fill box or spill bucket detail.
+  - RFI#26 moved the fill to the garage, so the relocation is an engineer-directed change (CO basis for the extra routing and the box).
+- **Material, FS300 note 10:**
+  - 2-1/2" and under: standard weight black steel, screwed malleable iron or welded.
+  - 3" and up: standard weight black steel, welded.
+  - Brass or copper also acceptable.
+  - → 2" fill: Sch 40 black steel, threaded or welded. 4" vent: Sch 40 black steel, welded.
+- **Test:** 150 psi for 1 hr with oil or water, witnessed by the DOB inspector and the special inspection agency.
+  - Brugg FLEXWELL-HL is rated for 145 psig operating. Confirm with Brugg / Core that a 150 psi test is allowed, or ask ACE for the manufacturer's test.
+- **Tank note 3:** asks for "FACTORY TESTED FOR AT LEAST 22.5 PSIG" and an "ASME STAMP". Odd for a UL 142 tank; Core's tank is UL 142, 25 psi.
+- **Generator:** FS105 shows an 80 kW TD80 with a 134 gal belly tank. FS300 shows "200KW" with a 275 gal tank (likely leftover). The submittal cut shows a 75 gal tank.
+- **FS105 roof:** untagged "6" VENT ... 10 FT ABOVE BULKHEAD", "TERMINATE 11 FT AWAY FROM PROPERTY LINE". Ask ACE what it is.
+- **Special inspections (T001):** BC 1705.22 fuel oil storage and piping; BC 1705.17 penetrations.
+  - BE-600 2.D (spec): "special inspection by a licensed professional engineer to be hired by this contractor". Check who pays.
+- **Permits:** T001 / BE-001 #13 say the contractor files. Overridden for NWAC by the handwritten note on 010R.
