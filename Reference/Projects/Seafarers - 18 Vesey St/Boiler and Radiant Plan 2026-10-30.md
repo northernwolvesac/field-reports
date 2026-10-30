@@ -26,7 +26,9 @@ Not reviewed: boiler sheets BE-001..BE-600 and fuel storage sheets FS / T001. Th
 - **Location and design (M105):** existing roof boiler room.
   - Flue into the "existing exhaust duct", condition to be verified in the field.
   - Keep the 2 existing HW pumps. Combustion air from the existing duct and louver.
-  - Not shown anywhere: expansion tank, makeup water, backflow, pad, piping diagram.
+  - Not shown on M105: expansion tank, makeup water / backflow, relief discharge, pad, piping diagram. This is a replacement
+    in an existing boiler room, so these are most likely existing to remain (Ruslan, 10/30). Verify in the field.
+    New work is limited to the connections to the new boiler.
 - **Serves:** the existing HWS / HWR risers. M103 / M104 say to tie PTAC-A / PTAC-B to the HW risers.
   - KBD RFI#01 answer (8/10) puts the coil piping in our base scope.
   - COP-SVS-01 is disputed.
@@ -54,7 +56,7 @@ Not reviewed: boiler sheets BE-001..BE-600 and fuel storage sheets FS / T001. Th
    - Flue sized for the old boiler: check condition and draft.
    - Vent connector and any liner not bought.
    - Vent damper / combustion-air damper interlock not specified.
-5. Expansion tank, makeup water, backflow preventer, relief piping: not shown, not bought.
+5. Existing expansion tank, makeup / backflow and relief drain: verify condition and reuse. New: the relief discharge from the new boiler's relief valve, and the vent connector from the boiler outlet to the existing flue.
 6. Drain / flush of the existing loop; sequencing with PTAC coil hookups; no load check.
 7. Rigging ~735 lb to the roof: no plan. Pad by whom.
 8. Who is installer of record for the S5 boiler filing and sign-off (we do not pull permits).

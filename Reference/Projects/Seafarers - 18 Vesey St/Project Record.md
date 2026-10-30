@@ -94,7 +94,7 @@ double-wall piping start 11/2; fuel tank week of 11/2; PTACs waiting on vendor. 
 Plan: `Boiler and Radiant Plan 2026-10-30.md`.
 - Boiler: Weil-McLain EG-75 (gas HW), approved NET 5/8, at our office since 7/10. Not rigged, piped or started; install sub not awarded.
 - Floor heat: ELECTRIC mats (Watts SunTouch, 13 kits / 350 sf) in the floor 3-5 bathrooms, at our office since 7/10, not installed.
-  Must go in before tile: check the tile status first.
+  Must go in before tile: check the tile status first. Status email sent to Whitney 10/30 (delivered? installed? tile? electrician? sizes).
 - Note: "18 Vesey Street Proposal REV1.pdf" in Drive is Highmark's ERV quote, not our proposal (ours is Quote 2759).
 
 ## Fuel oil system
