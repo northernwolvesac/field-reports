@@ -101,5 +101,9 @@ Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids 
 - Unassigned: containment box, generator tank vents, initial fuel fill, leak probe cable, tightness test / special inspection,
   LV alarm wiring, roof flashing. Permits: not ours (Ruslan 10/30); the S4 filing still needs a licensed installer of record - confirm who.
 - Fill / vent pipe: Sch 40 black steel (threaded or welded); CPVC and B-vent not acceptable (see review).
-- ACE leak detection probe cable: hydrocarbon sensing cable, location to be confirmed with ACE; get price from Core.
+- ACE leak detection probe cable: comment is on the returned 19.2 FO-1 sheet (roof / riser area, next to the Brugg enclosure note),
+  Drive file 1uSMdNbKtAJfjTJuxWtZWIVxPn99dwy7u. Not on the M-sheets (FS sheets still unchecked). NWAC RFI #04 (10/30) proposes
+  3 Core 00L-LS point sensors instead and reserves a CO: `RFI-04 Leak Detection Cable/`. Core pricing request drafted in Gmail
+  (options: 3 point sensors, or cable 50 ft / 200 ft). Not yet sent; RFI #04 still to be uploaded to Procore.
+- CO #002 (carbon steel incl. 2" fill) was never approved: status "Proposed", no customer signature (`source/CO #002 ...pdf`).
 - FS / T001 / BE sheets in the 51 MB bid set still need to be read.
