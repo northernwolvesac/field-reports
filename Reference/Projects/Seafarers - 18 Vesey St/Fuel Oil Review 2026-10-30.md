@@ -120,3 +120,12 @@ This review covers every fuel oil file in the Drive folder "Seafarers 18 Vesey S
    - App #5 bills equipment procurement at 90% while the Core equipment is undelivered and unpaid.
 9. **Schedule:** completion is 12/4. The pump set ships mid November, no install sub is on board, and KBD reports no manpower on site.
 10. **Documentation:** M504 (oil-fired steam boiler detail) is referenced in the contract for the gas hot-water boiler, so it is the wrong detail. The 15.0/15.1 returns and the 19.1 return are missing from Drive.
+
+## 6. Brugg FLEXWELL-HL data sheet (added 10/30, `source/Brugg FLEXWELL-HL Data Sheet 2025.pdf`)
+- HL 30/48 (1"): OD 1.9", 0.9 lb/ft, min bend radius 20". HL 48/71 (1-1/2"): OD 2.8", 2.0 lb/ft, min bend radius 26".
+  HL 60/83 (2", OD 3.3", 2.6 lb/ft, bend 28") is also made, and the sheet lists fill pipes as an application.
+- Factory lengths up to 3,000 ft, laid in one piece with no intermediate joints. Closed mechanical end fittings, NPT or EZ-Fit.
+- 316L primary and secondary, LDPE jacket, 145 psig. Interstice monitored by vacuum (-8.7 psi) or pressure.
+- **"Two hour fire rating per UL 1369."** Use this against ACE's added second 2-hr enclosure.
+- **"No requirement for constant leak monitoring per UL 1369 for BRUGG FLEXWELL-HL."** Use this against ACE's probe cable
+  comment (we already have vacuum monitoring on top of that).
