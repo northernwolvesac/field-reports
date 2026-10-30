@@ -16,9 +16,10 @@ start Spring 2027 after turnover (owner contact Lucas Mietlowski, sihnyc.org; NW
   Karen (office / accounting), Ruslan.
 
 ## Contract
-- KBD subcontract SC-30-26004-010 ("HVAC"), fully executed 5/8/2026 (also -010R in Drive). Change work 10% OH + 5% profit
-  (Exhibit R). Core drilling alternate $5,000.00. Warranty 1 yr labor and material. Permits not ours. Contract value: to confirm
-  from the subcontract PDF.
+- KBD subcontract SC-30-26004-010R ("HVAC"), fully executed 5/8/2026: $498,200 lump sum (our Quote 2759, 4/22/2026),
+  start 4/29/2026, completion 12/4/2026. Change work 10% OH + 5% profit (Exhibit R). Core drilling excluded, alternate $5,000.00.
+  Warranty 1 yr labor and material. Handwritten note: no filing / permits, fees by others (conflicts with Exhibit A permits line).
+  §12.2: no subcontracting without KBD written approval. App #5: 79.5% complete ($396,080), 5% retainage.
 - Billing through Textura. Draw 1 paid $141,550.00 (6/4). June draw rejected 6/26 ("missing all of the shop drawings").
   Inv #02 / Draw 3 (June+July) paid ~8/26. Draw 4 $91,205.70 (9/17). Draw 5 $115,020.30 (10/29). October draw not yet submitted.
   Invoice numbering differs between Leonid's and Karen's files; needs reconciling.
@@ -52,8 +53,8 @@ start Spring 2027 after turnover (owner contact Lucas Mietlowski, sihnyc.org; NW
 | COP-SVS-01 | Hot water coils for PTACs (sent 8/20) | see PDF | Disputed: KBD cites M-104.00 note tying PTACs to HW risers; we cite 1.5 kW electric heat in schedule |
 | COP-SVS-02 | Credit for PTHP units | see PDF | Pending |
 | COP-SVS-03 | Split system (revised 9/14, reduced $4,400 for 3-ton) | see PDF | Pending; submittal 230000-23 revise and resubmit |
-| CO #001 (was COP-SVS-04) | Credit, delete double-wall fuel oil piping | ($19,374.00) | Dead: KBD 10/13 "stick to the original"; we returned to double-wall 10/15. Withdraw formally |
-| CO #002 (was COP-SVS-05) | Carbon steel fuel oil piping instead | $7,100 material + welder 104 h + mechanic 128 h | Dead, as above |
+| CO #001 (was COP-SVS-04, 10/12) | Credit, delete Brugg double-wall fuel oil piping | -$39,300 | Dead: KBD 10/13 "stick to the original"; we returned to double-wall 10/15. Withdraw formally |
+| CO #002 (was COP-SVS-05, 10/12) | Sch 40 carbon steel in 6" containment instead | +$60,475 | Dead, as above |
 | - | Fuel oil containment box (requested 8/27) | $1,800 vendor | Status unknown |
 | - | Fire and fire/smoke damper pricing, new vs existing duct (KBD ask 10/29) | - | To price |
 
@@ -90,4 +91,13 @@ double-wall piping start 11/2; fuel tank week of 11/2; PTACs waiting on vendor. 
   `Proposal`; empty so far: Specs, As Builts, TAB Report, Reports, IOM & Warranty, Photos.
 
 ## Fuel oil system
-Full Drive review in progress (10/30/2026), to be summarized here.
+Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids in `notes/`). In short:
+- Serves the roof emergency generator only (boiler is gas). 134-gal tank FOT-1 and duplex pump set FOP-1 in sub-cellar,
+  1" / 1-1/2" Brugg double-wall supply / return to roof, 2" fill / 4" vent. Equipment from Core (PO $100,000, supply only).
+- Core package approved NET 6/11. Layout 19.2 approved as noted 10/20 for supply / return only; fill and vent must be resubmitted
+  at the RFI#26 garage location (vent out of building, 2 ft from openings). ACE also wants a second 2-hr enclosure and no shaft
+  penetration. Rev.03 never reviewed.
+- Install, filing and sign-off out to bid (licensed oil burner installer needed); not awarded, KBD approval needed.
+- Unassigned: containment box, generator tank vents, initial fuel fill, leak probe cable, tightness test / special inspection,
+  LV alarm wiring, roof flashing. Permit responsibility conflicts across contract documents.
+- FS / T001 / BE sheets in the 51 MB bid set still need to be read.
