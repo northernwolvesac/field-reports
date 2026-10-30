@@ -18,7 +18,7 @@ start Spring 2027 after turnover (owner contact Lucas Mietlowski, sihnyc.org; NW
 ## Contract
 - KBD subcontract SC-30-26004-010R ("HVAC"), fully executed 5/8/2026: $498,200 lump sum (our Quote 2759, 4/22/2026),
   start 4/29/2026, completion 12/4/2026. Change work 10% OH + 5% profit (Exhibit R). Core drilling excluded, alternate $5,000.00.
-  Warranty 1 yr labor and material. Handwritten note: no filing / permits, fees by others (conflicts with Exhibit A permits line).
+  Warranty 1 yr labor and material. Permits: NOT ours - confirmed by Ruslan 10/30 per the handwritten note on 010R (no filing / pulling permits, fees by others); Exhibit A line is overridden.
   §12.2: no subcontracting without KBD written approval. App #5: 79.5% complete ($396,080), 5% retainage.
 - Billing through Textura. Draw 1 paid $141,550.00 (6/4). June draw rejected 6/26 ("missing all of the shop drawings").
   Inv #02 / Draw 3 (June+July) paid ~8/26. Draw 4 $91,205.70 (9/17). Draw 5 $115,020.30 (10/29). October draw not yet submitted.
@@ -99,5 +99,7 @@ Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids 
   penetration. Rev.03 never reviewed.
 - Install, filing and sign-off out to bid (licensed oil burner installer needed); not awarded, KBD approval needed.
 - Unassigned: containment box, generator tank vents, initial fuel fill, leak probe cable, tightness test / special inspection,
-  LV alarm wiring, roof flashing. Permit responsibility conflicts across contract documents.
+  LV alarm wiring, roof flashing. Permits: not ours (Ruslan 10/30); the S4 filing still needs a licensed installer of record - confirm who.
+- Fill / vent pipe: Sch 40 black steel (threaded or welded); CPVC and B-vent not acceptable (see review).
+- ACE leak detection probe cable: hydrocarbon sensing cable, location to be confirmed with ACE; get price from Core.
 - FS / T001 / BE sheets in the 51 MB bid set still need to be read.

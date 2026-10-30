@@ -98,7 +98,7 @@ This review covers every fuel oil file in the Drive folder "Seafarers 18 Vesey S
    - It may force reroutes through residential floors.
    - Headroom is already tight (B.4'-11" to 5'-6"), and there is the 3 ft x 7 ft clearance.
    - Possible CO or extra-cost item.
-3. **Permits, filing, licensing:** contract documents conflict on who files and pays.
+3. **Permits, filing, licensing:** settled 10/30: NWAC does not pull permits (handwritten note on 010R governs). Still to confirm who is installer of record on S4.
    - NWAC appears not to hold the Oil Burner Installer license, so we need a licensed sub to file and sign off S4.
    - FDNY requirements were not found in the documents read; they are probably on T001 / FS sheets.
 4. **Vents:** Core supplies only a 2" vent, but the drawings show 4" FOV.
