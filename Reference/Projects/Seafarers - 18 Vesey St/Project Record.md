@@ -107,6 +107,12 @@ Plan: `Boiler and Radiant Plan 2026-10-30.md`.
   Rev.03 (10/13) FOS 164'-7" / FOR 142'-5". The latest route is shorter, so there is no length CO. Fill / vent in Rev.03
   (FOF 93'-7", FOV 95'-2") still follow the contract location.
 
+- Fill / vent relocation: `Fill-Vent Relocation/` has the contract vs RFI#26 comparison PDF. NOTE: RFI#26 was NWAC's own
+  RFI#02 (8/20) asking for Option 1 (sidewalk) or Option 2 (garage wall); the reason is not stated. A CO needs a field-condition
+  reason why the contract facade location could not be built.
+- Boiler flue: field review and photos requested from Whitney and Andrei 10/31 (email sent). Floor-heat status email to Whitney
+  sent 10/30. Boiler RFI #05: on hold per Ruslan.
+
 ## Fuel oil system
 Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids in `notes/`). In short:
 - Serves the roof emergency generator only (boiler is gas). 134-gal tank FOT-1 and duplex pump set FOP-1 in sub-cellar,
