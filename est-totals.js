@@ -115,6 +115,7 @@
   // ── insulation budget (2026-10-19, Russ): duct and pipe lines carry insulation inside their price — split it out so the
   // insulation budget is visible, and optionally (es_settings.insulation_sub) move its labor to a subcontract bucket ──
   var INS_PIPE_FT = { 0.5: 3.0, 0.75: 3.2, 1: 3.6, 1.25: 4.1, 1.5: 4.6, 2: 5.4, 2.5: 6.3, 3: 7.2, 4: 9.0, 5: 11, 6: 13.5 };   // $/ft fiberglass ASJ 1" (material only, self-perform)
+  var DUCT_INS_LABOR_SHARE = 0.2;   // Russ 2026-10-28: duct line labor is about 80 % installation, 20 % insulation (lining or field wrap)
   // ── Energy Plus NY installed rates (material + labor), quote of 2026-10-19 valid 60 days: non-prevailing wage, normal hours,
   // accessible new construction, below 12 ft; pipe rates = straight pipe, fittings 25 % allowance, valves/flanges/jackets quoted
   // separately, hangers excluded; minimum $1,500 per project (one mobilization). Duct = bare surface sq ft. ──
@@ -169,17 +170,6 @@
     if (flag(es.round_ea) && /^ea$/i.test(unit.trim())) totalQty = Math.round(totalQty);
 
     var unitCost = num(line.unit_material_cost);
-
-    if (insSubMat) unitCost = Math.max(0, unitCost - insSubMat);   // sub-installed insulation: its material is no longer ours
-    var pricedUnitCost = materialDropped ? 0 : unitCost;   // legacy: install-category material is not priced
-    var wastePct = num(line.waste_pct);
-    if (wastePct > 1) wastePct = wastePct / 100;           // whole percent slipped through (catalog / layer scale)
-    var subtotalItemCost = totalQty * pricedUnitCost * (1 + wastePct);
-    var markupPct = num(line.markup_pct);
-    var unitSales = pricedUnitCost * (1 + markupPct);
-    var subtotalItemSales = subtotalItemCost * (1 + markupPct);
-    var profit = subtotalItemSales - subtotalItemCost;
-
     var unitLaborTime = num(line.unit_labor_hours);
     var ins = insulationOf(line, cat, unit), insSub = flag(es.insulation_sub);
     // acoustic lining is applied by the duct shop; es_settings.al_shop_pct (default 100) = share of the lined duct that really gets lining
@@ -192,8 +182,29 @@
       ins.fieldMin = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? ins.wrapMin * (1 - shopFrac) : ins.min;
       ins.fieldEp = ins.kind === 'explicit' ? 0 : ins.kind === 'duct' && ins.liner ? (ins.epUnit || 0) * (1 - shopFrac) : (ins.epUnit || 0);   // what Energy Plus charges for the field part
     }
-    if (ins && insSub && ins.kind !== 'explicit') unitLaborTime = Math.max(0, unitLaborTime - ins.fieldMin / 60);   // insulators do the field part; lining stays with the shop
-    var insSubMat = (ins && insSub && ins.kind !== 'explicit') ? ins.fieldMat : 0;   // … and their material leaves the line as well (the sub price is installed)
+    // insulation by subcontractor: the field part leaves the line before the line is priced. Duct lines (Russ 2026-10-31): duct labor
+    // is about 80 % installation and 20 % insulation, so 20 % of the line labor times the field share goes, with the insulation money
+    // the line price carries for that share (liner 2.40/sq ft on lined lines). Pipe lines keep their own minutes and material per ft.
+    var insSubMat = 0;
+    if (ins && insSub && ins.kind !== 'explicit') {
+      if (ins.kind === 'duct') {
+        var fieldShare = ins.qtyUnit ? ins.fieldQty / ins.qtyUnit : 0;
+        ins.fieldMin = unitLaborTime * DUCT_INS_LABOR_SHARE * fieldShare * 60;
+        ins.fieldMat = ins.mat * fieldShare;
+      }
+      unitLaborTime = Math.max(0, unitLaborTime - ins.fieldMin / 60);   // insulators do the field part; lining stays with the shop
+      insSubMat = ins.fieldMat;                                          // … and their material leaves the line as well (the sub price is installed)
+    }
+    if (insSubMat) unitCost = Math.max(0, unitCost - insSubMat);   // sub-installed insulation: its material is no longer ours
+    var pricedUnitCost = materialDropped ? 0 : unitCost;   // legacy: install-category material is not priced
+    var wastePct = num(line.waste_pct);
+    if (wastePct > 1) wastePct = wastePct / 100;           // whole percent slipped through (catalog / layer scale)
+    var subtotalItemCost = totalQty * pricedUnitCost * (1 + wastePct);
+    var markupPct = num(line.markup_pct);
+    var unitSales = pricedUnitCost * (1 + markupPct);
+    var subtotalItemSales = subtotalItemCost * (1 + markupPct);
+    var profit = subtotalItemSales - subtotalItemCost;
+
     var indiv = flag(es.individual_labor_rates);
     var laborRate = (indiv && num(line.labor_rate) > 0) ? num(line.labor_rate) : rates.labor;
     var globalSalesRate = num(settings.labor_sales_rate);
