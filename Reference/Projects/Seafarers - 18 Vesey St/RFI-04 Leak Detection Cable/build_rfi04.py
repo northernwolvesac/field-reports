@@ -119,11 +119,13 @@ story = [Spacer(1, 70), Paragraph("Request for Information", pT),
          Paragraph("No probe cable. Keep the approved vacuum monitoring and add one Core 00L-LS point leak sensor at each "
                    "Brugg end-fitting location (sub-cellar at pump set FOP-1, roof at the generator tank connection), "
                    "wired to the FOC panel and annunciator.", pB),
+         Paragraph("Neither these end-fitting sensors nor a probe cable are shown on the contract documents (FS101-FS105, "
+                   "FS300, M-101.00) or included in the approved Core package. Whichever is accepted, the added devices, "
+                   "wiring and labor will be priced as a change to the contract, including where required by code.", pB),
          Paragraph("Requested from the Engineer", pH),
          Paragraph("1. Confirm the proposed solution.<br/>"
                    "2. If a probe cable is still required, identify the code section that requires it for UL 1369 listed "
-                   "piping, and define the locations, length and product. It is not shown on the contract documents; "
-                   "the added work will be priced as a change to the contract.", pB)]
+                   "piping, and define the locations, length and product.", pB)]
 
 
 def build_cover():
