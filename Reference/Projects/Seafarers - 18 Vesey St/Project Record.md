@@ -110,6 +110,9 @@ Plan: `Boiler and Radiant Plan 2026-10-30.md`.
 - Fill / vent relocation: `Fill-Vent Relocation/` has the contract vs RFI#26 comparison PDF. NOTE: RFI#26 was NWAC's own
   RFI#02 (8/20) asking for Option 1 (sidewalk) or Option 2 (garage wall); the reason is not stated. A CO needs a field-condition
   reason why the contract facade location could not be built.
+- Fill / vent CO: on hold until the revised fill / vent shop drawing is approved (Ruslan 10/31); then price the CO from the
+  approved route. 4" vent per FS300 note 10 is welded black steel (alternates: brass / copper per MC Table 1302.3, or
+  ask ACE in the resubmittal for threaded 4" or a smaller vent).
 - Boiler flue: field review and photos requested from Whitney and Andrei 10/31 (email sent). Floor-heat status email to Whitney
   sent 10/30. Boiler RFI #05: on hold per Ruslan.
 
