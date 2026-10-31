@@ -97,6 +97,16 @@ Plan: `Boiler and Radiant Plan 2026-10-30.md`.
   Must go in before tile: check the tile status first. Status email sent to Whitney 10/30 (delivered? installed? tile? electrician? sizes).
 - Note: "18 Vesey Street Proposal REV1.pdf" in Drive is Highmark's ERV quote, not our proposal (ours is Quote 2759).
 
+## Decisions (Ruslan, 10/31)
+- 2-hr enclosures (including ACE's second layer) are the GC's sheetrock scope, not ours. Dropped from RFI #04.
+- Special inspection (BE-600 2.D / T001 BC 1705.22): paid by the GC.
+- Tank ASME stamp / 22.5 psig note vs Core UL 142 tank: EOR approved the tank (15.2 NET), so it is the EOR's issue.
+- Generator and its belly tank are not ours; we only connect the Brugg supply / return to it.
+- Brugg test 150 psi / 1 hr (FS300) vs 145 psig rating: question added to the Tony Ramos draft (Gmail, not sent).
+- Brugg lengths: Core quote (Jan 2026, from contract drawings) 219 LF each size; shop dwg Rev.02 FOS 231'-10" / FOR 208'-2";
+  Rev.03 (10/13) FOS 164'-7" / FOR 142'-5". The latest route is shorter, so there is no length CO. Fill / vent in Rev.03
+  (FOF 93'-7", FOV 95'-2") still follow the contract location.
+
 ## Fuel oil system
 Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids in `notes/`). In short:
 - Serves the roof emergency generator only (boiler is gas). 134-gal tank FOT-1 and duplex pump set FOP-1 in sub-cellar,

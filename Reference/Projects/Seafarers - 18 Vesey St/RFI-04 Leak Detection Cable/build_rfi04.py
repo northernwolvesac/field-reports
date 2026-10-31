@@ -1,7 +1,7 @@
-"""Seafarers 18 Vesey St - NWAC RFI #04: ACE comments on submittal 230000-19.2 that conflict with the Brugg FLEXWELL-HL listing:
-"oil leak detection probe cable to be provided" and "supply and return piping shall be enclosed in another layer of 2 hr rated enclosure".
+"""Seafarers 18 Vesey St - NWAC RFI #04: ACE comment on submittal 230000-19.2 "oil leak detection probe cable to be provided",
+answered with the Brugg FLEXWELL-HL UL 1369 listing. (The second 2-hr enclosure comment is the GC's scope - dropped 10/31.)
 
-Run: python3 build_rfi04.py  ->  RFI-04_Fuel_Oil_Leak_Detection_and_Enclosure.pdf
+Run: python3 build_rfi04.py  ->  RFI-04_Fuel_Oil_Leak_Detection_Cable.pdf
 House RFI format (see Reference/Bids/2026-09 Boss Belmont Park - RFI 01/RFI Record.md): cover + one direct page,
 then Attachment A (Brugg data sheet, quoted lines highlighted, stamped).
 """
@@ -19,7 +19,7 @@ from reportlab.pdfbase.pdfmetrics import registerFontFamily
 S = os.path.dirname(os.path.abspath(__file__)) + "/"
 LOGO = os.path.join(S, "..", "..", "..", "..", "logo-full.png")
 BRUGG = os.path.join(S, "..", "source", "Brugg FLEXWELL-HL Data Sheet 2025.pdf")
-OUT = S + "RFI-04_Fuel_Oil_Leak_Detection_and_Enclosure.pdf"
+OUT = S + "RFI-04_Fuel_Oil_Leak_Detection_Cable.pdf"
 FD = "/usr/share/fonts/truetype/liberation/"
 pdfmetrics.registerFont(TTFont("Arial", FD + "LiberationSans-Regular.ttf"))
 pdfmetrics.registerFont(TTFont("Arial-Bold", FD + "LiberationSans-Bold.ttf"))
@@ -27,8 +27,7 @@ pdfmetrics.registerFont(TTFont("Arial-Italic", FD + "LiberationSans-Italic.ttf")
 registerFontFamily("Arial", normal="Arial", bold="Arial-Bold", italic="Arial-Italic", boldItalic="Arial-Bold")
 
 DATE, RFI, REV = "10/30/2026", "04", "Rev. 0"
-SUBJECT = ("Fuel oil supply / return (Brugg FLEXWELL-HL) - leak detection probe cable and second 2-hr enclosure "
-           "(ACE comments on submittal 230000-19.2)")
+SUBJECT = "Fuel oil supply / return (Brugg FLEXWELL-HL) - leak detection probe cable (ACE comment on submittal 230000-19.2)"
 STAMP = "ATTACHMENT A - RFI #%s %s - Northern Wolves AC" % (RFI, REV)
 PW, PH = letter
 BLUE = colors.HexColor("#236fa1"); GREY = colors.HexColor("#aeaeae"); LIGHT = colors.HexColor("#eef3f8")
@@ -85,7 +84,7 @@ story = [Spacer(1, 70), Paragraph("Request for Information", pT),
              [110, W - 110], head=False, label_col=True),
          Paragraph("Contents", pH),
          Paragraph("1. Question and proposed solution (page 2).<br/>"
-                   "Attachment A: Brugg FLEXWELL-HL data sheet, UL 1369 lines highlighted (pages 3-4).", pB),
+                   "Attachment A: Brugg FLEXWELL-HL data sheet, UL 1369 leak monitoring line highlighted (pages 3-4).", pB),
          Paragraph("Reference documents", pH),
          tbl([["Document", "Status"],
               ["Submittal 230000-19.2, FO-1 Fuel Oil Piping Layout (Rev. 02, 9/17/2026)",
@@ -94,43 +93,37 @@ story = [Spacer(1, 70), Paragraph("Request for Information", pT),
                "vacuum leak monitor)", "No Exceptions Taken 6/11/2026"],
               ["Brugg FLEXWELL-HL data sheet (UL 1369 \"Severe\", above ground)", "Attachment A"],
               ["FS101-FS105, FS300, M-101.00 (Rev 0, issued for bid 1/8/2026)",
-               "Brugg double-wall piping with vacuum leak panel, in a single 2-hr rated sheetrock enclosure"]],
+               "Brugg double-wall piping with vacuum leak panel"]],
              [W * 0.55, W * 0.45]),
          Paragraph("Submitted by / distribution", pH),
          Paragraph("Submitted by: Alikhan Ilyas, Northern Wolves AC - alikhan@northernwolvesac.com - (347) 463-9248<br/>"
                    "Distribution: KBD Group (Janina Leshik, Peter Sawiris); Arcari + Iovino (Chris Santos); ACE.", pB),
          PageBreak(),
          Paragraph("1. Question", pH),
-         Paragraph("ACE's review of submittal 230000-19.2 (10/20/2026) added two requirements to the 1\" FOS / 1-1/2\" FOR "
+         Paragraph("ACE's review of submittal 230000-19.2 (10/20/2026) added a requirement to the 1\" FOS / 1-1/2\" FOR "
                    "Brugg FLEXWELL-HL piping from the sub-cellar to the roof generator:", pB),
          Spacer(1, 3),
-         tbl([["#", "ACE comment", "Contract documents"],
-              ["A", "\"Oil leak detection probe cable to be provided.\" (no location, length or product given)",
-               "Not shown on any sheet. FS101 / FS300 show the \"BRUGG VACUUM SYSTEM\" / \"BRUGG VACUUM LEAK PANEL\" only."],
-              ["B", "\"Supply and return piping shall be enclosed in another layer of 2 hr rated enclosure.\" / "
-                    "\"The pipe enclosure shall have another 2 hr rated enclosure.\"",
-               "One enclosure: FS300 \"FUEL OIL RISER SHALL BE 2 HR RATED SHEETROCK ENCLOSURE\"; plans: \"BRUGG PIPING IN 2 HR RATED SHEETROCK ENCLOSURE\"."]],
-             [16, W * 0.5, W * 0.5 - 16]),
+         tbl([["ACE comment", "Contract documents"],
+              ["\"Oil leak detection probe cable to be provided.\" (no location, length or product given)",
+               "Not shown on any sheet. FS101 / FS300 show the \"BRUGG VACUUM SYSTEM\" / \"BRUGG VACUUM LEAK PANEL\" only."]],
+             [W * 0.5, W * 0.5]),
          Paragraph("Brugg FLEXWELL-HL listing (Attachment A)", pH),
          tbl([["Data sheet", "Bearing on the comment"],
-              ["\"FLEXWELL-HL has a two hour fire rating per UL 1369.\"",
-               "B: the pipe itself carries a 2-hr rating, inside the 2-hr enclosure already on the drawings."],
               ["\"No requirement for constant leak monitoring per UL 1369 for BRUGG FLEXWELL-HL.\"",
-               "A: the listing does not require monitoring. The project still adds continuous vacuum monitoring "
+               "The listing does not require monitoring. The project still adds continuous vacuum monitoring "
                "(Core FOC-LMS-VAC-4) of the full interstice, with leak sensors at the tank basin and pump skid."],
               ["Continuous lengths, no intermediate joints; closed mechanical end fittings",
-               "A: the only points where oil can leave the double wall are the two end fittings."]],
+               "The only points where oil can leave the double wall are the two end fittings."]],
              [W * 0.45, W * 0.55]),
          Paragraph("Proposed solution", pH),
-         Paragraph("A. No probe cable. Keep the approved vacuum monitoring and add one Core 00L-LS point leak sensor at each "
+         Paragraph("No probe cable. Keep the approved vacuum monitoring and add one Core 00L-LS point leak sensor at each "
                    "Brugg end-fitting location (sub-cellar at pump set FOP-1, roof at the generator tank connection), "
-                   "wired to the FOC panel and annunciator.<br/>"
-                   "B. Single 2-hr rated enclosure as shown on the contract drawings. No second enclosure layer.", pB),
+                   "wired to the FOC panel and annunciator.", pB),
          Paragraph("Requested from the Engineer", pH),
-         Paragraph("1. Confirm items A and B as proposed.<br/>"
-                   "2. If a probe cable or a second enclosure layer is still required, define the locations, extent and "
-                   "product or construction. Neither is shown on the contract documents; the added work, including any "
-                   "re-routing to keep the required 3 ft x 7 ft clearance, will be priced as a change to the contract.", pB)]
+         Paragraph("1. Confirm the proposed solution.<br/>"
+                   "2. If a probe cable is still required, identify the code section that requires it for UL 1369 listed "
+                   "piping, and define the locations, length and product. It is not shown on the contract documents; "
+                   "the added work will be priced as a change to the contract.", pB)]
 
 
 def build_cover():
@@ -146,10 +139,9 @@ def build_cover():
 
 def attachment():
     a = pymupdf.open(BRUGG)
-    for q in ["FLEXWELL®-HL has a two hour fire rating", "per UL 1369.", "No requirement for constant leak",
-              "monitoring per UL 1369 for BRUGG", "FLEXWELL®-HL."]:
+    for q in ["No requirement for constant leak", "monitoring per UL 1369 for BRUGG", "FLEXWELL®-HL."]:
         for r in a[0].search_for(q):
-            if r.y0 > 600:          # only the two UL 1369 statements at the bottom of page 1
+            if r.y0 > 625 and r.x0 > 400:   # only the leak monitoring statement, bottom right of page 1
                 a[0].add_highlight_annot(r)
     for p in a:
         p.insert_text((36, 24), STAMP, fontsize=9, fontname="helv", color=(0.82, 0.1, 0.1))
