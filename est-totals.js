@@ -77,7 +77,8 @@
   function nwEstRates(est) {
     est = est || {};
     return {
-      labor: Number(est.labor_rate || NW_EST_STD.labor),
+      // an explicit $0/h is kept (Procore estimates priced material-only, e.g. Pura Vida COs); empty falls back to the standard
+      labor: (est.labor_rate === 0 || est.labor_rate === '0') ? 0 : Number(est.labor_rate || NW_EST_STD.labor),
       overhead: pct(est.overhead_pct, est.is_ofci ? NW_EST_STD.ofciOverhead : NW_EST_STD.overhead),
       misc: pct(est.miscellaneous_pct, NW_EST_STD.misc),
       tax: pct(est.tax_rate, NW_EST_STD.tax)
