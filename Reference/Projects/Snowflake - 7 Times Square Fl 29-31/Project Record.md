@@ -195,6 +195,15 @@ not manual, not modulating. ATC spec 2.09.A.1 / A.7 / K.1 put automatic valves w
 sequence exists. M-629 shows a third branch at CWP-29-1,2 with two ball valves only, not matching HD-053.
 A manual always-open valve would short-circuit base building CWS to CWR when pumps are off.
 Siemens is sending an RFI to the engineer (size, fail position, sequence, balancing valve, M-629 mismatch).
+9/22 Brendan: "not on our approved submittal and not on our valve schedule. There is not SOO on the mechanical drawings
+or pipe size. I will need SOO and pipe sizing to get this ordered". RFI for bypass valves still open (Fatima 10/9 update);
+no engineer answer found in mail as of 11/02.
+**11/02 after the Siemens call:** agreed no lead/lag panels; Siemens wires the pumps; NW brings Dolphin start-up tech.
+Open question from the call: how to wire the bypass valves. Proposed logic (to confirm with the engineer through the RFI):
+2-position motorized valve, spring return normally closed, opens when either pump of the pair is running (pump relay
+"Pump running", both pumps paralleled, through an interposing relay) and closes when both stop, on power loss and when the
+pumps stop on leak. End switch to the DXR as status (optional). Balancing valve on the bypass to limit flow. Reason:
+with the pumps off an open bypass would short-circuit base building CWS to CWR.
 
 ## 3. COP-SF-05 Bulletin 3 revision - $66,780
 
