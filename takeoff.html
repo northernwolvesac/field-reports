@@ -388,7 +388,7 @@ requireAuth().catch(function(){});
   var estimateId = params.get('est') || params.get('id');
   var EMBED = !!P.isEmbed;
 
-  var me = { id: null, canEdit: false, name: '' }, est = null, rootId = null, schemaOk = true, catalogOk = true, syncOk = true, settingsOk = true, measLoadOk = true, keptWarned = false;
+  var me = { id: null, canEdit: false, name: '' }, est = null, rootId = null, layersOk = false, schemaOk = true, catalogOk = true, syncOk = true, settingsOk = true, measLoadOk = true, keptWarned = false;
   var extCols = false;   // estimate_takeoff_layers has params / tag / is_locked (procore-ui-schema.sql applied) — decides what copy paths may INSERT
   var drawings = [], plans = [], planIdx = -1, layers = [], allMeas = [], meas = [], groupOrder = [];
   var pdfPage = null, pdfCanvas, overlayCanvas, ctx, renderScale = 1, zoom = 1, viewport1 = null;
@@ -497,7 +497,7 @@ requireAuth().catch(function(){});
     else if (cmd === 'openPlan') { var i = plans.findIndex(function(p) { return p.drawing.id === payload.drawingId && (!payload.page || p.page === Number(payload.page)); }); if (i >= 0) openPlan(i); }
     else if (cmd === 'refresh') { loadLayers().then(loadDrawings).then(renderAll); }
     else if (cmd === 'flush') { flushSync(); }
-    else if (cmd === 'refreshLayers') { loadLayers().then(function() { allMeas = allMeas.filter(function(m) { return !m.layer_id || layerById(m.layer_id); }); meas = meas.filter(function(m) { return !m.layer_id || layerById(m.layer_id); }); if (activeLayerId && !layerById(activeLayerId)) activeLayerId = null; renderAll(); }); }   // estimate-side changes: layers only (deleting a layer there cascades to its marks)   // loadDrawings re-derives `meas` for the open plan
+    else if (cmd === 'refreshLayers') { loadLayers().then(function() { allMeas = allMeas.filter(ownMark); meas = meas.filter(ownMark); if (activeLayerId && !layerById(activeLayerId)) activeLayerId = null; renderAll(); }); }   // estimate-side changes: layers only (deleting a layer there cascades to its marks)   // loadDrawings re-derives `meas` for the open plan
     else if (cmd === 'export') exportPdf();
     else if (cmd === 'actions') openActionsMenu($('actionsBtn'));
     else if (cmd === 'showEstimate') showEstimate();
@@ -513,8 +513,8 @@ requireAuth().catch(function(){});
   // ═══════════════════════ layers ═══════════════════════
   async function loadLayers() {
     var r = await sb.from('estimate_takeoff_layers').select('*').eq('estimate_id', estimateId).order('sort_order').order('created_at');
-    if (r.error) { if (/estimate_takeoff_layers|42P01|does not exist/i.test(r.error.message)) { schemaOk = false; $('schemaBanner').style.display = ''; } layers = []; return; }
-    layers = r.data || [];
+    if (r.error) { if (/estimate_takeoff_layers|42P01|does not exist/i.test(r.error.message)) { schemaOk = false; $('schemaBanner').style.display = ''; } layers = []; layersOk = false; return; }
+    layers = r.data || []; layersOk = true;
     // do the rows carry the procore-ui-schema.sql columns? (probe when the estimate has no layers yet)
     if (layers.length) extCols = ('params' in layers[0]) && ('is_locked' in layers[0]);
     else { var pr = await sb.from('estimate_takeoff_layers').select('id,params,tag,is_locked').eq('estimate_id', estimateId).limit(1); extCols = !pr.error; }
@@ -526,6 +526,7 @@ requireAuth().catch(function(){});
     if (r.error && /layer_id|group_name|column/i.test(r.error.message)) { syncOk = false; if (me.canEdit) $('syncBanner').style.display = ''; }
   }
   function layerById(id) { return layers.find(function(l) { return l.id === id; }); }
+  function ownMark(m) { return !m.layer_id || !!layerById(m.layer_id); }
   function typeUnit(t) { return t === 'linear' ? 'ft' : t === 'area' ? 'sqft' : 'ea'; }
   function lineUnit(t) { return t === 'linear' ? 'lf' : t === 'area' ? 'sf' : 'ea'; }
   function qtyStr(q, t) { return P.qty(q, P.uom(typeUnit(t))); }
@@ -1351,6 +1352,9 @@ requireAuth().catch(function(){});
     allMeas = []; measLoadOk = true;
     // PostgREST returns at most 1,000 rows per request — an auto-measured set has thousands of marks, so page through
     if (ids.length) for (var from = 0; ; from += 1000) { var m = await sb.from('estimate_measurements').select('*').in('drawing_id', ids).order('created_at').order('id').range(from, from + 999); if (m.error) { measLoadOk = false; toast(m.error.message, 'error'); break; } allMeas = allMeas.concat(m.data || []); if (!m.data || m.data.length < 1000) break; }
+    // the plans are shared by every version of the bid: a mark on another version's layer (alternate copies, the original's own marks) is not ours —
+    // drawing it let a click / box select / Ctrl+A / Delete in E2 remove the original's marks. Marks without a layer (legacy, notes, stamps) stay shared.
+    if (layersOk) allMeas = allMeas.filter(ownMark);
     // a reload (embed 'refresh', upload) must not leave the overlay drawing stale marks: re-derive `meas` for the plan that is open
     if (curKey) {
       planIdx = plans.findIndex(function(x) { return x.key === curKey; });
