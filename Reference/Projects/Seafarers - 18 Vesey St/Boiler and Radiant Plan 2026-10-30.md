@@ -143,3 +143,19 @@ Not reviewed: boiler sheets BE-001..BE-600 and fuel storage sheets FS / T001. Th
 9. Connect PTAC HW coils as units arrive. Remove the 2nd-floor radiators and 5th-floor convection heaters and cap the risers (BE sheets).
 10. Hand the S5 documents to the filing rep; closeout (O&M, warranty).
 11. Bill SOV lines 4 / 6 / 8 as each step finishes.
+
+## Update 11/4/2026
+- **Ferguson quote BSTD20250400004022 (4/23), BOILER-1, EG-75-PIDN W/Water Trim, $5,408.20:**
+  - "partial knock down boiler, factory-assembled section block"
+  - insulated extended jacket, draft hood, automatic vent damper
+  - 24V gas valve, pilot burner, SS burners, spill switch, rollout fuse
+  - **Unity-CI control module with built-in LWCO**, built-in air separator, 30 psi ASME relief, P/T gauge, 50 VA transformer
+  - Outdoor sensor kit $29.07
+- **Not in the quote:** expansion tank, vent connector / liner, start-up, freight, tax, rigging.
+- **Ferguson notes useful for RFI #05:** "non-condensing; a condensate neutralizing kit is not needed"; "cast iron, not a Water Tube type boiler".
+- **EG table (WM2503_BRO_036):** "P" prefix (factory package) is only for steam sizes 30-65. Our EG-75 ships as an assembled block plus cartons; 735 lb is the shipping weight.
+- **Only the section block was received.** Email to Michael Liranzo (Ferguson), cc Whitney, 11/4 asks for:
+  - the remaining components and their ETA
+  - block and carton weights for rigging
+  - whether the block can be split into sections
+  - the IOM
