@@ -264,7 +264,9 @@
       var d = collectData();
       if (cfg.ownRevisions) {   // Change Order keeps its own status / Rev numbering and edit mode
         var coEdit = null; try { coEdit = _editCloudId; } catch (e) {}
-        if (!d._coStatus) d._coStatus = 'submitted';
+        try { clearTimeout(_cloudDraftTimer); if (_cloudDraftBusy) await _cloudDraftBusy; } catch (e) {}   // the page's cloud-draft autosave
+        if (!d._coStatus || d._coStatus === 'draft') d._coStatus = 'submitted';   // Save finishes an auto-saved draft
+        try { _coStatus = d._coStatus; } catch (e) {}
         if (!d._revisionNumber) d._revisionNumber = 1;
         var res = coEdit ? await updateReportInCloud(coEdit, { form_data: d, status: d._coStatus })
                          : await saveReportToCloud(cfg.type, d, { reportId: curReportId(), projectId: projectId() });

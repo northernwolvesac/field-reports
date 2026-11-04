@@ -417,6 +417,7 @@
   .co-card-desc { font-size: 13px; color: var(--nw-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .co-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--nw-muted); }
   .co-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: capitalize; }
+  .co-badge-draft { background: #f3f4f6; color: #4b5563; border: 1px dashed #9ca3af; }
   .co-badge-submitted { background: #dbeafe; color: #1e40af; }
   .co-badge-revised { background: #fef3c7; color: #92400e; }
   .co-badge-approved { background: #d1fae5; color: #065f46; }
@@ -807,6 +808,7 @@
       </div>
       <div id="coStatusTabs" style="display:flex;padding:0 16px;overflow-x:auto;gap:6px;margin-bottom:8px;">
         <div class="co-tab active" data-costatus="all" onclick="filterCOStatus('all',this)">All</div>
+        <div class="co-tab" data-costatus="draft" onclick="filterCOStatus('draft',this)">✏️ Draft</div>
         <div class="co-tab" data-costatus="submitted" onclick="filterCOStatus('submitted',this)">📋 Submitted</div>
         <div class="co-tab" data-costatus="revised" onclick="filterCOStatus('revised',this)">📝 Revised</div>
         <div class="co-tab" data-costatus="approved" onclick="filterCOStatus('approved',this)">✅ Approved</div>
@@ -1978,6 +1980,7 @@ requireAuth().catch(function(){});
       html += '<button class="co-status-option' + (coStatus === 'revised' ? ' active' : '') + '" onclick="quickStatusChange(\'' + co.id + '\',\'revised\',event)">📝 Revised</button>';
       html += '<button class="co-status-option' + (coStatus === 'approved' ? ' active' : '') + '" onclick="quickStatusChange(\'' + co.id + '\',\'approved\',event)">✅ Approved</button>';
       html += '<button class="co-status-option' + (coStatus === 'voided' ? ' active' : '') + '" onclick="quickStatusChange(\'' + co.id + '\',\'voided\',event)">🚫 Voided</button>';
+      if (coStatus === 'draft') html += '<button class="co-status-option" style="color:#b91c1c" onclick="deleteCODraft(\'' + co.id + '\',event)">🗑 Delete draft</button>';
       html += '</div>';
       html += '</div>';
       html += '</div>';
@@ -2043,6 +2046,27 @@ requireAuth().catch(function(){});
     } catch(err) {
       console.error('[projects] Quick status change error:', err);
       showToast('Error updating status');
+    }
+  };
+
+  // An auto-saved draft (change-order.html keeps an unfinished CO in the cloud) that is not needed: the report + its draft Prime Contract CO
+  window.deleteCODraft = async function(coId, e) {
+    if (e) e.stopPropagation();
+    document.querySelectorAll('.co-status-menu.open').forEach(function(m) { m.classList.remove('open'); });
+    var co = _allCOs.filter(function(x) { return x.id === coId; })[0];
+    if (!co || ((co.form_data && co.form_data._coStatus) || co.status) !== 'draft') return;
+    var fd = co.form_data || {};
+    if (!confirm('Delete draft CO #' + (fd.coNumber || co.report_number || '') + '?\n\nThis cannot be undone.')) return;
+    try {
+      var r = await supabaseClient.from('reports').delete().eq('id', coId).eq('status', 'draft');
+      if (r.error) throw r.error;
+      if (co.report_number) await supabaseClient.from('aia_change_orders').delete().eq('source_report_number', co.report_number).eq('status', 'draft');
+      _allCOs = _allCOs.filter(function(x) { return x.id !== coId; });
+      renderCOList();
+      showToast('Draft deleted');
+    } catch (err) {
+      console.error('[projects] delete CO draft', err);
+      showToast('Could not delete the draft: ' + (err.message || err));
     }
   };
 
