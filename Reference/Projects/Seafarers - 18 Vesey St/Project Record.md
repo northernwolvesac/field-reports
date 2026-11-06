@@ -115,6 +115,11 @@ Plan: `Boiler and Radiant Plan 2026-10-30.md`.
   ask ACE in the resubmittal for threaded 4" or a smaller vent).
 - Boiler: only the section block received (11/4). Ferguson asked for the jacket, burners, gas valve, Unity-CI controls,
   trim and outdoor sensor, plus block weight for rigging (email to Michael Liranzo, cc Whitney).
+- PH Works estimate 12845 (11/4), boiler only: $23,400 + tax $2,076.75 (tax waived with capital improvement form) = $25,476.75.
+  Includes BE permit / DOB inspections / ACP5 / boiler card under LMP 2436, setting on pad, near-boiler piping, LWCO + manual
+  reset aquastat + PRV + backflow, e-stop, damper interlock, connect to existing vent. Excludes: rigging, removal of the existing
+  boiler, vibration pad, chimney affidavit, thermostat / heating controls, gas, electrical, city fees, PAA, flashing, ConEd.
+  50 / 45 / 5 payment. Under review 11/6 (looks high; see the chat review).
 - Boiler flue: field review and photos requested from Whitney and Andrei 10/31 (email sent). Floor-heat status email to Whitney
   sent 10/30. Boiler RFI #05: on hold per Ruslan.
 
