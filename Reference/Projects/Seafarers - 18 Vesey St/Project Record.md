@@ -123,6 +123,12 @@ Plan: `Boiler and Radiant Plan 2026-10-30.md`.
 - Boiler flue: field review and photos requested from Whitney and Andrei 10/31 (email sent). Floor-heat status email to Whitney
   sent 10/30. Boiler RFI #05: on hold per Ruslan.
 
+## Ductwork: flex
+- Flex duct runouts are NOT allowed. ACE on duct standards submittal 230000-5.0 (5/8/2026): "FLEX DUCT SHALL NOT BE USED.
+  USE RIGID ROUND DUCTS INSTEAD." This overrides the M502 diffuser detail (max 6 ft flex). Using flex would need an RFI.
+- Fabric flexible connections at fans, ERV and AC units are required (M601 5.D: neoprene-coated glass fabric 30 oz/sy,
+  metal collars, 1" movement). Also turning vanes at all 90 deg elbows (submittal note).
+
 ## Fuel oil system
 Full review: `Fuel Oil Review 2026-10-30.md` (working notes with Drive file ids in `notes/`). In short:
 - Serves the roof emergency generator only (boiler is gas). 134-gal tank FOT-1 and duplex pump set FOP-1 in sub-cellar,
