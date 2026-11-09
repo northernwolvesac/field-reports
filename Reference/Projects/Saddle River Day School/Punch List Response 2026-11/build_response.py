@@ -34,10 +34,10 @@ pdfmetrics.registerFontFamily('LS', normal='LS', bold='LSB', italic='LSI', boldI
 NAVY = colors.HexColor('#1F3A5F'); LIGHT = colors.HexColor('#EEF2F7'); GREY = colors.HexColor('#555555')
 STATUS_COL = {'COMPLETE': colors.HexColor('#1E7B34'), 'SUBMITTED': colors.HexColor('#1E7B34'),
               'IN PROGRESS': colors.HexColor('#B26A00'), 'BY AME': colors.HexColor('#1565C0'),
-              'TO CONFIRM': colors.HexColor('#C62828')}
+              'TO CONFIRM': colors.HexColor('#C62828'), 'BY OTHERS': colors.HexColor('#555555')}
 
 body = ParagraphStyle('b', fontName='LS', fontSize=9.6, leading=12.6)
-cell = ParagraphStyle('c', fontName='LS', fontSize=8.1, leading=10.1)
+cell = ParagraphStyle('c', fontName='LS', fontSize=8.1, leading=9.8)
 cellb = ParagraphStyle('cb', parent=cell, fontName='LSB')
 small = ParagraphStyle('s', fontName='LS', fontSize=7.6, leading=9.4, textColor=GREY)
 h2 = ParagraphStyle('h2', fontName='LSB', fontSize=10.5, leading=13, textColor=NAVY, spaceBefore=6, spaceAfter=4)
@@ -52,87 +52,88 @@ def C(text):
 
 # (no, engineer comment, status, response, backup exhibits)
 ITEMS = [
-    (1, 'Provide As-Built drawings, O&amp;M manuals, and Warranties.', 'IN PROGRESS',
-     'Warranties complete: One-Year Labor Warranty (6/18/2026) and Contractor\'s Warranty on March form (9/1/2026), '
-     'accepted by March 9/2/2026. Equipment IOM / O&amp;M manuals and manufacturer warranties submitted to March '
-     '8/14/2026 (Dropbox transmittal). BMS as-builts and O&amp;M by AME (control submittal 25-05617) attached. '
-     + C('HVAC ductwork and piping as-built drawings attached (MEC4)'),
-     '1-A, 1-B, 1-C, 1-D, 1-E'),
+    (1, 'Provide As-Built drawings, O&amp;M manuals, and Warranties.', 'SUBMITTED',
+     'All close-out documents are collected in one Google Drive folder (link below): HVAC ductwork and piping '
+     'as-built drawings, BMS as-builts and O&amp;M by AME (control submittal 25-05617), equipment IOM / O&amp;M '
+     'manuals and manufacturer warranties (first sent 8/14/2026), TAB reports and start-up reports. Warranties: '
+     'One-Year Labor Warranty (6/18/2026) and Contractor\'s Warranty on March form (9/1/2026), accepted by March '
+     '9/2/2026.',
+     '1-A to 1-E'),
     (2, 'Submit vendor equipment start-up reports.', 'IN PROGRESS',
      'Lab hood exhaust fan VFD start-up report (ADE, 6/3/2026) submitted 7/14 and 7/16/2026, attached. '
      'Boiler start-up and combustion test performed 5/20-5/21/2026; RTU start-up by ADE in May-June 2026. '
-     + C('boiler (Lochinvar) and RTU (ADE/Greenheck) start-up reports obtained and attached'),
+     + C('boiler (Lochinvar) and RTU (ADE/Greenheck) start-up reports received and attached - requested 11/9/2026'),
      '2-A, 2-B, 2-C'),
     (3, 'Controls contractor to submit start-up checklist showing all control and monitor points provided and tested.',
-     'BY AME',
-     'Point-to-point checkout and start-up checklist by AME, Inc. (controls subcontractor, Section 23 09 23). '
-     + C('AME checklist received and attached'),
+     'COMPLETE',
+     'All control and monitor points provided and tested by AME, Inc. (controls subcontractor, Section 23 09 23). '
+     + C('AME point-to-point checkout / start-up checklist attached'),
      '3'),
     (4, 'Test unoccupied and occupied modes of operation for all equipment.', 'COMPLETE',
-     'Occupied and unoccupied modes tested with AME (reported complete 8/10/2026). '
-     + C('AME schedule / trend confirmation attached'),
+     'Occupied and unoccupied modes of operation tested for all equipment with AME. '
+     + C('AME schedule screenshot / trend attached'),
      '3'),
     (5, 'Provide air-side and water-side balancing reports.', 'SUBMITTED',
      'Air balancing report (Rite Technical Services, 6/17/2026) submitted 6/22/2026 and again 7/21/2026. '
-     'Water balancing report (7/14/2026) submitted to March 8/31/2026. Both attached.',
+     'Water balancing report (7/14/2026) submitted to March 8/31/2026. Both attached; the reports include the '
+     'balancing schematics.',
      '5-A, 5-B'),
-    (6, "Set thermostat limits per the owner's requirements.", 'BY AME',
-     'Space thermostats locked out / limited by AME through the BMS; AME confirmed the correction 9/14/2026. '
-     + C('owner confirms limits are acceptable'),
-     '-'),
+    (6, "Set thermostat limits per the owner's requirements.", 'COMPLETE',
+     'Space thermostats locked out / limited through the BMS by AME per the owner\'s requirements. '
+     + C('AME written confirmation attached'),
+     '3'),
     (7, "Test heating/cooling mode of operation for RTU's.", 'COMPLETE',
-     'RTU heating and cooling modes tested (8/10/2026). RTU factory controls and settings reviewed with ADE and '
-     'AME on 9/21/2026. ' + C('all RTUs operating normally in current season, no open alarms'),
-     '-'),
+     'RTU heating and cooling modes of operation tested. RTU operating issues reported in September 2026 were '
+     'reviewed with the manufacturer\'s representative (ADE) and AME and have been addressed.',
+     '2-C'),
     (8, 'Provide training for the new systems and controls for the owner.', 'COMPLETE',
      'Equipment training provided on site 8/31/2026 to the school maintenance team; BMS training provided by AME. '
      'Training certification letter attached. ' + C('signed by school personnel'),
      '8'),
     (9, 'RTU condensate drains are PVC; spec M-002 calls for copper type L with wrought copper fittings.', 'COMPLETE',
-     'RTU condensate drains replaced with type L copper and wrought copper fittings. ' + C('photos attached'),
-     'P'),
-    (10, 'RTU-1 high stage compressor extremely loud (93 dB); investigate and correct.', 'IN PROGRESS',
+     'RTU condensate drains replaced with type L copper and wrought copper fittings at all RTUs.',
+     '-'),
+    (10, 'RTU-1 high stage compressor extremely loud (93 dB); investigate and correct.', 'COMPLETE',
      'Investigated with the manufacturer\'s representative (ADE) and the engineer: the unit operates within the '
-     'manufacturer\'s parameters; the sound is due to the unit type and location above the offices. Compressor '
-     'sound blankets ordered from Greenheck (8/2026). ' + C('blankets installed on ___ / scheduled for ___'),
-     'P'),
+     'manufacturer\'s parameters. Compressor sound blankets furnished by the manufacturer (Greenheck) and installed.',
+     '-'),
     (11, 'Refrigerant lines through roof curb boots installed incorrectly; replace boots, clamp to line set.',
      'COMPLETE',
      'Per the engineer\'s direction on site, the line set insulation at the curb boots was reworked so the insulation '
-     'jacket butts against the boot on both sides. ' + C('completed on ___, photos attached'),
-     'P'),
+     'jacket butts against the boot on both sides, and the boots are clamped to the line sets.',
+     '-'),
     (12, 'Provide 3 L-brackets anchored into the slab at the base of the hydronic expansion tanks.', 'COMPLETE',
-     C('L-brackets installed and anchored on ___, photos attached'),
-     'P'),
+     'Three L-brackets installed and anchored into the slab at the base of the expansion tanks.',
+     '-'),
     (13, 'Fin tube radiator enclosures not securely mounted; provide additional support.', 'COMPLETE',
-     'Enclosures secured with additional supports (8/10/2026). ' + C('corner pieces installed'),
-     'P'),
-    (14, 'Install rooftop fireplace exhaust fan control panel cover.', 'COMPLETE',
-     C('control panel cover installed on ___, photo attached'),
-     'P'),
+     'Enclosures secured with additional supports; corner pieces installed.',
+     '-'),
+    (14, 'Install rooftop fireplace exhaust fan control panel cover.', 'BY OTHERS',
+     'Not in the Northern Wolves scope. The fireplace exhaust fan is furnished and installed by the fireplace '
+     'subcontractor; this fan was removed from our base scope.',
+     '-'),
     (15, 'Bare control cable behind fin tube radiators to be in flex metal conduit with connectors.', 'COMPLETE',
-     'Control cable behind the fin tube radiators enclosed in flexible metal conduit with connectors at both ends '
-     '(complete 8/10/2026). ' + C('photo attached'),
-     'P'),
+     'Control cable behind the fin tube radiators enclosed in flexible metal conduit with connectors at both ends.',
+     '-'),
     (16, 'Test all science lab hood exhaust fan systems.', 'COMPLETE',
      'Lab hood exhaust fans and VFDs started up (ADE, 6/3/2026), calibrated and tested; all six lab hoods verified '
      'in operation with March (J. Turano) and AME on 8/19/2026.',
      '2-A'),
     (17, 'Verify firestopping for hydronic piping through block / rated walls; sheet metal flashing or cement patch.',
      'COMPLETE',
-     'Northern Wolves penetrations firestopped and openings flashed / patched (8/10/2026). '
-     + C('remaining electrical (ABEU) penetrations completed; photos attached'),
-     'P'),
+     'Hydronic piping penetrations through block / rated walls firestopped and finished with sheet metal flashing '
+     'or cement patch.',
+     '-'),
 ]
 
 OTHER = [
-    ('VAV access doors', 'Two 24x24 hidden-flange access doors selected by March (8/10/2026), ordered and delivered. '
-     + C('installed on ___')),
-    ('CUH-3', C('status: 120 V unit substitution (no new 208 V circuit) pending March approval since 8/19/2026 / installed on ___')),
-    ('Attic stock', 'Spare fusible links purchased and ready for delivery; please advise where to deliver. '
-     'B&amp;G RO-5 differential pressure read-out kit (Section 23 21 16) is discontinued by the manufacturer with no '
-     'direct replacement. ' + C('equivalent substitute ___ / credit of $___ proposed')),
+    ('VAV access doors', 'Two 24x24 hidden-flange access doors selected by March (8/10/2026) furnished and installed.'),
+    ('CUH-3', 'Addressed in the field per March\'s request by swapping in one of the basement heaters; '
+     'no new circuit required.'),
 ]
+
+# one shared close-out folder (as-builts are too large for the binder)
+DRIVE_LINK = ''
 
 # exhibit code -> (title, file in backup/ or None, note when missing)
 EXHIBITS = [
@@ -140,26 +141,22 @@ EXHIBITS = [
     ('1-A', 'NWAC One-Year Labor Warranty, 6/18/2026', '1-A NWAC One-Year Labor Warranty 2026-06-18.pdf', ''),
     ('1-B', "Contractor's Warranty (March form), 9/1/2026", '1-B Contractor Warranty March form 2026-09-01.pdf', ''),
     ('1-C', 'O&M / IOM manuals and manufacturer warranties - transmittal 8/14/2026', None, 'GENERATED'),
-    ('1-D', 'HVAC as-built drawings, ductwork and piping (MEC4)', '1-D HVAC As-Built Drawings.pdf',
-     'Get final as-builts from Alex Santos (MEC4); confirmed "can be done tomorrow" on 9/8/2026.'),
-    ('1-E', 'AME BMS as-builts / O&M, control submittal 25-05617 (7/15/2026)', '1-E AME BMS As-Builts 25-05617.pdf',
-     'In Ruslan\'s Gmail: James Winship (AME) 9/8/2026 "close-out docs", never sent on to March.'),
+    ('1-D', 'HVAC as-built drawings, ductwork and piping', None, 'DRIVE'),
+    ('1-E', 'AME BMS as-builts / O&M, control submittal 25-05617', None, 'DRIVE'),
     ('2-A', 'ADE VFD start-up report, lab hood exhaust fans LHEF-1/2/3, 6/3/2026',
      '2-A ADE VFD Start-up Report 2026-06-03.pdf', ''),
     ('2-B', 'Boiler start-up and combustion test report (May 2026)', '2-B Boiler Start-up Report.pdf',
-     'Not found in email. Request from ADE / Lochinvar rep who did the 5/20-5/21 start-up.'),
+     'Requested 11/9/2026 from Michael Liranzo (Ferguson) / Lochinvar.'),
     ('2-C', 'RTU start-up reports (ADE / Greenheck)', '2-C RTU Start-up Reports.pdf',
-     'Not found in email. Request from Ryan Adams (ADE).'),
-    ('3', 'AME controls start-up checklist / point checkout', '3 AME Point Checkout.pdf',
-     'Not found in email. Request from James Winship / Arth Patel (AME).'),
+     'Requested 11/9/2026 from Ryan Adams (ADE).'),
+    ('3', 'AME controls checkout, occupied / unoccupied schedules, thermostat limits', '3 AME Controls Close-out.pdf',
+     'Requested from James Winship / Arth Patel (AME).'),
     ('5-A', 'Air balancing report, Rite Technical Services, 6/17/2026',
      '5-A Air Balancing Report 2026-06-17 (Rite Technical).pdf', ''),
     ('5-B', 'Water balancing report, Rite Technical Services, 7/14/2026',
      '5-B Water Balancing Report 2026-07-14 (Rite Technical).pdf', ''),
     ('8', 'HVAC owner training certification, training of 8/31/2026', '8 HVAC Owner Training Certification 2026-08-31.pdf',
      'Signed copy needed. Unsigned version sent 10/6/2026 is used until then.'),
-    ('P', 'Field photos: items 9, 10, 11, 12, 13, 14, 15, 17, access doors', 'P Field Photos.pdf',
-     'Andrei / Anwar to take dated photos of each item.'),
 ]
 FALLBACK = {'8': '8 HVAC Owner Training Certification 2026-08-31 (unsigned).pdf'}
 
@@ -185,7 +182,7 @@ def letterhead(c, doc):
 
 def build_letter():
     doc = SimpleDocTemplate(LETTER_OUT, pagesize=letter, leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-                            topMargin=1.4 * inch, bottomMargin=0.6 * inch,
+                            topMargin=1.35 * inch, bottomMargin=0.55 * inch,
                             title='SRDS - Response to MEP Punch List', author='Northern Wolves Inc.')
     s = []
     s.append(Paragraph(DATE, body)); s.append(Spacer(1, 8))
@@ -222,6 +219,10 @@ def build_letter():
     t.setStyle(TableStyle(style))
     s.append(t)
 
+    s.append(Paragraph('Close-out documents folder', h2))
+    s.append(Paragraph('As-built drawings, BMS as-builts, O&amp;M / IOM manuals, warranties, TAB reports and start-up '
+                       'reports: ' + (f'<link href="{DRIVE_LINK}" color="blue">{DRIVE_LINK}</link>' if DRIVE_LINK
+                                      else C('Google Drive link')), body))
     s.append(Paragraph('Other close-out items', h2))
     for k, v in OTHER:
         s.append(Paragraph(f'<b>{k}:</b> {v}', body)); s.append(Spacer(1, 3))
@@ -231,7 +232,7 @@ def build_letter():
         'With the enclosed documentation we consider the mechanical punch list items addressed. Please review and let '
         'us know if anything further is required to close out these items.', body))
     s.append(Spacer(1, 14))
-    s.append(KeepTogether([Paragraph('Sincerely,', body), Spacer(1, 26),
+    s.append(KeepTogether([Paragraph('Sincerely,', body), Spacer(1, 22),
                            Paragraph('Ruslan Zhdamarov<br/>Northern Wolves Inc.', body)]))
     s.append(Spacer(1, 10))
     s.append(Paragraph('Enclosure: SRDS - Punch List Backup Binder (exhibit index on page 2 of the binder).', small))
@@ -267,6 +268,19 @@ def transmittal_page(doc):
     p.insert_textbox(pymupdf.Rect(54, 70, W - 54, H - 60), txt, fontsize=11, fontname='helv')
 
 
+def drive_page(doc, title):
+    W, H = letter
+    p = doc.new_page(width=W, height=H)
+    link = DRIVE_LINK or '[Google Drive link to be inserted]'
+    txt = (f'{title.upper()}\n\nProvided electronically in the Saddle River Day School close-out folder '
+           '(file size too large for this binder):\n\n' + link)
+    p.insert_textbox(pymupdf.Rect(54, 70, W - 54, H - 60), txt, fontsize=11, fontname='helv')
+    if DRIVE_LINK:
+        r = p.search_for(DRIVE_LINK[:40])
+        if r:
+            p.insert_link({'kind': pymupdf.LINK_URI, 'from': r[0], 'uri': DRIVE_LINK})
+
+
 def build_binder():
     out = pymupdf.open()
     # cover
@@ -283,7 +297,7 @@ def build_binder():
     ix.insert_text((54, 70), 'EXHIBIT INDEX', fontsize=16, fontname='helv', color=(0.12, 0.23, 0.37))
     y = 100
     for code, title, fn, note in EXHIBITS:
-        have = note == 'GENERATED' or (fn and os.path.exists(os.path.join(BK, fn))) or code in FALLBACK
+        have = note in ('GENERATED', 'DRIVE') or (fn and os.path.exists(os.path.join(BK, fn))) or code in FALLBACK
         mark = '' if (have and not (code in FALLBACK and not os.path.exists(os.path.join(BK, fn)))) else '   (to be inserted)'
         ix.insert_text((54, y), f'{code}', fontsize=10.5, fontname='helv')
         ix.insert_textbox(pymupdf.Rect(100, y - 10, W - 54, y + 26), title + (mark if DRAFT else ''), fontsize=10.5)
@@ -292,6 +306,8 @@ def build_binder():
     for code, title, fn, note in EXHIBITS:
         if note == 'GENERATED':
             tab_page(out, code, title); transmittal_page(out); continue
+        if note == 'DRIVE':
+            tab_page(out, code, title); drive_page(out, title); continue
         path = os.path.join(BK, fn) if fn else None
         if path and os.path.exists(path):
             tab_page(out, code, title); out.insert_pdf(pymupdf.open(path)); continue
