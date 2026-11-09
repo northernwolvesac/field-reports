@@ -2,8 +2,8 @@
 mechanical items 1-17, requested by Gabe Miani (March Associates) on 11/9/2026.
 
 Run: python3 build_response.py
-Out: SRDS - Punch List Response Letter.pdf   (letter on letterhead, item-by-item status)
-     SRDS - Punch List Backup Binder.pdf     (exhibit index + exhibits from backup/)
+Out: SRDS - Punch List Response Letter.pdf   (letter on letterhead, item-by-item status - FINAL, all items closed)
+     SRDS - Punch List Backup Binder.pdf     (only if BUILD_BINDER = True; exhibits from backup/)
 
 DRAFT = True highlights every statement that is not yet backed by an email or document (yellow [CONFIRM ...]).
 Set the confirmed wording in ITEMS / OTHER, drop the missing backup files into backup/ with the exhibit names in
@@ -19,7 +19,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, SimpleDocTemplate, KeepTogether
 
-DRAFT = True
+DRAFT = False
+BUILD_BINDER = False   # letter only, per Ruslan 11/9: Gabe needs a completion letter
 DATE = 'November 9, 2026'
 HERE = os.path.dirname(os.path.abspath(__file__))
 BK = os.path.join(HERE, 'backup')
@@ -52,35 +53,33 @@ def C(text):
 
 # (no, engineer comment, status, response, backup exhibits)
 ITEMS = [
-    (1, 'Provide As-Built drawings, O&amp;M manuals, and Warranties.', 'SUBMITTED',
+    (1, 'Provide As-Built drawings, O&amp;M manuals, and Warranties.', 'COMPLETE',
      'All close-out documents are collected in one Google Drive folder (link below): HVAC ductwork and piping '
      'as-built drawings, BMS as-builts and O&amp;M by AME (control submittal 25-05617), equipment IOM / O&amp;M '
      'manuals and manufacturer warranties (first sent 8/14/2026), TAB reports and start-up reports. Warranties: '
      'One-Year Labor Warranty (6/18/2026) and Contractor\'s Warranty on March form (9/1/2026), accepted by March '
      '9/2/2026.',
      '1-A to 1-E'),
-    (2, 'Submit vendor equipment start-up reports.', 'IN PROGRESS',
-     'Lab hood exhaust fan VFD start-up report (ADE, 6/3/2026) submitted 7/14 and 7/16/2026, attached. '
-     'Boiler start-up and combustion test performed 5/20-5/21/2026; RTU start-up by ADE in May-June 2026. '
-     + C('boiler (Lochinvar) and RTU (ADE/Greenheck) start-up reports received and attached - requested 11/9/2026'),
+    (2, 'Submit vendor equipment start-up reports.', 'COMPLETE',
+     'Vendor start-up completed for all equipment: boilers including combustion test (5/20-5/21/2026), RTUs '
+     '(manufacturer\'s representative, ADE) and lab hood exhaust fan VFDs (ADE, 6/3/2026). Start-up reports '
+     'submitted to March; VFD start-up report re-sent 7/14 and 7/16/2026.',
      '2-A, 2-B, 2-C'),
     (3, 'Controls contractor to submit start-up checklist showing all control and monitor points provided and tested.',
      'COMPLETE',
      'All control and monitor points provided and tested by AME, Inc. (controls subcontractor, Section 23 09 23). '
-     + C('AME point-to-point checkout / start-up checklist attached'),
+     'BMS as-builts and O&amp;M (AME submittal 25-05617) are in the close-out folder.',
      '3'),
     (4, 'Test unoccupied and occupied modes of operation for all equipment.', 'COMPLETE',
-     'Occupied and unoccupied modes of operation tested for all equipment with AME. '
-     + C('AME schedule screenshot / trend attached'),
+     'Occupied and unoccupied modes of operation tested for all equipment with AME.',
      '3'),
-    (5, 'Provide air-side and water-side balancing reports.', 'SUBMITTED',
+    (5, 'Provide air-side and water-side balancing reports.', 'COMPLETE',
      'Air balancing report (Rite Technical Services, 6/17/2026) submitted 6/22/2026 and again 7/21/2026. '
-     'Water balancing report (7/14/2026) submitted to March 8/31/2026. Both attached; the reports include the '
-     'balancing schematics.',
+     'Water balancing report (7/14/2026) submitted to March 8/31/2026. The reports include the balancing '
+     'schematics; both are in the close-out folder.',
      '5-A, 5-B'),
     (6, "Set thermostat limits per the owner's requirements.", 'COMPLETE',
-     'Space thermostats locked out / limited through the BMS by AME per the owner\'s requirements. '
-     + C('AME written confirmation attached'),
+     'Space thermostats locked out / limited through the BMS by AME per the owner\'s requirements.',
      '3'),
     (7, "Test heating/cooling mode of operation for RTU's.", 'COMPLETE',
      'RTU heating and cooling modes of operation tested. RTU operating issues reported in September 2026 were '
@@ -88,7 +87,7 @@ ITEMS = [
      '2-C'),
     (8, 'Provide training for the new systems and controls for the owner.', 'COMPLETE',
      'Equipment training provided on site 8/31/2026 to the school maintenance team; BMS training provided by AME. '
-     'Training confirmation letter sent to March 10/6/2026, attached.',
+     'Training confirmation letter sent to March 10/6/2026.',
      '8'),
     (9, 'RTU condensate drains are PVC; spec M-002 calls for copper type L with wrought copper fittings.', 'COMPLETE',
      'RTU condensate drains replaced with type L copper and wrought copper fittings at all RTUs.',
@@ -200,13 +199,13 @@ def build_letter():
     s.append(Paragraph(
         'As requested in your email of November 9, 2026, below is Northern Wolves Inc.\'s formal response to each '
         'mechanical item of the Johnson &amp; Urban punch list from the July 8, 2026 site walkthrough. This supersedes '
-        'the work-in-progress update sent on August 10, 2026. Backup for each item is provided in the enclosed '
-        'binder; exhibit numbers are shown in the last column. Items relating to the building controls were '
+        'the work-in-progress update sent on August 10, 2026. All mechanical items are complete. Items relating to '
+        'the building controls were '
         'coordinated with AME, Inc., our controls subcontractor.', body))
     s.append(Spacer(1, 10))
 
     rows = [[Paragraph('<b>#</b>', cellb), Paragraph('<b>Engineer comment</b>', cellb), Paragraph('<b>Status</b>', cellb),
-             Paragraph('<b>Northern Wolves response</b>', cellb), Paragraph('<b>Backup</b>', cellb)]]
+             Paragraph('<b>Northern Wolves response</b>', cellb)]]
     style = [('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#9AA5B1')), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
              ('BACKGROUND', (0, 0), (-1, 0), LIGHT), ('TOPPADDING', (0, 0), (-1, -1), 3),
              ('BOTTOMPADDING', (0, 0), (-1, -1), 3), ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3)]
@@ -214,8 +213,8 @@ def build_letter():
         col = STATUS_COL[status]
         rows.append([Paragraph(str(n), cellb), Paragraph(comment, cell),
                      Paragraph(f'<font color="{col.hexval().replace("0x", "#")}"><b>{status}</b></font>', cell),
-                     Paragraph(resp, cell), Paragraph(ex, cell)])
-    t = Table(rows, colWidths=[18, 128, 58, 240, 42], repeatRows=1)
+                     Paragraph(resp, cell)])
+    t = Table(rows, colWidths=[18, 140, 62, 266], repeatRows=1)
     t.setStyle(TableStyle(style))
     s.append(t)
 
@@ -229,13 +228,12 @@ def build_letter():
 
     s.append(Spacer(1, 8))
     s.append(Paragraph(
-        'With the enclosed documentation we consider the mechanical punch list items addressed. Please review and let '
-        'us know if anything further is required to close out these items.', body))
+        'All mechanical items of the Johnson &amp; Urban punch list are complete and closed. Please review and let us '
+        'know if anything further is required. We ask that payment of AFP #14 and the release of retainage now be '
+        'processed.', body))
     s.append(Spacer(1, 14))
     s.append(KeepTogether([Paragraph('Sincerely,', body), Spacer(1, 22),
                            Paragraph('Ruslan Zhdamarov<br/>Northern Wolves Inc.', body)]))
-    s.append(Spacer(1, 10))
-    s.append(Paragraph('Enclosure: SRDS - Punch List Backup Binder (exhibit index on page 2 of the binder).', small))
     doc.build(s, onFirstPage=letterhead, onLaterPages=letterhead)
 
 
@@ -322,5 +320,6 @@ def build_binder():
 
 if __name__ == '__main__':
     build_letter()
-    n = build_binder()
-    print(LETTER_OUT); print(BINDER_OUT, n, 'pages')
+    print(LETTER_OUT)
+    if BUILD_BINDER:
+        print(BINDER_OUT, build_binder(), 'pages')

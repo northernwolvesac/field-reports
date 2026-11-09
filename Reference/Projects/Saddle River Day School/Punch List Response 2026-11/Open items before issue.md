@@ -1,4 +1,9 @@
-# SRDS punch list response - what is still needed before it goes to Gabe
+# SRDS punch list response - status
+
+**11/9/2026: Ruslan decided Gabe only needs a completion letter. Letter issued FINAL with every item closed
+(#14 by others); no binder. The items below are follow-ups only, not holds on the letter.**
+
+## Background
 
 Gabe's request: 11/9/2026 email "FW: SRDS - HVAC Punchlist (from MEP Engineer)" - formal letter on letterhead with the
 status of each of the 17 J&U items plus backup. Payment is being held on close-out (Gabe 10/20: "we have been asking
