@@ -1,0 +1,175 @@
+Hello everybody, how are you doing?
+
+Below is an update on the engineer report, the punchlist for saddle River and also updates overall on the Jobsite.
+
+First, I will go over the engineering report
+
+
+
+1. Provide As-Built drawings, O&M manuals, and Warranties. (Alikhan is putting together everything, I already sent all Reports comcerning startups for the RTUS, Boilers, Water, Air balancing & VFD startup) i’m waiting for Alikhan to finish up the full package to send over which should be this week.
+
+
+
+
+
+
+
+2. Submit vendor equipment start-up reports.
+
+(All reports were emailed and sent over)
+
+
+
+
+3. Controls contractor to submit start-up checklist showing all control and monitor point as per this contract have been provided and tested.
+
+
+
+
+4. Test unoccupied and occupied modes of operation for all equipment.(COMPLETED)
+
+
+
+
+5. Provide air-side and water-side balancing reports.
+
+(Finished and sent over)
+
+6. Set thermostat limits per the owner’s requirements.
+
+(Will be done once final unit is in Wednesday and can Go over and Set based on parameters)
+
+
+
+
+7. Test heating/cooling mode of operation for RTU’s.
+
+(TESTED AND COMPLETED)
+
+
+
+
+8. Provide training for the new systems and controls for the owner.(Completed)
+
+
+
+
+
+
+
+9. The RTU condensate drains are PVC and the drawing spec on M-002 calls for copper type L piping with wrought copper fittings. Completed
+
+
+
+
+
+
+
+10. RTU-1 high stage compressor is extremely loud and was measured at 93db. This did not occur when first installed. This must be investigated and corrected. This sound radiates into the admin offices and is unacceptable. (This was discussed and the decibel range is actually in the proper parameters for RTU1, the solution to lower the vibration and decibel range is to put decibel elimination blankets, these are in the process of being ordered, the cause of the vibration was discussed with myself in the engineer, along with the technicians from ADE, which has nothing to do with the unit itself being damaged or not functioning correctly but it is actually because of the placement & type of unit)
+
+
+
+
+
+
+
+11. The installation of the refrigerant lines through the roof curb boots is incorrect. The boot is cut out for the line set insulation but should have been cut only to accept the bare copper line set, with the insulation jacket butting up against the boot from both sides. Replace the boots and clamp boot directly to line set.
+
+(Discussed with the engineer that the copper lines do not need to be moved to cut or replaced, he simply wants the insulation to be changed and properly be installed, the way he wants the insulation to be installed was discussed and shown to Anwar, this will be completed this Wednesday along with the install of CUH3 8/12)
+
+
+
+
+12. Provide 3 – L brackets, anchored into the slab, at the base of the hydronic expansion tanks.
+
+(This is also being completed 8/12)
+
+
+
+
+13. The fin tube radiator enclosures are not securely mounted and are very wobbly. These will easily be damaged if pushed, stood on or otherwise impacted. Provide additional support to stiffen the enclosures.
+
+(as of 8/10, and checking today they are all secured with all of the proper colored enclosures)
+
+
+
+
+14. Install rooftop fireplace exhaust fan control panel cover.
+
+15. Visible bare control cable behind the fin tube radiators should be incased in flex metal conduit (not PVC clad), with connectors at both sides for a durable installation. The bare cable is subject to damage during cleaning behind the radiators.
+
+(This has been addressed and fixed)
+
+
+
+
+16. Test all science lab hood exhaust fan systems.
+
+(This was tested last week 8/3 from ADE and myself, waiting for confirmation on when the technician who is going to be configuring the lab hoods is coming)
+
+
+
+
+17. Verify firestopping requirements for hydronic piping through block walls and rated walls. Provide sheet metal flashing to cover rough masonry openings or patch with cement. Especially where duct louvers are installed on block walls.
+
+(This has been completed, the only thing that has to be fire stopped is a handful of areas from ABEU, they will be doing this along with the final connection of CUH3 all in 1 day once the unit is mounted 8/12)
+
+
+
+
+
+
+
+
+
+
+Gabe, last week I sent you over three access doors to be put near the vestibule area for the three stacked VAVs, just want to know if you came to a decision yet on which one of the three you would like so that we can order them immediately to then install.
+
+
+
+
+8/12
+
+-CUH3 install being done
+
+-3-CU units to be insulated based off engineer requirements
+
+
+
+
+
+
+
+Finally in regards to rooftop unit six and the water flowing through the roof, I see no signs that it is coming from the rooftop, especially when we had multiple days where it was raining/hot and it never leaked before even when the unit was backed up with condensate water in the drain pan.
+
+
+
+
+I sent over a video to Joey of a couple of spots that had water underneath the roof and when you stepped on those patches excess water would flow out. I am not sure if this is the cause but this seems more likely than it being RTU 6, because RTU six does not lineup where the tile on the 2nd floor that has water damages.
+
+
+
+
+
+
+
+If you have any other questions, or if I missed anything, please let me know please let me know.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
