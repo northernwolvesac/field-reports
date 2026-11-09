@@ -15,16 +15,16 @@ Drop files into `backup/` with the exhibit names, paste the Drive link into `DRI
 - Item 7 / RTU operating issues from September: all addressed.
 - As-builts (MEC4) and AME BMS as-builts 25-05617: in hand. TAB schematics = the TAB reports.
 - B&G RO-5 meter / attic stock: not in Gabe's 11/9 request, left out of this letter (separate close-out item).
+- Training letter: nobody at March asked for a signature (Gabe 11/9 and 10/8, Lorrany 10/7). The 10/6 letter is used as is.
 
 ## Still waiting on
 
 | Exhibit | What | From | Status |
 |---|---|---|---|
-| Drive | One Google Drive folder: as-builts, AME BMS as-builts, O&M/IOM, warranties, TAB, start-up reports | Ruslan | Create folder, paste link in `DRIVE_LINK` |
+| Drive | https://drive.google.com/drive/folders/1UIkEO-esOINCEb22ZkSWAfN4f3buonJ3 (private, not shared yet). Uploaded: warranties, water TAB, VFD start-up, training letter, Dropbox link doc | Ruslan | Add: as-builts (01), AME 25-05617 (02), air TAB 3.6 MB (05), RTU/boiler start-up when received (06). Share with March when issuing |
 | 2-B | Lochinvar boiler start-up / combustion report (5/20-5/21) | Michael Liranzo, Ferguson | Requested 11/9 (cc Andrei) |
 | 2-C | RTU start-up reports, 5 Greenheck RTUs | Ryan Adams, ADE | Requested 11/9 (cc Andrei) |
 | 3 | AME point checkout (item 3), occupied/unoccupied proof (item 4), thermostat limits (item 6) | James Winship / Arth Patel, AME | Gmail draft ready - set date and send |
-| 8 | Training certification signed by school staff | Scott Kirsch (school) / Gabe | Unsigned copy used until signed |
 
 ## Other close-out items (not part of this letter)
 

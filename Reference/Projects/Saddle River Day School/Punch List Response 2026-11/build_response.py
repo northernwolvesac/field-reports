@@ -88,7 +88,7 @@ ITEMS = [
      '2-C'),
     (8, 'Provide training for the new systems and controls for the owner.', 'COMPLETE',
      'Equipment training provided on site 8/31/2026 to the school maintenance team; BMS training provided by AME. '
-     'Training certification letter attached. ' + C('signed by school personnel'),
+     'Training confirmation letter sent to March 10/6/2026, attached.',
      '8'),
     (9, 'RTU condensate drains are PVC; spec M-002 calls for copper type L with wrought copper fittings.', 'COMPLETE',
      'RTU condensate drains replaced with type L copper and wrought copper fittings at all RTUs.',
@@ -133,7 +133,7 @@ OTHER = [
 ]
 
 # one shared close-out folder (as-builts are too large for the binder)
-DRIVE_LINK = ''
+DRIVE_LINK = 'https://drive.google.com/drive/folders/1UIkEO-esOINCEb22ZkSWAfN4f3buonJ3'
 
 # exhibit code -> (title, file in backup/ or None, note when missing)
 EXHIBITS = [
@@ -155,10 +155,10 @@ EXHIBITS = [
      '5-A Air Balancing Report 2026-06-17 (Rite Technical).pdf', ''),
     ('5-B', 'Water balancing report, Rite Technical Services, 7/14/2026',
      '5-B Water Balancing Report 2026-07-14 (Rite Technical).pdf', ''),
-    ('8', 'HVAC owner training certification, training of 8/31/2026', '8 HVAC Owner Training Certification 2026-08-31.pdf',
-     'Signed copy needed. Unsigned version sent 10/6/2026 is used until then.'),
+    ('8', 'HVAC owner training confirmation, training of 8/31/2026 (sent to March 10/6/2026)',
+     '8 HVAC Owner Training Certification 2026-08-31 (unsigned).pdf', ''),
 ]
-FALLBACK = {'8': '8 HVAC Owner Training Certification 2026-08-31 (unsigned).pdf'}
+FALLBACK = {}
 
 
 # ---------------- letter ----------------
