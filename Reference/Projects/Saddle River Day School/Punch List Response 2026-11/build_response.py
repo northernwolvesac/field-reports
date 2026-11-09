@@ -54,9 +54,8 @@ def C(text):
 # (no, engineer comment, status, response, backup exhibits)
 ITEMS = [
     (1, 'Provide As-Built drawings, O&amp;M manuals, and Warranties.', 'COMPLETE',
-     'All close-out documents are collected in one Google Drive folder (link below): HVAC ductwork and piping '
-     'as-built drawings, BMS as-builts and O&amp;M by AME (control submittal 25-05617), equipment IOM / O&amp;M '
-     'manuals and manufacturer warranties (first sent 8/14/2026), TAB reports and start-up reports. Warranties: '
+     'HVAC ductwork and piping as-built drawings complete. BMS as-builts and O&amp;M by AME (control submittal '
+     '25-05617). Equipment IOM / O&amp;M manuals and manufacturer warranties submitted 8/14/2026. Warranties: '
      'One-Year Labor Warranty (6/18/2026) and Contractor\'s Warranty on March form (9/1/2026), accepted by March '
      '9/2/2026.',
      '1-A to 1-E'),
@@ -67,16 +66,15 @@ ITEMS = [
      '2-A, 2-B, 2-C'),
     (3, 'Controls contractor to submit start-up checklist showing all control and monitor points provided and tested.',
      'COMPLETE',
-     'All control and monitor points provided and tested by AME, Inc. (controls subcontractor, Section 23 09 23). '
-     'BMS as-builts and O&amp;M (AME submittal 25-05617) are in the close-out folder.',
+     'All control and monitor points provided and tested by AME, Inc. (controls subcontractor, Section 23 09 23).',
      '3'),
     (4, 'Test unoccupied and occupied modes of operation for all equipment.', 'COMPLETE',
      'Occupied and unoccupied modes of operation tested for all equipment with AME.',
      '3'),
     (5, 'Provide air-side and water-side balancing reports.', 'COMPLETE',
      'Air balancing report (Rite Technical Services, 6/17/2026) submitted 6/22/2026 and again 7/21/2026. '
-     'Water balancing report (7/14/2026) submitted to March 8/31/2026. The reports include the balancing '
-     'schematics; both are in the close-out folder.',
+     'Water balancing report (7/14/2026) submitted to March 8/31/2026. Both reports include the balancing '
+     'schematics.',
      '5-A, 5-B'),
     (6, "Set thermostat limits per the owner's requirements.", 'COMPLETE',
      'Space thermostats locked out / limited through the BMS by AME per the owner\'s requirements.',
@@ -218,10 +216,6 @@ def build_letter():
     t.setStyle(TableStyle(style))
     s.append(t)
 
-    s.append(Paragraph('Close-out documents folder', h2))
-    s.append(Paragraph('As-built drawings, BMS as-builts, O&amp;M / IOM manuals, warranties, TAB reports and start-up '
-                       'reports: ' + (f'<link href="{DRIVE_LINK}" color="blue">{DRIVE_LINK}</link>' if DRIVE_LINK
-                                      else C('Google Drive link')), body))
     s.append(Paragraph('Other close-out items', h2))
     for k, v in OTHER:
         s.append(Paragraph(f'<b>{k}:</b> {v}', body)); s.append(Spacer(1, 3))
