@@ -21,7 +21,7 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, SimpleDocTe
 
 DRAFT = False
 BUILD_BINDER = False   # letter only, per Ruslan 11/9: Gabe needs a completion letter
-DATE = 'November 9, 2026'
+DATE = 'November 10, 2026'
 HERE = os.path.dirname(os.path.abspath(__file__))
 BK = os.path.join(HERE, 'backup')
 LOGO = os.path.join(HERE, '..', '..', '..', '..', 'logo-full.png'); LOGO_W, LOGO_H = 2367, 1303
@@ -182,31 +182,36 @@ def build_letter():
                             topMargin=1.35 * inch, bottomMargin=0.55 * inch,
                             title='SRDS - Response to MEP Punch List', author='Northern Wolves Inc.')
     s = []
-    s.append(Paragraph(DATE, body)); s.append(Spacer(1, 8))
-    s.append(Paragraph('March Associates Construction, Inc.<br/>601 Hamburg Turnpike, Suite 300<br/>Wayne, NJ 07470', body))
-    s.append(Spacer(1, 6))
-    s.append(Paragraph('<b>Attn:</b> Gabriel Miani, P.E., Senior Project Manager', body))
-    s.append(Paragraph('<b>Cc:</b> Todd Laubach, Joey Turano, Lorrany (March Associates); James Winship (AME, Inc.)', body))
-    s.append(Spacer(1, 8))
-    s.append(Paragraph('<b>Project:</b> Saddle River Day School, 147 Chestnut Ridge Rd, Saddle River, NJ 07458 '
-                       '(March Project No. 482)', body))
-    s.append(Paragraph('<b>Re:</b> Response to Johnson &amp; Urban MEP Punch List dated July 15, 2026 (JU# 24-050) - '
-                       'Mechanical items 1-17', body))
+    s.append(Paragraph(DATE, body)); s.append(Spacer(1, 10))
+    s.append(Paragraph('<b>VIA EMAIL</b>', body)); s.append(Spacer(1, 6))
+    s.append(Paragraph('Mr. Gabriel Miani, P.E.<br/>Senior Project Manager<br/>March Associates Construction, Inc.<br/>'
+                       '601 Hamburg Turnpike, Suite 300<br/>Wayne, NJ 07470', body))
     s.append(Spacer(1, 10))
-    s.append(Paragraph('Gabe,', body)); s.append(Spacer(1, 4))
+    re_rows = [[Paragraph('<b>RE:</b>', body), Paragraph('<b>Saddle River Day School</b><br/>'
+                '147 Chestnut Ridge Road, Saddle River, NJ 07458<br/>March Project No. 482', body)],
+               ['', Paragraph('<b>Response to Johnson &amp; Urban MEP Punch List JU# 24-050 dated July 15, 2026 - '
+                              'HVAC / Mechanical Items 1 through 17</b>', body)]]
+    rt = Table(re_rows, colWidths=[36, 450])
+    rt.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+    s.append(rt)
+    s.append(Spacer(1, 10))
+    s.append(Paragraph('Dear Mr. Miani:', body)); s.append(Spacer(1, 6))
     s.append(Paragraph(
-        'As requested in your email of November 9, 2026, below is Northern Wolves Inc.\'s formal response to each '
-        'mechanical item of the Johnson &amp; Urban punch list from the July 8, 2026 site walkthrough. This supersedes '
-        'the work-in-progress update sent on August 10, 2026. All mechanical items are complete. Items relating to '
-        'the building controls were '
-        'coordinated with AME, Inc., our controls subcontractor.', body))
+        'In accordance with your request of November 9, 2026, Northern Wolves Inc. hereby submits its formal response '
+        'to the mechanical items of the Johnson &amp; Urban MEP punch list issued following the site walkthrough of '
+        'July 8, 2026. This letter supersedes the work-in-progress status update provided on August 10, 2026.', body))
+    s.append(Spacer(1, 6))
+    s.append(Paragraph(
+        'The status of each item is set forth below. Items relating to the building management system were completed '
+        'in coordination with AME, Inc., our controls subcontractor.', body))
     s.append(Spacer(1, 10))
 
     rows = [[Paragraph('<b>#</b>', cellb), Paragraph('<b>Engineer comment</b>', cellb), Paragraph('<b>Status</b>', cellb),
              Paragraph('<b>Northern Wolves response</b>', cellb)]]
     style = [('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#9AA5B1')), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-             ('BACKGROUND', (0, 0), (-1, 0), LIGHT), ('TOPPADDING', (0, 0), (-1, -1), 3),
-             ('BOTTOMPADDING', (0, 0), (-1, -1), 3), ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3)]
+             ('BACKGROUND', (0, 0), (-1, 0), LIGHT), ('TOPPADDING', (0, 0), (-1, -1), 2),
+             ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5), ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3)]
     for i, (n, comment, status, resp, ex) in enumerate(ITEMS, 1):
         col = STATUS_COL[status]
         rows.append([Paragraph(str(n), cellb), Paragraph(comment, cell),
@@ -216,18 +221,30 @@ def build_letter():
     t.setStyle(TableStyle(style))
     s.append(t)
 
-    s.append(Paragraph('Other close-out items', h2))
+    s.append(Paragraph('Additional close-out items', h2))
     for k, v in OTHER:
         s.append(Paragraph(f'<b>{k}:</b> {v}', body)); s.append(Spacer(1, 3))
 
     s.append(Spacer(1, 8))
     s.append(Paragraph(
-        'All mechanical items of the Johnson &amp; Urban punch list are complete and closed. Please review and let us '
-        'know if anything further is required. We ask that payment of AFP #14 and the release of retainage now be '
-        'processed.', body))
-    s.append(Spacer(1, 14))
-    s.append(KeepTogether([Paragraph('Sincerely,', body), Spacer(1, 22),
-                           Paragraph('Ruslan Zhdamarov<br/>Northern Wolves Inc.', body)]))
+        'Northern Wolves Inc. confirms that all mechanical items of the above-referenced punch list within its scope '
+        'of work have been completed and are closed. We respectfully request that payment of Application for Payment '
+        'No. 14 and the release of retainage now be processed. Should you require any further information, please do '
+        'not hesitate to contact the undersigned.', body))
+    s.append(Spacer(1, 10))
+    sig = ParagraphStyle('sig', parent=body, leading=12.6)
+    s.append(KeepTogether([
+        Paragraph('Respectfully submitted,', body), Spacer(1, 6),
+        Paragraph('<b>NORTHERN WOLVES INC.</b>', body), Spacer(1, 26),
+        Paragraph('_' * 38, body),
+        Paragraph('Ruslan Zhdamarov<br/>President', sig), Spacer(1, 12),
+        Paragraph('Date: ' + '_' * 24, body)]))
+    s.append(Spacer(1, 10))
+    s.append(KeepTogether([
+        Paragraph('cc: Todd Laubach, Joey Turano, Lorrany Carvalho - March Associates Construction, Inc.<br/>'
+                  '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;James Winship - AME, Inc.<br/>'
+                  '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Andrei Kastanyan - Northern Wolves Inc.', small),
+    ]))
     doc.build(s, onFirstPage=letterhead, onLaterPages=letterhead)
 
 
