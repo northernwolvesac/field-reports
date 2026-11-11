@@ -19,7 +19,7 @@
 <script src="supabase-config.js?v=584"></script>
 <script src="auth.js?v=584"></script>
 <script src="est-totals.js?v=586"></script>
-<script src="procore-ui.js?v=584"></script>
+<script src="procore-ui.js?v=590"></script>
 <script src="nw-catalog-picker.js?v=584"></script>
 <script src="nw-duct-weight.js?v=584"></script>
 <script src="nw-proposal.js?v=584"></script>
@@ -119,6 +119,14 @@
   .es-grid .rowbtn { width: 24px; height: 24px; border: 0; background: transparent; color: #75838a; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; }
   .es-grid .rowbtn:hover { background: #e5e9eb; color: #232729; }
   .es-grid .rowbtn.blue { color: #1d5cc9; }
+  .es-grid .rowbtn.att { width: auto; padding: 0 5px; gap: 1px; color: #1d5cc9; font-size: 11px; font-weight: 600; margin-left: 4px; vertical-align: middle; }
+  .q-list { border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 12px; }
+  .q-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid #f0f2f3; font-size: 13px; }
+  .q-row:first-child { border-top: 0; }
+  .q-row .q-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1d5cc9; cursor: pointer; }
+  .q-row .q-nm:hover { text-decoration: underline; }
+  .q-row .q-meta { color: #75838a; font-size: 11.5px; white-space: nowrap; }
+  .q-empty { padding: 14px 10px; color: #75838a; font-size: 13px; }
   .es-grid .chip { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-style: normal; font-weight: 600; letter-spacing: .03em; vertical-align: middle; }
   .es-grid .chip.alt { background: #e2e8f0; color: #334155; }
   .es-grid .chip.budget { background: #fef3c7; color: #92400e; }
@@ -597,6 +605,7 @@ requireAuth().catch(function(){});
   var isEmbed = !!(window.PC && PC.isEmbed);
 
   var currentEst = null, currentLines = [], editingLineId = null;
+  var lineQuotes = {};   // line id -> [project_files rows]: vendor quotes attached to a cost item
   var rootId = null, versions = [], layers = [], layerById = {}, catalogById = {};
   var schemaOk = true;             // procore-ui-schema.sql has been run (line columns + estimates.settings)
   var projectsCache = null;        // bid-board rows for "Copy to another project"
@@ -1130,6 +1139,7 @@ requireAuth().catch(function(){});
 
     await probeSchema();
     await loadLines();
+    await loadLineQuotes();
     await loadVersions();
     await loadLayers();
     await loadCatalogRows();
@@ -1716,6 +1726,7 @@ requireAuth().catch(function(){});
               (li.is_optional ? '<span class="chip alt">ALT</span>' : '') +
               (li.is_firm === false ? '<span class="chip budget" title="Budget / placeholder — not a firm quote">BUDGET</span>' : '') +
               (li.is_wet_tap ? '<span class="chip wet">WET-TAP</span>' : '') +
+              quoteBadge(li.id) +
               '<span class="rowbtns">' +
                 '<button class="rowbtn" data-info="' + li.id + '" title="Item details">' + icon('info', 15) + '</button>' +
                 (canEdit ? '<button class="rowbtn" data-ren="' + li.id + '" title="' + (locked ? escAttr(lockHint) : 'Rename') + '">' + icon('edit', 15) + '</button>' : '') +
@@ -1799,6 +1810,7 @@ requireAuth().catch(function(){});
     table.querySelectorAll('[data-gren]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); startGroupRename(b.closest('tr'), b.getAttribute('data-gren')); }); });
     table.querySelectorAll('[data-gmenu]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); openGroupMenu(b, b.getAttribute('data-gmenu')); }); });
     table.querySelectorAll('[data-info]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); openDetails(b.getAttribute('data-info')); }); });
+    table.querySelectorAll('[data-quotes]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); openLineQuotes(b.getAttribute('data-quotes')); }); });
     table.querySelectorAll('[data-ren]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); startItemRename(b.closest('tr'), b.getAttribute('data-ren')); }); });
     table.querySelectorAll('[data-imenu]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); openItemMenu(b, b.getAttribute('data-imenu')); }); });
     table.querySelectorAll('td[data-edit]').forEach(function(td) {
@@ -2437,6 +2449,7 @@ requireAuth().catch(function(){});
     var locked = layerLocked(li);
     openMenu(btn, [
       { label: 'Edit Item', icon: 'edit', onClick: function() { openLineModal(id); } },
+      { label: (lineQuotes[id] || []).length ? 'Quotes (' + lineQuotes[id].length + ')' : 'Attach quote', icon: 'attach_file', onClick: function() { openLineQuotes(id); } },
       { label: 'Replace Item', icon: 'find_replace', onClick: function() { replaceItem(id); }, disabled: locked },
       { label: 'Copy Item', icon: 'content_copy', onClick: function() { copyLines([id]); } },
       { label: 'Move To', icon: 'swap_horiz', sub: moveToItems([id]) },   // takeoff lines move with their layer (two-way sync)
@@ -2445,6 +2458,105 @@ requireAuth().catch(function(){});
       { sep: true },
       { label: 'Delete', icon: 'delete', danger: true, onClick: function() { deleteLines([id]); } }
     ]);
+  }
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //   QUOTES ATTACHED TO A COST ITEM
+  //   Stored like any bid attachment (project_files on the root estimate, category 'quotes', bucket project-files), so they
+  //   also show under Documents -> Attachments. The line is identified by the storage path: est-<rootId>/line-<lineId>/...
+  // ══════════════════════════════════════════════════════════════════════════
+  function quotePrefix() { return 'est-' + rootId + '/line-'; }
+  async function loadLineQuotes() {
+    lineQuotes = {};
+    if (!rootId) return;
+    var r = await supabaseClient.from('project_files')
+      .select('id, filename, storage_path, size_bytes, content_type, notes, uploaded_by, created_at')
+      .eq('estimate_id', rootId).like('storage_path', quotePrefix() + '%').order('created_at', { ascending: true });
+    if (r.error) { console.warn('line quotes', r.error.message); return; }
+    (r.data || []).forEach(function(f) {
+      var m = /\/line-([0-9a-f-]{36})\//i.exec(f.storage_path || '');
+      if (m) (lineQuotes[m[1]] = lineQuotes[m[1]] || []).push(f);
+    });
+  }
+  function quoteBadge(id) {
+    var q = lineQuotes[id] || [];
+    if (!q.length) return '';
+    var tip = (q.length === 1 ? '1 quote attached' : q.length + ' quotes attached') + ': ' + q.map(function(f) { return f.filename; }).join(', ');
+    return '<button class="rowbtn att" data-quotes="' + id + '" title="' + escAttr(tip) + '">' + icon('attach_file', 14) + q.length + '</button>';
+  }
+  function fmtSize(b) {
+    if (!(b > 0)) return '';
+    if (b < 1024 * 1024) return Math.max(1, Math.round(b / 1024)) + ' KB';
+    return (Math.round(b / 104857.6) / 10) + ' MB';
+  }
+  async function openQuoteFile(f) {
+    var w = window.open('', '_blank');   // opened before the await so the popup blocker lets it through
+    var r = await supabaseClient.storage.from('project-files').createSignedUrl(f.storage_path, 3600);
+    if (r.error || !r.data) { if (w) w.close(); showToast('Could not open the file: ' + (r.error ? r.error.message : ''), 'error'); return; }
+    if (w) w.location = r.data.signedUrl; else window.location.href = r.data.signedUrl;
+  }
+  function openLineQuotes(id) {
+    var li = lineById(id); if (!li || !(window.PC && PC.modal)) return;
+    var body = document.createElement('div');
+    var m;
+    function draw() {
+      var q = lineQuotes[id] || [];
+      body.innerHTML =
+        '<div style="font-size:12.5px;color:#4b5563;margin-bottom:10px">Cost item: <b>' + escHtml(li.description) + '</b>' +
+          (li.vendor_name ? ' · vendor ' + escHtml(li.vendor_name) : '') + '</div>' +
+        '<div class="q-list">' + (q.length ? q.map(function(f) {
+          var when = f.created_at ? ((window.PC && PC.date) ? PC.date(f.created_at) : String(f.created_at).slice(0, 10)) : '';
+          return '<div class="q-row">' + icon('description', 16) +
+            '<span class="q-nm" data-qopen="' + f.id + '" title="Open">' + escHtml(f.filename) + '</span>' +
+            '<span class="q-meta">' + escHtml([fmtSize(f.size_bytes), when].filter(Boolean).join(' · ')) + '</span>' +
+            '<button class="pc-btn pc-btn-icon pc-btn-ghost" data-qopen="' + f.id + '" title="Open" style="height:28px;width:28px">' + icon('open_in_new', 16) + '</button>' +
+            (canEdit ? '<button class="pc-btn pc-btn-icon pc-btn-ghost" data-qdel="' + f.id + '" title="Delete" style="height:28px;width:28px">' + icon('delete', 16) + '</button>' : '') +
+          '</div>';
+        }).join('') : '<div class="q-empty">No quotes attached to this item yet.</div>') + '</div>' +
+        (canEdit ? '<label class="pc-label" style="display:block;margin-bottom:4px">Attach quote (PDF, image, Excel …)</label>' +
+          '<input class="pc-input" type="file" id="qFiles" multiple style="padding-top:6px">' +
+          '<div style="font-size:11.5px;color:#75838a;margin-top:6px">Saved with this bid — the files also show under Documents → Attachments (Quotes).</div>' : '');
+      body.querySelectorAll('[data-qopen]').forEach(function(el) { el.addEventListener('click', function() {
+        var f = (lineQuotes[id] || []).find(function(x) { return x.id === el.getAttribute('data-qopen'); }); if (f) openQuoteFile(f);
+      }); });
+      body.querySelectorAll('[data-qdel]').forEach(function(el) { el.addEventListener('click', async function() {
+        var f = (lineQuotes[id] || []).find(function(x) { return x.id === el.getAttribute('data-qdel'); }); if (!f) return;
+        if (!confirm('Delete the quote "' + f.filename + '"? It is removed from this bid\'s documents too.')) return;
+        var d = await supabaseClient.from('project_files').delete().eq('id', f.id);
+        if (d.error) { showToast('Delete failed: ' + d.error.message, 'error'); return; }
+        try { await supabaseClient.storage.from('project-files').remove([f.storage_path]); } catch (e) { console.warn('quote file remove', e); }
+        lineQuotes[id] = (lineQuotes[id] || []).filter(function(x) { return x.id !== f.id; });
+        showToast('Quote deleted', 'success');
+        draw(); renderGrid();
+      }); });
+    }
+    async function upload() {
+      var inp = body.querySelector('#qFiles');
+      var files = Array.prototype.slice.call((inp && inp.files) || []);
+      if (!files.length) { showToast('Pick a file first', 'error'); return false; }
+      var ok = 0;
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        var path = quotePrefix() + li.id + '/' + Date.now() + '_' + i + '_' + file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+        try {
+          var up = await supabaseClient.storage.from('project-files').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || null });
+          if (up.error) { showToast('Upload failed for ' + file.name + ': ' + up.error.message, 'error'); continue; }
+          var ins = await supabaseClient.from('project_files').insert({ estimate_id: rootId, filename: file.name, storage_path: path, size_bytes: file.size,
+            content_type: file.type || null, category: 'quotes', notes: ('Quote for cost item: ' + li.description).slice(0, 500), uploaded_by: currentUserId || null })
+            .select('id, filename, storage_path, size_bytes, content_type, notes, uploaded_by, created_at').single();
+          if (ins.error) { showToast('Saving ' + file.name + ' failed: ' + ins.error.message, 'error'); try { await supabaseClient.storage.from('project-files').remove([path]); } catch (e) {} continue; }
+          (lineQuotes[li.id] = lineQuotes[li.id] || []).push(ins.data);
+          ok++;
+        } catch (e) { showToast('Upload failed for ' + file.name + ': ' + (e.message || e), 'error'); }
+      }
+      if (ok) { showToast('Attached ' + ok + ' quote' + (ok === 1 ? '' : 's'), 'success'); draw(); renderGrid(); }
+      return false;   // keep the dialog open so the list shows the new file
+    }
+    draw();
+    var buttons = [{ label: 'Close', onClick: function() { m.close(); } }];
+    if (canEdit) buttons.push({ label: 'Upload', icon: 'upload', primary: true, closeOnDone: false, onClick: upload });
+    m = PC.modal({ title: 'Quotes — ' + (li.description || 'Cost item'), body: body, size: 'sm', buttons: buttons });
   }
 
   // ══════════════════════════════════════════════════════════════════════════
