@@ -307,10 +307,11 @@ explained - Christino: nothing for NW.
 **PC0046 / COR 7 riser piping re-route - client questions material (Sam 11/11, client "VC 11.11.26").** Client agrees
 29th and 31st returns were wrong on CDs, asks for approved shops; take-off: 29th 173 LF demo / 282 LF add (net 110 if
 reused), 30th no rework, 31st 411 / 468 (net 57); "labor portion is not being questioned", wants "fair material cost".
-Our COP-SF-07 (Leonid 9/8, revised): approx. 400 LF 3/4" Type K, 300 elbows, 100 couplings, 10 packs brazing rod =
+Our COP-SF-07 (Leonid 9/8, revised): approx. 400 LF 3/4" Type K incl. same LF of 1" fiberglass insulation in the
+$7,000 line (Ruslan 11/12), 300 elbows, 100 couplings, 10 packs brazing rod =
 $9,400 + tax $834.25 + OH $1,880 = $12,114.25 material; labor 320 MH @ $125 = $40,000; total $52,115 (Clearstory shows
 $51,219 from the first version). Client's own gross new pipe = 750 LF, removed 584 LF -> our 400 LF is about half.
-Reply drafted 11/12 (Ruslan to Sam, cc Mark, Christino; not sent): client take-off supports our quantity, removed pipe
+Reply drafted 11/12, re-drafted with insulation (Ruslan to Sam, cc Mark, Christino; not sent): client take-off supports our quantity, removed pipe
 not reusable (cut brazed sections), 30th only riser tie-in, CMTA SK 9/2 + chief engineer approval 9/3, material
 breakdown. To confirm before sending: no removed pipe was reused; 30th floor work was only the riser tie-in.
 
