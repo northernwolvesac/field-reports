@@ -352,6 +352,14 @@
     };
   }
 
+  // the estimate's overtime add as a proposal alternate row (same shape as lineCalc), or null when no OT hours are set
+  function otAlternate(T) {
+    var o = T && T.raw && T.raw.overtime;
+    if (!o || !(o.hours > 0) || !(o.price > 0)) return null;
+    return { line: { description: o.label, is_optional: true, is_overtime: true }, qty: o.hours, unit: 'hr', matU: 0, labU: o.premiumRate, ohU: o.premiumRate * o.ohRatio,
+             labOhU: o.premiumRate * (1 + o.ohRatio), unitTotal: o.premiumRate * (1 + o.ohRatio), material: 0, laborOh: o.price, total: o.price, hours: o.hours, profit: o.markup, taxable: true, overtime: true };
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   //  Grouping
   // ─────────────────────────────────────────────────────────────────────────
@@ -412,6 +420,10 @@
       groups[g].hours += r.hours;
       groups[g].profit += r.profit;
     });
+
+    // Overtime add alternate (est-totals overtime: OT h × 0.5 × rate × (1 + OH&P / misc), Russ 11/11/2026) — after the optional lines
+    var ot = otAlternate(T);
+    if (ot) alternates.push(ot);
 
     var ordered = [];
     order.forEach(function (n) { if (groups[n] && ordered.indexOf(groups[n]) < 0) ordered.push(groups[n]); });
@@ -1297,8 +1309,19 @@
         y += 12;
         if (y > 740) { doc.addPage(); y = 60; }
       });
-      y += 8;
     }
+    var otAlt = otAlternate(totals);
+    if (otAlt) {
+      if (!alts.length) sectionHeader('Alternates', true);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor.apply(doc, COLOR_BODY);
+      doc.text(doc.splitTextToSize(String(otAlt.line.description), RIGHT_X - BODY_X - 90)[0] || '', BODY_X, y);
+      doc.text(money(otAlt.total), RIGHT_X, y, { align: 'right' });
+      y += 12;
+      if (y > 740) { doc.addPage(); y = 60; }
+    }
+    if (alts.length || otAlt) y += 8;
 
     // ─── FOOTER on every page ───
     var pageCount = doc.internal.getNumberOfPages();

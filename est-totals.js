@@ -14,6 +14,8 @@
 //                        so a wet-tap / services line with is_taxable = true is taxed like the grid says)
 //   Post-Tax Markups  = settings.markups stage 'post' on Subtotal + Pre-Tax + Taxes
 //   Estimate Total    = Subtotal + Pre-Tax + Taxes + Post-Tax        (bidPrice === total)
+//   Overtime add      = OT man-hours × 0.5 × labor sales rate × (1 + Pre-Tax / Subtotal) — a separate add alternate, NOT in the total
+//                       (Russ 11/11/2026: OT = 1.5 × rate; es_settings.ot_hours or es_settings.ot_all = every labor hour)
 //
 // Kastriot's Cost Breakdown Template maps onto it 1:1 (legacy keys are kept for every old caller):
 //   Equipment/Material           = equipment quotes + ductwork material + piping material    → materialTotal
@@ -400,6 +402,24 @@
     var total = subtotal + preTaxTotal + taxes.total + postTaxTotal;
     var sqft = num(est.square_footage);
 
+    // ── Overtime add alternate (Russ 11/11/2026: OT = 1.5 × the labor rate) — NOT in the Estimate Total ──
+    // es_settings.ot_hours = man-hours the building / GC forces after hours; es_settings.ot_all = every labor hour on OT (full-OT add).
+    // The base hours are already priced in the lines at the normal rate, so the add is only the premium: OT h × 0.5 × labor sales rate,
+    // then the same pre-tax markups as any alternate line on the proposal (OH&P + misc = preTaxTotal / subtotal); labor is not taxed.
+    var otEs = settings.es_settings || {};
+    var otAll = flag(otEs.ot_all);
+    var otHours = otAll ? laborHours : Math.max(0, num(otEs.ot_hours));
+    var otRate = laborSalesRate(settings, r);
+    var otOhRatio = subtotal > 0 ? preTaxTotal / subtotal : (r.overhead + r.misc);
+    var otPremium = otHours * otRate * 0.5;
+    var overtime = {
+      hours: otHours, all: otAll, factor: 1.5,
+      rate: otRate, otRate: otRate * 1.5, premiumRate: otRate * 0.5,
+      premium: otPremium, ohRatio: otOhRatio, markup: otPremium * otOhRatio,
+      price: otPremium * (1 + otOhRatio),
+      label: 'Overtime premium' + (otAll ? ' (all labor on overtime)' : '') + ' — ' + (Math.round(otHours * 10) / 10) + ' man-hours at 1.5x ($' + (Math.round(otRate * 150) / 100).toFixed(2) + '/h)'
+    };
+
     var summary = {
       labor: {
         hours: laborHours,
@@ -449,7 +469,8 @@
       perSqFt: sqft > 0 ? total / sqft : null,
       squareFootage: sqft > 0 ? sqft : null,
       count: count,
-      optionalTotal: optionalTotal
+      optionalTotal: optionalTotal,
+      overtime: overtime               // OT add alternate (not in total)
     };
   }
 

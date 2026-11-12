@@ -1067,7 +1067,8 @@ requireAuth().catch(function(){});
       var lines = await loadLines();
       var t = nwEstTotals(lines, currentVersion);
       var total = (t.total != null) ? t.total : t.bidPrice;
-      chip.textContent = 'Estimate Total ' + money(total) + (lines.length ? '' : ' · no items');
+      var ot = t.overtime && t.overtime.price > 0 ? ' · OT add ' + money(t.overtime.price) + ' (' + Math.round(t.overtime.hours) + ' h)' : '';   // overtime add alternate, not in the total
+      chip.textContent = 'Estimate Total ' + money(total) + ot + (lines.length ? '' : ' · no items');
     } catch(e) { chip.textContent = 'Estimate Total —'; }
   }
 

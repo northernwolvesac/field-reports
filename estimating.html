@@ -807,6 +807,9 @@ requireAuth().catch(function(){});
     if (F.from_liner_sqft > 0) rows.push({ label: 'Duct wrap 1-1/2" R6 FSK — bare duct beyond the lined first runs', qty: F.from_liner_sqft, unit: 'sq ft', duct: true });
     return rows;
   }
+  // Overtime add alternate (est-totals overtime block): OT man-hours, or every labor hour on OT
+  window.setOtHours = async function(v) { v = Math.max(0, Math.round((Number(v) || 0) * 10) / 10); await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.ot_hours = v; }); renderSummary(); };
+  window.setOtAll = async function(on) { await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.ot_all = !!on; }); renderSummary(); };
   window.setInsSubMarkup = async function(v) { v = Math.min(100, Math.max(0, Number(v) || 0)); await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.insulation_sub_markup = v; }); renderSummary(); };
   window.setAlShopPct = async function(v) { v = Math.min(100, Math.max(0, Number(v) || 0)); await saveSettings(function(s) { s.es_settings = s.es_settings || {}; s.es_settings.al_shop_pct = v; }); renderSummary(); };
   function insRfqBody(t) {
@@ -3453,6 +3456,18 @@ requireAuth().catch(function(){});
         t.rules.adjustments.map(function(a) { return '<div style="margin-top:3px">' + escHtml(a.rule) + ' <b>+' + money(a.amount) + '</b> <span class="pc-muted" style="font-size:11px">' + escHtml(a.label) + (a.notes ? ' — ' + escHtml(a.notes) : '') + '</span></div>'; }).join('') +
         t.rules.flags.map(function(f) { return '<div style="margin-top:3px;color:#b45309">⚠ ' + escHtml(f.rule) + (f.notes ? ': <span style="color:#92400e">' + escHtml(f.notes) + '</span>' : '') + ' <span class="pc-muted" style="font-size:11px">(' + f.lines + ' line' + (f.lines === 1 ? '' : 's') + ')</span></div>'; }).join('') + '</div>';
     }
+
+    // Overtime add alternate (Russ 11/11/2026: OT = 1.5 × labor rate) — priced beside the estimate, not inside the Estimate Total
+    var OT = t.overtime || { hours: 0, all: false, premium: 0, price: 0, ohRatio: 0, rate: t.rates.labor, otRate: t.rates.labor * 1.5, premiumRate: t.rates.labor * 0.5 };
+    var otEd = canEdit && !locked;
+    html += '<div class="es-side-line" style="margin-top:6px"><b>Overtime add</b> <span class="pc-muted" style="font-size:11px">(separate add alternate, not in the Estimate Total)</span>' +
+      '<div style="font-size:12px;margin-top:4px">OT man-hours <input type="number" id="otHours" value="' + (OT.all ? fmtNum(OT.hours, 1) : (OT.hours ? fmtNum(OT.hours, 1) : '')) + '" placeholder="0" min="0" step="1" style="width:72px;padding:2px 4px;font-size:12px"' + (otEd && !OT.all ? '' : ' disabled') + ' onchange="setOtHours(this.value)">' +
+      ' &nbsp; <label style="font-size:12px;cursor:' + (otEd ? 'pointer' : 'default') + '"><input type="checkbox" id="otAll"' + (OT.all ? ' checked' : '') + (otEd ? '' : ' disabled') + ' onchange="setOtAll(this.checked)" style="vertical-align:middle"> all labor (' + fmtNum(t.summary.labor.hours, 1) + ' h) on OT</label></div>' +
+      (OT.hours > 0
+        ? '<div style="font-size:12px;margin-top:3px">' + fmtNum(OT.hours, 1) + ' h × ' + money(OT.premiumRate) + ' premium <span class="pc-muted">(1.5 × ' + money(OT.rate) + ' = ' + money(OT.otRate) + '/h; base hours stay in the lines)</span> = ' + money(OT.premium) + ' + OH&amp;P / misc ' + fmtNum(OT.ohRatio * 100, 1) + ' % → <b>OT add ' + money(OT.price) + '</b></div>' +
+          '<div class="pc-muted" style="font-size:11px">Shows on the proposal under Alternates. Building staff fees (handyman, elevator operator, engineer) are not in it — add them as a services line.</div>'
+        : '<div class="pc-muted" style="font-size:11px">Enter the man-hours the building or GC forces after hours (noisy work, core drilling, shutdowns, deliveries), or tick "all labor" for a full-OT add.</div>') +
+      '</div>';
 
     // Pre-Tax markups
     html += '<div class="es-mk"><div class="es-mk-h">Pre-Tax Markups' + (canEdit && !locked ? '<button class="pc-btn pc-btn-icon pc-btn-ghost" data-mkadd="pre" title="Add markup">' + icon('add', 18) + '</button>' : '') + '</div>';

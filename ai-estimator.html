@@ -1247,6 +1247,7 @@ var AE = (function() {
     { id: 'controls', g: 4, t: 'Controls and BMS', q: 'What is the controls / building-management scope: who furnishes and installs thermostats, sensors, actuators, VAV controllers and wiring; BACnet or other protocol; integration with the existing system?' },
     { id: 'closeout', g: 4, t: 'TAB, commissioning and close-out', q: 'What testing, adjusting and balancing, commissioning, training, O&M manuals, as-built drawings and warranty are required, and who performs the TAB?' },
     { id: 'codes', g: 5, t: 'Codes and standards named', q: 'Which codes and standards are named, with edition (NYC Mechanical Code, ASHRAE 90.1, NFPA 90A, SMACNA, ASME, MSS, UL, ASTM)?' },
+    { id: 'overtime', g: 5, t: 'Working hours and overtime', q: 'What are the building or site working hours, which work must be done after hours or on overtime (noisy work, core drilling, chopping, hot work, shutdowns, tie-ins, deliveries, freight elevator use), is a full-overtime price or alternate requested, and which building staff fees apply for after-hours work (engineer, handyman, elevator operator: $ per hour and minimum hours)?' },
     { id: 'split', g: 5, t: 'By others, alternates and allowances', q: 'Which items are by others, owner-furnished, alternates, allowances or excluded from the mechanical contractor?' }
   ];
   function dbDefault(id) {
@@ -1557,7 +1558,9 @@ var AE = (function() {
       [['Equipment / Material', t.materialTotal], ['Labor (' + (t.laborHours || 0).toFixed(1) + ' hrs @ $' + ((t.rates || {}).labor || laborRate()) + ')', t.labor], ['Wet-tap', t.wetTap], ['Services', t.services],
         ['Base subtotal', t.baseSubtotal], ['Overhead (' + Math.round(((t.rates || {}).overhead || 0) * 100) + '%)', t.overhead], ['Miscellaneous (' + pctLabel((t.rates || {}).misc, 0.02) + ')', t.miscellaneous], ['Sales tax (' + pctLabel((t.rates || {}).tax, 0.08875) + ', material only)', t.tax]]
         .map(function(r) { return '<tr><td>' + r[0] + '</td><td class="n">' + money(r[1]) + '</td></tr>'; }).join('') +
-      '<tr class="cat"><td>PROJECT TOTAL</td><td class="n">' + money(t.bidPrice) + '</td></tr></table>' +
+      '<tr class="cat"><td>PROJECT TOTAL</td><td class="n">' + money(t.bidPrice) + '</td></tr>' +
+      (fullOt(t) ? '<tr><td>Overtime add — all ' + (t.laborHours || 0).toFixed(0) + ' labor hrs at 1.5× <span class="muted">(alternate, not in the total)</span></td><td class="n">' + money(fullOt(t)) + '</td></tr>' : '') + '</table>' +
+      (otNote() ? '<p class="muted"><b>Overtime in the documents:</b> ' + esc(otNote().slice(0, 400)) + ' — set the OT man-hours on the estimate (Summary → Overtime add).</p>' : '') +
       '<p class="muted">Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' NWAC Procore rates' : 'fallback formula (Procore rate table not loaded yet)') + '. Shop drawings / T&B: ' + e.floors + ' plan sheet' + (e.floors > 1 ? 's' : '') + (e.sdBasis ? ' — ' + esc(e.sdBasis) : '') + (e.pipeSheets ? '; piping ' + e.pipeSheets : '') + '.</p></div><div>' +
       (e.ductCheck ? '<p><b>Duct footage check:</b> ' + e.ductCheck.measured_ft + ' ft measured for ' + e.ductCheck.outlets + ' air devices; NWAC history says ' + e.ductCheck.expected_ft[0] + '–' + e.ductCheck.expected_ft[2] + ' ft (median ' + e.ductCheck.expected_ft[1] + ').</p>' : '') +
       (e.ductSystems ? '<p><b>Duct by system:</b> ' + ['SA', 'RA', 'EA', 'OA', 'TA', ''].filter(function(s) { return e.ductSystems[s] >= 0.5; }).map(function(s) { return (s ? ({ SA: 'supply', RA: 'return', EA: 'exhaust', OA: 'outside air', TA: 'transfer' })[s] + ' (' + s + ')' : 'not marked') + ' ' + Math.round(e.ductSystems[s]).toLocaleString('en-US') + ' ft'; }).join(' · ') + ' <span class="muted">— from the S/A · R/A · E/A marks on the size labels and the reader\'s reading; sizes per system in ⬇ Quantities</span></p>' : '') +
@@ -1580,11 +1583,15 @@ var AE = (function() {
     });
     return rows;
   }
+  // full-overtime add alternate (est-totals overtime: premium 0.5 × labor rate on every labor hour + OH&P / misc), Russ 11/11/2026 OT = 1.5 × rate
+  function fullOt(t) { var o = t && t.overtime; if (!o || !(t.laborHours > 0)) return 0; return t.laborHours * o.premiumRate * (1 + o.ohRatio); }
+  // what the engineer's read found about after-hours work (databook topic 'overtime'), '' when silent / not read
+  function otNote() { var b = (session.result || {}).databook, tp = b && b.topics && b.topics.overtime; return tp && tp.found ? String(tp.answer || '').replace(/\s+/g, ' ').trim() : ''; }
   function totalRows() {
     var t = ((session.result || {}).engine || {}).totals || {}, r = t.rates || {};
     return [['Equipment / Material', t.materialTotal], ['Labor (' + (t.laborHours || 0).toFixed(1) + ' hrs @ $' + (r.labor || laborRate()) + ')', t.labor], ['Wet-tap', t.wetTap], ['Services', t.services],
       ['Base subtotal', t.baseSubtotal], ['Overhead (' + Math.round((r.overhead || 0) * 100) + '%)', t.overhead], ['Miscellaneous (' + pctLabel(r.misc, 0.02) + ')', t.miscellaneous],
-      ['Sales tax (' + pctLabel(r.tax, 0.08875) + ', material only)', t.tax], ['PROJECT TOTAL', t.bidPrice]];
+      ['Sales tax (' + pctLabel(r.tax, 0.08875) + ', material only)', t.tax], ['PROJECT TOTAL', t.bidPrice]].concat(fullOt(t) ? [['Overtime add alternate — all labor at 1.5x (not in total)', fullOt(t)]] : []);
   }
   function fileStem() { return (session.name || 'estimate').replace(/[\\/:*?"<>|]+/g, ' ').trim() + ' — AI estimate ' + new Date().toISOString().slice(0, 10); }
   function saveBlob(blob, name) { var u = URL.createObjectURL(blob), l = document.createElement('a'); l.href = u; l.download = name; document.body.appendChild(l); l.click(); setTimeout(function() { document.body.removeChild(l); URL.revokeObjectURL(u); }, 2000); }
@@ -1663,7 +1670,7 @@ var AE = (function() {
     y = doc.lastAutoTable.finalY + 16;
     var tr = totalRows().map(function(t) { return [t[0], money0(t[1])]; });
     doc.autoTable({ startY: y, margin: { left: W - M - 300, right: M }, tableWidth: 300, body: tr, theme: 'plain', styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
-      didParseCell: function(d) { if (d.row.index === tr.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = 11; d.cell.styles.fillColor = [241, 245, 249]; } } });
+      didParseCell: function(d) { if (tr[d.row.index] && tr[d.row.index][0] === 'PROJECT TOTAL') { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = 11; d.cell.styles.fillColor = [241, 245, 249]; } } });
     y = doc.lastAutoTable.finalY + 14;
     doc.setFontSize(8); doc.setTextColor(90);
     doc.text(doc.splitTextToSize('Unit rates: ' + (e.normsLoaded ? e.normsLoaded + ' historical unit rates' : 'fallback formula') + '. Shop drawings / T&B: ' + e.floors + ' plan sheet' + (e.floors > 1 ? 's' : '') + (e.sdBasis ? ' — ' + e.sdBasis : '') + (e.pipeSheets ? '; piping ' + e.pipeSheets : '') + '.' +
@@ -2012,7 +2019,7 @@ var AE = (function() {
     if (!estId) {
       var r = await supabaseClient.from('estimates').insert(Object.assign({ name: /\(AI\)\s*$/i.test(session.name) ? session.name : session.name + ' (AI)', project_address: session.location, estimator_name: 'AI Estimator (' + me.name + ')', status: 'draft',
         is_ofci: !!(session.result || {}).ofci }, nwEstStdRow(!!(session.result || {}).ofci), NWEngine.estimateRow(orgSettings(), !!(session.result || {}).ofci), {
-        exclusions: (v.exclusions || []).join('\n') || null, notes: 'Built by the AI Estimator (session ' + session.id + '). Check every BUDGET line and flag before sending.' })).select('id').single();
+        exclusions: (v.exclusions || []).join('\n') || null, notes: 'Built by the AI Estimator (session ' + session.id + '). Check every BUDGET line and flag before sending.' + (otNote() ? '\nOvertime in the documents: ' + otNote().slice(0, 600) + '\n→ set the OT man-hours in Summary → Overtime add (1.5 × labor rate, separate add alternate).' : '') })).select('id').single();
       if (r.error) { toast(r.error.message); return; }
       estId = r.data.id;
     }
