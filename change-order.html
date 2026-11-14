@@ -1275,12 +1275,14 @@ async function saveDraftAndClose(){
     // in the cloud now — drop the device-only draft entry so it is not listed twice
     try { var dl = JSON.parse(localStorage.getItem(DRAFTS_STORAGE_KEY) || '[]').filter(function(x){ return x.id !== draftId; }); localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(dl)); } catch (e) {}
     showToast('Draft saved — find it in the project\'s Change Orders');
+    await syncCOToPrimeContract(coProjectId());
   } else {
     saveDraftEntry('change-order','change-order.html');
     showToast(coProjectId() ? 'Draft saved on this device' : 'Draft saved on this device — pick a project to keep it in the cloud');
+    // no prime-contract CO for a CO the app does not have: a device-only draft used to create one anyway, leaving a
+    // prime-contract CO with no change order behind it (one such CO found in the 11/14/2026 audit)
   }
-  syncCOToPrimeContract(coProjectId())
-    .finally(function(){ setTimeout(function(){if(window.history.length>1){history.back()}else{location.href='index.html'}},300); });
+  setTimeout(function(){if(window.history.length>1){history.back()}else{location.href='index.html'}},300);
 }
 
 function collectData(){
