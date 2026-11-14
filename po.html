@@ -174,7 +174,7 @@
       <div class="fld"><label>Phone</label><input id="fIssPhone"></div>
       <div class="fld full"><label>Distribution (CC) <span class="auto">printed on the PO; emails found here are CC'd when sending</span></label><textarea id="fDist" style="min-height:52px"></textarea></div>
       <div class="fld full"><label>Signature on page 2 (Northern Wolves)</label>
-        <select id="fSig"><option value="none">Signature line only (sign by hand)</option><option value="issuer">Issued-by name printed, no signature image</option><option value="leonid">Leonid Leonidov, General Manager — saved signature</option></select></div>
+        <select id="fSig"><option value="none">Signature line only (sign by hand)</option><option value="issuer">Issued-by name printed, no signature image</option></select></div>
     </div>
   </div>
 
@@ -223,7 +223,6 @@ requireAuth().catch(function(){});
   var MAX_TOTAL = 35 * 1024 * 1024;
   var FIRST_SEQ = 1300;                    // Karen's last Excel PO was NWAC1299
   var GENERAL_FOLDER = 'Purchase Orders';  // NW Projects / Purchase Orders (every PO, all projects)
-  var SIG_KEY = 'signature:leonid-leonidov';
   var COMPANY = { name: 'NORTHERN WOLVES INC', addr: '55 9th Street, Unit 55A-2, Brooklyn, NY 11215', office: 'Office: (347) 463-9248',
                   web: 'hello@northernwolvesac.com  |  northernwolvesac.com', tag: 'Fully Licensed & Insured  |  Serving NYC Since 2017' };
   var DEFAULT_NOTES = [
@@ -255,7 +254,7 @@ requireAuth().catch(function(){});
   var copyId = params.get('copy');       // duplicate as a new PO number
   var projects = [], projectsById = {}, aiaByProject = {}, vendors = [], contacts = [], legacyVendors = {};
   var project = null, profile = null, userId = null, userEmail = '';
-  var attachments = [], saved = null, dirty = true, savedSig = null;
+  var attachments = [], saved = null, dirty = true;
   var $ = function(id) { return document.getElementById(id); };
   var val = function(id) { return ($(id).value || '').trim(); };
 
@@ -343,7 +342,6 @@ requireAuth().catch(function(){});
     } else {
       await nextSeq();
     }
-    loadSignature();
     bind(); recalc(); updateNumber();
     $('formWrap').style.display = ''; $('bar').style.display = '';
   }
@@ -394,7 +392,7 @@ requireAuth().catch(function(){});
     $('fIssName').value = r.issued_by_name || $('fIssName').value; $('fIssTitle').value = r.issued_by_title || $('fIssTitle').value;
     $('fIssEmail').value = r.issued_by_email || $('fIssEmail').value; $('fIssPhone').value = r.issued_by_phone || $('fIssPhone').value;
     $('fDist').value = r.distribution || DEFAULT_DIST; $('fEmailCopy').value = r.email_copy || '';
-    if (r.data && r.data.sig) $('fSig').value = r.data.sig;
+    if (r.data && r.data.sig) $('fSig').value = r.data.sig === 'leonid' ? 'issuer' : r.data.sig;   // the saved-signature option was removed 11/13/2026
     if (editId && r.attachments && r.attachments.length) $('attList').innerHTML = r.attachments.map(function(a) { return '<div class="att"><span>📄</span><span class="nm">' + esc(a.name) + '</span><span class="meta">' + (a.pages ? a.pages + ' pg · ' : '') + mb(a.size || 0) + '</span></div>'; }).join('');
     updateNumber();
   }
@@ -481,10 +479,6 @@ requireAuth().catch(function(){});
     }
     if (!val('fVendorCode')) $('fVendorCode').placeholder = vendorCode() || 'e.g. BUSH';
     updateNumber();
-  }
-
-  async function loadSignature() {
-    try { var r = await supabaseClient.from('app_assets').select('data,mime').eq('key', SIG_KEY).maybeSingle(); if (r.data && r.data.data) savedSig = 'data:' + (r.data.mime || 'image/png') + ';base64,' + r.data.data; } catch (e) {}
   }
 
   function bind() {
@@ -691,10 +685,9 @@ requireAuth().catch(function(){});
     font('normal', 9, ink);
     var sig = $('fSig').value, issuer = val('fIssName') + (val('fIssTitle') ? ', ' + val('fIssTitle') : '');
     doc.text('Signature: _______________________________', M, y);
-    if (sig === 'leonid' && savedSig) { try { doc.addImage(savedSig, 'PNG', x2 + 52, y - 26, 110, 34); } catch (e) {} }
     doc.text('Signature: _______________________________', x2, y); y += 26;
     doc.text('Name / Title: ____________________________', M, y);
-    var nt = sig === 'leonid' ? 'Leonid Leonidov, General Manager' : sig === 'issuer' ? issuer : issuer;
+    var nt = issuer;
     doc.text('Name / Title: ' + (nt || '____________________________'), x2, y); y += 26;
     doc.text('Date: ___________________', M, y); doc.text('Date: ' + longDate(val('fDate')), x2, y);
 

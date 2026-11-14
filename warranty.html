@@ -120,16 +120,14 @@
   <div class="sb-card">
     <h3>Signed by</h3>
     <div class="grid">
-      <div class="fld"><label>Name - title</label><input id="fSigner" value="Leonid Leonidov - General Manager"></div>
+      <div class="fld"><label>Name - title</label><input id="fSigner" value="Ruslan Zhdamarov - CEO/President"></div>
       <div class="fld"><label>Company</label><input id="fSignerCompany" value="Northern Wolves, Inc."></div>
       <div class="fld full"><label>Signature</label>
         <select id="fSigMode">
-          <option value="saved">Leonid Leonidov — saved signature</option>
-          <option value="draw">Sign on screen</option>
           <option value="none">No signature (sign by hand)</option>
+          <option value="draw">Sign on screen</option>
         </select></div>
     </div>
-    <div id="sigSavedBox" class="sig-box"><img id="sigSavedImg" alt="" style="max-height:48px;display:none"><span id="sigSavedMsg" class="note"></span></div>
     <div id="sigDrawBox" style="display:none;margin-top:8px">
       <canvas id="sigPad" width="600" height="150" style="width:100%;max-width:520px;height:130px;border:1px solid #d1d5db;border-radius:8px;background:#fff;touch-action:none"></canvas>
       <div><button type="button" class="mini" id="btnSigClear">Clear</button></div>
@@ -182,7 +180,6 @@ requireAuth().catch(function(){});
   var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
   var MAX_TOTAL = 35 * 1024 * 1024;
   var BASE = 'IOM & WARRANTY';
-  var SIG_KEY = 'signature:leonid-leonidov';
   var STANDARD_TERMS = [
     'Should any defect of workmanship develop during the warranty period, Northern Wolves, Inc will be responsible for repair or replacement (at our discretion) of any defective workmanship.',
     'The Owner shall give prompt written notice of the defective work and Northern Wolves, Inc. shall have a reasonable period of time to address. During the warranty period, if Owner fails to notify Northern Wolves, Inc. and to give Northern Wolves, Inc. an opportunity to make the corrections, Owner waives the rights to require corrections by Northern Wolves, Inc. and to make a claim for breach of warranty.',
@@ -200,7 +197,7 @@ requireAuth().catch(function(){});
   var params = new URLSearchParams(location.search);
   var projectId = params.get('project'), editId = params.get('id'), fromId = params.get('from');
   var project = null, prime = null, profile = null, userId = null, userEmail = '';
-  var attachments = [], saved = null, dirty = true, savedSig = null, padDirty = false;
+  var attachments = [], saved = null, dirty = true, padDirty = false;
   var $ = function(id) { return document.getElementById(id); };
   var val = function(id) { return ($(id).value || '').trim(); };
 
@@ -255,7 +252,7 @@ requireAuth().catch(function(){});
     }
     if (editId && src) { saved = src; dirty = false; $('pageTitle').textContent = 'Warranty ' + pad(src.number) + (src.revision ? ' Rev ' + src.revision : ''); showSaved(); }
 
-    loadSignature();
+    sigModeChanged();
     loadFolders(src ? src.drive_folder : null);
     bind(); updatePeriodNote();
     $('formWrap').style.display = ''; $('bar').style.display = '';
@@ -267,18 +264,13 @@ requireAuth().catch(function(){});
     $('fNumber').value = pad(r.number); $('fRevision').value = r.revision || 0;
     var d = r.data || {};
     FIELDS.forEach(function(id) { if (d[id] != null && $(id)) $(id).value = d[id]; });
+    // 11/13/2026: a letter copied or revised from an older one does not reuse the removed saved signature or its signer
+    if (d.fSigMode === 'saved' || !$('fSigMode').value) $('fSigMode').value = 'none';
+    if (/leonid/i.test($('fSigner').value)) $('fSigner').value = 'Ruslan Zhdamarov - CEO/President';
   }
   function formData() { var d = {}; FIELDS.forEach(function(id) { d[id] = $(id).value; }); return d; }
 
-  async function loadSignature() {
-    try {
-      var r = await supabaseClient.from('app_assets').select('data,mime').eq('key', SIG_KEY).maybeSingle();
-      if (r.data && r.data.data) { savedSig = 'data:' + (r.data.mime || 'image/png') + ';base64,' + r.data.data; $('sigSavedImg').src = savedSig; $('sigSavedImg').style.display = ''; $('sigSavedMsg').textContent = ''; }
-      else $('sigSavedMsg').textContent = 'No saved signature yet — choose "Sign on screen".';
-    } catch (e) { $('sigSavedMsg').textContent = 'Saved signature not available.'; }
-    sigModeChanged();
-  }
-  function sigModeChanged() { var m = $('fSigMode').value; $('sigSavedBox').style.display = m === 'saved' ? '' : 'none'; $('sigDrawBox').style.display = m === 'draw' ? '' : 'none'; }
+  function sigModeChanged() { $('sigDrawBox').style.display = $('fSigMode').value === 'draw' ? '' : 'none'; }
 
   async function loadFolders(want) {
     var sel = $('fFolder');
@@ -383,7 +375,6 @@ requireAuth().catch(function(){});
   }
   function signatureImage() {
     var m = val('fSigMode');
-    if (m === 'saved') return savedSig;
     if (m === 'draw' && padDirty) return $('sigPad').toDataURL('image/png');
     return null;
   }

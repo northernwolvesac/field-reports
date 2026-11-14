@@ -634,8 +634,8 @@
     </div>
     <div class="row">
       <div class="field"><label>Label of the amount line</label><input type="text" id="seAmtLabel" placeholder="PO / CONTRACT AMOUNT:"></div>
-      <div class="field"><label>Signed by (optional)</label><input type="text" id="seSigner" placeholder="e.g. Leonid Leonidov"></div>
-      <div class="field"><label>Title</label><input type="text" id="seSignerTitle" placeholder="e.g. General Manager"></div>
+      <div class="field"><label>Signed by (optional)</label><input type="text" id="seSigner" placeholder="e.g. Ruslan Zhdamarov"></div>
+      <div class="field"><label>Title</label><input type="text" id="seSignerTitle" placeholder="e.g. CEO/President"></div>
     </div>
     <div class="field-hint">Changes here apply to this invoice only. The PO number and PO date are also saved on the change order / client PO so the next invoice has them.</div>
     <div class="modal-actions">
@@ -1510,7 +1510,7 @@ requireAuth().catch(function(){});
     showToast('✅ Invoice updated', 'success'); renderApplication(currentApp.id);
   }
 
-  var simpleLogo = null, simpleSig = null;
+  var simpleLogo = null;
   async function loadSimpleAssets() {
     if (!simpleLogo) {
       try {
@@ -1520,10 +1520,6 @@ requireAuth().catch(function(){});
         var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
         simpleLogo = { data: c.toDataURL('image/jpeg', 0.92), ratio: c.height / c.width };
       } catch (e) { simpleLogo = { data: null, ratio: 0.55 }; }
-    }
-    if (simpleSig === null) {
-      try { var r = await supabaseClient.from('app_assets').select('data,mime').eq('key', 'signature:leonid-leonidov').maybeSingle(); simpleSig = (r.data && r.data.data) ? 'data:' + (r.data.mime || 'image/png') + ';base64,' + r.data.data : false; }
-      catch (e) { simpleSig = false; }
     }
   }
 
