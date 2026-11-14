@@ -206,7 +206,7 @@
       bar.querySelectorAll('button').forEach(function(b) {
         var oc = b.getAttribute('onclick') || '';
         if (/generateAndDownload/.test(oc)) b.innerHTML = '⬇ Download';
-        else if (/saveDraftAndClose/.test(oc)) { b.innerHTML = 'Draft'; b.classList.add('nwk-draft'); b.title = 'Keep a draft on this device only'; }
+        else if (/saveDraftAndClose/.test(oc)) { b.innerHTML = 'Draft'; b.classList.add('nwk-draft'); b.title = cfg.ownRevisions ? 'Keep it as a draft in the project\'s Change Orders' : 'Keep a draft on this device only'; }
         else if (/saveAndGoBack/.test(oc)) { b.innerHTML = '💾 Save'; b.classList.add('nwk-save'); hasOwnSave = true; }
         else if (/Email|Send/i.test(oc)) b.innerHTML = '✉️ Send';
       });
@@ -263,13 +263,18 @@
     try {
       var d = collectData();
       if (cfg.ownRevisions) {   // Change Order keeps its own status / Rev numbering and edit mode
+        try { if (typeof _coLoaded !== 'undefined' && !_coLoaded) { busy(false); toast('Not saved: ' + (typeof coNotLoadedMsg === 'function' ? coNotLoadedMsg() : 'still loading')); return; } } catch (e) {}   // never save a half-loaded CO
+        try { clearTimeout(_cloudDraftTimer); while (_cloudDraftBusy) await _cloudDraftBusy; } catch (e) {}   // the page's cloud-draft autosave
+        // read after the autosave: a draft it has just inserted is then updated by its id
         var coEdit = null; try { coEdit = _editCloudId; } catch (e) {}
-        try { clearTimeout(_cloudDraftTimer); if (_cloudDraftBusy) await _cloudDraftBusy; } catch (e) {}   // the page's cloud-draft autosave
+        var coWas = null; try { coWas = _coStatus; } catch (e) {}
+        d._cloudId = coEdit || null;
         if (!d._coStatus || d._coStatus === 'draft') d._coStatus = 'submitted';   // Save finishes an auto-saved draft
         try { _coStatus = d._coStatus; } catch (e) {}
         if (!d._revisionNumber) d._revisionNumber = 1;
         var res = coEdit ? await updateReportInCloud(coEdit, { form_data: d, status: d._coStatus })
                          : await saveReportToCloud(cfg.type, d, { reportId: curReportId(), projectId: projectId() });
+        if (res && res.error && coWas) { try { _coStatus = coWas; } catch (e) {} }   // not saved: a draft stays a draft (and keeps autosaving)
         if (!coEdit && res && res.data) { try { _editCloudId = res.data.id; } catch (e) {} }
         if (typeof syncCOToPrimeContract === 'function') { try { await syncCOToPrimeContract(projectId()); } catch (e) { console.warn(e); } }
       } else {
@@ -280,6 +285,7 @@
       }
       busy(false);
       if (res && res.error) { alert('Save failed: ' + (res.error.message || res.error)); return; }
+      if (typeof window.coMarkSaved === 'function') { try { window.coMarkSaved(); } catch (e) {} }   // Change Order: this is what is saved now
       toast(K.lastFileError ? '✅ Saved (PDF not filed in Drive: ' + K.lastFileError + ')' : '✅ Saved' + (K.driveUrl ? ' — PDF is in the project folder' : ''));
     } catch (e) { busy(false); throw e; }
   };
@@ -353,6 +359,15 @@
     } finally { busy(false); }
   };
 
+  // A row the page writes itself (the Change Order's draft): upload its pending attachments and file its PDF in the project folder.
+  // fd gets _attachments / _driveId / _driveUrl / _driveRev; the caller writes fd to its row. → true when the PDF was filed.
+  K.fileRecord = async function(row, fd) {
+    await prepare(fd); busy(false);
+    await K.fileToDrive(row, fd, async function() { return {}; });
+    return !K.lastFileError && !!fd._driveId;
+  };
+  K.busy = busy;
+
   function installHooks() {
     var origSave = window.saveReportToCloud, origUpd = window.updateReportInCloud;
     if (typeof origSave !== 'function' || typeof origUpd !== 'function' || origSave.__nwk) return;
@@ -410,7 +425,7 @@
     buildCard();
     reworkBars();
     installHooks();
-    loadEdit();
+    K.loaded = loadEdit();   // the Change Order's draft autosave waits for it, so it keeps the reopened CO's Drive PDF / attachments
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

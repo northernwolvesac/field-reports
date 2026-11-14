@@ -604,6 +604,10 @@ async function prefillFromContract(projId){
 var _editCloudId = null;
 var _revisionNumber = 1, _revBumped = false;
 var _coStatus = 'submitted';
+// A reopened CO (?edit=) is not written back until it has fully loaded: a half-loaded form must never overwrite the saved one,
+// and a load that failed must not create a second CO (Russ 11/13/2026)
+var _coLoaded = !new URLSearchParams(window.location.search).get('edit'), _coLoadFailed = false;
+function coNotLoadedMsg(){ return _coLoadFailed ? 'the change order did not load. Reload the page.' : 'the change order is still loading. Try again in a moment.'; }
 
 (async function checkEditMode() {
   var params = new URLSearchParams(window.location.search);
@@ -614,6 +618,7 @@ var _coStatus = 'submitted';
     showToast('Loading change order...');
     var result = await getReportById(editId);
     if (result.error || !result.data) {
+      _coLoadFailed = true;
       showToast('Could not load change order');
       return;
     }
@@ -745,9 +750,11 @@ var _coStatus = 'submitted';
     document.getElementById('newModeBar').style.display = 'none';
     document.getElementById('editModeBar').style.display = 'flex';
     showToast('Change order loaded' + (_revisionNumber > 1 ? ' — Rev ' + _revisionNumber : ''));
+    setTimeout(function() { _coLoaded = true; }, 400);   // after the photos above are back
 
   } catch(e) {
     console.error('[CO] Edit mode error:', e);
+    _coLoadFailed = true;
     showToast('Error loading change order');
   }
 })();
@@ -1093,50 +1100,82 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)autoSave()}
 // A new CO used to exist only after Save — Download alone kept nothing. Now, as soon as it has a project and some content, it is kept in the
 // cloud as a DRAFT (project → Change Orders, badge "draft") and updated while it is written; Save / Send make it submitted.
 // Written straight to `reports`: saveReportToCloud / updateReportInCloud are wrapped by nw-form-kit, which files the PDF in Drive on every call.
-var _cloudDraftBusy = null, _cloudDraftAgain = false, _cloudDraftTimer = null, _cloudDraftOff = false, _coSending = false;
+var _cloudDraftBusy = null, _cloudDraftAgain = false, _cloudDraftTimer = null, _cloudDraftOff = false, _coSending = false, _cloudDraftError = '';
 function coProjectId(){ return (typeof getSelectedProjectId === 'function' && getSelectedProjectId()) || _urlProjectId || null; }
 function coIsDraft(){ return !_cloudDraftOff && !_coSending && (!_editCloudId || _coStatus === 'draft'); }
 function coHasContent(){
   var v=function(id){return ((document.getElementById(id)||{}).value||'').trim();};
   return !!(v('changeDesc') || v('changeReason') || _coMoney((document.getElementById('costTotal')||{}).textContent) || _coMoney(v('lumpSumAmount')));
 }
+// What a draft row keeps: the form, Drive photos only (base64 ones stay in the page until uploaded), and the Drive PDF / attachments
+// the form kit already filed for this CO — an autosave must not drop them, or the next Save would file a second PDF.
+function coDraftData(projId){
+  var d = collectData();
+  d._projectId = projId; d._coStatus = 'draft'; d._cloudId = _editCloudId || null;
+  Object.keys(d._photos || {}).forEach(function(k){ d._photos[k] = (d._photos[k] || []).filter(function(p){ return p && p.driveId; }); });
+  var K = window.NWFormKit;
+  if (K) {
+    if (K.driveId) { d._driveId = K.driveId; d._driveUrl = K.driveUrl; }
+    d._attachments = (K.files || []).filter(function(f){ return f.driveId; }).map(function(f){ return { name: f.name, size: f.size, pages: f.pages, driveId: f.driveId }; });
+  }
+  return d;
+}
 function scheduleCloudDraft(){
   if (!coIsDraft()) return;
   clearTimeout(_cloudDraftTimer);
   _cloudDraftTimer = setTimeout(saveCloudDraft, 3000);
 }
-async function saveCloudDraft(){
+// opts.force (Download / Send): save even without content and report why when it cannot be saved (_cloudDraftError)
+async function saveCloudDraft(opts){
+  var force = !!(opts && opts.force);
   clearTimeout(_cloudDraftTimer);
-  if (!coIsDraft()) return null;
+  _cloudDraftError = '';
+  if (!coIsDraft()) {
+    if (_cloudDraftOff) _cloudDraftError = 'this change order is no longer a draft in the app (it was saved, sent or deleted on another screen). Reload the page and open it from the project\'s Change Orders.';
+    return null;
+  }
+  if (!_coLoaded) { _cloudDraftError = coNotLoadedMsg(); return null; }
   var projId = coProjectId();
-  if (!projId || !coHasContent()) return null;
-  if (_cloudDraftBusy) { _cloudDraftAgain = true; return _cloudDraftBusy; }
+  if (!projId) { _cloudDraftError = 'no project is selected.'; return null; }
+  if (!force && !coHasContent()) return null;
+  if (_cloudDraftBusy) {
+    if (!force) { _cloudDraftAgain = true; return _cloudDraftBusy; }
+    while (_cloudDraftBusy) { try { await _cloudDraftBusy; } catch (e) {} }   // a forced save writes what is on screen now
+    if (!coIsDraft()) return saveCloudDraft(opts);
+  }
   _cloudDraftBusy = (async function(){
     try {
-      var d = collectData();
-      d._projectId = projId; d._coStatus = 'draft'; d._cloudId = _editCloudId || null;
-      // photos not yet in Drive are base64 — they stay in the page; Save / Send upload them
-      Object.keys(d._photos || {}).forEach(function(k){ d._photos[k] = (d._photos[k] || []).filter(function(p){ return p && p.driveId; }); });
+      var K = window.NWFormKit;
+      if (K && K.loaded) { try { await K.loaded; } catch (e) {} }   // a reopened draft: its Drive PDF / attachments are known first
+      var d = coDraftData(projId);
       var row = { report_type: 'change-order', report_date: d.coDate || new Date().toISOString().slice(0, 10), customer_name: d.custName || '',
                   tech_name: d.requestedBy || '', form_data: d, status: 'draft' };
       var r;
       if (_editCloudId) {
         // only while it is still a draft — never overwrite a CO that was saved / sent elsewhere
         r = await supabaseClient.from('reports').update(row).eq('id', _editCloudId).eq('status', 'draft').select('id');
-        if (!r.error && !(r.data || []).length) { _cloudDraftOff = true; return null; }
+        if (!r.error && !(r.data || []).length) {
+          _cloudDraftOff = true;
+          _cloudDraftError = 'this change order is no longer a draft in the app (it was saved, sent or deleted on another screen). Reload the page and open it from the project\'s Change Orders.';
+          return null;
+        }
       } else {
         var s = await supabaseClient.auth.getSession();
         row.report_number = reportId; row.tech_id = s.data && s.data.session ? s.data.session.user.id : null;
         r = await supabaseClient.from('reports').insert(row).select('id');
         if (r.error && r.error.code === '23505') {   // this number is already in the cloud: take it over only if it is our draft
           var ex = await supabaseClient.from('reports').select('id,status').eq('report_number', reportId).maybeSingle();
-          if (!ex.data || ex.data.status !== 'draft') { _cloudDraftOff = true; return null; }
+          if (!ex.data || ex.data.status !== 'draft') {
+            _cloudDraftOff = true;
+            _cloudDraftError = 'number ' + reportId + ' already belongs to a saved change order. Reload the page and open it from the project\'s Change Orders.';
+            return null;
+          }
           r = await supabaseClient.from('reports').update(row).eq('id', ex.data.id).select('id');
         }
       }
-      if (r.error) { console.warn('[CO] cloud draft save failed', r.error); return null; }
+      if (r.error) { console.warn('[CO] cloud draft save failed', r.error); _cloudDraftError = r.error.message || String(r.error); return null; }
       var id = r.data && r.data[0] && r.data[0].id;
-      if (!id) return null;
+      if (!id) { _cloudDraftError = 'the app did not return the saved change order (no permission?).'; return null; }
       if (!_editCloudId) {
         _editCloudId = id; _coStatus = 'draft';
         try { var u = new URL(location.href); u.searchParams.set('edit', id); u.searchParams.set('project', projId); u.searchParams.delete('draft'); history.replaceState(history.state, '', u.toString()); } catch (e) {}
@@ -1145,7 +1184,7 @@ async function saveCloudDraft(){
       }
       await syncCOToPrimeContract(projId);
       return id;
-    } catch (e) { console.warn('[CO] cloud draft save failed', e); return null; }
+    } catch (e) { console.warn('[CO] cloud draft save failed', e); _cloudDraftError = (e && e.message) || String(e); return null; }
     finally {
       _cloudDraftBusy = null;
       if (_cloudDraftAgain) { _cloudDraftAgain = false; scheduleCloudDraft(); }
@@ -1157,6 +1196,77 @@ document.addEventListener('input', scheduleCloudDraft, true);
 document.addEventListener('change', scheduleCloudDraft, true);
 document.addEventListener('visibilitychange', function(){ if (document.hidden) saveCloudDraft(); });
 window.addEventListener('pagehide', function(){ saveCloudDraft(); });
+
+// ========== NO CO PDF WITHOUT A CO RECORD (Russ 11/13/2026) ==========
+// 10/18/2026: two CO PDFs were downloaded from this form and e-mailed to GCs, and the app never kept either CO. Now every PDF that
+// leaves the form belongs to a saved CO: a new or draft CO is saved as a DRAFT first (and its PDF filed in the project's Change Orders
+// folder, linked to that draft); a CO that was already saved / sent is updated first if it was changed on screen. If it cannot be
+// saved, no PDF is made and nothing is e-mailed.
+var _coBaseline = null, _coExporting = false;
+// what the PDF shows, for "was it changed since it was opened / saved?"
+function coPdfState(){
+  var d = collectData();
+  ['_cloudId', '_coStatus', '_projectId'].forEach(function(k){ delete d[k]; });
+  d._photos = Object.keys(d._photos || {}).map(function(k){ return k + ':' + (d._photos[k] || []).map(function(p){ return p.driveId || String(p.data || '').length; }).join(','); }).join('|');
+  d._att = ((window.NWFormKit || {}).files || []).map(function(f){ return f.name + '/' + (f.driveId || f.size); }).join('|');
+  return JSON.stringify(d);
+}
+function coMarkSaved(){ try { _coBaseline = coPdfState(); } catch (e) {} }
+window.coMarkSaved = coMarkSaved;   // nw-form-kit calls it after its Save
+// a reopened CO: the state it was opened with is taken at the first real tap / key press after it has loaded
+['pointerdown', 'keydown'].forEach(function(t){
+  document.addEventListener(t, function(e){ if (e.isTrusted && _coBaseline === null && _editCloudId && _coLoaded) coMarkSaved(); }, true);
+});
+
+// → { id, draft } once the CO is in the app; null if the user cancelled; throws with the reason when it could not be saved
+async function coRecordForExport(){
+  if (_coSending) throw new Error('the change order is being sent right now. Wait for it to finish.');
+  clearTimeout(_cloudDraftTimer);
+  while (_cloudDraftBusy) { try { await _cloudDraftBusy; } catch (e) {} }
+  if (!_editCloudId || _coStatus === 'draft') {
+    var id = await saveCloudDraft({ force: true });
+    if (!id) throw new Error(_cloudDraftError || 'the change order could not be saved in the app.');
+    return { id: id, draft: true };
+  }
+  if (!_coLoaded) throw new Error(coNotLoadedMsg());
+  if (_coBaseline !== null && coPdfState() === _coBaseline) return { id: _editCloudId, draft: false };
+  var v = function(id){ return (document.getElementById(id) || {}).value || ''; };
+  var name = 'Change Order #' + (v('coNumber') || reportId);
+  var st = String(_coStatus || 'submitted').toUpperCase();
+  if (!confirm(name + ' (' + st + ') has changes on screen that are not saved in the app.\n\n' +
+      'OK = save the changes to this change order, then download.\nCancel = do not download.' +
+      (_coStatus === 'approved' ? '\n\nIt is APPROVED: saving changes the approved change order.' : ''))) return null;
+  var d = collectData();
+  d._coStatus = _coStatus;
+  var r = await updateReportInCloud(_editCloudId, { form_data: d, status: _coStatus });
+  if (r && r.error) throw new Error('the changes could not be saved: ' + (r.error.message || r.error));
+  await syncCOToPrimeContract(coProjectId());
+  coMarkSaved();
+  return { id: _editCloudId, draft: false };
+}
+
+// After a draft's PDF was downloaded: new photos to Drive, the PDF (+ attachments) filed in the project's Change Orders folder,
+// and the draft row updated to point at them — so Save / Send later replace that same file instead of adding a second one.
+async function coFileDraftCopy(id){
+  var K = window.NWFormKit, projId = coProjectId();
+  if (!K || typeof K.fileRecord !== 'function' || !projId) return;
+  try {
+    var v = function(x){ return (document.getElementById(x) || {}).value || ''; };
+    if (Object.keys(photosByEquip).some(function(k){ return (photosByEquip[k] || []).some(function(p){ return p && !p.driveId; }); })) {
+      if (K.busy) K.busy(true, 'Saving photos…');
+      await uploadAllPhotosToDrive(v('projectName') || v('custName') || 'Unknown', projId, v('coNumber') || reportId);
+    }
+    var fd = coDraftData(projId);
+    var filed = await K.fileRecord({ id: id, report_number: reportId }, fd);
+    if (_editCloudId !== id || _coStatus !== 'draft' || _coSending) return;   // saved / sent meanwhile — that wrote its own copy
+    var r = await supabaseClient.from('reports').update({ form_data: fd }).eq('id', id).eq('status', 'draft').select('id');
+    if (r.error) console.warn('[CO] draft Drive link not saved', r.error);
+    showToast(filed ? 'Draft saved — PDF filed in the project\'s Change Orders folder' : '⚠️ Draft saved, but the PDF was not filed in Drive: ' + (K.lastFileError || 'unknown error'));
+  } catch (e) {
+    console.warn('[CO] filing the draft PDF failed', e);
+    showToast('⚠️ Draft saved, but the PDF was not filed in Drive');
+  } finally { if (K.busy) K.busy(false); }
+}
 
 async function saveDraftAndClose(){
   autoSave();
@@ -1312,15 +1422,29 @@ function generatePDF(){
   return doc;
 }
 
-function generateAndDownload(){
+async function generateAndDownload(){
+  if (_coExporting) return;
+  _coExporting = true;
+  var rec = null;
   try {
-    generatePDF().save(coPdfName());
-    showToast('PDF downloaded!');
-    saveCloudDraft();   // downloading must not be the only copy (Russ 11/04/2026)
-  } catch (err) {
-    console.error('[PDF] generateAndDownload failed:', err);
-    alert('PDF generation failed:\n\n'+(err&&err.message?err.message:err)+'\n\nOpen console (F12) and share the error if this keeps happening.');
-  }
+    // the CO is saved in the app first; no record, no PDF (Russ 11/13/2026)
+    try { rec = await coRecordForExport(); }
+    catch (err) {
+      console.error('[CO] not saved, PDF not made:', err);
+      alert('PDF not downloaded: ' + (err && err.message ? err.message : err) + '\n\nA change order PDF is only made for a change order saved in the app, so the GC never gets one the app does not have.');
+      return;
+    }
+    if (!rec) return;
+    try {
+      generatePDF().save(coPdfName());
+    } catch (err) {
+      console.error('[PDF] generateAndDownload failed:', err);
+      alert('PDF generation failed:\n\n'+(err&&err.message?err.message:err)+'\n\nOpen console (F12) and share the error if this keeps happening.');
+      return;
+    }
+    showToast(rec.draft ? 'PDF downloaded — saved as a draft in the project\'s Change Orders' : 'PDF downloaded');
+    if (rec.draft) await coFileDraftCopy(rec.id);
+  } finally { _coExporting = false; }
 }
 
 function openEmailPreview(){
@@ -1368,6 +1492,11 @@ async function confirmSendEmail(){
   btn.innerHTML='<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px"></span>Sending\u2026';
   const T0=Date.now(), lap=function(m){ console.log('[CO send] '+m+' — '+((Date.now()-T0)/1000).toFixed(1)+' s'); };   // where the minutes go (browser console)
   try{
+    // The CO is in the app before anything goes to the GC: a new CO becomes a draft record now, and is only e-mailed if every save
+    // below succeeds (it used to e-mail even when the cloud save failed — Russ 11/13/2026)
+    if (!_editCloudId || _coStatus === 'draft') {
+      if (!(await saveCloudDraft({ force: true }))) throw new Error('the change order could not be saved in the app: ' + (_cloudDraftError || 'unknown error') + '\n\nNothing was e-mailed.');
+    }
     const d=collectData?collectData():{};
     if(typeof saveToHistory==='function') saveToHistory('change-order',d);
     const projId=typeof getSelectedProjectId==='function'?getSelectedProjectId():null;
@@ -1408,28 +1537,21 @@ async function confirmSendEmail(){
     const emailUpload=(async function(){ const r=await uploadToGoogleDrive(generatePDF(),fn); lap('email PDF uploaded'); return r; })();
     emailUpload.catch(function(){});   // surfaced at the await below
     // Save or update in cloud
+    // a failed save stops here: the e-mail below is never sent for a CO the app does not have
+    var notSaved = function(res){ return new Error('the change order could not be saved in the app (' + ((res.error && res.error.message) || res.error) + ').\n\nNothing was e-mailed.'); };
     if (isRevision) {
       var revResult = await updateReportInCloud(_editCloudId, { form_data: d, status: 'revised' });
-      if (revResult && revResult.error) {
-        console.error('[change-order] revision save failed:', revResult.error);
-        if (typeof showToast === 'function') showToast('⚠️ Cloud save failed — email still sent. Check console.');
-      }
+      if (revResult && revResult.error) { console.error('[change-order] revision save failed:', revResult.error); throw notSaved(revResult); }
       console.log('[CO] Updated existing CO:', _editCloudId, 'Rev:', _revisionNumber);
     } else if (wasDraft) {
       var draftResult = await updateReportInCloud(_editCloudId, { form_data: d, status: 'submitted', customer_name: v('custName') || '', report_date: v('coDate') || new Date().toISOString().slice(0, 10) });
-      if (draftResult && draftResult.error) {
-        console.error('[change-order] cloud save failed:', draftResult.error);
-        if (typeof showToast === 'function') showToast('⚠️ Cloud save failed — email still sent. Check console.');
-      }
+      if (draftResult && draftResult.error) { console.error('[change-order] cloud save failed:', draftResult.error); throw notSaved(draftResult); }
       _coStatus = 'submitted';
     } else {
       var cloudResult = await (typeof saveOrUpdateReport === 'function'
         ? saveOrUpdateReport('change-order', d, { reportId: reportId, projectId: projId })
         : saveReportToCloud('change-order', d, { reportId: reportId, projectId: projId }));
-      if (cloudResult && cloudResult.error) {
-        console.error('[change-order] cloud save failed:', cloudResult.error);
-        if (typeof showToast === 'function') showToast('⚠️ Cloud save failed — email still sent. Check console.');
-      }
+      if (cloudResult && cloudResult.error) { console.error('[change-order] cloud save failed:', cloudResult.error); throw notSaved(cloudResult); }
     }
     lap('cloud save + project-folder filing done');
     await syncCOToPrimeContract(projId || _urlProjectId);
@@ -1474,13 +1596,21 @@ async function saveAndGoBack() {
     saveDraftAndClose();
     return;
   }
+  if (!_coLoaded) { showToast('Not saved: ' + coNotLoadedMsg()); return; }   // never save a half-loaded CO over the saved one
   try {
     showToast('Saving...');
     var d = collectData();
     clearTimeout(_cloudDraftTimer);
     if (_cloudDraftBusy) { try { await _cloudDraftBusy; } catch (e) {} }
-    if (_coStatus === 'draft') { _coStatus = 'submitted'; d._coStatus = 'submitted'; }   // Save finishes a draft
-    await updateReportInCloud(_editCloudId, { form_data: d, status: _coStatus || d._coStatus || 'submitted' });
+    var wasDraft = _coStatus === 'draft';
+    if (wasDraft) { _coStatus = 'submitted'; d._coStatus = 'submitted'; }   // Save finishes a draft
+    var saved = await updateReportInCloud(_editCloudId, { form_data: d, status: _coStatus || d._coStatus || 'submitted' });
+    if (saved && saved.error) {   // it used to say "Changes saved!" and leave the page anyway
+      if (wasDraft) _coStatus = 'draft';
+      console.error('[CO] Save error:', saved.error);
+      alert('Not saved: ' + (saved.error.message || saved.error) + '\n\nYour changes are still on this screen.');
+      return;
+    }
     await syncCOToPrimeContract((typeof getSelectedProjectId === 'function' && getSelectedProjectId()) || _urlProjectId);
     showToast('Changes saved!');
     setTimeout(function() {
@@ -1557,7 +1687,7 @@ function openChangeOrderAIChat() {
 </script>
 <script src="form-utils.js?v=581"></script>
 <script src="nw-drive.js?v=581"></script>
-<script src="nw-form-kit.js?v=589"></script>
+<script src="nw-form-kit.js?v=593"></script>
 <script src="sw-register.js?v=581"></script>
 </body>
 </html>
