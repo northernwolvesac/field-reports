@@ -163,10 +163,11 @@
   <h3>Request documents</h3>
   <div class="f2">
     <div class="fld full"><label>To</label><input id="rTo" placeholder="name@company.com, broker@agency.com"></div>
+    <div class="fld full"><label>Our office on the e-mail (always copied)</label><input id="rOffice" placeholder="karen@northernwolvesac.com"></div>
     <div class="fld full"><label>Subject</label><input id="rSubj"></div>
     <div class="fld full"><label>Message</label><textarea id="rBody" style="min-height:300px"></textarea></div>
   </div>
-  <div style="font-size:12px;color:#6b7280;margin-top:6px">Sent from Northern Wolves (hello@). Replies come back to <b id="rReply"></b>.</div>
+  <div style="font-size:12px;color:#6b7280;margin-top:6px">Sent from Northern Wolves (hello@). The office addresses are on the e-mail itself, so "Reply all" reaches them; "Reply" goes to <b id="rReply"></b>.</div>
   <div class="mact"><button class="btn light" id="rCancel">Cancel</button><button class="btn" id="rSend">Send</button></div>
 </div></div>
 
@@ -707,19 +708,32 @@ requireAuth().catch(function(){});
     $('rTo').value = [p.email, p.cc_emails].filter(Boolean).join(', ');
     $('rSubj').value = 'Northern Wolves — ' + (c.st === 'exp' || c.st === 'soon' ? 'insurance certificate renewal' : 'insurance & subcontractor documents') + ' — ' + p.name;
     $('rBody').value = body;
-    $('rReply').textContent = (profile && profile.email) || 'you';
+    var office = officeEmails();
+    $('rOffice').value = office.join(', ');
+    $('rReply').textContent = office.join(', ') || 'you';
     show('reqModal', true);
   }
+  // The office people who must see every reply: the compliance notify list (Karen) + whoever sends it.
+  // EmailJS sends from hello@ (nobody in the office reads that inbox), so they go on the e-mail itself
+  // (To list, the template has no Cc field) and in Reply-To.
+  function splitEmails(s) { return String(s || '').split(/[,;\s]+/).map(function(x) { return x.trim(); }).filter(function(x) { return /@/.test(x); }); }
+  function uniqEmails(list) { var seen = {}; return list.filter(function(x) { var k = x.toLowerCase(); if (seen[k] || k === 'hello@northernwolvesac.com') return false; seen[k] = 1; return true; }); }
+  function officeEmails() {
+    return uniqEmails(splitEmails((settings && settings.notify_emails) || 'karen@northernwolvesac.com').concat(profile && profile.email ? [profile.email] : []));
+  }
   async function sendRequest() {
-    var to = $('rTo').value.trim(); if (!/@/.test(to)) { toast('Enter the e-mail address'); return; }
+    var vendor = splitEmails($('rTo').value); if (!vendor.length) { toast('Enter the e-mail address'); return; }
+    var office = uniqEmails(splitEmails($('rOffice').value));
+    if (!office.length) office = officeEmails();
+    var to = uniqEmails(vendor.concat(office)).join(', ');
     var p = reqParty;
     $('rSend').disabled = true; $('rSend').textContent = 'Sending…';
     try {
       await nwSendBrandedEmail({ to: to, subject: $('rSubj').value.trim(), bodyText: $('rBody').value, reportType: 'Insurance & documents', title: 'Documents request', subtitle: p.name,
-        customerName: p.name, techName: myName(), senderName: myName(), senderEmail: profile.email || '', files: [] });
+        customerName: p.name, techName: myName(), senderName: myName(), senderEmail: office.join(', ') || profile.email || '', files: [] });
       var ins = await supabaseClient.from('compliance_reminders').insert({ party_id: p.id, kind: 'request_sent', sent_to: to, subject: $('rSubj').value.trim(), sent_by: profile.id, sent_by_name: myName() }).select().single();
       if (!ins.error) reminders.unshift(ins.data);
-      if (!p.email) { var first = to.split(/[,;]/)[0].trim(); await supabaseClient.from('compliance_parties').update({ email: first }).eq('id', p.id); p.email = first; }
+      if (!p.email) { var first = vendor[0]; await supabaseClient.from('compliance_parties').update({ email: first }).eq('id', p.id); p.email = first; }
       show('reqModal', false); render(); if (openId === p.id) openDrawer(p.id); toast('Request sent to ' + to);
     } catch (e) { console.error(e); toast('Could not send: ' + ((e && (e.text || e.message)) || e)); }
     finally { $('rSend').disabled = false; $('rSend').textContent = 'Send'; }
