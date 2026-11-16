@@ -1529,7 +1529,7 @@ requireAuth().catch(function(){});
   //  PROPOSAL
   // ═══════════════════════════════════════════════════════════════
   var propSettings = null, propLoadedFor = null, propDirty = false, estimatorEmailCache = {};
-  var propSaveTimer = null, propHtmlTimer = null;
+  var propSaveTimer = null, propHtmlTimer = null, propSettingsPending = false;
 
   var PROP_SCHEMA = [
     { sec: 'Layout' },
@@ -1582,12 +1582,22 @@ requireAuth().catch(function(){});
   }
   function savePropSettings() {
     clearTimeout(propSaveTimer);
-    propSaveTimer = setTimeout(function() {
-      var copy = JSON.parse(JSON.stringify(propSettings)); copy.editMode = false;
-      saveSettings({ proposal: copy });
-    }, 600);
+    propSettingsPending = true;
+    propSaveTimer = setTimeout(flushPropSettings, 600);
+  }
+  async function flushPropSettings() {
+    clearTimeout(propSaveTimer);
+    propSettingsPending = false;
+    var copy = JSON.parse(JSON.stringify(propSettings)); copy.editMode = false;
+    return saveSettings({ proposal: copy });
   }
 
+  // leaving the project with proposal edits not stored yet: start the save and let the browser ask before closing
+  window.addEventListener('beforeunload', function(e) {
+    if (!(propDirty || propSettingsPending)) return;
+    if (propDirty) saveProposalHtml(false); else flushPropSettings();
+    e.preventDefault(); e.returnValue = '';
+  });
   function bindProposal() {
     Array.prototype.forEach.call(document.querySelectorAll('.prop-btn[data-cmd]'), function(b) {
       b.addEventListener('mousedown', function(e) { e.preventDefault(); });
@@ -1842,7 +1852,10 @@ requireAuth().catch(function(){});
     if (upd.error) { toast('Save failed: ' + upd.error.message, 'error'); return; }
     currentVersion.proposal_html = html;
     propDirty = false;
-    if (wasDirty && !propSettings.htmlOverride) { propSettings.htmlOverride = true; savePropSettings(); }
+    // the flag that shows the saved text instead of the live render goes to the database now, not after a debounce
+    // (closing the project right after "Save proposal" lost it and the proposal looked deleted)
+    if (wasDirty && !propSettings.htmlOverride) { propSettings.htmlOverride = true; await flushPropSettings(); }
+    else if (propSettingsPending) await flushPropSettings();
     if (announce) toast(wasDirty ? 'Proposal saved' : 'No changes to save');
   }
   async function regenerateProposal() {

@@ -788,9 +788,15 @@ requireAuth().catch(function(){});
   }
   async function saveSettings(patchFn) {
     if (!canEdit) return false;
+    if (!schemaOk) { var s0 = JSON.parse(JSON.stringify(getSettings())); patchFn(s0); currentEst.settings = s0; showToast('Saved for this session only — run procore-ui-schema.sql to persist settings', 'error'); return true; }
+    // estimates.settings is shared by the Proposal tab (settings.proposal), Takeoff (takeoff_groups, zones…) and this grid:
+    // patch the row as it is in the database NOW, else the copy loaded with this page wipes what the other tabs saved since
+    // (Alisultan 11/16/2026: a saved proposal "got deleted" — its settings.proposal.htmlOverride was overwritten)
+    var fresh = null;
+    try { var q = await supabaseClient.from('estimates').select('settings').eq('id', currentEst.id).maybeSingle(); if (!q.error && q.data) fresh = q.data; } catch (e) { console.warn('settings refresh', e); }
+    if (fresh) currentEst.settings = fresh.settings;
     var s = JSON.parse(JSON.stringify(getSettings()));
     patchFn(s);
-    if (!schemaOk) { currentEst.settings = s; showToast('Saved for this session only — run procore-ui-schema.sql to persist settings', 'error'); return true; }
     var r = await supabaseClient.from('estimates').update({ settings: s, updated_at: nowIso() }).eq('id', currentEst.id);
     if (r.error) { showToast('Save failed: ' + r.error.message, 'error'); return false; }
     currentEst.settings = s;

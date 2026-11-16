@@ -454,13 +454,29 @@ requireAuth().catch(function(){});
   }
   function settings() { return window.nwEstSettings ? nwEstSettings(est) : ((est && est.settings && typeof est.settings === 'object') ? est.settings : {}); }
   function normGroups(g) { if (!Array.isArray(g)) return []; return g.map(function(x) { return typeof x === 'string' ? { name: x, collapsed: false } : (x && x.name ? { name: x.name, collapsed: !!x.collapsed } : null); }).filter(Boolean); }
-  var settingsTimer = null;
+  var settingsTimer = null, settingsPending = null;
   function saveSettings(patch) {
     if (!settingsOk || !est || !me.canEdit) return;
-    var s = Object.assign({}, settings(), patch); est.settings = s;
+    est.settings = Object.assign({}, settings(), patch);
+    settingsPending = Object.assign(settingsPending || {}, patch);
     clearTimeout(settingsTimer);
-    settingsTimer = setTimeout(async function() { var r = await sb.from('estimates').update({ settings: s }).eq('id', estimateId); if (r.error) { settingsOk = false; console.warn('settings', r.error.message); } }, 400);
+    settingsTimer = setTimeout(flushSettings, 400);
   }
+  // estimates.settings is shared with the Estimating grid and the Proposal tab (settings.proposal): only the keys changed
+  // here are written, on top of the row as it is in the database now (the copy loaded with this page is stale — writing it
+  // back wiped saved proposals, Alisultan 11/16/2026)
+  async function flushSettings() {
+    var patch = settingsPending; settingsPending = null;
+    if (!patch) return;
+    var cur = await sb.from('estimates').select('settings').eq('id', estimateId).maybeSingle();
+    if (cur.error) { settingsPending = Object.assign(patch, settingsPending || {}); console.warn('settings', cur.error.message); return; }
+    var base = (cur.data && cur.data.settings && typeof cur.data.settings === 'object' && !Array.isArray(cur.data.settings)) ? cur.data.settings : {};
+    var s = Object.assign({}, base, patch);
+    var r = await sb.from('estimates').update({ settings: s }).eq('id', estimateId);
+    if (r.error) { settingsOk = false; console.warn('settings', r.error.message); return; }
+    est.settings = Object.assign({}, s, settingsPending || {});
+  }
+  window.addEventListener('pagehide', function() { if (settingsPending) { clearTimeout(settingsTimer); flushSettings(); } });
   function saveGroups() { saveSettings({ takeoff_groups: groupOrder }); }
 
   // ─── shell (standalone only) ───
