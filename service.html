@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NW Field">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<title>Service &amp; Maintenance — Northern Wolves AC</title>
+<link rel="stylesheet" href="styles.css?v=595">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js?v=595"></script>
+<script src="auth.js?v=595"></script>
+<style>
+  body { background: #f7f8fa; padding-bottom: 60px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 14px; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+  .top a.back { font-size: 22px; text-decoration: none; color: #111318; padding: 0 6px; }
+  .top .ttl { flex: 1; } .top .ttl b { display: block; font-size: 16px; color: #111318; } .top .ttl span { font-size: 12px; color: #6b7280; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+  @media (max-width: 520px) { .cards { grid-template-columns: 1fr 1fr; gap: 8px; } .card b { font-size: 19px; } }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+  .card:hover { border-color: #9ca3af; } .card.on { border-color: #111318; box-shadow: inset 0 0 0 1px #111318; }
+  .card b { display: block; font-size: 22px; color: #111318; font-variant-numeric: tabular-nums; } .card span { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; }
+  .card em { display: block; font-style: normal; font-size: 12px; color: #374151; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .card.red b { color: #b91c1c; } .card.amb b { color: #b45309; } .card.grn b { color: #15803d; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid #e5e7eb; margin: 12px 0 0; overflow-x: auto; }
+  .tabs button { border: none; background: none; padding: 10px 14px; font-weight: 700; font-size: 14px; color: #6b7280; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; font-family: inherit; width: auto; border-radius: 0; }
+  .tabs button.on { color: #111318; border-bottom-color: #111318; }
+  .tabs button small { font-weight: 500; color: #9ca3af; margin-left: 4px; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+  .tools input[type=search], .tools select { padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-family: inherit; }
+  .tools input[type=search] { flex: 1; min-width: 200px; }
+  .tools select { max-width: 220px; }
+  .btn { padding: 9px 13px; font-size: 13px; font-weight: 700; border-radius: 9px; cursor: pointer; border: 1px solid #111318; background: #111318; color: #fff; text-decoration: none; white-space: nowrap; font-family: inherit; width: auto; display: inline-flex; flex: 0 0 auto; }
+  .btn.light { background: #fff; color: #111318; border-color: #d1d5db; }
+  .btn.red { background: #fff; color: #b91c1c; border-color: #fecaca; }
+  .btn.sm { padding: 5px 9px; font-size: 12px; border-radius: 7px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .grid-h, .prow { display: grid; gap: 10px; align-items: center; }
+  .pipe { grid-template-columns: minmax(200px, 1.6fr) .9fr .8fr .9fr 1.5fr; }
+  .agr { grid-template-columns: minmax(200px, 1.5fr) 1fr .8fr 1fr .9fr 1.1fr; }
+  .grid-h { padding: 0 12px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; }
+  .prow { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 7px; background: #fff; font-size: 13px; cursor: pointer; }
+  .prow:hover { border-color: #9ca3af; }
+  .prow.inactive { opacity: .55; }
+  .prow .nm b { display: block; color: #111318; font-size: 14px; } .prow .nm span { font-size: 11px; color: #6b7280; }
+  .prow .ct { font-size: 12px; color: #374151; } .prow .ct small { display: block; font-size: 11px; color: #6b7280; }
+  .prow .mn { font-variant-numeric: tabular-nums; font-weight: 700; color: #111318; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+  .chip small { font-weight: 500; opacity: .85; margin-left: 3px; }
+  .c-ok { background: #dcfce7; color: #166534; } .c-exp { background: #fee2e2; color: #b91c1c; } .c-soon { background: #fef3c7; color: #92400e; }
+  .c-miss { background: #fff1f2; color: #be123c; border: 1px dashed #fda4af; } .c-rev { background: #e0f2fe; color: #0369a1; } .c-na { background: #f3f4f6; color: #6b7280; } .c-rej { background: #fee2e2; color: #991b1b; }
+  .grp { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #111318; font-weight: 700; margin: 16px 2px 7px; } .grp span { color: #6b7280; font-weight: 500; margin-left: 6px; }
+  .sum { font-size: 12px; color: #6b7280; margin: 0 0 8px; }
+  .empty, .blocked { text-align: center; padding: 50px 20px; color: #6b7280; }
+  /* calendar */
+  .cal-head { display: flex; align-items: center; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+  .cal-head b { font-size: 17px; min-width: 150px; text-align: center; }
+  .cal-head .sp { flex: 1; }
+  .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #e5e7eb; gap: 1px; }
+  .cal .dh { background: #f9fafb; font-size: 10px; text-transform: uppercase; color: #6b7280; padding: 6px; text-align: center; letter-spacing: .05em; }
+  .cal .dc { background: #fff; min-height: 96px; padding: 4px 5px; font-size: 11px; min-width: 0; }
+  .cal .dc.out { background: #f9fafb; }
+  .cal .dn { font-size: 11px; color: #6b7280; font-weight: 700; display: inline-block; margin-bottom: 3px; padding: 0 5px; }
+  .cal .dc.today .dn { background: #111318; color: #fff; border-radius: 999px; }
+  .ev { display: block; font-size: 11px; font-weight: 600; border-radius: 6px; padding: 2px 6px; margin-bottom: 3px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid transparent; }
+  .ev.plan { background: #fef3c7; color: #92400e; border-style: dashed; border-color: #f59e0b; } .ev.sched { background: #e0f2fe; color: #0369a1; }
+  .ev.done { background: #dcfce7; color: #166534; } .ev.over { background: #fee2e2; color: #b91c1c; } .ev.task { background: #f3e8ff; color: #6b21a8; }
+  .ev.skip { background: #f3f4f6; color: #9ca3af; text-decoration: line-through; }
+  .unsched { background: #fff; border: 1px dashed #f59e0b; border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; font-size: 12px; color: #92400e; }
+  .unsched .ev { display: inline-block; margin: 4px 6px 0 0; max-width: 100%; }
+  .lrow { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 6px; font-size: 13px; cursor: pointer; }
+  .lrow:hover { border-color: #9ca3af; }
+  .lrow .d { font-weight: 700; font-variant-numeric: tabular-nums; } .lrow .d small { display: block; font-weight: 500; font-size: 11px; color: #6b7280; }
+  .lrow .w b { display: block; } .lrow .w span { font-size: 11px; color: #6b7280; }
+  /* tasks */
+  .qadd { display: grid; grid-template-columns: minmax(0, 1fr) 130px 150px 160px auto; gap: 8px; margin: 12px 0; }
+  .qadd input, .qadd select { padding: 9px 10px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-family: inherit; min-width: 0; box-sizing: border-box; width: 100%; }
+  .trow { display: flex; gap: 10px; align-items: center; padding: 9px 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 6px; font-size: 13px; }
+  .trow input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
+  .trow .tt { flex: 1; min-width: 0; } .trow .tt b { cursor: pointer; color: #111318; } .trow .tt span { display: block; font-size: 11px; color: #6b7280; }
+  .trow .tt a { color: #0696D7; text-decoration: none; font-weight: 700; }
+  .trow.done { opacity: .55; } .trow.done .tt b { text-decoration: line-through; }
+  .trow .due { font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  /* drawer */
+  .dr-bg { position: fixed; inset: 0; background: rgba(17,19,24,.35); display: none; z-index: 40; }
+  .dr-bg.show { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: #fff; z-index: 41; transform: translateX(100%); transition: transform .2s; display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.12); }
+  .drawer.show { transform: none; }
+  .dr-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px; border-bottom: 1px solid #e5e7eb; }
+  .dr-head h2 { margin: 0; font-size: 19px; flex: 1; } .dr-head h2 small { display: block; font-size: 12px; color: #6b7280; font-weight: 400; margin-top: 3px; }
+  .dr-head .x { border: none; background: none; font-size: 24px; cursor: pointer; line-height: 1; color: #6b7280; width: auto; padding: 0; }
+  .dr-body { flex: 1; overflow: auto; padding: 14px 18px 30px; }
+  .sec { margin: 4px 0 18px; } .sec h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .sec h3 .sp { flex: 1; }
+  .sec a { color: #0696D7; font-weight: 700; text-decoration: none; }
+  .f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .f3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 12px; }
+  .fld label { display: block; font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+  .fld input, .fld select, .fld textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; background: #fff; }
+  .fld textarea { min-height: 60px; resize: vertical; }
+  .fld.full { grid-column: 1 / -1; }
+  .fld .hint { font-size: 11px; color: #6b7280; margin-top: 3px; }
+  .fld .hint a { color: #0696D7; font-weight: 700; text-decoration: none; cursor: pointer; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; } .checks label { display: flex; gap: 5px; align-items: center; }
+  .vt { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .vt th, .vt td { padding: 7px 6px; border-bottom: 1px solid #f3f4f6; text-align: left; vertical-align: middle; }
+  .vt th { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; font-weight: 700; }
+  .vt tbody tr { cursor: pointer; } .vt tbody tr:hover { background: #f9fafb; }
+  .eq { font-size: 12px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; color: #374151; } .eq b { color: #111318; } .eq span { color: #6b7280; }
+  .note { font-size: 12px; color: #6b7280; }
+  /* modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(17,19,24,.45); display: none; align-items: flex-start; justify-content: center; z-index: 60; padding: 24px 16px; overflow: auto; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 640px; padding: 18px; box-sizing: border-box; }
+  .modal h3 { margin: 0 0 4px; font-size: 17px; } .modal .msub { font-size: 12px; color: #6b7280; margin: 0 0 12px; }
+  .modal .mact { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; flex-wrap: wrap; }
+  @media (max-width: 860px) {
+    .grid-h { display: none; }
+    .pipe, .agr { grid-template-columns: 1fr 1fr; } .prow .nm { grid-column: 1 / -1; }
+    .f2, .f3 { grid-template-columns: 1fr; }
+    .qadd { grid-template-columns: 1fr 1fr; } .qadd input:first-child { grid-column: 1 / -1; }
+    .cal .dc { min-height: 64px; padding: 3px; } .ev { font-size: 10px; padding: 1px 4px; }
+    .lrow { grid-template-columns: 92px minmax(0, 1fr); } .lrow .s { grid-column: 2; }
+    .vt .hm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="index.html" class="back">←</a>
+  <div class="ttl"><b>Service &amp; Maintenance</b><span id="sub">Proposals, maintenance agreements, visits and follow-ups</span></div>
+  <img src="logo-header.png?v=258" alt="Northern Wolves AC" style="height:34px;width:auto">
+</div>
+<div class="wrap" id="main" style="display:none">
+  <div class="cards" id="cards"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Search client, site, number, contact, note…">
+    <select id="fStage"></select>
+    <select id="fCust"><option value="">All customers</option></select>
+    <a class="btn light" href="#" id="btnSettings">⚙ Settings</a>
+    <a class="btn" href="#" id="btnNew">+ New</a>
+  </div>
+  <div class="sum" id="sum"></div>
+  <div id="view"></div>
+</div>
+<div class="blocked" id="blocked" style="display:none"></div>
+<datalist id="custDl"></datalist>
+
+<!-- contract drawer -->
+<div class="dr-bg" id="drBg"></div>
+<div class="drawer" id="drawer">
+  <div class="dr-head"><h2 id="drTitle"></h2><button class="x" id="drClose" title="Close">×</button></div>
+  <div class="dr-body" id="drBody"></div>
+</div>
+
+<!-- visit editor -->
+<div class="modal-bg" id="vModal"><div class="modal">
+  <h3 id="vTitle">Visit</h3>
+  <div class="msub" id="vSub"></div>
+  <div class="f2">
+    <div class="fld full"><label>Label</label><input id="vLabel" placeholder="Visit 2 of 3 — heating prep"></div>
+    <div class="fld"><label>Due month</label><input type="month" id="vDue"></div>
+    <div class="fld"><label>Status</label><select id="vStatus"><option value="planned">Planned</option><option value="scheduled">Scheduled</option><option value="done">Done</option><option value="skipped">Skipped</option><option value="cancelled">Cancelled</option></select></div>
+    <div class="fld"><label>Visit date</label><input type="date" id="vSched"><div class="hint" id="vEntry"></div></div>
+    <div class="fld"><label>Done on</label><input type="date" id="vDone"></div>
+    <div class="fld full"><label>Visit report</label><select id="vReport"><option value="">— none —</option></select><div class="hint" id="vRepHint"></div></div>
+    <div class="fld"><label>Invoice #</label><input id="vInv"></div>
+    <div class="fld"><label>&nbsp;</label><div class="checks" style="padding-top:8px"><label><input type="checkbox" id="vInvoiced"> Invoiced</label></div></div>
+    <div class="fld full"><label>Notes</label><textarea id="vNotes"></textarea></div>
+  </div>
+  <div class="mact">
+    <button class="btn red" id="vDel" style="margin-right:auto">Delete</button>
+    <button class="btn light" id="vOpenC">Contract</button>
+    <button class="btn light" id="vCancel">Cancel</button>
+    <button class="btn light" id="vSchedBtn">📅 Schedule</button>
+    <button class="btn light" id="vDoneBtn">✓ Done</button>
+    <button class="btn" id="vSave">Save</button>
+  </div>
+</div></div>
+
+<!-- task editor -->
+<div class="modal-bg" id="tModal"><div class="modal">
+  <h3 id="tTitle">Task</h3>
+  <div class="msub" id="tSub"></div>
+  <div class="f2">
+    <div class="fld full"><label>Task</label><input id="tName"></div>
+    <div class="fld"><label>Type</label><select id="tKind"></select></div>
+    <div class="fld"><label>Due</label><input type="date" id="tDue"></div>
+    <div class="fld"><label>Assignee</label><input id="tWho" placeholder="name or e-mail"></div>
+    <div class="fld"><label>Status</label><select id="tStatus"><option value="open">Open</option><option value="done">Done</option></select></div>
+    <div class="fld full"><label>Notes</label><textarea id="tNotes"></textarea></div>
+  </div>
+  <div class="mact"><button class="btn red" id="tDel" style="margin-right:auto">Delete</button><button class="btn light" id="tCancel">Cancel</button><button class="btn" id="tSave">Save</button></div>
+</div></div>
+
+<!-- new customer -->
+<div class="modal-bg" id="ncModal"><div class="modal">
+  <h3>New customer</h3>
+  <div class="msub">Added to Customers — the same record the reports and equipment use.</div>
+  <div class="f2">
+    <div class="fld full"><label>Name</label><input id="ncName"></div>
+    <div class="fld full"><label>Address</label><input id="ncAddr"></div>
+    <div class="fld"><label>City</label><input id="ncCity"></div>
+    <div class="f2"><div class="fld"><label>State</label><input id="ncState" value="NY"></div><div class="fld"><label>ZIP</label><input id="ncZip"></div></div>
+    <div class="fld"><label>Contact</label><input id="ncContact"></div>
+    <div class="fld"><label>Phone</label><input id="ncPhone"></div>
+    <div class="fld full"><label>E-mail</label><input id="ncEmail" type="email"></div>
+  </div>
+  <div class="mact"><button class="btn light" id="ncCancel">Cancel</button><button class="btn" id="ncSave">Add customer</button></div>
+</div></div>
+
+<!-- settings -->
+<div class="modal-bg" id="setModal"><div class="modal">
+  <h3>Reminders</h3>
+  <div class="msub">Who gets the daily e-mail and how far ahead it looks.</div>
+  <div class="f2">
+    <div class="fld full"><label>Daily e-mail goes to (comma separated)</label><input id="sNotify"></div>
+    <div class="fld"><label>Visits: remind N days before due</label><input id="sLead" type="number" min="1" max="120"></div>
+    <div class="fld"><label>Proposals: follow up after N days</label><input id="sFollow" type="number" min="1" max="90"></div>
+    <div class="fld"><label>Renewals: N days ahead</label><input id="sRenew" type="number" min="1" max="365"></div>
+  </div>
+  <div class="mact"><button class="btn light" id="sDigest" style="margin-right:auto">⏰ Daily 8 AM e-mail…</button><button class="btn light" id="sCancel">Cancel</button><button class="btn" id="sSave">Save</button></div>
+</div></div>
+<div class="modal-bg" id="dgModal"><div class="modal">
+  <h3>Daily e-mail at 8 AM</h3>
+  <p style="font-size:13px;color:#475569;margin:0 0 8px">Every morning at 8 AM (New York time) the people in “Daily e-mail goes to” get one e-mail with: visits to schedule, overdue visits, visits this week, tasks due, proposals to follow up, renewals coming up and active agreements the client has not signed. Nothing is sent on days with nothing on the list.</p>
+  <ol style="font-size:13px;color:#475569;margin:0 0 10px;padding-left:18px"><li>Open <a href="https://script.google.com" target="_blank" rel="noopener">script.google.com</a> with the Google account that should send it → <b>New project</b>.</li>
+    <li>Paste the code below → Save → choose <b>setup</b> → <b>Run</b> → allow access.</li><li>The first e-mail goes out right away; after that every morning at 8.</li></ol>
+  <textarea id="dgCode" readonly style="width:100%;height:220px;font:11px/1.4 Consolas,monospace;box-sizing:border-box"></textarea>
+  <div id="dgState" style="font-size:12px;color:#64748b;margin-top:6px"></div>
+  <div class="mact"><button class="btn light" id="dgClose">Close</button><button class="btn" id="dgCopy">Copy code</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+requireAuth().catch(function(){});
+(function() {
+  'use strict';
+  var OFFICE_ROLES = ['admin', 'manager', 'lead_pm', 'project_manager', 'apm'];
+  var STAGE_LABEL = { draft: 'Draft', sent: 'Sent', negotiation: 'Negotiation', signed: 'Signed', active: 'Active', lost: 'Lost', cancelled: 'Cancelled', expired: 'Expired', superseded: 'Superseded' };
+  var STAGE_CHIP = { draft: 'c-na', sent: 'c-rev', negotiation: 'c-soon', signed: 'c-ok', active: 'c-ok', lost: 'c-rej', cancelled: 'c-na', expired: 'c-exp', superseded: 'c-na' };
+  var PIPE = ['draft', 'sent', 'negotiation', 'lost'];
+  var AGR = ['signed', 'active', 'expired', 'cancelled', 'superseded'];
+  var PIPE_OPEN = ['draft', 'sent', 'negotiation'], AGR_OPEN = ['signed', 'active'];
+  var KIND_LABEL = { maint: 'Maintenance', repair: 'Repair', project: 'Project', survey: 'Survey' };
+  var PLAN_LABEL = { '': '—', preventive: 'Preventive', priority: 'Priority', signature: 'Signature', legacy: 'Legacy', other: 'Other' };
+  var BILL_LABEL = { '': '—', 'semi-annual': 'Semi-annual', quarterly: 'Quarterly', monthly: 'Monthly', annual: 'Annual', 'per-visit': 'Per visit' };
+  var VSTAT_LABEL = { planned: 'Planned', scheduled: 'Scheduled', done: 'Done', skipped: 'Skipped', cancelled: 'Cancelled' };
+  var VSTAT_CHIP = { planned: 'c-soon', scheduled: 'c-rev', done: 'c-ok', skipped: 'c-na', cancelled: 'c-na' };
+  var TKIND_LABEL = { follow_up: 'Follow-up', call: 'Call', email: 'E-mail', renewal: 'Renewal', invoice: 'Invoice', visit: 'Visit', other: 'Other' };
+  var REPORT_PAGE = { 'service-call': 'service-call-report.html', 'startup': 'startup-report.html', 'site-survey': 'site-survey-report.html', 'pm-checklist': 'pm-checklist.html', 'work-order': 'work-order.html' };
+  var REPORT_LABEL = { 'pm-checklist': 'PM checklist', 'service-call': 'Service call', 'startup': 'Start-up', 'site-survey': 'Site survey', 'work-order': 'Work order' };
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var profile = null, contracts = [], visits = [], tasks = [], customers = [], custById = {}, settings = null;
+  var tab = 'pipeline', cardFilter = '', calMonth = '', calMode = window.innerWidth < 760 ? 'list' : 'grid', showDoneTasks = false;
+  var openId = null, drCust = null, editVisit = null, editTask = null, ncResolve = null;
+  var $ = function(id) { return document.getElementById(id); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function money(v) { if (v == null || v === '') return '—'; v = Number(v) || 0; return '$' + v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function num(v) { if (v == null) return null; v = String(v).replace(/[$,\s]/g, ''); if (!v) return null; var n = Number(v); return isFinite(n) ? n : null; }
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3600); }
+  function fmt(d) { if (!d) return ''; var p = String(d).slice(0, 10).split('-'); return p.length === 3 ? p[1] + '/' + p[2] + '/' + p[0] : d; }
+  function iso(dt) { return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
+  var TODAY = iso(new Date());
+  function addDays(n, from) { var d = new Date((from || TODAY) + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); }
+  function daysTo(d) { return Math.round((new Date(String(d).slice(0, 10) + 'T12:00:00') - new Date(TODAY + 'T12:00:00')) / 86400000); }
+  function som(d) { return String(d).slice(0, 7) + '-01'; }   // first day of the month
+  function addMonths(first, n) { var y = +first.slice(0, 4), m = +first.slice(5, 7) - 1 + n; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; return y + '-' + String(m + 1).padStart(2, '0') + '-01'; }
+  function eom(d) { return addDays(-1, addMonths(som(d), 1)); }   // last day of the month
+  function monLabel(d) { if (!d) return ''; return MONTHS[+String(d).slice(5, 7) - 1] + ' ' + String(d).slice(0, 4); }
+  function show(id, on) { $(id).classList[on ? 'add' : 'remove']('show'); }
+  function myName() { return (profile && (profile.full_name || profile.name)) || ''; }
+  function S(k, def) { return settings && settings[k] != null ? settings[k] : def; }
+
+  init().catch(function(e) { console.error(e); $('blocked').textContent = 'Could not load: ' + (e.message || e); $('blocked').style.display = ''; });
+
+  async function init() {
+    try { profile = await getAuthProfile(); } catch (e) {}
+    if (!profile || OFFICE_ROLES.indexOf(profile.role) < 0) { $('blocked').textContent = 'Service agreements and proposals are managed by the office.'; $('blocked').style.display = ''; return; }
+    await load();
+    var params = new URLSearchParams(location.search);
+    if (params.get('tab') && ['pipeline', 'agreements', 'calendar', 'tasks'].indexOf(params.get('tab')) >= 0) tab = params.get('tab');
+    if (params.get('f')) { var cd = CARDS.filter(function(c) { return c[0] === params.get('f'); })[0]; if (cd) { cardFilter = cd[0]; tab = cd[3]; } }
+    calMonth = som(TODAY);
+    buildStatic();
+    render();
+    $('q').addEventListener('input', renderView); $('fStage').addEventListener('change', renderView); $('fCust').addEventListener('change', renderView);
+    $('btnNew').addEventListener('click', function(e) { e.preventDefault(); openDrawer(null, tab === 'agreements' ? { stage: 'active' } : null); });
+    $('btnSettings').addEventListener('click', function(e) { e.preventDefault(); openSettings(); });
+    $('sCancel').addEventListener('click', function() { show('setModal', false); });
+    $('sSave').addEventListener('click', saveSettings);
+    $('sDigest').addEventListener('click', function() { show('setModal', false); openDigest(); });
+    $('dgClose').addEventListener('click', function() { show('dgModal', false); });
+    $('dgCopy').addEventListener('click', function() { var t = $('dgCode'); t.select(); try { navigator.clipboard.writeText(t.value).then(function() { toast('Code copied'); }); } catch (e) { document.execCommand('copy'); toast('Code copied'); } });
+    $('drClose').addEventListener('click', closeDrawer); $('drBg').addEventListener('click', closeDrawer);
+    $('vCancel').addEventListener('click', function() { show('vModal', false); });
+    $('vSave').addEventListener('click', function() { saveVisit(null); });
+    $('vSchedBtn').addEventListener('click', scheduleVisit);
+    $('vDoneBtn').addEventListener('click', function() { if (!$('vDone').value) $('vDone').value = TODAY; saveVisit({ status: 'done' }); });
+    $('vDel').addEventListener('click', deleteVisit);
+    $('vOpenC').addEventListener('click', function() { var cid = editVisit && editVisit.contract_id; show('vModal', false); if (cid) openDrawer(cid); });
+    $('vReport').addEventListener('change', reportHint);
+    $('tCancel').addEventListener('click', function() { show('tModal', false); });
+    $('tSave').addEventListener('click', saveTask);
+    $('tDel').addEventListener('click', deleteTask);
+    $('ncCancel').addEventListener('click', function() { show('ncModal', false); });
+    $('ncSave').addEventListener('click', createCustomer);
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { if ($('vModal').classList.contains('show')) show('vModal', false); else if ($('tModal').classList.contains('show')) show('tModal', false); else if ($('drawer').classList.contains('show')) closeDrawer(); } });
+    $('main').style.display = '';
+    if (params.get('c')) openDrawer(params.get('c'));
+  }
+
+  async function load() {
+    var r = await Promise.all([
+      supabaseClient.from('svc_contracts').select('*').order('created_at', { ascending: false }),
+      supabaseClient.from('svc_visits').select('*').order('due_month'),
+      supabaseClient.from('svc_tasks').select('*').order('due_date', { ascending: true, nullsFirst: false }),
+      supabaseClient.from('svc_settings').select('*').eq('id', 1).maybeSingle(),
+      supabaseClient.from('customers').select('id,name,address,city,state,zip,contact_name,contact_phone,contact_email,is_active').order('name').limit(5000)
+    ]);
+    if (r[0].error) {
+      if (/svc_contracts/.test(r[0].error.message)) throw new Error('the service tables are not created yet — run service-crm-schema.sql in Supabase');
+      throw new Error(r[0].error.message);
+    }
+    contracts = r[0].data || []; visits = r[1].data || []; tasks = r[2].data || [];
+    settings = r[3].data || { lead_days: 14, followup_days: 7, renewal_days: 60, notify_emails: '' };
+    customers = r[4].data || [];
+    indexCustomers();
+  }
+  function indexCustomers() {
+    custById = {}; customers.forEach(function(c) { custById[c.id] = c; });
+    $('custDl').innerHTML = customers.filter(function(c) { return c.is_active !== false; }).map(function(c) { return '<option value="' + esc(c.name) + '">'; }).join('');
+  }
+
+  // ===== derived =====
+  function contract(id) { return contracts.filter(function(c) { return c.id === id; })[0]; }
+  function clientName(c) { if (!c) return ''; var cu = custById[c.customer_id]; return (cu && cu.name) || c.site_name || c.client_no || c.internal_no || 'Untitled'; }
+  function contractNo(c) { return [c.internal_no, c.client_no].filter(Boolean).join(' · '); }
+  function custAddr(cu) { if (!cu) return ''; return [cu.address, cu.city, [cu.state, cu.zip].filter(Boolean).join(' ')].filter(function(x) { return x && String(x).trim(); }).join(', '); }
+  function isLive(c) { return c && (c.stage === 'signed' || c.stage === 'active'); }
+  function isOpenVisit(v) { return v.status === 'planned' || v.status === 'scheduled'; }
+  function visitDate(v) { return v.scheduled_date || v.due_month || ''; }
+  function visitOverdue(v) {
+    if (!isOpenVisit(v) || !isLive(contract(v.contract_id))) return false;
+    if (v.scheduled_date) return v.scheduled_date < TODAY;
+    return !!v.due_month && eom(v.due_month) < TODAY;
+  }
+  function visitDueWithin(v, n) {
+    if (!isOpenVisit(v) || !isLive(contract(v.contract_id)) || visitOverdue(v)) return false;
+    var d = v.scheduled_date || v.due_month; return !!d && d <= addDays(n);
+  }
+  function visitDay(v) { return v.scheduled_date || (v.status === 'done' ? v.done_date : null) || null; }   // the day a visit sits on in the calendar
+  function visitLabel(v) { return v.label || ('Visit ' + (v.visit_no || '')); }
+  function nextVisit(cid) {
+    var l = visits.filter(function(v) { return v.contract_id === cid && isOpenVisit(v); });
+    l.sort(function(a, b) { return String(visitDate(a)).localeCompare(String(visitDate(b))); });
+    return l[0] || null;
+  }
+  function needsFollowUp(c) {
+    if (c.stage !== 'sent' && c.stage !== 'negotiation') return false;
+    if (c.next_action_date) return c.next_action_date <= TODAY;
+    return !!c.sent_date && addDays(S('followup_days', 7), c.sent_date) <= TODAY;
+  }
+  function renewalSoon(c) { return c.stage === 'active' && !!c.renewal_date && c.renewal_date <= addDays(S('renewal_days', 60)); }
+  function unsigned(c) { return c.stage === 'active' && !c.client_signed; }
+  function sumPrice(list) { return list.reduce(function(s, c) { return s + (Number(c.annual_price) || 0); }, 0); }
+  function chip(cls, text, sub) { return '<span class="chip ' + cls + '">' + esc(text) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>'; }
+  function stageChip(s) { return chip(STAGE_CHIP[s] || 'c-na', STAGE_LABEL[s] || s); }
+  function priceText(c) { return c.annual_price == null ? '—' : money(c.annual_price) + (c.kind === 'maint' ? '/yr' : ''); }
+
+  // [key, label, class, tab]
+  var CARDS = [
+    ['due30', 'Visits due in 30 days', 'amb', 'calendar'], ['overdue', 'Overdue visits', 'red', 'calendar'], ['followups', 'Open follow-ups', '', 'tasks'],
+    ['proposals', 'Proposals out', '', 'pipeline'], ['active', 'Active agreements', 'grn', 'agreements'], ['renewals', 'Renewals ≤ 60 days', 'amb', 'agreements'], ['unsigned', 'Unsigned', 'red', 'agreements']
+  ];
+  function cardContracts(k) {
+    switch (k) {
+      case 'proposals': return contracts.filter(function(c) { return c.stage === 'sent' || c.stage === 'negotiation'; });
+      case 'active': return contracts.filter(isLive);
+      case 'renewals': return contracts.filter(renewalSoon);
+      case 'unsigned': return contracts.filter(unsigned);
+    }
+    return null;
+  }
+  function openTasks() { return tasks.filter(function(t) { return t.status === 'open'; }); }
+
+  function buildStatic() {
+    $('tKind').innerHTML = Object.keys(TKIND_LABEL).map(function(k) { return '<option value="' + k + '">' + TKIND_LABEL[k] + '</option>'; }).join('');
+  }
+
+  function render() { renderCards(); renderTabs(); renderFilters(); renderView(); }
+
+  function renderCards() {
+    CARDS[5][1] = 'Renewals ≤ ' + S('renewal_days', 60) + ' days';
+    $('cards').innerHTML = CARDS.map(function(c) {
+      var n, sub = '';
+      if (c[0] === 'due30') n = visits.filter(function(v) { return visitDueWithin(v, 30); }).length;
+      else if (c[0] === 'overdue') n = visits.filter(visitOverdue).length;
+      else if (c[0] === 'followups') { var ot = openTasks(), od = ot.filter(function(t) { return t.due_date && t.due_date <= TODAY; }).length, fu = contracts.filter(needsFollowUp).length; n = ot.length; sub = (od ? od + ' due' : 'none due') + (fu ? ' · ' + fu + ' proposal' + (fu > 1 ? 's' : '') : ''); }
+      else { var l = cardContracts(c[0]); n = l.length; if (c[0] === 'proposals' || c[0] === 'active' || c[0] === 'renewals') sub = money(sumPrice(l)) + '/yr'; }
+      var cls = n ? c[2] : '';
+      return '<div class="card ' + cls + (cardFilter === c[0] ? ' on' : '') + '" data-k="' + c[0] + '"><b>' + n + '</b><span>' + esc(c[1]) + '</span>' + (sub ? '<em>' + esc(sub) + '</em>' : '') + '</div>';
+    }).join('');
+    $('cards').querySelectorAll('.card').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var k = el.getAttribute('data-k');
+        if (cardFilter === k) cardFilter = ''; else { cardFilter = k; tab = CARDS.filter(function(c) { return c[0] === k; })[0][3]; }
+        $('fStage').value = ''; render();
+      });
+    });
+  }
+  function renderTabs() {
+    var nP = contracts.filter(function(c) { return PIPE_OPEN.indexOf(c.stage) >= 0; }).length, nA = contracts.filter(isLive).length, nT = openTasks().length;
+    var T = [['pipeline', 'Pipeline', nP], ['agreements', 'Agreements', nA], ['calendar', 'Calendar', null], ['tasks', 'Tasks', nT]];
+    $('tabs').innerHTML = T.map(function(t) { return '<button data-t="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + (t[2] != null ? '<small>' + t[2] + '</small>' : '') + '</button>'; }).join('');
+    $('tabs').querySelectorAll('button').forEach(function(b) { b.addEventListener('click', function() { tab = b.getAttribute('data-t'); cardFilter = ''; $('fStage').value = ''; render(); }); });
+  }
+  function renderFilters() {
+    var cur = $('fStage').value, opts;
+    if (tab === 'pipeline') opts = [['', 'Open (draft / sent / negotiation)'], ['all', 'All stages']].concat(PIPE.map(function(s) { return [s, STAGE_LABEL[s]]; }));
+    else if (tab === 'agreements') opts = [['', 'Live (signed / active)'], ['all', 'All stages']].concat(AGR.map(function(s) { return [s, STAGE_LABEL[s]]; }));
+    else opts = null;
+    $('fStage').style.display = opts ? '' : 'none';
+    if (opts) { $('fStage').innerHTML = opts.map(function(o) { return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>'; }).join(''); $('fStage').value = opts.some(function(o) { return o[0] === cur; }) ? cur : ''; }
+    var curC = $('fCust').value, seen = {};
+    contracts.forEach(function(c) { if (c.customer_id) seen[c.customer_id] = 1; });
+    var list = Object.keys(seen).map(function(id) { return custById[id]; }).filter(Boolean).sort(function(a, b) { return String(a.name).localeCompare(String(b.name)); });
+    $('fCust').innerHTML = '<option value="">All customers</option>' + list.map(function(c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('');
+    $('fCust').value = seen[curC] ? curC : '';
+    $('btnNew').textContent = tab === 'tasks' ? '+ Contract' : '+ New';
+  }
+  function matchQ(c, q) {
+    if (!q) return true;
+    return [clientName(c), c.site_name, c.site_address, c.internal_no, c.client_no, c.contact_name, c.contact_email, c.gc_name, c.notes, c.next_action, c.price_note, PLAN_LABEL[c.plan || ''], KIND_LABEL[c.kind]].join(' ').toLowerCase().indexOf(q) >= 0;
+  }
+  function filteredContracts(stages, openStages) {
+    var q = ($('q').value || '').trim().toLowerCase(), st = $('fStage').value, cu = $('fCust').value;
+    var base = cardFilter ? (cardContracts(cardFilter) || []) : contracts.filter(function(c) {
+      if (st === 'all') return stages.indexOf(c.stage) >= 0;
+      if (st) return c.stage === st;
+      return openStages.indexOf(c.stage) >= 0;
+    });
+    return base.filter(function(c) { return (!cu || c.customer_id === cu) && matchQ(c, q); });
+  }
+
+  function renderView() {
+    if (tab === 'pipeline') renderPipeline();
+    else if (tab === 'agreements') renderAgreements();
+    else if (tab === 'calendar') renderCalendar();
+    else renderTasks();
+  }
+  function bindRows() {
+    $('view').querySelectorAll('[data-c]').forEach(function(el) { el.addEventListener('click', function(e) { if (e.target.closest('a')) return; openDrawer(el.getAttribute('data-c')); }); });
+  }
+
+  // ===== pipeline =====
+  function renderPipeline() {
+    var list = filteredContracts(PIPE, PIPE_OPEN), fd = S('followup_days', 7);
+    list.sort(function(a, b) { return String(b.sent_date || b.created_at).localeCompare(String(a.sent_date || a.created_at)); });
+    $('sum').textContent = list.length + ' proposal' + (list.length === 1 ? '' : 's') + ' / quote' + (list.length === 1 ? '' : 's') + ' · ' + money(sumPrice(list.filter(function(c) { return c.kind === 'maint'; }))) + '/yr recurring + ' + money(sumPrice(list.filter(function(c) { return c.kind !== 'maint'; }))) + ' one-time';
+    if (!list.length) { $('view').innerHTML = '<div class="empty">Nothing here. Press <b>+ New</b> to add a proposal or quote.</div>'; return; }
+    var h = '<div class="grid-h pipe"><div>Client / site</div><div>Number</div><div>$ / yr</div><div>Sent</div><div>Next action</div></div>';
+    var order = cardFilter ? ['sent', 'negotiation'] : PIPE.concat(AGR);
+    order.forEach(function(s) {
+      var g = list.filter(function(c) { return c.stage === s; }); if (!g.length) return;
+      h += '<div class="grp">' + esc(STAGE_LABEL[s]) + '<span>' + g.length + ' · ' + money(sumPrice(g)) + '</span></div>';
+      h += g.map(function(c) {
+        var age = c.sent_date ? -daysTo(c.sent_date) : null;
+        var ageCls = age != null && (c.stage === 'sent' || c.stage === 'negotiation') && age >= fd ? 'color:#b45309;font-weight:700' : 'color:#6b7280';
+        var na = c.next_action || c.next_action_date ? '<div class="ct">' + esc(c.next_action || 'Follow up') + (c.next_action_date ? ' ' + chip(c.next_action_date < TODAY ? 'c-exp' : c.next_action_date === TODAY ? 'c-soon' : 'c-na', fmt(c.next_action_date)) : '') + '</div>'
+          : needsFollowUp(c) ? chip('c-soon', 'follow up') : '<span class="note">—</span>';
+        if (c.stage === 'lost' && c.lost_reason) na = '<div class="ct">' + esc(c.lost_reason) + '</div>';
+        return '<div class="prow pipe" data-c="' + c.id + '">' +
+          '<div class="nm"><b>' + esc(clientName(c)) + '</b><span>' + esc([c.site_name && c.site_name !== clientName(c) ? c.site_name : '', KIND_LABEL[c.kind], c.plan ? PLAN_LABEL[c.plan] : ''].filter(Boolean).join(' · ')) + '</span></div>' +
+          '<div class="ct">' + (c.internal_no ? esc(c.internal_no) : '<span class="note">—</span>') + (c.client_no ? '<small>' + esc(c.client_no) + '</small>' : '') + '</div>' +
+          '<div class="mn">' + priceText(c) + '</div>' +
+          '<div class="ct">' + (c.sent_date ? fmt(c.sent_date) + '<small style="' + ageCls + '">' + age + ' d ago</small>' : '<span class="note">not sent</span>') + '</div>' +
+          '<div>' + na + '</div></div>';
+      }).join('');
+    });
+    $('view').innerHTML = h; bindRows();
+  }
+
+  // ===== agreements =====
+  function renderAgreements() {
+    var list = filteredContracts(AGR, AGR_OPEN);
+    list.sort(function(a, b) { return String(clientName(a)).localeCompare(String(clientName(b))); });
+    var live = list.filter(isLive);
+    $('sum').textContent = list.length + ' agreement' + (list.length === 1 ? '' : 's') + ' · ' + money(sumPrice(live)) + '/yr recurring' + (live.length !== list.length ? ' (live ones)' : '');
+    if (!list.length) { $('view').innerHTML = '<div class="empty">No agreements match.</div>'; return; }
+    var rd = S('renewal_days', 60);
+    var h = '<div class="grid-h agr"><div>Client / site</div><div>Plan · visits</div><div>$ / yr</div><div>Renewal</div><div>Signed</div><div>Next visit</div></div>';
+    h += list.map(function(c) {
+      var ren = '<span class="note">—</span>';
+      if (c.renewal_date) { var n = daysTo(c.renewal_date); ren = chip(n < 0 ? 'c-exp' : n <= rd ? 'c-soon' : 'c-na', fmt(c.renewal_date), c.stage === 'active' && n <= rd ? (n < 0 ? Math.abs(n) + ' d ago' : n + ' d') : ''); }
+      var sg = chip(c.client_signed ? 'c-ok' : 'c-miss', (c.client_signed ? '✓' : '✗') + ' client') + ' ' + chip(c.nwac_signed ? 'c-ok' : 'c-na', (c.nwac_signed ? '✓' : '✗') + ' NWAC');
+      var nv = nextVisit(c.id), nvh = '<span class="note">' + (visits.some(function(v) { return v.contract_id === c.id; }) ? 'none open' : 'no visits yet') + '</span>';
+      if (nv) nvh = chip(visitOverdue(nv) ? 'c-exp' : nv.status === 'scheduled' ? 'c-rev' : 'c-soon', nv.scheduled_date ? fmt(nv.scheduled_date) : 'due ' + monLabel(nv.due_month)) + '<div class="note" style="font-size:11px;margin-top:2px">' + esc(visitLabel(nv)) + '</div>';
+      return '<div class="prow agr' + (isLive(c) ? '' : ' inactive') + '" data-c="' + c.id + '">' +
+        '<div class="nm"><b>' + esc(clientName(c)) + '</b><span>' + esc([contractNo(c), c.site_name && c.site_name !== clientName(c) ? c.site_name : ''].filter(Boolean).join(' · ')) + (isLive(c) ? '' : ' · ' + esc(STAGE_LABEL[c.stage])) + '</span></div>' +
+        '<div class="ct">' + esc(c.plan ? PLAN_LABEL[c.plan] : KIND_LABEL[c.kind]) + '<small>' + (c.visits_per_year ? c.visits_per_year + ' visits / yr' : '—') + (c.billing ? ' · ' + esc(BILL_LABEL[c.billing]) : '') + '</small></div>' +
+        '<div class="mn">' + priceText(c) + '</div>' +
+        '<div>' + ren + '</div><div>' + sg + '</div><div>' + nvh + '</div></div>';
+    }).join('');
+    $('view').innerHTML = h; bindRows();
+  }
+
+  // ===== calendar =====
+  function calVisits() {
+    var q = ($('q').value || '').trim().toLowerCase(), cu = $('fCust').value;
+    return visits.filter(function(v) {
+      var c = contract(v.contract_id); if (!c || ['signed', 'active', 'expired'].indexOf(c.stage) < 0) return false;
+      if (cu && c.customer_id !== cu) return false;
+      return !q || (matchQ(c, q) || visitLabel(v).toLowerCase().indexOf(q) >= 0);
+    });
+  }
+  function calTasks() {
+    var q = ($('q').value || '').trim().toLowerCase(), cu = $('fCust').value;
+    return tasks.filter(function(t) {
+      if (t.status !== 'open' || !t.due_date) return false;
+      var c = t.contract_id ? contract(t.contract_id) : null, cid = t.customer_id || (c && c.customer_id);
+      if (cu && cid !== cu) return false;
+      return !q || [t.title, t.notes, t.assignee, c ? clientName(c) : '', custById[cid] ? custById[cid].name : ''].join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  function evClass(v) { return visitOverdue(v) ? 'over' : v.status === 'done' ? 'done' : v.status === 'scheduled' ? 'sched' : v.status === 'planned' ? 'plan' : 'skip'; }
+  function evHtml(v) { var c = contract(v.contract_id); return '<span class="ev ' + evClass(v) + '" data-v="' + v.id + '" title="' + esc(clientName(c) + ' — ' + visitLabel(v) + ' (' + VSTAT_LABEL[v.status] + ')') + '">' + esc(clientName(c)) + (v.visit_no ? ' #' + v.visit_no : '') + '</span>'; }
+  function taskEv(t) { var c = t.contract_id ? contract(t.contract_id) : null; return '<span class="ev task" data-t="' + t.id + '" title="' + esc(t.title) + '">☐ ' + esc(t.title) + (c ? ' — ' + esc(clientName(c)) : '') + '</span>'; }
+  function renderCalendar() {
+    var vs = calVisits(), ts = calTasks(), h = '';
+    if (cardFilter === 'due30' || cardFilter === 'overdue') {
+      var l = vs.filter(function(v) { return cardFilter === 'overdue' ? visitOverdue(v) : visitDueWithin(v, 30); });
+      l.sort(function(a, b) { return String(visitDate(a)).localeCompare(String(visitDate(b))); });
+      $('sum').textContent = l.length + (cardFilter === 'overdue' ? ' overdue visit' : ' visit') + (l.length === 1 ? '' : 's') + (cardFilter === 'overdue' ? ' — due month (or visit date) passed without “done”' : ' due in the next 30 days');
+      h = l.length ? l.map(listRow).join('') : '<div class="empty">Nothing here.</div>';
+      $('view').innerHTML = h; bindCal(); return;
+    }
+    var m0 = calMonth, m1 = addMonths(calMonth, 1);
+    var inMonth = function(d) { return d && d >= m0 && d < m1; };
+    var unsched = vs.filter(function(v) { return isOpenVisit(v) && !v.scheduled_date && v.due_month && som(v.due_month) === m0; });
+    var dated = vs.filter(function(v) { return inMonth(visitDay(v)); });
+    var tm = ts.filter(function(t) { return inMonth(t.due_date); });
+    $('sum').textContent = dated.length + unsched.length + ' visit' + (dated.length + unsched.length === 1 ? '' : 's') + ' and ' + tm.length + ' open task' + (tm.length === 1 ? '' : 's') + ' in ' + monLabel(m0);
+    h += '<div class="cal-head"><button class="btn sm light" id="calPrev">‹</button><b>' + MONTHS[+m0.slice(5, 7) - 1] + ' ' + m0.slice(0, 4) + '</b><button class="btn sm light" id="calNext">›</button><button class="btn sm light" id="calToday">Today</button><span class="sp"></span>' +
+      '<button class="btn sm ' + (calMode === 'grid' ? '' : 'light') + '" id="calGrid">Month</button><button class="btn sm ' + (calMode === 'list' ? '' : 'light') + '" id="calList">List</button></div>';
+    if (unsched.length) h += '<div class="unsched"><b>Due in ' + monLabel(m0) + ' — not scheduled yet (' + unsched.length + ')</b><br>' + unsched.map(evHtml).join('') + '</div>';
+    if (calMode === 'grid') {
+      var first = new Date(m0 + 'T12:00:00'), lead = first.getDay(), cells = '', d0 = addDays(-lead, m0);
+      ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(function(d) { cells += '<div class="dh">' + d + '</div>'; });
+      var weeks = Math.ceil((lead + +eom(m0).slice(8, 10)) / 7);
+      for (var i = 0; i < weeks * 7; i++) {
+        var d = addDays(i, d0), out = !inMonth(d);
+        var ev = dated.filter(function(v) { return visitDay(v) === d; }).map(evHtml).join('') + tm.filter(function(t) { return t.due_date === d; }).map(taskEv).join('');
+        cells += '<div class="dc' + (out ? ' out' : '') + (d === TODAY ? ' today' : '') + '"><span class="dn">' + (+d.slice(8, 10)) + '</span>' + ev + '</div>';
+      }
+      h += '<div class="cal">' + cells + '</div>';
+    } else {
+      var rows = dated.map(function(v) { return { d: visitDay(v), v: v }; }).concat(tm.map(function(t) { return { d: t.due_date, t: t }; }));
+      rows.sort(function(a, b) { return a.d.localeCompare(b.d); });
+      h += rows.length ? rows.map(function(r) { return r.v ? listRow(r.v) : taskRow(r.t, true); }).join('') : (unsched.length ? '' : '<div class="empty">Nothing in ' + monLabel(m0) + '.</div>');
+    }
+    $('view').innerHTML = h;
+    $('calPrev').addEventListener('click', function() { calMonth = addMonths(calMonth, -1); renderView(); });
+    $('calNext').addEventListener('click', function() { calMonth = addMonths(calMonth, 1); renderView(); });
+    $('calToday').addEventListener('click', function() { calMonth = som(TODAY); renderView(); });
+    $('calGrid').addEventListener('click', function() { calMode = 'grid'; renderView(); });
+    $('calList').addEventListener('click', function() { calMode = 'list'; renderView(); });
+    bindCal();
+  }
+  function listRow(v) {
+    var c = contract(v.contract_id), cls = { over: 'c-exp', done: 'c-ok', sched: 'c-rev', plan: 'c-soon', skip: 'c-na' }[evClass(v)];
+    var day = visitDay(v);
+    return '<div class="lrow" data-v="' + v.id + '"><div class="d">' + (day ? fmt(day) : monLabel(v.due_month)) + '<small>' + (day ? (v.due_month ? 'due ' + monLabel(v.due_month) : '') : 'not scheduled') + '</small></div>' +
+      '<div class="w"><b>' + esc(clientName(c)) + '</b><span>' + esc([visitLabel(v), c.site_name && c.site_name !== clientName(c) ? c.site_name : '', contractNo(c)].filter(Boolean).join(' · ')) + '</span></div>' +
+      '<div class="s">' + chip(cls, visitOverdue(v) ? 'overdue' : VSTAT_LABEL[v.status]) + '</div></div>';
+  }
+  function bindCal() {
+    $('view').querySelectorAll('[data-v]').forEach(function(el) { el.addEventListener('click', function() { openVisit(el.getAttribute('data-v')); }); });
+    bindTaskRows();
+  }
+
+  // ===== tasks =====
+  function taskRow(t, compact) {
+    var c = t.contract_id ? contract(t.contract_id) : null, cu = custById[t.customer_id || (c && c.customer_id)];
+    var due = '';
+    if (t.due_date) { var n = daysTo(t.due_date); due = '<span class="due" style="color:' + (t.status === 'done' ? '#6b7280' : n < 0 ? '#b91c1c' : n === 0 ? '#b45309' : '#374151') + '">' + (compact ? '' : fmt(t.due_date)) + (t.status === 'open' && n < 0 ? (compact ? '' : ' · ') + Math.abs(n) + ' d late' : '') + '</span>'; }
+    var who = [TKIND_LABEL[t.kind], t.assignee].filter(Boolean).join(' · ');
+    var ref = c ? '<a href="#" data-oc="' + c.id + '">' + esc(clientName(c)) + (contractNo(c) ? ' · ' + esc(contractNo(c)) : '') + '</a>' : cu ? esc(cu.name) : '';
+    var left = compact ? '<div class="d" style="min-width:110px;font-weight:700">' + fmt(t.due_date) + '</div>' : '';
+    return '<div class="trow' + (t.status === 'done' ? ' done' : '') + '">' + left + '<input type="checkbox" data-tdone="' + t.id + '"' + (t.status === 'done' ? ' checked' : '') + ' title="Done">' +
+      '<div class="tt"><b data-tedit="' + t.id + '">' + esc(t.title) + '</b><span>' + esc(who) + (ref ? (who ? ' · ' : '') + ref : '') + (t.notes ? ' · ' + esc(String(t.notes).slice(0, 80)) : '') + '</span></div>' + due + '</div>';
+  }
+  function bindTaskRows(root) {
+    root = root || $('view');
+    root.querySelectorAll('[data-tdone]').forEach(function(el) { el.addEventListener('change', function() { toggleTask(el.getAttribute('data-tdone'), el.checked); }); });
+    root.querySelectorAll('[data-tedit]').forEach(function(el) { el.addEventListener('click', function() { openTask(el.getAttribute('data-tedit')); }); });
+    root.querySelectorAll('[data-t]').forEach(function(el) { el.addEventListener('click', function() { openTask(el.getAttribute('data-t')); }); });
+    root.querySelectorAll('[data-oc]').forEach(function(el) { el.addEventListener('click', function(e) { e.preventDefault(); show('tModal', false); openDrawer(el.getAttribute('data-oc')); }); });
+  }
+  function renderTasks() {
+    var q = ($('q').value || '').trim().toLowerCase(), cu = $('fCust').value;
+    var list = tasks.filter(function(t) {
+      if (t.status === 'done' && !showDoneTasks) return false;
+      var c = t.contract_id ? contract(t.contract_id) : null, cid = t.customer_id || (c && c.customer_id);
+      if (cu && cid !== cu) return false;
+      return !q || [t.title, t.notes, t.assignee, TKIND_LABEL[t.kind], c ? clientName(c) + ' ' + contractNo(c) : '', custById[cid] ? custById[cid].name : ''].join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+    list.sort(function(a, b) { return (a.status === 'done') - (b.status === 'done') || String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')); });
+    var fu = contracts.filter(needsFollowUp).filter(function(c) { return (!cu || c.customer_id === cu) && matchQ(c, q); });
+    var open = list.filter(function(t) { return t.status === 'open'; });
+    $('sum').textContent = open.length + ' open task' + (open.length === 1 ? '' : 's') + (fu.length ? ' · ' + fu.length + ' proposal' + (fu.length === 1 ? '' : 's') + ' to follow up' : '');
+    var h = '<div class="qadd"><input id="qaTitle" placeholder="New task — e.g. Call Mike about the spring visit"><select id="qaKind">' + Object.keys(TKIND_LABEL).map(function(k) { return '<option value="' + k + '">' + TKIND_LABEL[k] + '</option>'; }).join('') + '</select>' +
+      '<input type="date" id="qaDue" value="' + addDays(1) + '"><input id="qaWho" placeholder="Assignee" value="' + esc(myName()) + '"><button class="btn" id="qaAdd">Add</button></div>';
+    var groups = [
+      ['Overdue', open.filter(function(t) { return t.due_date && t.due_date < TODAY; })],
+      ['Today', open.filter(function(t) { return t.due_date === TODAY; })],
+      ['Next 7 days', open.filter(function(t) { return t.due_date > TODAY && t.due_date <= addDays(7); })],
+      ['Later', open.filter(function(t) { return t.due_date > addDays(7); })],
+      ['No date', open.filter(function(t) { return !t.due_date; })]
+    ];
+    groups.forEach(function(g) { if (g[1].length) h += '<div class="grp">' + g[0] + '<span>' + g[1].length + '</span></div>' + g[1].map(function(t) { return taskRow(t); }).join(''); });
+    if (fu.length) {
+      h += '<div class="grp">Proposals to follow up<span>' + fu.length + ' · sent ≥ ' + S('followup_days', 7) + ' days ago or next action due</span></div>';
+      h += fu.map(function(c) { return '<div class="trow" data-c="' + c.id + '" style="cursor:pointer"><span style="font-size:16px">✉</span><div class="tt"><b>' + esc(clientName(c)) + '</b><span>' + esc([contractNo(c), STAGE_LABEL[c.stage], c.sent_date ? 'sent ' + fmt(c.sent_date) : '', c.next_action].filter(Boolean).join(' · ')) + '</span></div><span class="due">' + priceText(c) + '</span></div>'; }).join('');
+    }
+    var done = list.filter(function(t) { return t.status === 'done'; });
+    if (done.length) h += '<div class="grp">Done<span>' + done.length + '</span></div>' + done.slice(0, 50).map(function(t) { return taskRow(t); }).join('');
+    if (!open.length && !fu.length && !done.length) h += '<div class="empty">No open tasks.</div>';
+    h += '<div style="margin-top:10px"><label class="note"><input type="checkbox" id="qaShowDone"' + (showDoneTasks ? ' checked' : '') + '> show done tasks</label></div>';
+    $('view').innerHTML = h;
+    $('qaAdd').addEventListener('click', function() { quickAddTask('qa', null); });
+    $('qaTitle').addEventListener('keydown', function(e) { if (e.key === 'Enter') quickAddTask('qa', null); });
+    $('qaShowDone').addEventListener('change', function() { showDoneTasks = this.checked; renderView(); });
+    bindTaskRows(); bindRows();
+  }
+  async function quickAddTask(prefix, c) {
+    var title = ($(prefix + 'Title').value || '').trim(); if (!title) { toast('Type the task first'); $(prefix + 'Title').focus(); return; }
+    var row = { title: title, kind: $(prefix + 'Kind').value, due_date: $(prefix + 'Due').value || null, assignee: ($(prefix + 'Who') && $(prefix + 'Who').value.trim()) || myName() || null,
+      contract_id: c ? c.id : null, customer_id: c ? c.customer_id || null : null, status: 'open', created_by: profile.id, created_by_name: myName() };
+    var r = await supabaseClient.from('svc_tasks').insert(row).select().single();
+    if (r.error) { toast('Could not add: ' + r.error.message); return; }
+    tasks.push(r.data); toast('Task added');
+    renderCards(); renderTabs(); if (c && openId === c.id) openDrawer(c.id); else renderView();
+    var el = $(prefix + 'Title'); if (el) el.focus();
+  }
+  async function toggleTask(id, done) {
+    var patch = { status: done ? 'done' : 'open', done_at: done ? new Date().toISOString() : null };
+    var u = await supabaseClient.from('svc_tasks').update(patch).eq('id', id).select().single();
+    if (u.error) { toast('Could not update: ' + u.error.message); return; }
+    tasks = tasks.map(function(t) { return t.id === id ? u.data : t; });
+    renderCards(); renderTabs(); renderView(); if (openId && u.data.contract_id === openId) openDrawer(openId);
+    if (done) toast('Done ✓');
+  }
+  function openTask(id) {
+    var t = tasks.filter(function(x) { return x.id === id; })[0]; if (!t) return;
+    editTask = t;
+    var c = t.contract_id ? contract(t.contract_id) : null, cu = custById[t.customer_id || (c && c.customer_id)];
+    $('tTitle').textContent = 'Task'; $('tSub').innerHTML = c ? esc(clientName(c)) + (contractNo(c) ? ' · ' + esc(contractNo(c)) : '') : cu ? esc(cu.name) : 'Not linked to a contract';
+    $('tName').value = t.title || ''; $('tKind').value = t.kind || 'follow_up'; $('tDue').value = t.due_date || ''; $('tWho').value = t.assignee || ''; $('tStatus').value = t.status || 'open'; $('tNotes').value = t.notes || '';
+    show('tModal', true);
+  }
+  async function saveTask() {
+    var title = $('tName').value.trim(); if (!title) { toast('The task needs a title'); return; }
+    var st = $('tStatus').value;
+    var row = { title: title, kind: $('tKind').value, due_date: $('tDue').value || null, assignee: $('tWho').value.trim() || null, status: st, notes: $('tNotes').value.trim() || null,
+      done_at: st === 'done' ? (editTask.done_at || new Date().toISOString()) : null };
+    var u = await supabaseClient.from('svc_tasks').update(row).eq('id', editTask.id).select().single();
+    if (u.error) { toast('Could not save: ' + u.error.message); return; }
+    tasks = tasks.map(function(t) { return t.id === u.data.id ? u.data : t; });
+    show('tModal', false); renderCards(); renderTabs(); renderView(); if (openId && u.data.contract_id === openId) openDrawer(openId); toast('Saved');
+  }
+  async function deleteTask() {
+    if (!editTask || !confirm('Delete this task?')) return;
+    var d = await supabaseClient.from('svc_tasks').delete().eq('id', editTask.id);
+    if (d.error) { toast('Could not delete: ' + d.error.message); return; }
+    var cid = editTask.contract_id;
+    tasks = tasks.filter(function(t) { return t.id !== editTask.id; });
+    show('tModal', false); renderCards(); renderTabs(); renderView(); if (openId && cid === openId) openDrawer(openId); toast('Deleted');
+  }
+
+  // ===== contract drawer =====
+  function closeDrawer() { show('drawer', false); show('drBg', false); openId = null; }
+  function fld(label, id, v, type, extra) { return '<div class="fld' + (extra && extra.full ? ' full' : '') + '"><label>' + label + '</label><input id="' + id + '"' + (type ? ' type="' + type + '"' : '') + (extra && extra.attrs ? ' ' + extra.attrs : '') + ' value="' + esc(v == null ? '' : v) + '">' + (extra && extra.hint ? '<div class="hint">' + extra.hint + '</div>' : '') + '</div>'; }
+  function sel(label, id, v, opts) { return '<div class="fld"><label>' + label + '</label><select id="' + id + '">' + Object.keys(opts).map(function(k) { return '<option value="' + k + '"' + (k === (v || '') ? ' selected' : '') + '>' + esc(opts[k]) + '</option>'; }).join('') + '</select></div>'; }
+  function txt(label, id, v) { return '<div class="fld full"><label>' + label + '</label><textarea id="' + id + '">' + esc(v || '') + '</textarea></div>'; }
+  function nextInternalNo() {
+    var y = TODAY.slice(0, 4), max = 0;
+    contracts.forEach(function(c) { var m = /^P-(\d{4})-(\d+)$/.exec(c.internal_no || ''); if (m && m[1] === y) max = Math.max(max, +m[2]); });
+    return 'P-' + y + '-' + String(max + 1).padStart(4, '0');
+  }
+
+  function openDrawer(id, preset) {
+    var c = id ? contract(id) : Object.assign({ stage: 'draft', kind: 'maint', escalator_pct: 2, client_signed: false, nwac_signed: false }, preset || {});
+    if (!c) { toast('That contract was not found'); return; }
+    openId = id || null; drCust = c.customer_id || null;
+    var cu = custById[drCust];
+    $('drTitle').innerHTML = id ? esc(clientName(c)) + '<small>' + esc([contractNo(c), KIND_LABEL[c.kind], c.plan ? PLAN_LABEL[c.plan] : ''].filter(Boolean).join(' · ')) + ' · ' + stageChip(c.stage) + '</small>' : 'New proposal / agreement<small>Fill in what you know — everything can be changed later.</small>';
+    var h = '';
+    if (id) {
+      var nv = nextVisit(c.id);
+      h += '<div class="sec"><div class="note" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + stageChip(c.stage) + ' <b style="color:#111318">' + priceText(c) + '</b>' +
+        (c.renewal_date ? ' · renews ' + fmt(c.renewal_date) : '') + (nv ? ' · next visit ' + (nv.scheduled_date ? fmt(nv.scheduled_date) : monLabel(nv.due_month)) : '') +
+        (c.doc_url ? ' · <a href="' + esc(c.doc_url) + '" target="_blank" rel="noopener">' + esc(c.doc_name || 'Open document') + ' ↗</a>' : ' · <span>no document linked</span>') + '</div></div>';
+    }
+    h += '<div class="sec"><h3>Client &amp; site</h3><div class="f2">' +
+      '<div class="fld full"><label>Customer</label><input id="cCust" list="custDl" autocomplete="off" placeholder="Start typing — pick from the list" value="' + esc(cu ? cu.name : '') + '"><div class="hint" id="cCustHint"></div></div>' +
+      fld('Site name', 'cSite', c.site_name) + fld('Site address', 'cAddr', c.site_address) +
+      fld('Contact', 'cCName', c.contact_name) + fld('Contact e-mail', 'cCEmail', c.contact_email, 'email') + fld('Contact phone', 'cCPhone', c.contact_phone) +
+      fld('GC (referral route)', 'cGc', c.gc_name) + fld('GC contact', 'cGcC', c.gc_contact) + '</div></div>';
+    h += '<div class="sec"><h3>Proposal / agreement</h3><div class="f2">' +
+      fld('Our number (P-YYYY-NNNN)', 'cInt', c.internal_no, null, { hint: c.internal_no ? '' : '<a id="cIntNext">use next: ' + nextInternalNo() + '</a>' }) + fld('Client number', 'cCli', c.client_no, null, { attrs: 'placeholder="e.g. SIH-MAINT-02"' }) +
+      sel('Type', 'cKind', c.kind, KIND_LABEL) + sel('Stage', 'cStage', c.stage, STAGE_LABEL) +
+      sel('Plan', 'cPlan', c.plan, PLAN_LABEL) + fld('Visits per year', 'cVpy', c.visits_per_year, 'number', { attrs: 'min="0" max="52"' }) +
+      fld('Price ($ / yr for maintenance)', 'cPrice', c.annual_price, null, { attrs: 'inputmode="decimal"' }) + sel('Billing', 'cBill', c.billing, BILL_LABEL) +
+      fld('Price note', 'cPNote', c.price_note) + fld('Escalator %', 'cEsc', c.escalator_pct, null, { attrs: 'inputmode="decimal"' }) +
+      fld('Sent', 'cSent', c.sent_date, 'date') + fld('Signed', 'cSigned', c.signed_date, 'date') +
+      fld('Start', 'cStart', c.start_date, 'date') + fld('End', 'cEnd', c.end_date, 'date') +
+      fld('Renewal date', 'cRenew', c.renewal_date, 'date', { hint: '<a id="cRenewAuto">= end date</a>' }) + '<div class="fld"><label>Signatures</label><div class="checks" style="padding-top:8px">' +
+        '<label><input type="checkbox" id="cCs"' + (c.client_signed ? ' checked' : '') + '> Client signed</label><label><input type="checkbox" id="cNs"' + (c.nwac_signed ? ' checked' : '') + '> NWAC signed</label></div></div>' +
+      fld('Document link (Drive)', 'cDocUrl', c.doc_url, 'url') + fld('Document name', 'cDocName', c.doc_name) +
+      fld('Next action', 'cNext', c.next_action, null, { attrs: 'placeholder="e.g. Call Mike re: signed copy"' }) + fld('Next action date', 'cNextD', c.next_action_date, 'date') +
+      fld('Lost reason', 'cLost', c.lost_reason, null, { full: true }) + txt('Notes', 'cNotes', c.notes) +
+      '</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="cSave">' + (id ? 'Save' : 'Create') + '</button>' + (id ? '<button class="btn red" id="cDel">Delete</button>' : '<button class="btn light" id="cCancel">Cancel</button>') + '</div></div>';
+    if (id) {
+      var vs = visits.filter(function(v) { return v.contract_id === c.id; }).sort(function(a, b) { return String(a.due_month || a.scheduled_date || '').localeCompare(String(b.due_month || b.scheduled_date || '')) || (a.visit_no || 0) - (b.visit_no || 0); });
+      h += '<div class="sec"><h3>Visits<span class="sp"></span><button class="btn sm light" id="cGen">⟳ Generate visits</button><button class="btn sm" id="cAddV">+ Visit</button></h3>';
+      h += vs.length ? '<table class="vt"><thead><tr><th>#</th><th>Visit</th><th>Due</th><th>Date</th><th>Status</th><th class="hm">Invoice</th></tr></thead><tbody>' + vs.map(function(v) {
+        return '<tr data-v="' + v.id + '"><td>' + (v.visit_no || '') + '</td><td>' + esc(visitLabel(v)) + (v.schedule_entry_id ? ' <span title="On the crew schedule">📅</span>' : '') + (v.report_id ? ' <span title="Report linked">📄</span>' : '') + '</td><td>' + monLabel(v.due_month) + '</td><td>' + fmt(v.scheduled_date || v.done_date) + '</td>' +
+          '<td>' + chip(visitOverdue(v) ? 'c-exp' : VSTAT_CHIP[v.status], visitOverdue(v) ? 'overdue' : VSTAT_LABEL[v.status]) + '</td><td class="hm">' + (v.invoiced ? '✓ ' : '') + esc(v.invoice_no || '') + '</td></tr>';
+      }).join('') + '</tbody></table>' : '<div class="note">No visits yet. Set the start date and visits per year, save, then press <b>Generate visits</b>.</div>';
+      h += '</div>';
+      var ct = tasks.filter(function(t) { return t.contract_id === c.id; }).sort(function(a, b) { return (a.status === 'done') - (b.status === 'done') || String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')); });
+      h += '<div class="sec"><h3>Tasks &amp; follow-ups</h3>' +
+        '<div class="qadd" style="margin-top:0"><input id="dtTitle" placeholder="New task for this contract"><select id="dtKind">' + Object.keys(TKIND_LABEL).map(function(k) { return '<option value="' + k + '">' + TKIND_LABEL[k] + '</option>'; }).join('') + '</select><input type="date" id="dtDue" value="' + addDays(S('followup_days', 7)) + '"><input id="dtWho" placeholder="Assignee" value="' + esc(myName()) + '"><button class="btn" id="dtAdd">Add</button></div>' +
+        '<div id="drTasks">' + (ct.length ? ct.map(function(t) { return taskRow(t); }).join('') : '<div class="note">No tasks.</div>') + '</div></div>';
+      h += '<div class="sec"><h3>Equipment at this customer<span class="sp"></span><a href="equipment.html" target="_blank">Equipment ↗</a></h3><div id="drEq" class="note">' + (c.customer_id ? 'Loading…' : 'Pick a customer to see the equipment.') + '</div></div>';
+      h += '<div class="note" style="color:#9ca3af">Added ' + fmt(c.created_at) + (c.created_by_name ? ' by ' + esc(c.created_by_name) : '') + ' · updated ' + fmt(c.updated_at) + '</div>';
+    }
+    $('drBody').innerHTML = h;
+    $('drBody').scrollTop = 0;
+    custHint();
+    $('cCust').addEventListener('input', onCustInput); $('cCust').addEventListener('change', onCustInput);
+    if ($('cIntNext')) $('cIntNext').addEventListener('click', function() { $('cInt').value = nextInternalNo(); this.parentNode.textContent = ''; });
+    $('cRenewAuto').addEventListener('click', function() { if ($('cEnd').value) $('cRenew').value = $('cEnd').value; else toast('Set the end date first'); });
+    $('cStart').addEventListener('change', function() {   // a new start date proposes a 12-month term
+      if (!this.value || $('cEnd').value) return;
+      var e = new Date(this.value + 'T12:00:00'); e.setFullYear(e.getFullYear() + 1); e.setDate(e.getDate() - 1);
+      $('cEnd').value = iso(e); if (!$('cRenew').value) $('cRenew').value = $('cEnd').value;
+    });
+    $('cStage').addEventListener('change', function() { if (this.value === 'sent' && !$('cSent').value) $('cSent').value = TODAY; if ((this.value === 'signed' || this.value === 'active') && !$('cSigned').value) $('cSigned').value = TODAY; });
+    $('cSave').addEventListener('click', function() { saveContract(id); });
+    if (id) {
+      $('cDel').addEventListener('click', function() { deleteContract(id); });
+      $('cGen').addEventListener('click', function() { generateVisits(c); });
+      $('cAddV').addEventListener('click', function() { newVisit(c); });
+      $('drBody').querySelectorAll('tr[data-v]').forEach(function(el) { el.addEventListener('click', function() { openVisit(el.getAttribute('data-v')); }); });
+      $('dtAdd').addEventListener('click', function() { quickAddTask('dt', c); });
+      $('dtTitle').addEventListener('keydown', function(e) { if (e.key === 'Enter') quickAddTask('dt', c); });
+      bindTaskRows($('drTasks'));
+      if (c.customer_id) loadEquipment(c.customer_id, c.id);
+    } else $('cCancel').addEventListener('click', closeDrawer);
+    show('drawer', true); show('drBg', true);
+  }
+  function findCustomer(name) {
+    name = String(name || '').trim().toLowerCase(); if (!name) return null;
+    return customers.filter(function(c) { return String(c.name).trim().toLowerCase() === name && c.is_active !== false; })[0] || customers.filter(function(c) { return String(c.name).trim().toLowerCase() === name; })[0] || null;
+  }
+  function onCustInput() {
+    var cu = findCustomer($('cCust').value);
+    drCust = cu ? cu.id : null;
+    if (cu && this && this.type) prefillFromCustomer(cu, false);
+    custHint();
+  }
+  function prefillFromCustomer(cu, force) {
+    var a = custAddr(cu);
+    if (a && (force || !$('cAddr').value)) $('cAddr').value = a;
+    if (cu.contact_name && (force || !$('cCName').value)) $('cCName').value = cu.contact_name;
+    if (cu.contact_email && (force || !$('cCEmail').value)) $('cCEmail').value = cu.contact_email;
+    if (cu.contact_phone && (force || !$('cCPhone').value)) $('cCPhone').value = cu.contact_phone;
+  }
+  function custHint() {
+    var v = ($('cCust').value || '').trim(), cu = custById[drCust], el = $('cCustHint');
+    if (cu) el.innerHTML = '✓ ' + esc(custAddr(cu) || 'customer on file') + (cu.contact_name ? ' · ' + esc(cu.contact_name) : '');
+    else if (v) { el.innerHTML = 'Not on the customer list — <a id="cCustNew">+ create customer “' + esc(v) + '”</a>'; $('cCustNew').addEventListener('click', function() { openNewCustomer(v); }); }
+    else { el.innerHTML = 'Not on the list? <a id="cCustNew">+ new customer</a>'; $('cCustNew').addEventListener('click', function() { openNewCustomer(''); }); }
+  }
+  function openNewCustomer(name) {
+    $('ncName').value = name || ''; ['ncAddr', 'ncCity', 'ncZip', 'ncContact', 'ncPhone', 'ncEmail'].forEach(function(k) { $(k).value = ''; }); $('ncState').value = 'NY';
+    if ($('cCName') && $('cCName').value) $('ncContact').value = $('cCName').value;
+    if ($('cCEmail') && $('cCEmail').value) $('ncEmail').value = $('cCEmail').value;
+    if ($('cCPhone') && $('cCPhone').value) $('ncPhone').value = $('cCPhone').value;
+    if ($('cAddr') && $('cAddr').value) $('ncAddr').value = $('cAddr').value;
+    show('ncModal', true); setTimeout(function() { $(name ? 'ncAddr' : 'ncName').focus(); }, 50);
+  }
+  async function createCustomer() {
+    var name = $('ncName').value.trim(); if (!name) { toast('The customer name is required'); return; }
+    var ex = findCustomer(name);
+    if (ex && !confirm(name + ' is already a customer. Create another one with the same name?')) { useCustomer(ex); show('ncModal', false); return; }
+    var row = { name: name, address: $('ncAddr').value.trim(), city: $('ncCity').value.trim(), state: $('ncState').value.trim(), zip: $('ncZip').value.trim(),
+      contact_name: $('ncContact').value.trim(), contact_phone: $('ncPhone').value.trim(), contact_email: $('ncEmail').value.trim(), created_by: profile.id };
+    $('ncSave').disabled = true;
+    var r = await supabaseClient.from('customers').insert(row).select().single();
+    $('ncSave').disabled = false;
+    if (r.error) { toast('Could not add the customer: ' + r.error.message); return; }
+    customers.push(r.data); customers.sort(function(a, b) { return String(a.name).localeCompare(String(b.name)); }); indexCustomers();
+    useCustomer(r.data); show('ncModal', false); toast('Customer added — press Save to keep it on this contract');
+  }
+  function useCustomer(cu) { drCust = cu.id; $('cCust').value = cu.name; prefillFromCustomer(cu, false); custHint(); }
+
+  async function loadEquipment(cid, contractId) {
+    var r = await supabaseClient.from('equipment').select('*').eq('customer_id', cid);
+    var box = $('drEq'); if (!box || openId !== contractId) return;
+    if (r.error) { box.textContent = 'Could not load the equipment: ' + r.error.message; return; }
+    var l = (r.data || []).filter(function(e) { return e.is_active !== false; });
+    if (!l.length) { box.innerHTML = 'No equipment on file for this customer yet — add it on the <a href="equipment.html" target="_blank">Equipment</a> page.'; return; }
+    l.sort(function(a, b) { return String(a.location || a.location_tag || '').localeCompare(String(b.location || b.location_tag || '')); });
+    box.classList.remove('note');
+    box.innerHTML = '<div class="note" style="margin-bottom:4px">' + l.length + ' unit' + (l.length === 1 ? '' : 's') + '</div>' + l.map(function(e) {
+      var type = e.unit_type || e.equipment_type || 'Unit', bm = [e.brand || e.manufacturer, e.model].filter(Boolean).join(' ');
+      return '<div class="eq"><b>' + esc(type) + '</b>' + (bm ? ' · ' + esc(bm) : '') + (e.serial_number ? ' <span>· S/N ' + esc(e.serial_number) + '</span>' : '') +
+        ((e.location || e.location_tag) ? ' <span>· ' + esc(e.location || e.location_tag) + '</span>' : '') + (e.capacity ? ' <span>· ' + esc(e.capacity) + '</span>' : '') + (e.refrigerant || e.refrigerant_type ? ' <span>· ' + esc(e.refrigerant || e.refrigerant_type) + '</span>' : '') + '</div>';
+    }).join('');
+  }
+
+  function readContract() {
+    var g = function(id) { return ($(id).value || '').trim(); };
+    var vpy = g('cVpy');
+    return {
+      customer_id: drCust, site_name: g('cSite') || null, site_address: g('cAddr') || null,
+      contact_name: g('cCName') || null, contact_email: g('cCEmail') || null, contact_phone: g('cCPhone') || null, gc_name: g('cGc') || null, gc_contact: g('cGcC') || null,
+      internal_no: g('cInt') || null, client_no: g('cCli') || null, kind: $('cKind').value, stage: $('cStage').value, plan: $('cPlan').value || null,
+      visits_per_year: vpy ? parseInt(vpy, 10) : null, annual_price: num(g('cPrice')), billing: $('cBill').value || null, price_note: g('cPNote') || null, escalator_pct: num(g('cEsc')),
+      sent_date: $('cSent').value || null, signed_date: $('cSigned').value || null, start_date: $('cStart').value || null, end_date: $('cEnd').value || null, renewal_date: $('cRenew').value || null,
+      client_signed: $('cCs').checked, nwac_signed: $('cNs').checked, doc_url: g('cDocUrl') || null, doc_name: g('cDocName') || null,
+      next_action: g('cNext') || null, next_action_date: $('cNextD').value || null, lost_reason: g('cLost') || null, notes: g('cNotes') || null
+    };
+  }
+  async function saveContract(id) {
+    var typed = ($('cCust').value || '').trim();
+    if (typed && !drCust) { var m = findCustomer(typed); if (m) drCust = m.id; else { toast('“' + typed + '” is not on the customer list — pick it from the list or create it'); openNewCustomer(typed); return; } }
+    if (!typed) drCust = null;
+    var row = readContract();
+    if (!row.customer_id && !row.site_name) { toast('Pick a customer (or at least type the site name)'); return; }
+    if (row.internal_no && !/^P-\d{4}-\d{4}$/.test(row.internal_no) && !confirm('“' + row.internal_no + '” does not look like P-YYYY-NNNN. Save anyway?')) return;
+    if (row.stage === 'active' && !row.client_signed && !confirm('Active, but the client has not signed. Save anyway? (It will show under “Unsigned”.)')) return;
+    if (row.start_date && row.end_date && row.end_date < row.start_date) { toast('The end date is before the start date'); return; }
+    $('cSave').disabled = true;
+    var r;
+    if (id) r = await supabaseClient.from('svc_contracts').update(row).eq('id', id).select().single();
+    else r = await supabaseClient.from('svc_contracts').insert(Object.assign(row, { created_by: profile.id, created_by_name: myName() })).select().single();
+    if ($('cSave')) $('cSave').disabled = false;
+    if (r.error) { toast(/duplicate|unique/i.test(r.error.message) ? 'That number is already used by another contract' : 'Could not save: ' + r.error.message); return; }
+    contracts = contracts.filter(function(c) { return c.id !== r.data.id; }); contracts.unshift(r.data);
+    render(); openDrawer(r.data.id); toast(id ? 'Saved' : 'Created — now add visits and tasks below');
+  }
+  async function deleteContract(id) {
+    var c = contract(id), nv = visits.filter(function(v) { return v.contract_id === id; }).length, nt = tasks.filter(function(t) { return t.contract_id === id; }).length;
+    if (!confirm('Delete ' + clientName(c) + (contractNo(c) ? ' (' + contractNo(c) + ')' : '') + (nv || nt ? ' with its ' + nv + ' visit(s) and ' + nt + ' task(s)' : '') + '?\nEntries already on the crew schedule stay there.\nTo keep the history, set the stage to Lost / Cancelled / Expired instead.')) return;
+    var d = await supabaseClient.from('svc_contracts').delete().eq('id', id);
+    if (d.error) { toast('Could not delete: ' + d.error.message); return; }
+    contracts = contracts.filter(function(x) { return x.id !== id; }); visits = visits.filter(function(v) { return v.contract_id !== id; }); tasks = tasks.filter(function(t) { return t.contract_id !== id; });
+    closeDrawer(); render(); toast('Deleted');
+  }
+
+  // ===== visit generation =====
+  // 2 / yr = April & October; otherwise spread evenly (3 = every 4 months, 4 = quarterly …) from the start month (or next month).
+  function season(m) { var mm = +m.slice(5, 7); return mm >= 3 && mm <= 5 ? ' — cooling prep' : mm >= 9 && mm <= 11 ? ' — heating prep' : ''; }
+  function planVisits(c) {
+    var n = parseInt(c.visits_per_year, 10); if (!n || n < 1) return null;
+    var start = c.start_date ? som(c.start_date) : addMonths(som(TODAY), 1);
+    var end = c.end_date || eom(addMonths(start, 11));
+    // contract years in the term (a 11/16/2026 – 11/15/2027 term is one year, not two)
+    var years = Math.max(1, Math.round((new Date(end + 'T12:00:00') - new Date((c.start_date || start) + 'T12:00:00')) / (365.25 * 86400000))), total = n * years, out = [], m;
+    if (n === 2) { for (m = start; m <= end && out.length < total; m = addMonths(m, 1)) { var mm = +m.slice(5, 7); if (mm === 4 || mm === 10) out.push(m); } }
+    else for (var k = 0; k < total; k++) { m = addMonths(start, Math.round(k * 12 / n)); if (m > end) break; out.push(m); }
+    return out.map(function(m, i) { return { due_month: m, label: 'Visit ' + (i % n + 1) + ' of ' + n + (n <= 4 ? season(m) : '') + (years > 1 ? ' (year ' + (Math.floor(i / n) + 1) + ')' : '') }; });
+  }
+  async function generateVisits(c0) {
+    var c = contract(c0.id) || c0;
+    var plan = planVisits(c);
+    if (!plan) { toast('Set “visits per year” and save first'); return; }
+    if (!plan.length) { toast('No visit falls between the start and end dates'); return; }
+    var mine = visits.filter(function(v) { return v.contract_id === c.id; });
+    // planned visits nobody touched that fall outside the new plan are deleted; every other visit is kept
+    var planMonths = plan.map(function(p) { return p.due_month.slice(0, 7); });
+    var removable = mine.filter(function(v) { return v.status === 'planned' && !v.schedule_entry_id && !v.scheduled_date && !v.report_id && !v.invoice_no && !v.notes && planMonths.indexOf(String(v.due_month || '').slice(0, 7)) < 0; });
+    var kept = mine.filter(function(v) { return removable.indexOf(v) < 0; });
+    var keptMonths = kept.map(function(v) { return v.due_month ? v.due_month.slice(0, 7) : ''; });
+    var add = plan.filter(function(p) { return keptMonths.indexOf(p.due_month.slice(0, 7)) < 0; });
+    if (!add.length && !removable.length) { toast('All visits are already there'); return; }
+    var msg = add.length ? 'Create ' + add.length + ' visit' + (add.length === 1 ? '' : 's') + ': ' + add.map(function(p) { return monLabel(p.due_month); }).join(', ') + '?' : 'No new visits to create.';
+    if (removable.length) msg += '\n\n' + removable.length + ' planned visit' + (removable.length === 1 ? '' : 's') + ' outside the new plan (' + removable.map(function(v) { return monLabel(v.due_month) || 'no month'; }).join(', ') + ') will be deleted.';
+    if (kept.length) msg += '\n' + kept.length + ' existing visit' + (kept.length === 1 ? ' is' : 's are') + ' kept.';
+    if (!confirm(msg)) return;
+    $('cGen').disabled = true;
+    try {
+      if (removable.length) {
+        var ids = removable.map(function(v) { return v.id; });
+        var d = await supabaseClient.from('svc_visits').delete().in('id', ids);
+        if (d.error) throw new Error(d.error.message);
+        visits = visits.filter(function(v) { return ids.indexOf(v.id) < 0; });
+      }
+      // number all visits of the contract in due-month order
+      var all = kept.map(function(v) { return { v: v, m: v.due_month || v.scheduled_date || '' }; }).concat(add.map(function(p) { return { p: p, m: p.due_month }; }));
+      all.sort(function(a, b) { return String(a.m).localeCompare(String(b.m)); });
+      var rows = [], renum = [];
+      all.forEach(function(x, i) {
+        if (x.p) rows.push({ contract_id: c.id, visit_no: i + 1, label: x.p.label, due_month: x.p.due_month, status: 'planned' });
+        else if (x.v.visit_no !== i + 1) renum.push({ id: x.v.id, visit_no: i + 1 });
+      });
+      if (rows.length) {
+        var ins = await supabaseClient.from('svc_visits').insert(rows).select();
+        if (ins.error) throw new Error(ins.error.message);
+        visits = visits.concat(ins.data || []);
+      }
+      for (var i = 0; i < renum.length; i++) {
+        var u = await supabaseClient.from('svc_visits').update({ visit_no: renum[i].visit_no }).eq('id', renum[i].id).select().single();
+        if (!u.error) visits = visits.map(function(v) { return v.id === u.data.id ? u.data : v; });
+      }
+      toast(rows.length + ' visit' + (rows.length === 1 ? '' : 's') + ' created');
+    } catch (e) { console.error(e); toast('Could not generate: ' + (e.message || e)); }
+    renderCards(); renderView(); openDrawer(c.id);
+  }
+
+  // ===== visit editor =====
+  function newVisit(c) {
+    var mine = visits.filter(function(v) { return v.contract_id === c.id; });
+    var no = mine.reduce(function(m, v) { return Math.max(m, v.visit_no || 0); }, 0) + 1;
+    fillVisit({ contract_id: c.id, visit_no: no, label: 'Visit ' + no, status: 'planned', due_month: addMonths(som(TODAY), 1) });
+  }
+  function openVisit(id) { var v = visits.filter(function(x) { return x.id === id; })[0]; if (v) fillVisit(Object.assign({}, v)); }
+  function fillVisit(v) {
+    editVisit = v;
+    var c = contract(v.contract_id);
+    $('vTitle').textContent = (v.id ? '' : 'New ') + 'Visit' + (v.visit_no ? ' #' + v.visit_no : '') + ' — ' + clientName(c);
+    $('vSub').textContent = [contractNo(c), c.site_name, c.site_address].filter(Boolean).join(' · ');
+    $('vLabel').value = v.label || ''; $('vDue').value = v.due_month ? v.due_month.slice(0, 7) : ''; $('vStatus').value = v.status || 'planned';
+    $('vSched').value = v.scheduled_date || ''; $('vDone').value = v.done_date || ''; $('vInv').value = v.invoice_no || ''; $('vInvoiced').checked = !!v.invoiced; $('vNotes').value = v.notes || '';
+    $('vEntry').innerHTML = v.schedule_entry_id ? '📅 On the crew schedule — <a href="schedule.html" target="_blank">open Schedule ↗</a>' : 'Pick the date, then press <b>Schedule</b> to put it on the crew schedule.';
+    $('vSchedBtn').textContent = v.schedule_entry_id ? '📅 Move on schedule' : '📅 Schedule';
+    $('vDel').style.display = v.id ? '' : 'none'; $('vDoneBtn').style.display = v.status === 'done' ? 'none' : '';
+    $('vReport').innerHTML = '<option value="">— none —</option>' + (v.report_id ? '<option value="' + v.report_id + '" selected>Linked report</option>' : '');
+    reportHint();
+    show('vModal', true);
+    loadReports(c, v);
+  }
+  async function loadReports(c, v) {
+    if (!c || !c.customer_id) { $('vRepHint').innerHTML = 'Link a customer to the contract to pick its reports.'; return; }
+    var r = await supabaseClient.from('reports').select('id,report_number,report_type,report_date,status,tech_name').eq('customer_id', c.customer_id).in('report_type', ['pm-checklist', 'service-call', 'work-order', 'startup']).order('report_date', { ascending: false }).limit(60);
+    if (editVisit !== v) return;
+    if (r.error) { $('vRepHint').textContent = 'Could not load reports: ' + r.error.message; return; }
+    var l = r.data || [];
+    $('vReport').innerHTML = '<option value="">— none —</option>' + l.map(function(x) {
+      return '<option value="' + x.id + '" data-type="' + esc(x.report_type) + '"' + (x.id === v.report_id ? ' selected' : '') + '>' + fmt(x.report_date) + ' · ' + esc(REPORT_LABEL[x.report_type] || x.report_type) + ' · ' + esc(x.report_number || '') + (x.tech_name ? ' · ' + esc(x.tech_name) : '') + '</option>';
+    }).join('') + (v.report_id && !l.some(function(x) { return x.id === v.report_id; }) ? '<option value="' + v.report_id + '" selected>Linked report (older)</option>' : '');
+    reportHint();
+  }
+  function reportHint() {
+    var o = $('vReport').selectedOptions && $('vReport').selectedOptions[0], id = $('vReport').value;
+    var page = o && o.getAttribute('data-type') ? REPORT_PAGE[o.getAttribute('data-type')] : 'pm-checklist.html';
+    $('vRepHint').innerHTML = id ? '<a href="' + page + '?edit=' + esc(id) + '" target="_blank">Open the report ↗</a>' : 'No report yet — <a href="pm-checklist.html" target="_blank">start a PM checklist ↗</a>';
+  }
+  async function saveVisit(extra, quiet) {
+    var v = editVisit; if (!v) return null;
+    var row = { label: $('vLabel').value.trim() || null, due_month: $('vDue').value ? $('vDue').value + '-01' : null, status: $('vStatus').value,
+      scheduled_date: $('vSched').value || null, done_date: $('vDone').value || null, report_id: $('vReport').value || null,
+      invoice_no: $('vInv').value.trim() || null, invoiced: $('vInvoiced').checked, notes: $('vNotes').value.trim() || null };
+    Object.assign(row, extra || {});
+    if (row.status === 'done' && !row.done_date) row.done_date = TODAY;
+    if (row.status === 'planned' && row.scheduled_date) row.status = 'scheduled';   // a visit with a date is scheduled
+    var r;
+    if (v.id) r = await supabaseClient.from('svc_visits').update(row).eq('id', v.id).select().single();
+    else r = await supabaseClient.from('svc_visits').insert(Object.assign({ contract_id: v.contract_id, visit_no: v.visit_no }, row)).select().single();
+    if (r.error) { toast('Could not save the visit: ' + r.error.message); return null; }
+    visits = visits.filter(function(x) { return x.id !== r.data.id; }); visits.push(r.data);
+    show('vModal', false); renderCards(); renderTabs(); renderView(); if (openId === r.data.contract_id) openDrawer(openId);
+    if (!quiet) toast(row.status === 'done' ? 'Visit done ✓' : 'Visit saved');
+    return r.data;
+  }
+  async function scheduleVisit() {
+    var d = $('vSched').value; if (!d) { toast('Pick the visit date first'); $('vSched').focus(); return; }
+    var v = editVisit, c = contract(v.contract_id), name = clientName(c);
+    var scope = 'Maintenance visit ' + (v.visit_no || '') + ' — ' + name;
+    var notes = [($('vLabel').value || '').trim(), c.site_name && c.site_name !== name ? c.site_name : '', c.site_address, contractNo(c) ? 'Contract ' + contractNo(c) : '', c.contact_name ? 'Contact: ' + [c.contact_name, c.contact_phone].filter(Boolean).join(' ') : '', 'From Service & Maintenance']
+      .filter(Boolean).join('\n');
+    $('vSchedBtn').disabled = true;
+    var entryId = v.schedule_entry_id || null, warn = '';
+    try {
+      if (entryId) {
+        var u = await supabaseClient.from('schedule_entries').update({ start_date: d, end_date: d, scope_summary: scope }).eq('id', entryId).select('id');
+        if (u.error) { warn = u.error.message; }
+        else if (!u.data || !u.data.length) entryId = null;   // the schedule entry was deleted — create a new one
+      }
+      if (!entryId && !warn) {
+        var ins = await supabaseClient.from('schedule_entries').insert({ project_id: null, crew_type: 'maintenance', start_date: d, end_date: d, status: 'scheduled', priority: 'normal',
+          scope_summary: scope, notes: notes, assigned_tech_ids: [], assigned_tech_names: [], created_by: profile.id }).select('id').single();
+        if (ins.error) warn = ins.error.message; else entryId = ins.data.id;
+      }
+    } catch (e) { warn = e.message || String(e); }
+    $('vSchedBtn').disabled = false;
+    var saved = await saveVisit({ status: 'scheduled', scheduled_date: d, schedule_entry_id: entryId }, true);
+    if (!saved) return;
+    if (warn) toast('Visit date saved, but the crew schedule entry failed (' + warn + ') — a manager can add it on the Schedule page');
+    else toast('On the crew schedule for ' + fmt(d) + ' — assign the crew on the Schedule page');
+  }
+  async function deleteVisit() {
+    var v = editVisit; if (!v || !v.id) return;
+    if (!confirm('Delete this visit?' + (v.schedule_entry_id ? '\nThe entry on the crew schedule stays — remove it on the Schedule page if needed.' : ''))) return;
+    var d = await supabaseClient.from('svc_visits').delete().eq('id', v.id);
+    if (d.error) { toast('Could not delete: ' + d.error.message); return; }
+    visits = visits.filter(function(x) { return x.id !== v.id; });
+    show('vModal', false); renderCards(); renderView(); if (openId === v.contract_id) openDrawer(openId); toast('Deleted');
+  }
+
+  // ===== settings =====
+  function openSettings() {
+    $('sNotify').value = S('notify_emails', ''); $('sLead').value = S('lead_days', 14); $('sFollow').value = S('followup_days', 7); $('sRenew').value = S('renewal_days', 60);
+    show('setModal', true);
+  }
+  async function saveSettings() {
+    var clamp = function(v, lo, hi, def) { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
+    var row = { id: 1, notify_emails: $('sNotify').value.trim() || 'ruslan@northernwolvesac.com', lead_days: clamp($('sLead').value, 1, 120, 14), followup_days: clamp($('sFollow').value, 1, 90, 7), renewal_days: clamp($('sRenew').value, 1, 365, 60) };
+    var u = await supabaseClient.from('svc_settings').upsert(row).select().single();
+    if (u.error) { toast('Could not save: ' + u.error.message); return; }
+    settings = u.data; show('setModal', false); render(); toast('Settings saved');
+  }
+  // ===== daily 8 AM e-mail (Google Apps Script → svc_daily_digest RPC) =====
+  // The generated script avoids backslashes so it survives this template literal unchanged.
+  function digestScript() {
+    var app = location.origin + location.pathname.replace(/[^\/]*$/, '') + 'service.html';
+    return `// Northern Wolves AC — daily service & maintenance reminder · Google Apps Script
+// 1) script.google.com → New project → paste all of this → Save.
+// 2) Select  setup  in the toolbar and press Run (allow 'send e-mail as you' + 'connect to an external service').
+//    It sends today's list right away and then every morning at 8 AM (New York time).
+//    Nothing is sent on days when nothing is due.
+var CFG = {
+  rpc: '${SUPABASE_URL}/rest/v1/rpc/svc_daily_digest',
+  key: '${SUPABASE_ANON_KEY}',
+  token: '${(settings && settings.digest_token) || ''}',
+  app: '${app}'
+};
+function setup() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('run').timeBased().everyDays(1).atHour(8).inTimezone('America/New_York').create();
+  run();
+}
+function run() {
+  var r = UrlFetchApp.fetch(CFG.rpc, { method: 'post', contentType: 'application/json', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key },
+    payload: JSON.stringify({ p_token: CFG.token }), muteHttpExceptions: true });
+  if (r.getResponseCode() >= 300) throw new Error('Service digest failed: ' + r.getContentText().slice(0, 300));
+  var d = JSON.parse(r.getContentText()), NL = String.fromCharCode(10);
+  var SECTIONS = [
+    ['visits_overdue', 'Overdue visits', '#b91c1c', 'overdue visit'],
+    ['visits_due', 'Visits to schedule (due within ' + d.lead_days + ' days)', '#b45309', 'to schedule'],
+    ['visits_week', 'Visits in the next 7 days', '#0369a1', 'this week'],
+    ['tasks', 'Tasks due today or overdue', '#b45309', 'task'],
+    ['proposals', 'Proposals to follow up', '#7c3aed', 'follow-up'],
+    ['renewals', 'Renewals within ' + d.renewal_days + ' days', '#b45309', 'renewal'],
+    ['unsigned', 'Active agreements not signed by the client', '#b91c1c', 'unsigned']
+  ];
+  var total = 0;
+  SECTIONS.forEach(function (s) { total += (d[s[0]] || []).length; });
+  if (!total) { Logger.log('Nothing due — no e-mail today.'); return; }
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function us(s) { if (!s) return ''; var p = String(s).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function mon(s) { if (!s) return ''; var p = String(s).split('-'); return MON[Number(p[1]) - 1] + ' ' + p[0]; }
+  function days(s) { return Math.round((new Date(String(s).slice(0, 10) + 'T12:00:00') - new Date(d.today + 'T12:00:00')) / 86400000); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+  function money(v) { return v == null ? '' : '$' + Math.round(Number(v)).toLocaleString('en-US'); }
+  function no(x) { return [x.internal_no, x.client_no].filter(function (v) { return v; }).join(' · '); }
+  function visitName(x) { return x.label || ('Visit ' + (x.visit_no || '')); }
+  function cells(key, x) {
+    switch (key) {
+      case 'visits_overdue': return [visitName(x), x.scheduled_date ? 'was scheduled ' + us(x.scheduled_date) + ', not marked done' : 'was due ' + mon(x.due_month) + ', not scheduled'];
+      case 'visits_due': return [visitName(x), 'due ' + mon(x.due_month)];
+      case 'visits_week': return [visitName(x), us(x.scheduled_date)];
+      case 'tasks': var n = days(x.due_date); return [x.title + (x.assignee ? ' (' + x.assignee + ')' : ''), n < 0 ? 'overdue since ' + us(x.due_date) : 'due today'];
+      case 'proposals': return [[no(x), x.annual_price != null ? money(x.annual_price) + '/yr' : ''].filter(function (v) { return v; }).join(' · '),
+        x.next_action_date ? (x.next_action || 'follow up') + ' (' + us(x.next_action_date) + ')' : 'sent ' + us(x.sent_date) + ' (' + (-days(x.sent_date)) + ' days ago)'];
+      case 'renewals': var r = days(x.renewal_date); return [[no(x), money(x.annual_price) + '/yr'].filter(function (v) { return v && v !== '/yr'; }).join(' · '), 'renews ' + us(x.renewal_date) + (r < 0 ? ' (passed)' : ' (in ' + r + ' days)')];
+      case 'unsigned': return [no(x), (x.start_date ? 'active since ' + us(x.start_date) : 'active') + (x.nwac_signed ? '' : ' · not signed by NWAC either')];
+    }
+    return ['', ''];
+  }
+  var td = 'padding:6px 10px;border-bottom:1px solid #e5e7eb;vertical-align:top';
+  var html = '<div style="font:14px Arial;color:#111">Good morning,<br><br>Service &amp; maintenance for today:', plain = '', parts = [];
+  SECTIONS.forEach(function (s) {
+    var list = d[s[0]] || [];
+    if (!list.length) return;
+    parts.push(list.length + ' ' + s[3] + (list.length > 1 && s[3] !== 'this week' && s[3] !== 'to schedule' && s[3] !== 'unsigned' ? 's' : ''));
+    html += '<h3 style="margin:18px 0 6px;font:700 15px Arial;color:' + s[2] + '">' + esc(s[1]) + ' (' + list.length + ')</h3><table style="border-collapse:collapse;font:13px Arial;width:100%">';
+    plain += NL + s[1] + ':' + NL;
+    list.forEach(function (x) {
+      var c = cells(s[0], x), link = x.contract_id ? CFG.app + '?c=' + x.contract_id : CFG.app + '?tab=tasks';
+      html += '<tr><td style="' + td + '"><a href="' + link + '" style="color:#111;font-weight:700;text-decoration:none">' + esc(x.client || '—') + '</a></td><td style="' + td + '">' + esc(c[0]) + '</td><td style="' + td + ';white-space:nowrap">' + esc(c[1]) + '</td></tr>';
+      plain += '- ' + (x.client || '—') + ' — ' + c[0] + ' — ' + c[1] + NL;
+    });
+    html += '</table>';
+  });
+  html += '<p style="margin-top:18px">Open <a href="' + CFG.app + '">Service &amp; Maintenance</a> in the app: press a visit to <b>Schedule</b> it (it goes on the crew schedule) or mark it <b>Done</b>; tick tasks off when handled.</p>' +
+    '<p style="color:#6b7280;font-size:12px">Sent every morning at 8 AM while anything is due.</p></div>';
+  plain += NL + CFG.app;
+  var subject = 'Service & maintenance: ' + parts.join(', ') + ' — ' + us(d.today);
+  GmailApp.sendEmail(d.notify, subject, plain, { htmlBody: html, name: 'Northern Wolves App' });
+}
+`;
+  }
+  function openDigest() {
+    $('dgCode').value = digestScript();
+    var last = settings && settings.digest_last_run;
+    $('dgState').textContent = !settings || !settings.digest_token ? 'Run service-crm-schema.sql in Supabase first.' :
+      last ? 'Last run: ' + fmt(String(last).slice(0, 10)) + ' ' + new Date(last).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Not installed yet.';
+    show('dgModal', true);
+  }
+})();
+</script>
+<script src="sw-register.js?v=595"></script>
+</body>
+</html>
