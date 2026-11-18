@@ -558,6 +558,7 @@
       ['Management', 'management.html', null, true],
       ['Labor Costs (Mason)', 'labor-import.html', null, true],
       ['Estimate vs Actual', 'estimate-vs-actual.html', null, true],
+      ['AI Estimator (admin)', 'ai-estimator.html', null, true, '', 'admin'],
       ['Catalog Verification', 'catalog-verify.html', null, true],
       ['Activity', 'history.html'],
       ['AI Support', 'support.html'],
@@ -577,7 +578,6 @@
       ['Bid Board', 'bid-board.html'],
       ['Cost Catalog', 'assembly-library.html'],
       ['Estimating Rules', 'est-rules.html'],
-      ['AI Estimator', 'ai-estimator.html'],
       ['Estimating Knowledge', 'est-knowledge.html']
     ]}
   ];
@@ -599,7 +599,7 @@
 
     var page = '', nav = '';
     (role === 'partner' ? PARTNER_FOLDERS : role === 'estimator' ? ESTIMATOR_FOLDERS : FOLDERS).forEach(function(f) {
-      var links = f.links.filter(function(l) { return !(isTech && l[3]); });
+      var links = f.links.filter(function(l) { return !(isTech && l[3]) && !(l[5] === 'admin' && role !== 'admin'); });   // AI Estimator page: admin only (estimators run AI from the Takeoff)
       if (!links.length) return;   // a folder of office-only links (Subs & Vendors) is hidden from techs
       var cells = '', dd = '';
       links.forEach(function(l) {

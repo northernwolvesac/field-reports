@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
+<script src="nw-ai-takeoff.js?v=602"></script>
 <script src="est-drawings.js?v=584"></script>
 <script src="nw-catalog-picker.js?v=596"></script>
 <script src="nw-duct-weight.js?v=584"></script>
@@ -422,7 +423,7 @@ requireAuth().catch(function(){});
       var u = await sb.auth.getUser(); me.id = u.data.user.id;
       var p = { data: (typeof getAuthProfile === 'function') ? await getAuthProfile() : null };
       if (!p.data) p = await sb.from('profiles').select('role,full_name').eq('id', me.id).maybeSingle();
-      me.canEdit = !!(p.data && P.canEdit(p.data)); me.name = (p.data && p.data.full_name) || '';
+      me.canEdit = !!(p.data && P.canEdit(p.data)); me.name = (p.data && p.data.full_name) || ''; me.role = (p.data && p.data.role) || '';
     } catch (e) { console.warn(e); }
     if (window.EstDrawings) EstDrawings.ensurePdfjs().catch(function(e) { console.warn(e); });
     await loadEstimate();
@@ -487,7 +488,7 @@ requireAuth().catch(function(){});
       crumb: { label: 'Bid Board', href: 'bid-board.html' }, title: est.name, sub: est.quote_number ? 'Q# ' + est.quote_number : '',
       stage: { value: est.bid_stage || 'estimating', readOnly: !me.canEdit, onChange: async function(k) { var r = await sb.from('estimates').update({ bid_stage: k }).eq('id', estimateId); if (r.error) toast(r.error.message, 'error'); else { est.bid_stage = k; toast('Saved', 'success'); } } },
       avatarName: est.estimator_name || '',
-      actions: [{ id: 'showEstimateBtn', label: 'Show Estimate', onClick: showEstimate }, { id: 'createLayerBtn', label: 'Create New Takeoff Layer', primary: true, onClick: function() { openLayerModal(null); } }],
+      actions: [{ id: 'aiTakeoffBtn', label: 'Run AI Takeoffs', onClick: aiTakeoffDialog }, { id: 'showEstimateBtn', label: 'Show Estimate', onClick: showEstimate }, { id: 'createLayerBtn', label: 'Create New Takeoff Layer', primary: true, onClick: function() { openLayerModal(null); } }],
       kebab: headerKebab()
     });
     P.renderTabs($('tabsHost'), { active: 'takeoff', hrefs: { overview: 'bid-project.html?id=' + rootId + '&est=' + estimateId + '#overview', documents: 'bid-project.html?id=' + rootId + '&est=' + estimateId + '#documents', takeoff: 'takeoff.html?est=' + estimateId, estimating: 'estimating.html?est=' + estimateId, proposal: 'bid-project.html?id=' + rootId + '&est=' + estimateId + '#proposal' } });
@@ -497,19 +498,21 @@ requireAuth().catch(function(){});
     return [
       { label: 'Upload plans', icon: 'upload', onClick: function() { if (!me.canEdit) { toast('Read-only', 'error'); return; } $('uploadInput').click(); } },
       { label: 'Name sheets with AI', icon: 'auto_awesome', onClick: nameSheetsAI },
-      { label: 'Run the AI Estimator on these plans', icon: 'auto_awesome', onClick: runAiEstimator },
+      { label: 'Run AI Takeoffs', icon: 'auto_awesome', onClick: aiTakeoffDialog }].concat(me.role === 'admin' ? [{ label: 'Open in the AI Estimator (admin)', icon: 'auto_awesome', onClick: runAiEstimator }] : []).concat([
       { label: 'Roll up to Estimate', icon: 'swap_vert', onClick: openRollup },
       { label: 'Export this page as PDF', icon: 'download', onClick: exportPdf },
       { label: 'Analyze page', icon: 'auto_awesome', onClick: analyzeModal },
       { sep: true },
       { label: 'Refresh rates from Cost Catalog', icon: 'refresh', onClick: refreshRates }
-    ];
+    ]);
   }
   function showEstimate() { if (EMBED) P.emit('navigate', { tab: 'estimating', hash: '#estimating' }); else location.href = 'estimating.html?est=' + estimateId; }
   function handleCmd(cmd, payload) {
     if (cmd && typeof cmd === 'object') { payload = cmd.payload; cmd = cmd.cmd; }
     payload = payload || {};
     if (cmd === 'newLayer') openLayerModal(null);
+    else if (cmd === 'aiTakeoff') aiTakeoffDialog();
+    else if (cmd === 'aiReview') setReviewMode(true);
     else if (cmd === 'openPlan') { var i = plans.findIndex(function(p) { return p.drawing.id === payload.drawingId && (!payload.page || p.page === Number(payload.page)); }); if (i >= 0) openPlan(i); }
     else if (cmd === 'refresh') { loadLayers().then(loadDrawings).then(renderAll); }
     else if (cmd === 'flush') { flushSync(); }
@@ -2732,6 +2735,31 @@ requireAuth().catch(function(){});
     } catch (e) { toast('Auto-measure failed: ' + e.message, 'error'); }
   }
 
+  // ═══════════════════════ Run AI Takeoffs (Russ 11/18/2026) ═══════════════════════
+  // The AI reads the bid's plans and lays its takeoff out in the bid's "AI Takeoff" version (nw-ai-takeoff.js runs the AI Estimator
+  // pipeline in a hidden frame). Whole set or only the open sheet. Inside the project page the parent runs it (it survives tab switches).
+  function aiTakeoffDialog() {
+    if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    if (!plans.length) { toast('Upload the plans first', 'error'); return; }
+    if (!window.NWAiTakeoff) { toast('nw-ai-takeoff.js is not loaded — refresh the page', 'error'); return; }
+    var cp = plans[planIdx], isAi = est && est.version_label === NWAiTakeoff.LABEL, cpName = cp ? (cp.sheet || ('page ' + cp.page)) : '';
+    var body = '<div class="pc-banner-info" style="margin-bottom:12px"><span>The AI reads the HVAC sheets, measures ducts and pipes, counts the devices and lays it all out as takeoff layers in the <b>' + esc(NWAiTakeoff.LABEL) + '</b> version of this bid' + (isAi ? ' (this one — the earlier AI marks are replaced)' : ' — your own takeoff is not touched') + '. Then you check and fix it in the AI review tab.</span></div>' +
+      '<label class="pc-check" style="display:flex;gap:8px;padding:6px 0"><input type="radio" name="aiScope" value="all" checked> <span><b>Whole drawing set</b> — ' + plans.length + ' sheet' + (plans.length === 1 ? '' : 's') + '; the AI skips the ones that are not HVAC</span></label>' +
+      (cp ? '<label class="pc-check" style="display:flex;gap:8px;padding:6px 0"><input type="radio" name="aiScope" value="one"> <span><b>Only this sheet</b> — ' + esc(planLabel(cp)) + '</span></label>' : '') +
+      '<div class="hint" style="margin-top:8px">About $0.06 a sheet and a few minutes per 10 sheets. Keep this page open while it runs — you can keep working.</div>';
+    var dlg = P.modal({ title: 'Run AI Takeoffs', body: body, size: 'md', buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Run AI Takeoffs', primary: true, onClick: function() {
+      var one = dlg.body.querySelector('input[name=aiScope]:checked').value === 'one';
+      startAiTakeoff(one && cp ? { drawingId: cp.drawing.id, page: cp.page, sheetLabel: cpName } : {});
+    } }] });
+  }
+  function startAiTakeoff(o) {
+    o = o || {};
+    if (EMBED) { P.emit('aiTakeoff', { estimateId: estimateId, drawingId: o.drawingId || null, page: o.page || null, sheetLabel: o.sheetLabel || null }); return; }
+    NWAiTakeoff.run({ estimateId: estimateId, drawingId: o.drawingId, page: o.page, sheetLabel: o.sheetLabel,
+      onTarget: function() { try { if (P.estStrip && P.estStrip.refresh) P.estStrip.refresh(); } catch (e) {} },
+      onDone: function(id) { location.href = 'takeoff.html?est=' + id + '&review=1'; } });
+  }
+
   // ═══════════════════════ AI Estimator on the uploaded plans ═══════════════════════
   // One session per estimate: it opens with the plans of this Takeoff already inside (no second upload) and offers to read them.
   async function runAiEstimator() {
@@ -3220,9 +3248,11 @@ requireAuth().catch(function(){});
   // ═══════════════════════ upload / export / analyze ═══════════════════════
   async function uploadPdfs(ev) {
     var files = Array.prototype.slice.call(ev.target.files || []); ev.target.value = ''; if (!files.length) return; if (!me.canEdit) { toast('Read-only', 'error'); return; }
+    var choice = window.NWAiTakeoff ? await NWAiTakeoff.uploadChoice(files) : { ai: false }; if (!choice) return;
     var res = await EstDrawings.upload(rootId, files, { uploadedBy: me.id, onProgress: function(info) { if (info.stage === 'split') toast(info.file.name + ' is over 490 MB — splitting it into parts (storage limit 500 MB per file)…'); if (info.stage === 'upload') toast('Uploading ' + info.file.name + ' (' + (info.index + 1) + '/' + info.total + ')…'); } });
     res.errors.forEach(function(e) { toast(e.message, 'error'); });
     var n = plans.length; await loadDrawings(); if (plans.length > n) await openPlan(n); if (res.rows.length) toast(res.rows.length + ' plan(s) uploaded', 'success'); renderAll();
+    if (choice.ai && res.rows.length) startAiTakeoff({});
   }
   function exportPdf() {
     if (!pdfPage) { toast('Open a plan first', 'error'); return; }

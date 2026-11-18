@@ -922,7 +922,7 @@ requireAuth().catch(function(){});
         '<a href="vendors.html">Vendor Library</a>' +
         '<a href="est-knowledge.html">Knowledge</a>' +
         '<a href="est-rules.html">Rules</a>' +
-        '<a href="ai-estimator.html">AI Estimator</a>' +
+        (currentUserRole === 'admin' ? '<a href="ai-estimator.html">AI Estimator</a>' : '') +
         '<span class="grow" style="flex:1"></span>' +
         '<label>Estimator <select id="crumbEstimator"><option value="">All</option><option value="__me__">Just me</option></select></label>' +
         '<label>Status <select id="crumbStatus"><option value="">All</option><option value="draft">Draft</option><option value="sent">Sent</option><option value="awarded">Awarded</option><option value="lost">Lost</option><option value="void">Void</option></select></label>' +

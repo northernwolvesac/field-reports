@@ -22,6 +22,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
+<script src="nw-ai-takeoff.js?v=602"></script>
 <script src="est-drawings.js?v=584"></script>
 <script src="nw-proposal.js?v=584"></script>
 <style>
@@ -527,6 +528,7 @@ requireAuth().catch(function(){});
       { id: 'upload', label: 'Upload', primary: true, onClick: openUploadDrawings }
     ];
     if (tab === 'takeoff') return [
+      { id: 'aiTakeoff', label: 'Run AI Takeoffs', icon: 'auto_awesome', title: 'The AI reads the plans and lays its takeoff out in the bid\'s "AI Takeoff" version', onClick: function() { if (!canEdit) return viewOnly(); sendCmd('takeoff', 'aiTakeoff'); } },
       { id: 'showEstimate', label: 'Show Estimate', onClick: function() { sendCmd('takeoff', 'showEstimate'); } },
       { id: 'newLayer', label: 'Create New Takeoff Layer', primary: true, onClick: function() { if (!canEdit) return viewOnly(); sendCmd('takeoff', 'newLayer'); } }
     ];
@@ -660,6 +662,8 @@ requireAuth().catch(function(){});
       linesCache = null;
       if (PC.estStrip && typeof PC.estStrip.refresh === 'function') PC.estStrip.refresh();
       refreshVersionSettings();   // the iframe may have written settings.markups / manual_groups / es_settings
+    } else if (d.event === 'aiTakeoff') {
+      runAiTakeoff(p);
     } else if (d.event === 'navigate') {
       if (p.href) { location.href = p.href; return; }   // e.g. est-strip "Set as primary" → reload on the new root
       if (p.tab) setTab(p.tab);
@@ -1457,6 +1461,15 @@ requireAuth().catch(function(){});
   }
 
   // ─── uploads (drawings → estimate_drawings ONLY; attachments → project_files) ───
+  // ─── Run AI Takeoffs (nw-ai-takeoff.js): runs here, in the project page, so switching tabs does not stop it; the result is the
+  // bid's "AI Takeoff" version, opened on its Takeoff with the AI review tab when done ───
+  function runAiTakeoff(p) {
+    p = p || {};
+    if (!window.NWAiTakeoff) { toast('nw-ai-takeoff.js is not loaded — refresh the page', 'error'); return; }
+    NWAiTakeoff.run({ estimateId: p.estimateId || currentVersion.id, drawingId: p.drawingId || null, page: p.page || null, sheetLabel: p.sheetLabel || null,
+      onTarget: function() { try { if (PC.estStrip && typeof PC.estStrip.refresh === 'function') PC.estStrip.refresh(); } catch (e) {} },
+      onDone: async function(id) { await switchVersion(id); setTab('takeoff'); sendCmd('takeoff', 'aiReview'); } });
+  }
   function openUploadDrawings() {
     if (!canEdit) return viewOnly();
     $('drawingFileInput').click();
@@ -1465,6 +1478,8 @@ requireAuth().catch(function(){});
     if (!window.EstDrawings) { toast('est-drawings.js not loaded', 'error'); return; }
     var pdfs = files.filter(function(f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
     if (!pdfs.length) { toast('Drawings must be PDF files', 'error'); return; }
+    var choice = window.NWAiTakeoff ? await NWAiTakeoff.uploadChoice(pdfs) : { ai: false }; if (!choice) return;
+    var uploadedN = 0;
     toast('Uploading ' + pdfs.length + ' drawing' + (pdfs.length === 1 ? '' : 's') + '…');
     try {
       // EstDrawings.upload never throws per file: it returns {rows, errors}; onProgress gets one {index,total,file,stage} object
@@ -1475,8 +1490,10 @@ requireAuth().catch(function(){});
       var errs = (res && res.errors) || [], rows = (res && res.rows) || [];
       errs.forEach(function(er) { toast(er.message || 'Upload failed', 'error'); });
       if (rows.length) toast('Uploaded ' + rows.length + ' drawing' + (rows.length === 1 ? '' : 's'), 'success');
+      uploadedN = rows.length;
     } catch(e) { toast('Upload failed: ' + (e.message || e), 'error'); }
     if (currentTab !== 'documents') setTab('documents'); else loadDocs();
+    if (choice.ai && uploadedN) runAiTakeoff({});
   }
   function openUploadAttachment() {
     if (!canEdit) return viewOnly();

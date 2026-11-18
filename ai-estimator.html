@@ -91,7 +91,7 @@ var AE = (function() {
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function money(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3200); if (AUTO) aiPost('note', m); }
   function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
   init();
@@ -104,6 +104,10 @@ var AE = (function() {
     me = { id: u.id, name: p.full_name || u.email };
     var hc = document.querySelector('.header-content'); if (hc && window.NWOrg) { var sw = document.createElement('div'); sw.className = 'muted'; sw.style.cssText = 'font-size:12px;margin-top:2px'; sw.innerHTML = NWOrg.switcher() + (NWOrg.isAdmin() || (p.role === 'admin') ? ' · <a href="est-orgs.html">organisations</a>' : ''); hc.appendChild(sw); }
     var qs = new URLSearchParams(location.search), sid = qs.get('s');
+    // "Run AI Takeoffs" on the Takeoff page runs this page in a hidden frame (nw-ai-takeoff.js) — any estimator may do that
+    if (qs.get('run')) { autoRun({ target: qs.get('run'), drawing: qs.get('d') || null, page: Number(qs.get('p')) || null }); return; }
+    // Russ 11/18/2026: NWAC estimators work from the Takeoff ("Run AI Takeoffs"); this page stays for the admin (and partner organisations)
+    if (bidBoardOrg() && p.role !== 'admin') { $('main').innerHTML = '<div class="card"><h3 style="margin-top:0">AI Takeoff moved into the Takeoff</h3><p>Open the bid on the <a href="bid-board.html">Bid Board</a> → Takeoff → <b>Run AI Takeoffs</b>. The AI reads the plans and lays its takeoff out in an “AI Takeoff” version of the bid, where you check and fix it.</p></div>'; return; }
     if (sid) openSession(sid).then(function() { if (qs.get('import')) importFromEstimate(); }); else listSessions();
   }
 
@@ -242,6 +246,88 @@ var AE = (function() {
     await supabaseClient.from('est_ai_bench').update({ truth: got.truth, truth_src: 'estimate:' + (truthIds || [estId]).join('+') }).eq('id', bid);
     BLIND.step = 'done'; BLIND.secs = Math.round((Date.now() - BLIND.t0) / 1000); BLIND.truth = got.truth; BLIND.cost = pages.reduce(function(s, p) { return s + (Number(p.cost) || 0); }, 0);
     return BLIND;
+  }
+  // ─── AI Takeoff run from the Takeoff page (nw-ai-takeoff.js): this page in a hidden frame, ?run=<estimate>[&d=<drawing>&p=<page>] ───
+  // The bid's plans (shared by every version) are copied into the estimate's session once, the HVAC sheets are read (or only the one
+  // sheet), measured and priced, the engine lines go to the estimate and the runs / devices onto its Takeoff — the same steps as the
+  // buttons of this page, without the confirmations. Progress goes to the parent page as {nwAi: {step, msg, done, total}}.
+  var AUTO = null;
+  function aiPost(step, msg, extra) { try { if (window.parent && window.parent !== window) window.parent.postMessage({ nwAi: Object.assign({ step: step, msg: msg || '' }, extra || {}) }, location.origin); } catch (e) {} }
+  async function autoRun(o) {
+    AUTO = { t0: Date.now(), err: null };
+    try {
+      aiPost('start', 'Starting the AI takeoff…');
+      var er = (await supabaseClient.from('estimates').select('id,name,project_address,parent_estimate_id').eq('id', o.target).single()).data;
+      if (!er) throw new Error('estimate not found');
+      var rootId = er.parent_estimate_id || er.id;
+      var ex = await supabaseClient.from('ai_est_sessions').select('*').eq('estimate_id', er.id).order('created_at', { ascending: false }).limit(1);
+      session = ex.data && ex.data[0];
+      if (!session) {
+        var ins = await supabaseClient.from('ai_est_sessions').insert((window.NWOrg ? NWOrg.stamp : function(x) { return x; })({ name: er.name, location: er.project_address || null, model: 'claude-sonnet-5', estimate_id: er.id, notes: 'AI Takeoff run from the Takeoff page' })).select('*').single();
+        if (ins.error) throw new Error(ins.error.message);
+        session = ins.data;
+      }
+      files = []; pages = []; corrections = []; fileCache = {};
+      $('hTitle').textContent = session.name; await reload(); render();
+      // 1 · the plans of the bid → the session (once per file name)
+      var dq = supabaseClient.from('estimate_drawings').select('id, filename, storage_path, page_count').eq('estimate_id', rootId).order('created_at');
+      if (o.drawing) dq = dq.eq('id', o.drawing);
+      var dr = (await dq).data || [];
+      if (!dr.length) throw new Error('This bid has no plans yet — upload them first');
+      var todo = dr.filter(function(d) { return !files.some(function(f) { return f.file_name === d.filename; }); });
+      for (var i = 0; i < todo.length; i++) {
+        aiPost('import', 'Copying ' + todo[i].filename + ' (' + (i + 1) + ' of ' + todo.length + ')…');
+        var dl = await supabaseClient.storage.from('estimate-drawings').download(todo[i].storage_path);
+        if (dl.error) { aiPost('note', 'Could not copy ' + todo[i].filename + ': ' + dl.error.message); continue; }
+        await upload([new File([dl.data], todo[i].filename, { type: 'application/pdf' })]); fileCache = {};
+      }
+      await reload(); render();
+      // 2 · read: the whole set (the AI sorts the sheets, the non-HVAC ones are skipped) or the one sheet asked for
+      var only = null;
+      if (o.drawing && o.page) {
+        var f1 = files.find(function(f) { return f.file_name === dr[0].filename; });
+        only = pages.filter(function(p) { return f1 && p.file_id === f1.id && p.page_no === o.page; });
+        if (!only.length) throw new Error('sheet not found in the AI session');
+        var again = only.filter(function(p) { return p.status !== 'done'; });
+        if (again.length) {
+          await supabaseClient.from('ai_est_pages').update({ status: 'pending', error: null }).in('id', again.map(function(p) { return p.id; })).neq('status', 'running');
+          await reload(); only = pages.filter(function(p) { return only.some(function(q) { return q.id === p.id; }); });
+          runQueue(only.filter(function(p) { return p.status === 'pending' || p.status === 'error'; }));
+        }
+      } else {
+        aiPost('triage', 'Sorting the sheets (which are HVAC plans)…');
+        await readAll();
+      }
+      var scope = function() { return only ? pages.filter(function(p) { return only.some(function(q) { return q.id === p.id; }); }) : pages; };
+      var retries = 0;
+      for (var w = 0; w < 1500; w++) {   // up to ~2 h
+        await sleep(4000);
+        if (!running && !measuring) {
+          await reload();
+          var left = scope().filter(function(p) { return p.status === 'pending' || p.status === 'error'; });
+          if (left.length && retries < 2) { retries++; runQueue(left); continue; }
+          break;
+        }
+        var sc = scope(), readN = sc.filter(function(p) { return p.status === 'done' || p.status === 'skipped' || p.status === 'error'; }).length;
+        aiPost('read', 'Reading the sheets… ' + readN + ' of ' + sc.length, { done: readN, total: sc.length });
+      }
+      // 3 · measure the duct / pipe / riser geometry
+      await reload();
+      var mlist = scope().filter(function(p) { return isDuctPlan(p) || isPipePlan(p) || isRiserSheet(p); });
+      if (mlist.length) {
+        var mp = measureDucts(false, only ? mlist : undefined);
+        while (measuring || running) { var mm = /\((\d+) of (\d+)\)/.exec(String(measuring || '')); aiPost('measure', String(measuring || 'Measuring…'), mm ? { done: +mm[1] - 1, total: +mm[2] } : null); await sleep(1500); }
+        await mp;
+      }
+      // 4 · price, estimate lines, takeoff layers + marks
+      aiPost('price', 'Pricing…'); await reload(); await price();
+      aiPost('estimate', 'Writing the estimate lines…'); await toEstimate(); if (AUTO.err) throw new Error(AUTO.err);
+      aiPost('takeoff', 'Laying the takeoff out on the plans…'); await toTakeoff(); if (AUTO.err) throw new Error(AUTO.err);
+      var cost = pages.reduce(function(s, p) { return s + (Number(p.cost) || 0); }, 0);
+      aiPost('done', 'Done — ' + scope().filter(function(p) { return p.status === 'done'; }).length + ' sheets read', { estId: er.id, cost: cost, secs: Math.round((Date.now() - AUTO.t0) / 1000) });
+    } catch (e) {
+      aiPost('error', 'AI takeoff stopped: ' + (e.message || e));
+    }
   }
   // ─── e-mail intake: the Edge Function made the session + file rows and the script uploaded the PDFs to Storage; the pages are split
   // and their text counted here, the same way an upload does it (files with a storage path and no page count yet) ───
@@ -1804,7 +1890,7 @@ var AE = (function() {
     // nothing measured (no geometry on the plans): the plans still go to the Takeoff, where the estimator traces or auto-measures
     var noGeo = !list.length;
     if (noGeo) { list = pages.filter(function(p) { var f0 = files.find(function(x) { return x.id === p.file_id; }) || {}; return f0.kind !== 'quote' && f0.kind !== 'specs' && f0.storage_path && p.status !== 'error'; }); if (!list.length) { toast('No drawing sheets on this session yet'); return; } }
-    if (!confirm(noGeo ? 'No ducts or pipes could be measured on these plans (the sheet reads show why). Copy the drawing set into this estimate\'s Takeoff anyway, so you can trace or auto-measure there?' : 'Copy the drawing set into this estimate\'s Takeoff and lay the measured ducts, pipes and risers on the plans as layers? Earlier auto-marks there are replaced.')) return;
+    if (!AUTO && !confirm(noGeo ? 'No ducts or pipes could be measured on these plans (the sheet reads show why). Copy the drawing set into this estimate\'s Takeoff anyway, so you can trace or auto-measure there?' : 'Copy the drawing set into this estimate\'s Takeoff and lay the measured ducts, pipes and risers on the plans as layers? Earlier auto-marks there are replaced.')) return;
     bridging = 'Preparing…'; render();
     try {
       await loadNorms();   // engine fallbacks for sizes the catalog does not carry
@@ -1832,18 +1918,27 @@ var AE = (function() {
         dwg[f.id] = ins.data;
       }
       var dIds = Object.keys(dwg).map(function(k) { return dwg[k].id; });
+      // the plans are shared by every version of the bid (E1 = the estimator's own takeoff, "AI Takeoff" = this one): only this
+      // estimate's auto marks are replaced, and a sheet that already has a scale (set in another version) keeps it
+      var sibs = await supabaseClient.from('estimates').select('id').or('id.eq.' + dwgRoot + ',parent_estimate_id.eq.' + dwgRoot);
+      var sharedDw = ((sibs.data || []).length > 1), haveScale = {};
+      if (sharedDw && dIds.length) { var hs = await supabaseClient.from('estimate_measurements').select('drawing_id,page_number,points').in('drawing_id', dIds).eq('tool_type', 'scale');
+        (hs.data || []).forEach(function(m) { haveScale[m.drawing_id + ':' + m.page_number + ((m.points || []).length >= 3 ? ':area' : '')] = 1; }); }
       if (noGeo) {   // plans only: a scale mark per sheet from the printed scale, no runs, earlier marks and decisions untouched
         var sc0 = [];
         list.forEach(function(p0) { var r0 = p0.result || {}, m0 = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]/.exec(String(r0.scale || '')); if (!m0 || !dwg[p0.file_id]) return;
           var inch = m0[1].indexOf('/') > 0 ? Number(m0[1].split('/')[0]) / Number(m0[1].split('/')[1]) : Number(m0[1]); if (!(inch > 0)) return;
           sc0.push({ drawing_id: dwg[p0.file_id].id, page_number: p0.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(inch * 72) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: inch * 72, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' }); });
-        if (sc0.length) { await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%'); var insS = await supabaseClient.from('estimate_measurements').insert(sc0); if (insS.error) throw new Error(insS.error.message); }
+        if (sharedDw) sc0 = sc0.filter(function(x) { return !haveScale[x.drawing_id + ':' + x.page_number]; });
+        if (sc0.length) { if (!sharedDw) await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%'); var insS = await supabaseClient.from('estimate_measurements').insert(sc0); if (insS.error) throw new Error(insS.error.message); }
         toast('Plans copied (' + list.length + ' sheets, no runs measured) — opening the takeoff');
-        setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
+        if (!AUTO) setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
         bridging = ''; render(); return;
       }
-      await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('label', 'auto');
-      await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%');
+      var myLayerIds = layers.map(function(l) { return l.id; });
+      if (!sharedDw) await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('label', 'auto');
+      else for (var li0 = 0; li0 < myLayerIds.length; li0 += 100) await supabaseClient.from('estimate_measurements').delete().in('layer_id', myLayerIds.slice(li0, li0 + 100)).eq('label', 'auto');
+      if (!sharedDw) await supabaseClient.from('estimate_measurements').delete().in('drawing_id', dIds).eq('tool_type', 'scale').like('label', '%(auto)%');
       // the auto-marks are re-created with new ids: review decisions on the old runs no longer point at anything (device / equipment decisions stay)
       try { await supabaseClient.from('est_ai_corrections').delete().eq('estimate_id', estId).in('kind', ['duct', 'pipe', 'riser']); } catch (eC) {}
       // 2 · layers by size, rates from the catalog; the duct family comes from the spec reading
@@ -1893,7 +1988,7 @@ var AE = (function() {
         var ptft = null, laidDuct = 0, textItems = null, vpDone = false;
         // plans at different scales on this sheet → one takeoff scale area per plan (the takeoff measures inside each with its own scale)
         var vpAreas = function(vps) {
-          if (vpDone || !vps || !vps.length) return; vpDone = true;
+          if (vpDone || !vps || !vps.length || haveScale[d.id + ':' + p.page_no + ':area']) return; vpDone = true;
           vps.forEach(function(v1) { (v1.boxes || []).forEach(function(bx) { var c = [V(bx[0], bx[1]), V(bx[2], bx[1]), V(bx[2], bx[3]), V(bx[0], bx[3])], xs = c.map(function(q) { return q[0]; }), ys = c.map(function(q) { return q[1]; });
             var x0 = Math.min.apply(null, xs) - 18, x1 = Math.max.apply(null, xs) + 18, y0 = Math.min.apply(null, ys) - 18, y1 = Math.max.apply(null, ys) + 18;
             scales.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'scale', points: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(function(q) { return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]; }), label: scaleLabelFor(v1.ptft || v1.scale * 72) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: v1.ptft || v1.scale * 72, color: '#dc2626', notes: 'Scale area — read from the sheet by the AI Estimator' }); }); });
@@ -1977,7 +2072,7 @@ var AE = (function() {
             var rl = await layerFor(rs.z + ' copper pipe & 1" insulation', 'pipework', 'Pipes', null, rs.z, false);
             rows.push(mk(rl, [V(rs.s[0], rs.s[1]), V(rs.s[2], rs.s[3])], rs.ft, null, { notes: 'riser — length from the floor elevations, not the drawing scale' })); }
         }
-        if (ptft) scales.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(ptft) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ptft, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' });
+        if (ptft && !haveScale[d.id + ':' + p.page_no]) scales.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(ptft) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ptft, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' });
         pdf.destroy();
       }
       // refrigerant line sets: not drawn on the plans (Sunrise Rye Brook: the estimator's 9,099 ft of "refrigerant lines (2 pipes)" run along the chases to each indoor unit by judgement) — the engine's
@@ -2022,8 +2117,8 @@ var AE = (function() {
       } catch (eSet) { console.warn('[bridge] settings', eSet); }
       var dampN = rows.filter(function(r) { return /^AI census/.test(r.notes || ''); }).length;   // refAllow ft of refrigerant lines go on as a by-hand quantity
       toast('✅ ' + (rows.length - nCnt) + ' runs' + (nCnt ? ' + ' + nCnt + ' devices' : '') + (dampN ? ' (' + dampN + ' damper marks)' : '') + ' on ' + list.length + ' plans, ' + made + ' layers' + (nTyp ? ', ' + nTyp + ' typical sheet' + (nTyp === 1 ? '' : 's') + ' ×N' : '') + (cloudZones.length ? ', ' + cloudZones.length + ' clouds → zones (Actions → Zones report)' : '') + ' — opening the takeoff');
-      setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
-    } catch (e) { toast('Takeoff: ' + (e.message || e)); }
+      if (!AUTO) setTimeout(function() { location.href = 'takeoff.html?est=' + estId; }, 800);
+    } catch (e) { toast('Takeoff: ' + (e.message || e)); if (AUTO) AUTO.err = 'Takeoff: ' + (e.message || e); }
     bridging = ''; render();
   }
 
@@ -2035,8 +2130,8 @@ var AE = (function() {
     // 🔗 Link estimate is the explicit way to point the session at an existing estimate instead
     if (estId) {
       var cur = await supabaseClient.from('estimates').select('name,line_count,total_sales').eq('id', estId).maybeSingle();
-      if (!cur.data) { toast('The linked estimate no longer exists — link the session to another one'); session.estimate_id = null; estimateGone = true; await supabaseClient.from('ai_est_sessions').update({ estimate_id: null }).eq('id', session.id); render(); return; }
-      if (session.estimate_id === estId && !confirm('Replace the ' + (cur.data.line_count || 0) + ' line items' + (cur.data.total_sales ? ' (' + money(cur.data.total_sales) + ')' : '') + ' of “' + cur.data.name + '” with this AI breakdown?')) return;
+      if (!cur.data) { if (AUTO) AUTO.err = 'the estimate no longer exists'; toast('The linked estimate no longer exists — link the session to another one'); session.estimate_id = null; estimateGone = true; await supabaseClient.from('ai_est_sessions').update({ estimate_id: null }).eq('id', session.id); render(); return; }
+      if (session.estimate_id === estId && !AUTO && !confirm('Replace the ' + (cur.data.line_count || 0) + ' line items' + (cur.data.total_sales ? ' (' + money(cur.data.total_sales) + ')' : '') + ' of “' + cur.data.name + '” with this AI breakdown?')) return;
     }
     if (!estId) {
       var r = await supabaseClient.from('estimates').insert(Object.assign({ name: /\(AI\)\s*$/i.test(session.name) ? session.name : session.name + ' (AI)', project_address: session.location, estimator_name: 'AI Estimator (' + me.name + ')', status: 'draft',
@@ -2059,8 +2154,8 @@ var AE = (function() {
         unit_labor_hours: l.unit_labor_hours, labor_crew_type: l.labor_crew_type, vendor_name: l.vendor_name || null, vendor_quote_ref: l.vendor_quote_ref || null,
         is_firm: l.is_firm !== false, is_wet_tap: !!l.is_wet_tap, sort_order: l.sort_order, notes: [l.basis, l.flag ? '⚠ ' + l.flag : ''].filter(Boolean).join(' — ') };
     });
-    var ins = await supabaseClient.from('estimate_line_items').insert(rows);
-    if (ins.error) { toast(ins.error.message); return; }
+    var ins = rows.length ? await supabaseClient.from('estimate_line_items').insert(rows) : { error: null };
+    if (ins.error) { toast(ins.error.message); if (AUTO) AUTO.err = 'Estimate lines: ' + ins.error.message; return; }
     session.estimate_id = estId;
     await supabaseClient.from('ai_est_sessions').update({ estimate_id: estId }).eq('id', session.id);
     toast('Estimate ready ✓' + (skippedCats.length ? ' — ' + skippedCats.join(', ').replace(/_/g, ' ') + ' stay with the takeoff' : '')); render();

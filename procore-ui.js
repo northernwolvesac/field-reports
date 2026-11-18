@@ -689,8 +689,7 @@
     ['Bid Board', 'bid-board.html'],
     ['Estimating', 'estimating.html'],
     ['Cost Catalog', 'assembly-library.html'],
-    ['Knowledge', 'est-knowledge.html'],
-    ['AI Estimator', 'ai-estimator.html']
+    ['Knowledge', 'est-knowledge.html']
   ];
   /*
    * PC.nwHeaderHtml() — the NW logo <header class="dash-header"> block from index.html
