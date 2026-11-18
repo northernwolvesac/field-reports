@@ -112,6 +112,64 @@
     try { var r = await sb().from('est_catalog_usage').select('item_id, n_lines, last_used').limit(5000); (r.data || []).forEach(function (u) { usageMap[String(u.item_id)] = u; }); } catch (e) { /* view missing */ }
     return usageMap;
   }
+  // ── smart search (Alisultan 11/17/2026): the items we use most come first ──
+  // The words may come in any order and every one must be in the name: "1 1/4 copper" finds '1-1/4" copper pipe & 1" insulation',
+  // "14 x 14" = "14x14", "diffusers" = "diffuser". Ranking: how many estimate lines used the item (est_catalog_usage),
+  // then your own recent picks, whole-word / exact-name matches, NW folders over the archive, shorter names.
+  function searchTokens(q) {
+    var s = String(q || '').toLowerCase().replace(/\u00d7/g, 'x').replace(/[\u201d\u2033]/g, '"').replace(/''/g, '"')
+      .replace(/(\d)\s+(\d+\/\d+)/g, '$1-$2')            // 1 1/4 -> 1-1/4
+      .replace(/(\d)\s*"?\s*x\s*(?=\d)/g, '$1x');          // 14 x 14, 14"x14 -> 14x14
+    return s.split(/[\s,]+/).map(function (t) {
+      t = t.replace(/^["']+|["']+$/g, '');
+      if (/^[a-z]{5,}s$/.test(t) && !/ss$/.test(t)) t = t.slice(0, -1);   // plural -> singular (diffusers, dampers, louvers)
+      return t;
+    }).filter(Boolean);
+  }
+  function reEsc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function usesOf(id) { var u = usageMap && usageMap[String(id)]; return u ? Number(u.n_lines || 0) : 0; }
+  function searchScore(it, toks, phrase, mru) {
+    var name = String(it.name || '').toLowerCase().replace(/\u00d7/g, 'x'), s = 0;
+    s += 40 * Math.log(1 + usesOf(it.id));
+    var mi = mru ? mru.indexOf(String(it.id)) : -1; if (mi >= 0) s += 30 - Math.min(20, mi);
+    toks.forEach(function (t) { if (new RegExp('(^|[^a-z0-9])' + reEsc(t) + '(s)?($|[^a-z0-9])').test(name)) s += 12; });
+    var bare = name.replace(/["']/g, '').trim();
+    if (bare === phrase || bare === phrase + 's') s += 40; else if (name.indexOf(toks[0]) === 0) s += 15;
+    var fp = String(it.folder_path || '');
+    if (/^archive/i.test(fp)) s -= 200; else if (/^NW/i.test(fp) || it.is_custom) s += 5;
+    return s - name.length * 0.05;
+  }
+  function rankRows(rows, q) {
+    var toks = searchTokens(q); if (!toks.length) return rows;
+    var phrase = toks.join(' '), mru = getMru().map(String);
+    rows.forEach(function (r) { r._score = searchScore(r, toks, phrase, mru); r._uses = usesOf(r.id); });
+    return rows.sort(function (a, b) { return (b._score - a._score) || natCompare(a.name, b.name); });
+  }
+  function applyTokens(q, toks) { toks.forEach(function (t) { q = q.ilike('name', '%' + escapeLike(t) + '%'); }); return q; }
+  // Ranked catalog search for typeaheads (takeoff "Catalog Item Name"): the matches + every used item that matches, best first.
+  async function search(text, opts) {
+    opts = opts || {};
+    var toks = searchTokens(text); if (!toks.length) return [];
+    await loadUsage();
+    var sel = opts.select || ITEM_SELECT;
+    var used = Object.keys(usageMap).sort(function (a, b) { return usesOf(b) - usesOf(a); }).slice(0, 300).filter(isNumId).map(Number);
+    var res = await Promise.all([
+      applyTokens(sb().from('est_catalog_items').select(sel), toks).order('id').limit(1000),
+      used.length ? applyTokens(sb().from('est_catalog_items').select(sel), toks).in('id', used) : Promise.resolve({ data: [] })
+    ]);
+    if (res[0].error) return { error: res[0].error };
+    var seen = {}, rows = [];
+    (res[1].data || []).concat(res[0].data || []).forEach(function (r) { if (!seen[r.id]) { seen[r.id] = 1; rows.push(r); } });
+    return rankRows(rows, text).slice(0, opts.limit || 40);
+  }
+  // Several catalog rows answer one name (Procore duplicates, M/L copies): take the one our estimates use most.
+  async function pickMostUsed(rows) {
+    if (!rows || !rows.length) return null;
+    await loadUsage();
+    var best = rows[0];
+    rows.forEach(function (r) { if (usesOf(r.id) > usesOf(best.id)) best = r; });
+    return best;
+  }
   function auditPills(it) {
     var p = [];
     if (it.needs_review) p.push('<span class="pc-pill" style="background:#fef3c7;color:#b45309" title="Price needs verification">verify</span>');
@@ -609,7 +667,7 @@
     }
 
     // ── toolbar ─────────────────────────────────────────────────────────
-    var SORTS = [['common', 'Common'], ['name', 'Name'], ['unit_cost', 'Unit Cost'], ['updated', 'Recently updated']];
+    var SORTS = [['common', 'Common (search: most used first)'], ['name', 'Name'], ['unit_cost', 'Unit Cost'], ['updated', 'Recently updated']];
     var AUDITS = [['', 'Any'], ['review', 'Needs verification'], ['zero_cost', 'No material price ($0)'], ['zero_labor', 'No labor time'], ['stale', 'Not checked in 6 months']];
     $('[data-sort]').addEventListener('click', function (e) {
       var self = this;
@@ -742,7 +800,8 @@
         else if (folderChildren(f.id).length) q = q.in('folder_id', folderTreeIds(f.id));   // folder + true descendants only
         else q = q.eq('folder_id', f.id);
       }
-      if (st.q.trim()) q = q.ilike('name', '%' + escapeLike(st.q.trim()) + '%');
+      var toks = searchTokens(st.q);
+      if (toks.length) { q = applyTokens(q, toks); await loadUsage(); }
       if (st.filters.types.length) q = q.in('item_type', st.filters.types);
       q = applyUnitFilter(q, st.filters.unit);
       if (st.filters.taxable) q = q.eq('is_untaxed', false);
@@ -760,7 +819,8 @@
             from += 1000;
           }
           var customFirst = st.sort === 'common';
-          all.sort(function (a, b) { return (customFirst ? (b.is_custom ? 1 : 0) - (a.is_custom ? 1 : 0) : 0) || natCompare(a.name, b.name); });
+          if (customFirst && toks.length) rankRows(all, st.q);   // a search: most used + best match first
+          else all.sort(function (a, b) { return (customFirst ? (b.is_custom ? 1 : 0) - (a.is_custom ? 1 : 0) : 0) || natCompare(a.name, b.name); });
           natCache = all;
         }
         return { rows: natCache.slice(st.page * PAGE_SIZE, (st.page + 1) * PAGE_SIZE), count: natCache.length };
@@ -1354,6 +1414,11 @@
     pushMru: pushMru,
     getMru: getMru,
     escapeLike: escapeLike,
+    search: search,
+    searchTokens: searchTokens,
+    rankRows: rankRows,
+    loadUsage: loadUsage,
+    pickMostUsed: pickMostUsed,
     metaLine: metaLine,
     CATEGORIES: CATEGORIES,
     moveItems: moveItems,

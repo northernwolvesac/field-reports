@@ -1744,9 +1744,21 @@ var AE = (function() {
     for (var i = 0; i < names.length; i++) if (Math.abs(names[i][0] - inch) < 0.002) return names[i][1] + ' = 1\'';
     return inch.toFixed(3) + '" = 1\'';
   }
+  // several catalog rows answer one name (Procore duplicates, M/L copies): use the one our estimates use most (est_catalog_usage)
+  async function mostUsedRow(rows) {
+    if (!rows || !rows.length) return null;
+    if (rows.length === 1) return rows[0];
+    try {
+      var u = await supabaseClient.from('est_catalog_usage').select('item_id,n_lines').in('item_id', rows.map(function(r) { return r.id; }));
+      var n = {}; (u.data || []).forEach(function(x) { n[String(x.item_id)] = Number(x.n_lines || 0); });
+      var best = rows[0]; rows.forEach(function(r) { if ((n[String(r.id)] || 0) > (n[String(best.id)] || 0)) best = r; });
+      return best;
+    } catch (e) { return rows[0]; }
+  }
   async function bridgeRate(patterns) {
     for (var i = 0; i < patterns.length; i++) {
-      var c = await supabaseClient.from('est_catalog_items').select('id,name,unit_cost,unit_labor_min').ilike('name', patterns[i]).order('is_custom', { ascending: false }).limit(1).maybeSingle();
+      var c = await supabaseClient.from('est_catalog_items').select('id,name,unit_cost,unit_labor_min').ilike('name', patterns[i]).order('is_custom', { ascending: false }).limit(25);
+      c = { data: await mostUsedRow(c.data) };
       if (c.data) return { id: c.data.id, name: c.data.name, cost: Number(c.data.unit_cost || 0), hrs: Number(c.data.unit_labor_min || 0) / 60, basis: 'Procore catalog' };
       var n = await supabaseClient.from('est_norms').select('item,unit_cost,labor_hrs,projects').ilike('item', patterns[i]).order('projects', { ascending: false }).limit(1).maybeSingle();
       if (n.data) return { id: null, name: n.data.item, cost: Number(n.data.unit_cost || 0), hrs: Number(n.data.labor_hrs || 0), basis: 'NWAC Procore rate (' + n.data.projects + ' jobs)' };

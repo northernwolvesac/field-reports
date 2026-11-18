@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
 <script src="est-drawings.js?v=584"></script>
-<script src="nw-catalog-picker.js?v=584"></script>
+<script src="nw-catalog-picker.js?v=596"></script>
 <script src="nw-duct-weight.js?v=584"></script>
 <script src="geo-takeoff.js?v=584"></script>
 <script src="est-engine.js?v=585"></script>
@@ -1272,7 +1272,13 @@ requireAuth().catch(function(){});
   async function searchCatalog(q) {
     q = q.trim(); var list = $('catList'); if (!list) return; if (q.length < 2) { list.style.display = 'none'; return; }
     var rows = [];
-    if (catalogOk) {
+    if (catalogOk && window.NWCatalogPicker && NWCatalogPicker.search) {
+      // ranked: the items our estimates use most first, words in any order ("1 1/4 copper", "14x14")
+      var found = await NWCatalogPicker.search(q, { limit: 40 });
+      if (found && found.error) { if (/est_catalog_items|42P01|does not exist/i.test(found.error.message)) catalogOk = false; }
+      else rows = (found || []).map(function(x) { var c = fromCatalogItem(x); if (x._uses) c.meta += ' · used ' + x._uses + '×'; return c; });
+      if ($('lName') && $('lName').value.trim() !== q) return;   // a newer keystroke is on its way
+    } else if (catalogOk) {
       var r = await sb.from('est_catalog_items').select('id,name,description,folder_path,unit,unit_cost,unit_labor_min,waste_pct,catalog_number,nw_category,takeoff_type,is_custom').ilike('name', '%' + q.replace(/\s+/g, '%') + '%').order('is_custom', { ascending: false }).order('name').limit(40);
       if (r.error) { if (/est_catalog_items|42P01|does not exist/i.test(r.error.message)) catalogOk = false; } else rows = (r.data || []).map(fromCatalogItem);
     }
@@ -1331,11 +1337,19 @@ requireAuth().catch(function(){});
     layers = layers.concat(r.data); r.data.forEach(function(l) { if (!l.params || typeof l.params !== 'object') l.params = {}; groupEntry(l.group_name, true).collapsed = false; }); saveGroups();
     toast(r.data.length + ' standard layers added', 'success'); renderAll();
   }
+  // several catalog rows with one name (Procore duplicates): the one our estimates use most, else the first (custom first)
+  async function mostUsed(rows) {
+    if (!rows || !rows.length) return null;
+    if (window.NWCatalogPicker && NWCatalogPicker.pickMostUsed) { try { return await NWCatalogPicker.pickMostUsed(rows); } catch (e) {} }
+    return rows[0];
+  }
   async function findRate(name) {
     var m = /^(\S+)"\s+(copper|pvc|cpvc|black iron|steel)/i.exec(name), loose = m ? m[1] + '%' + m[2] + ' pipe%' : null;
-    if (catalogOk && loose) { var c0 = await sb.from('est_catalog_items').select('id,unit_cost,unit_labor_min,waste_pct').ilike('name', loose).order('is_custom', { ascending: false }).limit(1).maybeSingle();
+    if (catalogOk && loose) { var c0 = await sb.from('est_catalog_items').select('id,unit_cost,unit_labor_min,waste_pct').ilike('name', loose).order('is_custom', { ascending: false }).limit(25);
+      c0 = { data: await mostUsed(c0.data) };
       if (c0.data) return { id: c0.data.id, cost: Number(c0.data.unit_cost || 0), hrs: Number(c0.data.unit_labor_min || 0) / 60, waste: Number(c0.data.waste_pct || 0), basis: 'Procore catalog' }; }
-    if (catalogOk) { var c = await sb.from('est_catalog_items').select('id,unit_cost,unit_labor_min,waste_pct').ilike('name', name).order('is_custom', { ascending: false }).limit(1).maybeSingle();
+    if (catalogOk) { var c = await sb.from('est_catalog_items').select('id,unit_cost,unit_labor_min,waste_pct').ilike('name', name).order('is_custom', { ascending: false }).limit(25);
+      if (!c.error) c = { data: await mostUsed(c.data) };
       if (c.error && /est_catalog_items|42P01|does not exist/i.test(c.error.message)) catalogOk = false; else if (c.data) return { id: c.data.id, cost: Number(c.data.unit_cost || 0), hrs: Number(c.data.unit_labor_min || 0) / 60, waste: Number(c.data.waste_pct || 0), basis: 'Procore catalog' }; }
     var n = await sb.from('est_norms').select('unit_cost,labor_hrs,projects').ilike('item', name).order('projects', { ascending: false }).limit(1).maybeSingle();
     if (n.data) return { id: null, cost: Number(n.data.unit_cost || 0), hrs: Number(n.data.labor_hrs || 0), waste: 0, basis: 'NWAC Procore rate (' + n.data.projects + ' jobs)' };
@@ -2349,7 +2363,7 @@ requireAuth().catch(function(){});
       var r = await sb.from('est_catalog_items').select('id,name,unit,unit_cost,unit_labor_min,waste_pct').ilike('name', '%' + it.q + '%').order('name').limit(200);
       var rows = (r.data || []).filter(function(x) { return !(it.not && it.not.test(x.name)); });
       if (size) { var rx = sizeRx(size, it.size); rows = rows.filter(function(x) { return rx.test(x.name); }); }
-      cat = rows[0] || null;
+      cat = await mostUsed(rows);
     }
     var row = { estimate_id: estimateId, name: cat ? cat.name : want, group_name: it.cat === 'ductwork' ? 'Duct accessories' : it.cat === 'pipework' ? 'Valves & specialties' : 'Controls',
       takeoff_type: 'count', category: it.cat, labor_crew_type: it.crew, unit: 'ea', unit_material_cost: cat ? Number(cat.unit_cost || 0) : 0, unit_labor_hours: cat ? Math.round(Number(cat.unit_labor_min || 0) / 60 * 10000) / 10000 : 0,
