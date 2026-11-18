@@ -18,7 +18,7 @@
 <script src="est-drawings.js?v=584"></script>
 <script src="nw-catalog-picker.js?v=596"></script>
 <script src="nw-duct-weight.js?v=584"></script>
-<script src="geo-takeoff.js?v=584"></script>
+<script src="geo-takeoff.js?v=601"></script>
 <script src="est-engine.js?v=585"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
@@ -2708,14 +2708,25 @@ requireAuth().catch(function(){});
       if (d && !d.error && d.xy) { var ptft = d.ptft;
         for (var i = 0; i < d.xy.length; i++) { var pc = d.xy[i], sz = String(pc.size || ''), round = /Ø/.test(sz), dim = sz.replace(/["”Ø]/g, '').split('x');
           var name = round ? dim[0] + 'x' + dim[0] + ' round/oval with 1" ACL' : sz + ' rectangular with 1" ACL'; var l = await layerFor(name, 'ductwork', 'Default Group'); var pts = [];
-          if (pc.k === 'd') { var h = pc.len * ptft / 2; pts = [V(pc.cx - pc.ux * h, pc.cy - pc.uy * h), V(pc.cx + pc.ux * h, pc.cy + pc.uy * h)]; rows.push(mk(l, pts, pc.len)); }
-          else (pc.segs || []).forEach(function(s) { var q = [V(s[0], s[1]), V(s[2], s[3])]; rows.push(mk(l, q, Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft)); }); } }
+          var pf = pc.pf || ptft;
+          if (pc.k === 'd') { var h = pc.len * pf / 2; pts = [V(pc.cx - pc.ux * h, pc.cy - pc.uy * h), V(pc.cx + pc.ux * h, pc.cy + pc.uy * h)]; rows.push(mk(l, pts, pc.len)); }
+          else (pc.segs || []).forEach(function(s) { var q = [V(s[0], s[1]), V(s[2], s[3])]; rows.push(mk(l, q, Math.hypot(s[2] - s[0], s[3] - s[1]) / pf)); }); } }
       if (pp && !pp.error && pp.xy) { for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
-          var pname = size + ' copper pipe & 1" insulation'; var pl = await layerFor(cd ? size + ' condensate drain' : pname, 'pipework', 'Pipes'); rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / pp.ptft)); } }
+          var pname = size + ' copper pipe & 1" insulation'; var pl = await layerFor(cd ? size + ' condensate drain' : pname, 'pipework', 'Pipes'); rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / (s2.pf || pp.ptft))); } }
+      // plans drawn at different scales on this sheet (the geometry found several "x" = 1'-0"" notes): one scale area per plan
+      var vpsAll = [].concat((d && d.viewports) || [], (!(d && d.viewports) && pp && pp.viewports) || []);
+      if (vpsAll.length && !scaleAreas.length) {
+        var vrows = [];
+        vpsAll.forEach(function(vp1) { (vp1.boxes || []).forEach(function(bx) { var c = [V(bx[0], bx[1]), V(bx[2], bx[1]), V(bx[2], bx[3]), V(bx[0], bx[3])], xs = c.map(function(q) { return q[0]; }), ys = c.map(function(q) { return q[1]; });
+          var x0 = Math.min.apply(null, xs) - 18, x1 = Math.max.apply(null, xs) + 18, y0 = Math.min.apply(null, ys) - 18, y1 = Math.max.apply(null, ys) + 18, ppf = vp1.ptft || vp1.scale * 72, pr = SCALE_PRESETS.find(function(x) { return Math.abs(x.ppf - ppf) < 0.01; });
+          vrows.push({ drawing_id: p.drawing.id, page_number: p.page, tool_type: 'scale', points: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(function(q) { return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]; }), label: (pr ? pr.label : vp1.note) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ppf, color: '#dc2626', notes: 'Scale area — read from the sheet' }); }); });
+        if (vrows.length) { var vi = await sb.from('estimate_measurements').insert(vrows).select(); if (!vi.error) { allMeas = allMeas.concat(vi.data); meas = meas.concat(vi.data); loadScale(); } }
+      }
       // a run inside a scale area (enlarged plan) is measured with that area's scale, not the one read for the sheet
       function mk(l, pts, ft) { var sa = scaleAreaAt(pts[0]); if (sa) ft = polyLen(pts) / Number(sa.scale_pixels_per_foot);
         return { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: sa ? Number(sa.scale_pixels_per_foot) : ((d && d.ptft) || (pp && pp.ptft) || scalePpf), label: 'auto' }; }
       for (var c = 0; c < rows.length; c += 200) { var ins = await sb.from('estimate_measurements').insert(rows.slice(c, c + 200)).select(); if (ins.error) throw new Error(ins.error.message); allMeas = allMeas.concat(ins.data); meas = meas.concat(ins.data); }
+      if (vpsAll.length) { await recomputeScaled(); redraw(); }
       if (!scalePpf && ((d && d.ptft) || (pp && pp.ptft))) { var ppf = (d && d.ptft) || pp.ptft; var preset = SCALE_PRESETS.find(function(x) { return Math.abs(x.ppf - ppf) < 0.01; }); if (preset) await setPresetScale(preset, true); }
       saveGroups(); toast(rows.length + ' runs measured' + (made ? ', ' + made + ' layers added' : '') + (d && d.error ? ' · ducts: ' + d.error : '') + (pp && pp.error ? ' · pipes: ' + pp.error : ''), 'success'); renderAll(); scheduleSync();
     } catch (e) { toast('Auto-measure failed: ' + e.message, 'error'); }

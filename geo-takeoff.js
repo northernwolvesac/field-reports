@@ -2459,8 +2459,97 @@
       return { sizes: sizes, total_ft: Math.round(total * 10) / 10, unsized_ft: Math.round(unsized), inherited: inherited, levels: runs.map(function (r) { return r.map(function (e) { return e.v; }); }), risers: true,
         xy: D.wantPieces ? segs.map(function (s, i) { return { s: s.xy, z: got[i] ? pipeLabel(got[i].d) : '?', ft: Math.round(s.ft * 10) / 10 }; }) : undefined };
     }
+    // ─── several scales on one sheet (Russ 11/18/2026, Costco Paramus MR-2.1: a 1/4" enlarged plan beside two 1/8" plans) ───
+    // The sheet's line work is split into blocks (clusters of short segments on a 24 pt grid; borders and long grid lines left out),
+    // each block takes the nearest "x" = 1'-0"" note (its title sits under / beside it), and the blocks of each scale are measured on
+    // their own with that scale first (the label fit can still overrule it). The results are added up; every traced piece keeps the
+    // points per foot it was measured with (pf) and the result lists the viewports (scale + boxes, user space) for the takeoff.
+    var VP_NOTE_RE = /(\d+(?:\/\d+)?)\s*["”]\s*=\s*1\s*['’]\s*-?\s*0\s*["”]?/;
+    function scaleNotes(D) {
+      var out = [];
+      (D.text || []).forEach(function (t) { var m = VP_NOTE_RE.exec(t.str || ''); if (!m) return; var f = frac(m[1]); if (!(f >= 1 / 64 && f <= 3)) return;
+        out.push({ f: f, str: m[0], box: [Math.min(t.x0, t.x1), Math.min(t.y0, t.y1), Math.max(t.x0, t.x1), Math.max(t.y0, t.y1)] }); });
+      return out;
+    }
+    function boxDist(a, b) { var dx = Math.max(0, a[0] - b[2], b[0] - a[2]), dy = Math.max(0, a[1] - b[3], b[1] - a[3]); return Math.sqrt(dx * dx + dy * dy); }
+    function sheetBlocks(D) {
+      var S = D.segs, n = S.length / 5, mx = 0, my = 0, i;
+      for (i = 0; i < n; i++) { var o = i * 5; mx = Math.max(mx, S[o], S[o + 2]); my = Math.max(my, S[o + 1], S[o + 3]); }
+      if (!(mx > 0 && my > 0)) return [];
+      var C = 24, gw = Math.ceil(mx / C) + 2, gh = Math.ceil(my / C) + 2, occ = new Uint8Array(gw * gh), maxL = 0.25 * Math.min(mx, my);
+      for (i = 0; i < n; i++) { var p = i * 5, x1 = S[p], y1 = S[p + 1], x2 = S[p + 2], y2 = S[p + 3], L = hyp(x2 - x1, y2 - y1); if (L > maxL || x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) continue;
+        var k = Math.max(1, Math.ceil(L / C)); for (var j = 0; j <= k; j++) occ[Math.floor((y1 + (y2 - y1) * j / k) / C) * gw + Math.floor((x1 + (x2 - x1) * j / k) / C)] = 1; }
+      var lab = new Int32Array(gw * gh).fill(-1), out = [];
+      for (var c = 0; c < gw * gh; c++) { if (!occ[c] || lab[c] >= 0) continue;
+        var id = out.length, st = [c], b = { x0: 1e9, y0: 1e9, x1: -1, y1: -1, cells: 0 }; lab[c] = id;
+        while (st.length) { var q = st.pop(), qx = q % gw, qy = (q - qx) / gw; b.cells++; b.x0 = Math.min(b.x0, qx); b.y0 = Math.min(b.y0, qy); b.x1 = Math.max(b.x1, qx); b.y1 = Math.max(b.y1, qy);
+          for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) { var nx = qx + dx, ny = qy + dy; if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue; var r = ny * gw + nx; if (occ[r] && lab[r] < 0) { lab[r] = id; st.push(r); } } }
+        if (b.cells >= 40) out.push({ box: [b.x0 * C, b.y0 * C, (b.x1 + 1) * C, (b.y1 + 1) * C], cells: b.cells }); }
+      return out;
+    }
+    function viewportsOf(D) {
+      if (D.noViewports || D.forceScale || D.raster || !D.segs || !D.text) return null;
+      var notes = scaleNotes(D), fs = {}; notes.forEach(function (x) { fs[x.f] = 1; });
+      if (Object.keys(fs).length < 2) return null;
+      var blocks = sheetBlocks(D); if (blocks.length < 2) return null;
+      var groups = {};
+      blocks.forEach(function (b) {
+        var best = null, bd = Infinity; notes.forEach(function (x) { var d = boxDist(b.box, x.box); if (d < bd) { bd = d; best = x; } });
+        if (!best || bd > 150) return;
+        var g = groups[best.f] = groups[best.f] || { f: best.f, str: best.str, boxes: [], cells: 0 }; g.boxes.push(b.box); g.cells += b.cells;
+      });
+      var keys = Object.keys(groups); if (keys.length < 2) return null;
+      return keys.map(function (k) { return groups[k]; }).sort(function (a, b) { return b.cells - a.cells; });
+    }
+    function subD(D, keep) {
+      var S = D.segs, n = S.length / 5, idx = new Int32Array(n).fill(-1), list = [], i;
+      for (i = 0; i < n; i++) { var o = i * 5; if (keep((S[o] + S[o + 2]) / 2, (S[o + 1] + S[o + 3]) / 2)) { idx[i] = list.length; list.push(i); } }
+      var segs = new Float64Array(list.length * 5); list.forEach(function (i0, j) { for (var k = 0; k < 5; k++) segs[j * 5 + k] = S[i0 * 5 + k]; });
+      var o2 = {}; Object.keys(D).forEach(function (k) { o2[k] = D[k]; });
+      function mid4(g) { return keep((g[0] + g[2]) / 2, (g[1] + g[3]) / 2); }
+      o2.segs = segs;
+      o2.rectSeg = (D.rectSeg || []).map(function (k) { return idx[k]; }).filter(function (k) { return k >= 0; });
+      o2.text = (D.text || []).filter(function (t) { return keep((t.x0 + t.x1) / 2, (t.y0 + t.y1) / 2); });
+      ['glyphs', 'fills', 'bnd', 'symSegs'].forEach(function (k) { if (Array.isArray(D[k])) o2[k] = D[k].filter(mid4); });
+      return o2;
+    }
+    function addInto(a, b) {
+      Object.keys(b).forEach(function (k) {
+        var v = b[k], cur = a[k]; if (v === undefined || v === null || k === 'ptft' || k === 'error') return;
+        if (cur === undefined || cur === null) { a[k] = (typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v; return; }
+        if (typeof v === 'number' && typeof cur === 'number') a[k] = Math.round((cur + v) * 10) / 10;
+        else if (Array.isArray(v) && Array.isArray(cur)) a[k] = cur.concat(v);
+        else if (typeof v === 'object' && !Array.isArray(v) && typeof cur === 'object' && !Array.isArray(cur)) addInto(cur, v);
+        else if (typeof v === 'boolean') a[k] = cur || v;
+      });
+    }
+    function byViewports(D, fn) {
+      var vps = viewportsOf(D); if (!vps) return fn(D);
+      var PAD = 36;
+      function groupOf(x, y) {
+        for (var g = 0; g < vps.length; g++) for (var b = 0; b < vps[g].boxes.length; b++) { var bx = vps[g].boxes[b]; if (x >= bx[0] - PAD && x <= bx[2] + PAD && y >= bx[1] - PAD && y <= bx[3] + PAD) return g; }
+        return -1;
+      }
+      var parts = vps.map(function (g, gi) { var sd = subD(D, function (x, y) { return groupOf(x, y) === gi; });
+        sd.fullText = (g.str + ' ').repeat(6) + sd.text.map(function (t) { return t.str; }).join(' '); return { g: g, D: sd }; });
+      var rest = subD(D, function (x, y) { return groupOf(x, y) < 0; });
+      parts.push({ g: null, D: rest });
+      var merged = null, best = null, errs = [], out = [];
+      parts.forEach(function (pt) {
+        var r; try { r = fn(pt.D); } catch (e) { r = { error: String(e && e.message || e) }; }
+        if (pt.g) out.push({ scale: pt.g.f, ptft: r && r.ptft ? r.ptft : pt.g.f * 72, note: pt.g.str, boxes: pt.g.boxes, total_ft: r && !r.error ? (r.total_ft || 0) : 0, error: r && r.error ? r.error : undefined });
+        if (!r || r.error) { if (r && r.error) errs.push(r); return; }
+        (r.xy || []).forEach(function (x) { x.pf = r.ptft; });
+        if (!merged) merged = {};
+        addInto(merged, r);
+        if (!best || (r.total_ft || 0) > (best.total_ft || 0)) best = r;
+      });
+      if (!merged) { var e0 = errs[0] || { error: 'nothing measured' }; e0.viewports = out; return e0; }
+      merged.ptft = best.ptft; merged.scale_from = 'viewports'; merged.viewports = out;
+      return merged;
+    }
     onmessage = function (e) {
-      try { postMessage({ ok: true, result: e.data.mode === 'risers' ? measureRisers(e.data) : e.data.mode === 'pipes' ? measurePipes(e.data) : measure(e.data) }); }
+      try { postMessage({ ok: true, result: e.data.mode === 'risers' ? measureRisers(e.data) : e.data.mode === 'pipes' ? byViewports(e.data, measurePipes) : byViewports(e.data, measure) }); }
       catch (err) { postMessage({ ok: false, error: String(err && err.message || err) }); }
     };
   }
