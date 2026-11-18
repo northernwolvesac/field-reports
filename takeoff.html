@@ -11,7 +11,7 @@
 <script src="supabase-config.js?v=584"></script>
 <script src="auth.js?v=584"></script>
 <script src="est-totals.js?v=586"></script>
-<script src="procore-ui.js?v=584"></script>
+<script src="procore-ui.js?v=597"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
@@ -1706,9 +1706,43 @@ requireAuth().catch(function(){});
 
   // ─── scale ───
   function loadScale() {
-    var sm = meas.filter(function(m) { return m.tool_type === 'scale'; }).pop();
+    var sm = meas.filter(function(m) { return m.tool_type === 'scale' && !isScaleArea(m); }).pop();
     scalePpf = sm ? Number(sm.scale_pixels_per_foot) : null; scaleLabel = sm ? (sm.label || 'Custom') : null;
-    var chip = $('scaleChip'); chip.classList.toggle('unset', !scalePpf); chip.textContent = scalePpf ? scaleLabel : 'not defined yet';
+    scaleAreas = meas.filter(isScaleArea);
+    var chip = $('scaleChip'), n = scaleAreas.length;
+    chip.classList.toggle('unset', !scalePpf && !n);
+    chip.textContent = (scalePpf ? scaleLabel : (n ? 'sheet: none' : 'not defined yet')) + (n ? ' + ' + n + ' scale area' + (n === 1 ? '' : 's') : '');
+  }
+  // ── scale areas (Russ 11/18/2026, Costco MR-2.1: two enlarged plans at different scales on one sheet) ──
+  // A scale row whose points outline an area (3+ points) = a viewport with its own scale. A mark is measured with the scale of the
+  // (smallest) area its first point falls in, else with the sheet scale.
+  var scaleAreas = [], pendingScaleArea = null, pendingBox = null;
+  function isScaleArea(m) { return !!(m && m.tool_type === 'scale' && Array.isArray(m.points) && m.points.length >= 3); }
+  function scaleAreaAt(q) { var best = null, ba = Infinity; scaleAreas.forEach(function(a) { if (inPoly(q, a.points)) { var ar = polyArea(a.points); if (ar < ba) { ba = ar; best = a; } } }); return best; }
+  function ppfOf(pts) { if (!pts || !pts.length || !scaleAreas.length) return scalePpf; var a = scaleAreaAt(pts[0]); return a ? Number(a.scale_pixels_per_foot) : scalePpf; }
+  function lenFt(pts) { var k = ppfOf(pts); return k ? polyLen(pts) / k : 0; }
+  function areaSf(pts) { var k = ppfOf(pts); return k ? polyArea(pts) / (k * k) : 0; }
+  function scaleAreaDialog(pts) {
+    var g = {}; SCALE_PRESETS.forEach(function(p, i) { (g[p.group] = g[p.group] || []).push('<option value="' + i + '">' + esc(p.label) + '</option>'); });
+    var body = '<div class="pc-banner-info" style="margin-bottom:12px">Everything you measure inside this area uses this scale; the rest of the sheet keeps the sheet scale. Read the scale under the plan\'s title (e.g. <b>SCALE: 1/4" = 1\'-0"</b>).</div>' +
+      '<div class="pc-field"><label class="pc-label">Scale of this area</label><select class="pc-select" id="saPreset"><option value="">Select…</option>' + Object.keys(g).map(function(k) { return '<optgroup label="' + k + '">' + g[k].join('') + '</optgroup>'; }).join('') + '</select></div>' +
+      '<div class="pc-field"><label class="pc-label">Or calibrate inside the area</label><button class="pc-btn pc-btn-outline" id="saCalib">' + ic('straighten', 16) + 'Calibrate: click two points</button><div class="hint">Click both ends of a known dimension inside the area, then type its length in feet.</div></div>';
+    var done = false;
+    var dlg = P.modal({ title: 'Scale area', body: body, onClose: function() { pendingBox = null; redraw(); }, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Save scale area', primary: true, close: false, onClick: function() {
+      var v = $('saPreset').value; if (v === '') { toast('Pick the scale of this area', 'error'); return false; }
+      done = true; dlg.close(); var pr = SCALE_PRESETS[+v]; saveScaleArea(pts, pr.ppf, pr.label);
+    } }] });
+    $('saCalib').onclick = function() { done = true; dlg.close(); setTool('scale'); pendingScaleArea = pts; updateStatus(); toast('Click both ends of a known dimension inside the area'); };
+  }
+  async function saveScaleArea(pts, ppf, label) {
+    var p = plans[planIdx]; if (!p || !me.canEdit) return;
+    var row = { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'scale', points: pts.map(function(q) { return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]; }),
+      label: label, computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ppf, color: '#dc2626', notes: 'Scale area' };
+    var r = await sb.from('estimate_measurements').insert(row).select().single();
+    if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); return; }
+    allMeas.push(r.data); meas.push(r.data); pushUndo({ type: 'add', id: r.data.id });
+    var n = await recomputeScaled(); setTool('select'); redraw(); renderAll(); scheduleSync();
+    toast('Scale area ' + label + ' saved' + (n ? ' — ' + n + ' mark' + (n === 1 ? '' : 's') + ' re-measured' : ''), 'success');
   }
   function scaleDialog() {
     if (!pdfPage) { toast('Open a plan first', 'error'); return; }
@@ -1717,9 +1751,14 @@ requireAuth().catch(function(){});
     var body = '<div class="pc-field"><label class="pc-label">Current scale</label><div class="ro" style="font-weight:600' + (scalePpf ? '' : ';color:var(--pc-danger)') + '">' + (scalePpf ? esc(scaleLabel) : 'not defined yet') + '</div></div>' +
       '<div class="pc-field"><label class="pc-label">Pick the sheet\'s scale</label><select class="pc-select" id="scalePreset"><option value="">Select…</option>' + Object.keys(g).map(function(k) { return '<optgroup label="' + k + '">' + g[k].join('') + '</optgroup>'; }).join('') + '</select></div>' +
       '<div class="pc-field"><label class="pc-label">Apply to</label><select class="pc-select" id="scaleScope"><option value="">This sheet only</option><option value="drawing">This sheet + the other sheets of this drawing that have no scale</option><option value="all">This sheet + every sheet of the estimate that has no scale</option></select></div>' +
-      '<div class="pc-field"><label class="pc-label">Or calibrate on the drawing</label><button class="pc-btn pc-btn-outline" id="scaleCalib">' + ic('straighten', 16) + 'Calibrate: click two points</button><div class="hint">Click both ends of a known dimension on the plan, then type its length in feet.</div></div>';
+      '<div class="pc-field"><label class="pc-label">Or calibrate on the drawing</label><button class="pc-btn pc-btn-outline" id="scaleCalib">' + ic('straighten', 16) + 'Calibrate: click two points</button><div class="hint">Click both ends of a known dimension on the plan, then type its length in feet.</div></div>' +
+      '<div class="pc-field"><label class="pc-label">Plans at different scales on this sheet</label>' +
+      (scaleAreas.length ? '<div style="margin-bottom:8px">' + scaleAreas.map(function(a, i) { return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:10px;height:10px;border:2px dashed #dc2626;display:inline-block"></span><span style="flex:1">Area ' + (i + 1) + ': <b>' + esc(a.label || '') + '</b></span><a class="pc-link" data-sadel="' + a.id + '" style="cursor:pointer;color:var(--pc-danger)">Remove</a></div>'; }).join('') + '</div>' : '') +
+      '<button class="pc-btn pc-btn-outline" id="scaleAreaBtn">' + ic('crop_free', 16) + 'Add a scale area</button><div class="hint">For a sheet with enlarged plans: draw a box around one plan and give it its own scale. Marks inside the box use it, the rest of the sheet keeps the sheet scale.</div></div>';
     var dlg = P.modal({ title: 'Drawing Scale', body: body, buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Set scale', primary: true, close: false, onClick: function() { var v = $('scalePreset').value; if (v === '') { toast('Pick a scale', 'error'); return false; } scaleScopeNext = $('scaleScope').value; dlg.close(); setPresetScale(SCALE_PRESETS[+v], false); } }] });
     $('scaleCalib').onclick = function() { scaleScopeNext = $('scaleScope').value; dlg.close(); setTool('scale'); toast('Click two points of a known dimension'); };
+    $('scaleAreaBtn').onclick = function() { dlg.close(); setTool('scalearea'); toast('Click two opposite corners around the plan that has its own scale'); };
+    dlg.body.querySelectorAll('[data-sadel]').forEach(function(a) { a.onclick = async function() { dlg.close(); await deleteMark(a.getAttribute('data-sadel')); }; });
   }
   async function setPresetScale(preset, auto) {
     if (!pdfPage || !me.canEdit) return;
@@ -1728,33 +1767,40 @@ requireAuth().catch(function(){});
     var r = await sb.from('estimate_measurements').insert(row).select().single();
     if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data);
-    await recomputeScaled(preset.ppf); loadScale(); redraw(); renderAll(); scheduleSync();
+    await recomputeScaled(); redraw(); renderAll(); scheduleSync();
     if (!auto) { toast('Scale ' + preset.label, 'success'); if (scaleScopeNext) await copyScaleToSheets(preset.ppf, preset.label, scaleScopeNext); scaleScopeNext = ''; }
   }
   // the same scale on the sheets that have none yet (never overwrites a scale that is already set)
   async function copyScaleToSheets(ppf, label, scope) {
     var cur = plans[planIdx]; if (!cur || !scope) return;
-    var has = {}; allMeas.forEach(function(m) { if (m.tool_type === 'scale') has[m.drawing_id + ':' + m.page_number] = 1; });
+    var has = {}; allMeas.forEach(function(m) { if (m.tool_type === 'scale' && !isScaleArea(m)) has[m.drawing_id + ':' + m.page_number] = 1; });
     var rows = plans.filter(function(q) { return q !== cur && (scope === 'all' || q.drawing.id === cur.drawing.id) && !has[q.drawing.id + ':' + q.page]; })
       .map(function(q) { return { drawing_id: q.drawing.id, page_number: q.page, tool_type: 'scale', points: [[0, 0]], label: label, computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ppf, color: '#dc2626', notes: 'Copied from ' + (cur.sheet || ('page ' + cur.page)) }; });
     if (!rows.length) { toast('No other sheet without a scale'); return; }
     for (var i = 0; i < rows.length; i += 200) { var r = await sb.from('estimate_measurements').insert(rows.slice(i, i + 200)).select(); if (r.error) { toast(r.error.message, 'error'); return; } allMeas = allMeas.concat(r.data); }
     toast('Scale ' + label + ' applied to ' + rows.length + ' more sheet' + (rows.length === 1 ? '' : 's'), 'success');
   }
-  async function recomputeScaled(ppf) {
+  async function recomputeScaled() {
+    loadScale(); var n = 0;
     for (var i = 0; i < meas.length; i++) { var m = meas[i]; if (m.tool_type !== 'length' && m.tool_type !== 'area') continue;
-      m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / ppf : polyArea(m.points) / (ppf * ppf); m.scale_pixels_per_foot = ppf;
-      await sb.from('estimate_measurements').update({ computed_value: m.computed_value, scale_pixels_per_foot: ppf }).eq('id', m.id); }
+      if (isAnnot(m)) continue;
+      var ppf = ppfOf(m.points); if (!ppf) continue;
+      var v = m.tool_type === 'length' ? polyLen(m.points) / ppf : polyArea(m.points) / (ppf * ppf);
+      if (Math.abs(v - Number(m.computed_value || 0)) < 1e-6 && Math.abs(ppf - Number(m.scale_pixels_per_foot || 0)) < 1e-6) continue;
+      m.computed_value = v; m.scale_pixels_per_foot = ppf; n++;
+      await sb.from('estimate_measurements').update({ computed_value: v, scale_pixels_per_foot: ppf }).eq('id', m.id); }
+    return n;
   }
   async function applyCustomScale() {
     var s = await P.prompt({ title: 'Set drawing scale', label: 'The line you drew — how long is it in feet? (e.g. 10 for 10\'-0")', placeholder: '10.0', okLabel: 'Set scale' });
-    if (s == null) { draft = []; setTool('select'); return; }
+    if (s == null) { draft = []; pendingScaleArea = null; setTool('select'); return; }
     var ft = Number(s); if (!(ft > 0) || draft.length < 2) { toast('Enter the distance in feet', 'error'); draft = []; setTool('select'); return; }
     var ppf = dist(draft[0], draft[1]) / ft, p = plans[planIdx];
+    if (pendingScaleArea) { var sa = pendingScaleArea; pendingScaleArea = null; draft = []; await saveScaleArea(sa, ppf, 'Custom (' + ft + ' ft)'); return; }
     var r = await sb.from('estimate_measurements').insert({ drawing_id: p.drawing.id, page_number: p.page, tool_type: 'scale', points: draft.slice(), label: 'Custom (' + ft + ' ft)', computed_value: ft, computed_unit: 'ft', scale_pixels_per_foot: ppf, color: '#dc2626' }).select().single();
     if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); return; }
     allMeas.push(r.data); meas.push(r.data); draft = [];
-    await recomputeScaled(ppf); loadScale(); setTool('select'); redraw(); renderAll(); scheduleSync();
+    await recomputeScaled(); setTool('select'); redraw(); renderAll(); scheduleSync();
     if (scaleScopeNext) { await copyScaleToSheets(ppf, 'Custom (' + ft + ' ft)', scaleScopeNext); scaleScopeNext = ''; }
   }
 
@@ -1767,7 +1813,7 @@ requireAuth().catch(function(){});
     $('compareBtn').innerHTML = ic('picture_in_picture', 18) + 'Compare'; $('compareClose').innerHTML = ic('close', 14); $('undoTop').innerHTML = ic('undo', 18) + 'Undo'; $('redoTop').innerHTML = ic('redo', 18); $('openNewBtn').innerHTML = ic('open_in_new', 18); $('downloadBtn').innerHTML = ic('download', 18);
     $('emptyIcon').innerHTML = ic('straighten', 56); $('rightClose').innerHTML = ic('close', 18);
     $('rail').innerHTML = '<div class="tk-float">' + tb('pan', 'pan_tool', 'Pan (H) — or hold Space / Alt and drag') + tb('select', 'near_me', 'Select / move marks (V)') + tb('marquee', 'select_all', 'Marquee select — drag a rectangle') + ib('undoBtn', 'undo', 'Undo (Ctrl+Z)') + ib('redoBtn', 'redo', 'Redo (Ctrl+Y / Ctrl+Shift+Z)') + ib('layersBtn', 'layers', 'Show / hide the takeoff panel') + '</div>' +
-      '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('zone', 'select_all', 'Zone — outline an area (a wing, a phase, a CO area), Enter to close; quantities inside it: Actions → Zones report') + ib('symBtn', 'tune', 'Symbols — valves, dampers, controls, specialties: a priced count layer in one click, then place them on the plan') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
+      '<div class="tk-float">' + tb('cloud', 'cloud', 'Revision cloud (U) — click the corners, Enter to close') + tb('zone', 'select_all', 'Zone — outline an area (a wing, a phase, a CO area), Enter to close; quantities inside it: Actions → Zones report') + tb('scalearea', 'crop_free', 'Scale area — a box around a plan drawn at a different scale (enlarged plans): marks inside it use its own scale') + ib('symBtn', 'tune', 'Symbols — valves, dampers, controls, specialties: a priced count layer in one click, then place them on the plan') + tb('note', 'text_fields', 'Note (N)') + tb('stamp', 'approval', 'Stamp — RFI, VERIFY, EXISTING… (T)') + tb('measure', 'straighten', 'Measure only, nothing saved (M)') + ib('railMore', 'more_vert', 'More tools') + '</div>' +
       '<div class="tk-float">' + ib('legendBtn', 'description', 'Legend of the layers on this plan') + ib('pasteBtn', 'content_paste', 'Paste copied marks (Ctrl+V)') + '</div>' +
       '<div class="tk-float tk-rail-last">' + ib('swapBtn', 'swap_horiz', 'Swap the compared plans') + ib('railCollapse', 'chevron_right', 'Collapse the tool rail') + '</div>';
     $('bottombar').innerHTML = ib('zoomFit', 'fit_screen', 'Fit width (0)') + ib('zoomOut', 'remove', 'Zoom out (−)') + '<input type="range" id="zoomRange" min="10" max="1200" step="5" value="100" title="Zoom"><span id="zoomText" class="pc-muted" style="font-size:11px;min-width:34px;text-align:center">100%</span>' + ib('zoomIn', 'add', 'Zoom in (+)') +
@@ -1810,7 +1856,7 @@ requireAuth().catch(function(){});
 
   // ═══════════════════════ tools & drawing ═══════════════════════
   var DRAFT_TOOLS = ['linear', 'area', 'countline', 'cloud', 'arealen', 'arc', 'rect', 'zone'];
-  function setTool(t) { tool = t; if (overlayCanvas) { overlayCanvas.style.cursor = ''; overlayCanvas.removeAttribute('data-cur'); } draft = []; draftDrops = []; measureLine = null; marquee = null; if (['linear', 'arc', 'area', 'rect'].indexOf(t) < 0) draftDeduct = false;
+  function setTool(t) { tool = t; if (t !== 'scale') pendingScaleArea = null; if (overlayCanvas) { overlayCanvas.style.cursor = ''; overlayCanvas.removeAttribute('data-cur'); } draft = []; draftDrops = []; measureLine = null; marquee = null; if (['linear', 'arc', 'area', 'rect'].indexOf(t) < 0) draftDeduct = false;
     document.querySelectorAll('[data-tool]').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-tool') === t); });
     var db = $('deductBtn'); if (db) db.classList.toggle('on', draftDeduct);
     if (overlayCanvas) { overlayCanvas.classList.toggle('hand', t === 'pan'); $('viewport').classList.toggle('hand', t === 'pan'); overlayCanvas.classList.toggle('sel', t === 'select' || t === 'marquee'); } updateStatus(); redraw(); }
@@ -1823,9 +1869,10 @@ requireAuth().catch(function(){});
       area: 'Click the corners' + who + '. <span class="kbd">Enter</span>/double-click closes.', rect: 'Click two opposite corners' + who + '.', arealen: 'Draw the area' + who + ', <span class="kbd">Enter</span> closes it, then type the width to convert it to a length.',
       arc: 'Click the start, a point on the arc, then the end' + who + '.', measure: 'Click two points to read a distance. Nothing is saved.', note: 'Click where the note goes.',
       countline: 'Click the path the items follow' + (l ? ' → <b>' + esc(l.name) + '</b>' : ' — pick a count layer first') + '. <span class="kbd">Enter</span> finishes, then type the spacing in feet.',
-      stamp: 'Click where the stamp goes.', cloud: 'Click the corners of the cloud. <span class="kbd">Enter</span>/double-click closes it.', highlight: 'Click two opposite corners.', scale: 'Click both ends of a known dimension.' };
-    h.innerHTML = (reviewOn && rvStatusText()) || ((!scalePpf && pdfPage && ['count', 'note', 'select', 'marquee', 'pan', 'stamp', 'cloud', 'highlight', 'scale'].indexOf(tool) < 0) ? '<b style="color:var(--pc-danger)">Set the scale first</b> — click "Drawing Scale" above the plan.' : (hints[tool] || ''));
-    $('statusPage').textContent = pdfPage ? (plans[planIdx].sheet ? plans[planIdx].sheet + ' · ' : '') + meas.filter(function(m) { return m.tool_type !== 'scale'; }).length + ' marks on this plan' + (selectedIds.size ? ' · ' + selectedIds.size + ' selected' : '') : '';
+      stamp: 'Click where the stamp goes.', cloud: 'Click the corners of the cloud. <span class="kbd">Enter</span>/double-click closes it.', highlight: 'Click two opposite corners.', scale: pendingScaleArea ? 'Click both ends of a known dimension <b>inside the scale area</b>.' : 'Click both ends of a known dimension.',
+      scalearea: 'Click two opposite corners around the plan that has its own scale (its title says e.g. SCALE: 1/4" = 1\'-0").' };
+    h.innerHTML = (reviewOn && rvStatusText()) || ((!scalePpf && !scaleAreas.length && pdfPage && ['count', 'note', 'select', 'marquee', 'pan', 'stamp', 'cloud', 'highlight', 'scale', 'scalearea'].indexOf(tool) < 0) ? '<b style="color:var(--pc-danger)">Set the scale first</b> — click "Drawing Scale" above the plan.' : (hints[tool] || ''));
+    $('statusPage').textContent = pdfPage ? (plans[planIdx].sheet ? plans[planIdx].sheet + ' · ' : '') + meas.filter(function(m) { return m.tool_type !== 'scale'; }).length + ' marks on this plan' + (scaleAreas.length ? ' · ' + scaleAreas.length + ' scale area' + (scaleAreas.length === 1 ? '' : 's') : '') + (selectedIds.size ? ' · ' + selectedIds.size + ' selected' : '') : '';
     ['undoBtn', 'undoTop'].forEach(function(id) { var ub = $(id); if (ub) ub.disabled = !undoStack.length && !draft.length; });
     ['redoBtn', 'redoTop'].forEach(function(id) { var rb = $(id); if (rb) rb.disabled = !redoStack.length; });
   }
@@ -1900,9 +1947,11 @@ requireAuth().catch(function(){});
   async function saveMoved(ids, orig) {
     var undoItems = [], ok = true;
     for (var i = 0; i < ids.length; i++) { var m = meas.find(function(x) { return x.id === ids[i]; }); if (!m) continue;
-      if (m.tool_type === 'length') m.computed_value = scalePpf ? polyLen(m.points) / scalePpf : 0; if (m.tool_type === 'area') m.computed_value = scalePpf ? polyArea(m.points) / (scalePpf * scalePpf) : 0;
-      var u = await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); if (u.error) { toast(u.error.message, 'error'); ok = false; break; }
+      if (m.tool_type === 'length' && !isAnnot(m)) m.computed_value = lenFt(m.points); if (m.tool_type === 'area' && !isAnnot(m)) m.computed_value = areaSf(m.points);
+      var upd = { points: m.points, computed_value: m.computed_value }; if ((m.tool_type === 'length' || m.tool_type === 'area') && ppfOf(m.points)) upd.scale_pixels_per_foot = ppfOf(m.points);
+      var u = await sb.from('estimate_measurements').update(upd).eq('id', m.id); if (u.error) { toast(u.error.message, 'error'); ok = false; break; }
       undoItems.push({ id: m.id, points: orig[m.id] }); }
+    if (ok && ids.some(function(id) { return isScaleArea(meas.find(function(x) { return x.id === id; })); })) { var nr = await recomputeScaled(); renderAll(); scheduleSync(); if (nr) toast(nr + ' mark' + (nr === 1 ? '' : 's') + ' re-measured with the moved scale area'); }
     if (ok && undoItems.length) pushUndo(undoItems.length === 1 ? { type: 'move', id: undoItems[0].id, points: undoItems[0].points } : { type: 'move-multi', items: undoItems });
     renderAll(); scheduleSync();
   }
@@ -1928,6 +1977,11 @@ requireAuth().catch(function(){});
     if (tool === 'stamp') { stampPoint = p; openStamp(); return; }
     if (tool === 'highlight') { draft.push(p); if (draft.length === 2) { var a = draft[0], b = draft[1]; saveAnnot({ tool_type: 'area', points: [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]], notes: 'highlight', color: '#facc15' }); draft = []; } redraw(); return; }
     if (tool === 'cloud' || tool === 'zone') { draft.push(p); hover = null; redraw(); return; }
+    if (tool === 'scalearea') { if (!me.canEdit) { toast('Read-only', 'error'); return; } draft.push(p);
+      if (draft.length === 2) { var sa0 = draft[0], sa1 = draft[1]; draft = []; hover = null; if (Math.abs(sa1[0] - sa0[0]) < 5 || Math.abs(sa1[1] - sa0[1]) < 5) { toast('Draw a bigger box', 'error'); redraw(); return; }
+        var box = [[Math.min(sa0[0], sa1[0]), Math.min(sa0[1], sa1[1])], [Math.max(sa0[0], sa1[0]), Math.min(sa0[1], sa1[1])], [Math.max(sa0[0], sa1[0]), Math.max(sa0[1], sa1[1])], [Math.min(sa0[0], sa1[0]), Math.max(sa0[1], sa1[1])]];
+        pendingBox = box; redraw(); scaleAreaDialog(box); return; }
+      redraw(); return; }
     var l = layerById(activeLayerId); if (!l) { toast('Pick a takeoff layer first (left panel)', 'error'); return; }
     if (l.is_locked) { toast('Layer is locked', 'error'); return; }
     if (tool === 'countline' && l.takeoff_type !== 'count') { toast('Count by distance needs a count layer (diffusers, hangers, sprinklers…)', 'error'); return; }
@@ -1935,7 +1989,7 @@ requireAuth().catch(function(){});
       if (e.shiftKey) { var h = hitTest(p); if (h && h.m.layer_id === l.id) deleteMark(h.m.id); return; }
       saveMark({ tool_type: 'count', points: [p], computed_value: 1, computed_unit: 'ea', mark_no: nextMarkNo(l) }); return;
     }
-    if (!scalePpf) { toast('Set the drawing scale first', 'error'); return; }
+    if (!ppfOf(draft.length ? draft : [p])) { toast('Set the drawing scale first (or draw a scale area around this plan)', 'error'); return; }
     draft.push(p); hover = null; redraw();
     if (tool === 'rect' && draft.length === 2) { var a2 = draft[0], b2 = draft[1]; draft = [[a2[0], a2[1]], [b2[0], a2[1]], [b2[0], b2[1]], [a2[0], b2[1]]]; finishDraft(); }
     else if (tool === 'arc' && draft.length === 3) finishDraft();
@@ -1956,14 +2010,14 @@ requireAuth().catch(function(){});
   async function finishDraft() {
     if (tool === 'zone') { var zp = draft.slice(); draft = []; hover = null; redraw(); if (zp.length >= 3) addZone(zp); return; }
     if (tool === 'cloud') { if (draft.length >= 3) saveAnnot({ tool_type: 'area', points: draft.slice(), notes: 'cloud', color: '#dc2626' }); draft = []; hover = null; redraw(); return; }
-    if (!scalePpf || draft.length < 2) { draft = []; redraw(); return; }
+    if (!ppfOf(draft) || draft.length < 2) { draft = []; redraw(); return; }
     if (tool === 'countline') { openSpacing(); return; }
     var pts = draft.slice();
-    if (tool === 'linear') saveMark({ tool_type: 'length', points: pts, computed_value: polyLen(pts) / scalePpf, computed_unit: 'ft', drops: draftDrops.length, deduct: draftDeduct || undefined });
-    else if (tool === 'arc') { if (pts.length < 3) { draft = []; redraw(); return; } var ap = arcPoints(pts[0], pts[1], pts[2]); saveMark({ tool_type: 'length', points: ap, computed_value: polyLen(ap) / scalePpf, computed_unit: 'ft', label: 'arc', deduct: draftDeduct || undefined }); }
-    else if (tool === 'area' || tool === 'rect') { if (pts.length < 3) { draft = []; redraw(); return; } saveMark({ tool_type: 'area', points: pts, computed_value: polyArea(pts) / (scalePpf * scalePpf), computed_unit: 'sqft', deduct: draftDeduct || undefined }); }
+    if (tool === 'linear') saveMark({ tool_type: 'length', points: pts, computed_value: lenFt(pts), computed_unit: 'ft', drops: draftDrops.length, deduct: draftDeduct || undefined });
+    else if (tool === 'arc') { if (pts.length < 3) { draft = []; redraw(); return; } var ap = arcPoints(pts[0], pts[1], pts[2]); saveMark({ tool_type: 'length', points: ap, computed_value: lenFt(ap), computed_unit: 'ft', label: 'arc', deduct: draftDeduct || undefined }); }
+    else if (tool === 'area' || tool === 'rect') { if (pts.length < 3) { draft = []; redraw(); return; } saveMark({ tool_type: 'area', points: pts, computed_value: areaSf(pts), computed_unit: 'sqft', deduct: draftDeduct || undefined }); }
     else if (tool === 'arealen') { if (pts.length < 3) { draft = []; redraw(); return; } draft = []; hover = null; redraw();
-      var area = polyArea(pts) / (scalePpf * scalePpf), per = polyLen(pts.concat([pts[0]])) / scalePpf;
+      var area = areaSf(pts), per = lenFt(pts.concat([pts[0]]));
       var w = await P.prompt({ title: 'Area to length', label: 'Area ' + area.toFixed(1) + ' sf — divide by which width (ft)? Leave empty for the perimeter (' + per.toFixed(1) + ' ft).', placeholder: 'e.g. 2', okLabel: 'Add', required: false });
       if (w == null) return; var wn = Number(w); var qty = wn > 0 ? area / wn : per;
       saveMark({ tool_type: 'length', points: pts.concat([pts[0]]), computed_value: qty, computed_unit: 'ft', label: wn > 0 ? area.toFixed(0) + ' sf / ' + wn + ' ft' : 'perimeter' }); return; }
@@ -1972,7 +2026,7 @@ requireAuth().catch(function(){});
   async function saveMark(m) {
     var l = layerById(activeLayerId), p = plans[planIdx];
     if (l && l.is_locked) { toast('Layer is locked', 'error'); return; }
-    m.drawing_id = p.drawing.id; m.page_number = p.page; m.layer_id = l ? l.id : null; m.layer_category = l ? l.category : null; m.color = l ? l.color : '#1a66e0'; m.scale_pixels_per_foot = scalePpf;
+    m.drawing_id = p.drawing.id; m.page_number = p.page; m.layer_id = l ? l.id : null; m.layer_category = l ? l.category : null; m.color = l ? l.color : '#1a66e0'; m.scale_pixels_per_foot = ppfOf(m.points) || scalePpf;
     if (m.deduct === undefined) delete m.deduct;
     if (!schemaOk) { delete m.layer_id; delete m.drops; delete m.mark_no; delete m.deduct; m.layer_category = (l && l.category) || 'ductwork'; }
     var r = await sb.from('estimate_measurements').insert(m).select().single();
@@ -1998,7 +2052,7 @@ requireAuth().catch(function(){});
     setTimeout(function() { $('stampText').focus(); }, 50);
   }
   function openSpacing() {
-    var l = layerById(activeLayerId), len = polyLen(draft) / scalePpf, def = 8;
+    var l = layerById(activeLayerId), len = lenFt(draft), def = 8;
     try { def = Number(localStorage.getItem('tk_spacing_' + l.id)) || Number(localStorage.getItem('tk_spacing')) || 8; } catch (e) {}
     var body = '<p class="pc-muted" style="margin:0 0 12px">Path of ' + len.toFixed(1) + ' ft on ' + esc(l.name) + ' — one mark every N feet along it.</p><div class="pc-field"><label class="pc-label">Spacing (feet)</label><input type="number" class="pc-input" id="spacingFt" step="0.5" min="0.5" value="' + def + '"></div><div class="pc-field"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="tk-cb" id="spacingEnds" checked>Mark both ends of the path</label></div>';
     // close:false — the dialog's onClose wipes the drawn path, so it may only close once applySpacing has taken the path over
@@ -2010,7 +2064,7 @@ requireAuth().catch(function(){});
     var l = layerById(activeLayerId), sp = Number($('spacingFt').value || 0); if (!l || !(sp > 0) || draft.length < 2) { toast('Enter the spacing in feet', 'error'); return; }
     if (l.is_locked) { toast('Layer is locked', 'error'); return; }
     try { localStorage.setItem('tk_spacing_' + l.id, String(sp)); localStorage.setItem('tk_spacing', String(sp)); } catch (e) {}
-    var step = sp * scalePpf, ends = $('spacingEnds').checked, pts = [], acc = 0, next = ends ? 0 : step, total = polyLen(draft);
+    var step = sp * ppfOf(draft), ends = $('spacingEnds').checked, pts = [], acc = 0, next = ends ? 0 : step, total = polyLen(draft);
     for (var i = 1; i < draft.length; i++) { var a = draft[i - 1], b = draft[i], d = dist(a, b);
       while (next <= acc + d + 1e-6) { var t = d ? (next - acc) / d : 0; pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); next += step; } acc += d; }
     if (ends) { var last = draft[draft.length - 1]; if (!pts.length || dist(pts[pts.length - 1], last) > step * 0.25) pts.push(last); }
@@ -2021,7 +2075,7 @@ requireAuth().catch(function(){});
     var r = await sb.from('estimate_measurements').insert(rows).select();
     if (r.error) { if (await staleDrawing(r.error)) return; toast(r.error.message, 'error'); redraw(); return; }
     allMeas = allMeas.concat(r.data); meas = meas.concat(r.data); r.data.forEach(function(m) { pushUndo({ type: 'add', id: m.id }); });
-    toast(r.data.length + ' marks placed every ' + sp + ' ft (' + (polyLen(path) / scalePpf).toFixed(0) + ' ft path)', 'success'); renderAll(); scheduleSync();
+    toast(r.data.length + ' marks placed every ' + sp + ' ft (' + lenFt(path).toFixed(0) + ' ft path)', 'success'); renderAll(); scheduleSync();
   }
   async function addNote() {
     if (!draft.length) return;
@@ -2076,7 +2130,8 @@ requireAuth().catch(function(){});
     if (r.error) { toast(r.error.message, 'error'); return; }
     if (!silent) pushUndo({ type: 'delete', row: m });
     allMeas = allMeas.filter(function(x) { return x.id !== id; }); meas = meas.filter(function(x) { return x.id !== id; });
-    selectedIds.delete(id); renderAll(); scheduleSync(); if (!silent) toastUndo('Mark deleted');
+    if (isScaleArea(m)) { await recomputeScaled(); redraw(); }
+    selectedIds.delete(id); renderAll(); scheduleSync(); if (!silent) toastUndo(isScaleArea(m) ? 'Scale area removed' : 'Mark deleted');
   }
   async function deleteSelected() {
     if (!me.canEdit) { toast('Read-only', 'error'); return; }   // marquee / Ctrl+A selection is fine for viewers, deleting is not
@@ -2086,7 +2141,9 @@ requireAuth().catch(function(){});
     var rows = ids.map(function(id) { return meas.find(function(x) { return x.id === id; }); });
     var r = await sb.from('estimate_measurements').delete().in('id', ids); if (r.error) { toast(r.error.message, 'error'); return; }
     pushUndo({ type: 'delete-multi', rows: rows });
-    allMeas = allMeas.filter(function(x) { return ids.indexOf(x.id) < 0; }); meas = meas.filter(function(x) { return ids.indexOf(x.id) < 0; }); selectedIds.clear(); renderAll(); scheduleSync(); toastUndo(rows.length + ' marks deleted');
+    allMeas = allMeas.filter(function(x) { return ids.indexOf(x.id) < 0; }); meas = meas.filter(function(x) { return ids.indexOf(x.id) < 0; }); selectedIds.clear();
+    if (rows.some(isScaleArea)) { await recomputeScaled(); redraw(); }
+    renderAll(); scheduleSync(); toastUndo(rows.length + ' marks deleted');
   }
   function copySelected() {
     clipboard = Array.from(selectedIds).map(function(id) { return meas.find(function(x) { return x.id === id; }); }).filter(Boolean).map(function(m) { return JSON.parse(JSON.stringify(m)); });
@@ -2099,7 +2156,7 @@ requireAuth().catch(function(){});
     clipboard.forEach(function(m) { var l = layerById(m.layer_id); if (m.layer_id && !l) { skipped++; return; } if (l && l.is_locked) { skipped++; return; }
       var row = { drawing_id: p.drawing.id, page_number: p.page, tool_type: m.tool_type, points: m.points.map(function(q) { return [q[0] + off, q[1] + off]; }), computed_value: m.computed_value, computed_unit: m.computed_unit, layer_id: m.layer_id || null, layer_category: m.layer_category || null, color: m.color, label: m.label || null, notes: m.notes || null, scale_pixels_per_foot: scalePpf || m.scale_pixels_per_foot };
       if (m.drops) row.drops = m.drops; if (m.deduct) row.deduct = true; if (l && m.tool_type === 'count') row.mark_no = nextMarkNo(l);
-      if ((m.tool_type === 'length' || m.tool_type === 'area') && scalePpf) row.computed_value = m.tool_type === 'length' ? polyLen(row.points) / scalePpf : polyArea(row.points) / (scalePpf * scalePpf);
+      if ((m.tool_type === 'length' || m.tool_type === 'area') && ppfOf(row.points) && !isAnnot(m)) { row.computed_value = m.tool_type === 'length' ? lenFt(row.points) : areaSf(row.points); row.scale_pixels_per_foot = ppfOf(row.points); }
       rows.push(row); });
     if (!rows.length) { toast('Nothing to paste' + (skipped ? ' (' + skipped + ' locked / missing layer)' : ''), 'error'); return; }
     var r = await sb.from('estimate_measurements').insert(rows).select(); if (r.error) { toast(r.error.message, 'error'); return; }
@@ -2139,11 +2196,11 @@ requireAuth().catch(function(){});
     var u = undoStack.pop(); if (!u) return;
     if (u.type === 'add') { var was = allMeas.find(function(x) { return x.id === u.id; }); if (was) redoStack.push({ type: 'add', row: Object.assign({}, was) }); await deleteMark(u.id, true); }
     else if (u.type === 'delete' || u.type === 'delete-multi') { var rows = (u.rows || [u.row]).map(function(x) { var row = Object.assign({}, x); delete row.id; delete row.created_at; delete row.updated_at; return row; });
-      var r = await sb.from('estimate_measurements').insert(rows).select(); if (!r.error) { r.data.forEach(function(m) { allMeas.push(m); if (m.drawing_id === plans[planIdx].drawing.id && m.page_number === plans[planIdx].page) meas.push(m); }); redoStack.push({ type: 'del', ids: r.data.map(function(m) { return m.id; }) }); } renderAll(); scheduleSync(); }
+      var r = await sb.from('estimate_measurements').insert(rows).select(); if (!r.error) { r.data.forEach(function(m) { allMeas.push(m); if (m.drawing_id === plans[planIdx].drawing.id && m.page_number === plans[planIdx].page) meas.push(m); }); redoStack.push({ type: 'del', ids: r.data.map(function(m) { return m.id; }) }); if (r.data.some(isScaleArea)) { await recomputeScaled(); redraw(); } } renderAll(); scheduleSync(); }
     else if (u.type === 'patch') { if (await applyPatch(u.id, u.before)) redoStack.push(u); renderAll(); scheduleSync(); }
     else if (u.type === 'patch-multi') { await applyPatchMulti(u.items, 'before'); redoStack.push(u); renderAll(); scheduleSync(); }
     else if (u.type === 'move' || u.type === 'move-multi') { var items = u.items || [{ id: u.id, points: u.points }], redoItems = [];
-      for (var i = 0; i < items.length; i++) { var m = allMeas.find(function(x) { return x.id === items[i].id; }); if (!m) continue; redoItems.push({ id: m.id, points: m.points }); m.points = items[i].points; m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value; await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
+      for (var i = 0; i < items.length; i++) { var m = allMeas.find(function(x) { return x.id === items[i].id; }); if (!m) continue; redoItems.push({ id: m.id, points: m.points }); m.points = items[i].points; m.computed_value = isAnnot(m) ? m.computed_value : m.tool_type === 'length' ? lenFt(m.points) : m.tool_type === 'area' ? areaSf(m.points) : m.computed_value; await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
       if (redoItems.length) redoStack.push({ type: 'move', items: redoItems });
       renderAll(); scheduleSync(); }
     updateStatus();
@@ -2159,7 +2216,7 @@ requireAuth().catch(function(){});
     } else if (u.type === 'del') {
       var rows = allMeas.filter(function(m) { return u.ids.indexOf(m.id) >= 0; }); if (!rows.length) { updateStatus(); return; }
       var d = await sb.from('estimate_measurements').delete().in('id', u.ids);
-      if (!d.error) { allMeas = allMeas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); meas = meas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); selectedIds.clear(); undoStack.push({ type: 'delete-multi', rows: rows }); }
+      if (!d.error) { allMeas = allMeas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); meas = meas.filter(function(m) { return u.ids.indexOf(m.id) < 0; }); selectedIds.clear(); undoStack.push({ type: 'delete-multi', rows: rows }); if (rows.some(isScaleArea)) { await recomputeScaled(); redraw(); } }
       renderAll(); scheduleSync();
     } else if (u.type === 'patch') {
       if (await applyPatch(u.id, u.after)) undoStack.push(u); renderAll(); scheduleSync();
@@ -2168,7 +2225,7 @@ requireAuth().catch(function(){});
     } else if (u.type === 'move') {
       var prev = [];
       for (var i = 0; i < u.items.length; i++) { var m = allMeas.find(function(x) { return x.id === u.items[i].id; }); if (!m) continue; prev.push({ id: m.id, points: m.points }); m.points = u.items[i].points;
-        m.computed_value = m.tool_type === 'length' ? polyLen(m.points) / scalePpf : m.tool_type === 'area' ? polyArea(m.points) / (scalePpf * scalePpf) : m.computed_value;
+        m.computed_value = isAnnot(m) ? m.computed_value : m.tool_type === 'length' ? lenFt(m.points) : m.tool_type === 'area' ? areaSf(m.points) : m.computed_value;
         await sb.from('estimate_measurements').update({ points: m.points, computed_value: m.computed_value }).eq('id', m.id); }
       if (prev.length) undoStack.push({ type: 'move-multi', items: prev });
       renderAll(); scheduleSync();
@@ -2182,7 +2239,8 @@ requireAuth().catch(function(){});
       var pts = m.points;
       if (m.tool_type === 'note' && m._box && p[0] >= m._box[0] && p[0] <= m._box[0] + m._box[2] && p[1] >= m._box[1] && p[1] <= m._box[1] + m._box[3]) return { m: m, vertex: null };
       for (var k = 0; k < pts.length; k++) if (dist(p, pts[k]) <= (m.tool_type === 'count' || m.tool_type === 'note' ? 12 / renderScale : tolV)) return { m: m, vertex: (m.tool_type === 'count' || m.tool_type === 'note') ? null : k };
-      if (m.tool_type === 'length' || m.tool_type === 'scale') { for (var j = 1; j < pts.length; j++) if (segDist(p, pts[j - 1], pts[j]) <= tolS) best = best || { m: m, vertex: null }; }
+      if (m.tool_type === 'length' || m.tool_type === 'scale') { for (var j = 1; j < pts.length; j++) if (segDist(p, pts[j - 1], pts[j]) <= tolS) best = best || { m: m, vertex: null };
+        if (isScaleArea(m) && segDist(p, pts[pts.length - 1], pts[0]) <= tolS) best = best || { m: m, vertex: null }; }
       if (m.tool_type === 'area' && inPoly(p, pts)) best = best || { m: m, vertex: null }; }
     return best;
   }
@@ -2195,16 +2253,25 @@ requireAuth().catch(function(){});
     meas.forEach(function(m) { if (!annotVisible && isAnnot(m)) return; var l = layerById(m.layer_id); if (l && l.is_visible === false) return; drawMark(m, l, selectedIds.has(m.id)); });
     ctx.globalAlpha = 1;
     drawReviewHl();
-    var l = layerById(activeLayerId), col = tool === 'zone' ? '#7c3aed' : tool === 'scale' ? '#dc2626' : tool === 'cloud' ? '#dc2626' : tool === 'highlight' ? '#eab308' : (l ? l.color : '#1a66e0');
+    var l = layerById(activeLayerId), col = tool === 'zone' ? '#7c3aed' : (tool === 'scale' || tool === 'scalearea') ? '#dc2626' : tool === 'cloud' ? '#dc2626' : tool === 'highlight' ? '#eab308' : (l ? l.color : '#1a66e0');
     if (draft.length) { var pts = draft.map(S); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
       if (hover) { var h = S(hover); ctx.lineTo(h[0], h[1]); } if ((tool === 'area' || tool === 'cloud' || tool === 'zone' || tool === 'arealen') && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); pts.forEach(function(q) { dot(q, col); });
-      if ((tool === 'highlight' || tool === 'rect') && hover) { var hh = S(hover); ctx.globalAlpha = .3; ctx.fillRect(Math.min(pts[0][0], hh[0]), Math.min(pts[0][1], hh[1]), Math.abs(hh[0] - pts[0][0]), Math.abs(hh[1] - pts[0][1])); ctx.globalAlpha = 1; }
+      if ((tool === 'highlight' || tool === 'rect' || tool === 'scalearea') && hover) { var hh = S(hover); ctx.globalAlpha = .3; ctx.fillRect(Math.min(pts[0][0], hh[0]), Math.min(pts[0][1], hh[1]), Math.abs(hh[0] - pts[0][0]), Math.abs(hh[1] - pts[0][1])); ctx.globalAlpha = 1; }
       draftDrops.forEach(function(di) { if (pts[di]) glyph(pts[di], '▼', col); });
-      if (scalePpf && ['scale', 'cloud', 'highlight', 'zone'].indexOf(tool) < 0) { var isA = tool === 'area' || tool === 'arealen' || tool === 'rect', v = isA ? (pts.length > 2 ? polyArea(draft.concat(hover ? [hover] : [])) / (scalePpf * scalePpf) : 0) : polyLen(draft.concat(hover ? [hover] : [])) / scalePpf; var lp = hover ? S(hover) : pts[pts.length - 1]; label([lp[0] + 14, lp[1] - 14], isA ? v.toFixed(0) + ' sf' : v.toFixed(1) + ' ft', col); } }
-    if (measureLine) { var a = S(measureLine[0]), b = measureLine[1] ? S(measureLine[1]) : (hover ? S(hover) : null); if (b) { ctx.strokeStyle = '#1f2933'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); var ft = scalePpf ? dist(measureLine[0], measureLine[1] || hover) / scalePpf : 0; label([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], scalePpf ? ftIn(ft) : 'no scale', '#1f2933'); } dot(a, '#1f2933'); }
+      if (ppfOf(draft) && ['scale', 'cloud', 'highlight', 'zone', 'scalearea'].indexOf(tool) < 0) { var isA = tool === 'area' || tool === 'arealen' || tool === 'rect', v = isA ? (pts.length > 2 ? areaSf(draft.concat(hover ? [hover] : [])) : 0) : lenFt(draft.concat(hover ? [hover] : [])); var lp = hover ? S(hover) : pts[pts.length - 1]; label([lp[0] + 14, lp[1] - 14], isA ? v.toFixed(0) + ' sf' : v.toFixed(1) + ' ft', col); } }
+    if (measureLine) { var a = S(measureLine[0]), b = measureLine[1] ? S(measureLine[1]) : (hover ? S(hover) : null); if (b) { ctx.strokeStyle = '#1f2933'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); var mk = ppfOf([measureLine[0]]), ft = mk ? dist(measureLine[0], measureLine[1] || hover) / mk : 0; label([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], mk ? ftIn(ft) : 'no scale', '#1f2933'); } dot(a, '#1f2933'); }
+    if (pendingBox) { var pb = pendingBox.map(S); ctx.save(); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2; ctx.setLineDash([12, 6]); ctx.strokeRect(pb[0][0], pb[0][1], pb[2][0] - pb[0][0], pb[2][1] - pb[0][1]); ctx.restore(); }
     if (marquee) { var ma = S(marquee.a), mb = S(marquee.b); ctx.setLineDash([4, 3]); ctx.strokeStyle = '#1a66e0'; ctx.lineWidth = 1; ctx.fillStyle = 'rgba(26,102,224,.08)'; ctx.fillRect(Math.min(ma[0], mb[0]), Math.min(ma[1], mb[1]), Math.abs(mb[0] - ma[0]), Math.abs(mb[1] - ma[1])); ctx.strokeRect(Math.min(ma[0], mb[0]), Math.min(ma[1], mb[1]), Math.abs(mb[0] - ma[0]), Math.abs(mb[1] - ma[1])); ctx.setLineDash([]); }
   }
   function S(p) { return [p[0] * renderScale, p[1] * renderScale]; }
+  function drawScaleArea(m, pts, sel) {
+    ctx.save(); ctx.globalAlpha = 1; ctx.strokeStyle = '#dc2626'; ctx.lineWidth = sel ? 3 : 2; ctx.setLineDash([12, 6]);
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+    if (sel) pts.forEach(function(q) { dot(q, '#dc2626', true); });
+    var t = 'Scale ' + (m.label || ''), mn = pts.reduce(function(a, b) { return (b[1] < a[1] - 0.5 || (Math.abs(b[1] - a[1]) <= 0.5 && b[0] < a[0])) ? b : a; });
+    ctx.font = '600 12px Inter, Arial, sans-serif'; var tw = ctx.measureText(t).width;
+    ctx.fillStyle = '#dc2626'; ctx.fillRect(mn[0], mn[1] - 19, tw + 12, 18); ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic'; ctx.fillText(t, mn[0] + 6, mn[1] - 6); ctx.restore();
+  }
   function showNo(l) { return VS.numberMarks && !(l && l.params && l.params.number_marks === false); }
   function drawMark(m, l, sel) {
     var col = (l && l.color) || m.color || '#1a66e0', pts = m.points.map(S), lw = (l ? Number(l.line_width || VS.lineWidth || 3) : 2);
@@ -2212,6 +2279,7 @@ requireAuth().catch(function(){});
     ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = sel ? lw + 2 : lw; ctx.setLineDash(m.deduct ? [8, 5] : []);
     if (m.tool_type === 'count') { symbol(pts[0], l ? l.symbol : 'circle', col, sel, showNo(l) ? m.mark_no : null); }
     else if (m.tool_type === 'note') { drawNote(m, pts[0], sel); }
+    else if (isScaleArea(m)) { drawScaleArea(m, pts, sel); }
     else if (m.tool_type === 'length' || m.tool_type === 'scale') { if (m.tool_type === 'scale' && pts.length < 2) return; if (m.tool_type === 'scale') { ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 3; }
       ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); ctx.setLineDash([]);
       if (sel || pts.length <= 12) pts.forEach(function(q) { dot(q, m.tool_type === 'scale' ? '#dc2626' : col, sel); });
@@ -2644,7 +2712,9 @@ requireAuth().catch(function(){});
           else (pc.segs || []).forEach(function(s) { var q = [V(s[0], s[1]), V(s[2], s[3])]; rows.push(mk(l, q, Math.hypot(s[2] - s[0], s[3] - s[1]) / ptft)); }); } }
       if (pp && !pp.error && pp.xy) { for (var j = 0; j < pp.xy.length; j++) { var s2 = pp.xy[j], size = s2.z.replace(/ CD$/, ''), cd = / CD$/.test(s2.z);
           var pname = size + ' copper pipe & 1" insulation'; var pl = await layerFor(cd ? size + ' condensate drain' : pname, 'pipework', 'Pipes'); rows.push(mk(pl, [V(s2.s[0], s2.s[1]), V(s2.s[2], s2.s[3])], Math.hypot(s2.s[2] - s2.s[0], s2.s[3] - s2.s[1]) / pp.ptft)); } }
-      function mk(l, pts, ft) { return { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: (d && d.ptft) || (pp && pp.ptft) || scalePpf, label: 'auto' }; }
+      // a run inside a scale area (enlarged plan) is measured with that area's scale, not the one read for the sheet
+      function mk(l, pts, ft) { var sa = scaleAreaAt(pts[0]); if (sa) ft = polyLen(pts) / Number(sa.scale_pixels_per_foot);
+        return { drawing_id: p.drawing.id, page_number: p.page, tool_type: 'length', points: pts, computed_value: Math.round(ft * 100) / 100, computed_unit: 'ft', layer_id: l.id, layer_category: l.category, color: l.color, scale_pixels_per_foot: sa ? Number(sa.scale_pixels_per_foot) : ((d && d.ptft) || (pp && pp.ptft) || scalePpf), label: 'auto' }; }
       for (var c = 0; c < rows.length; c += 200) { var ins = await sb.from('estimate_measurements').insert(rows.slice(c, c + 200)).select(); if (ins.error) throw new Error(ins.error.message); allMeas = allMeas.concat(ins.data); meas = meas.concat(ins.data); }
       if (!scalePpf && ((d && d.ptft) || (pp && pp.ptft))) { var ppf = (d && d.ptft) || pp.ptft; var preset = SCALE_PRESETS.find(function(x) { return Math.abs(x.ppf - ppf) < 0.01; }); if (preset) await setPresetScale(preset, true); }
       saveGroups(); toast(rows.length + ' runs measured' + (made ? ', ' + made + ' layers added' : '') + (d && d.error ? ' · ducts: ' + d.error : '') + (pp && pp.error ? ' · pipes: ' + pp.error : ''), 'success'); renderAll(); scheduleSync();
