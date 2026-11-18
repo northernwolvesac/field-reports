@@ -15,7 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
-<script src="nw-ai-takeoff.js?v=602"></script>
+<script src="nw-ai-takeoff.js?v=603"></script>
 <script src="est-drawings.js?v=584"></script>
 <script src="nw-catalog-picker.js?v=596"></script>
 <script src="nw-duct-weight.js?v=584"></script>
@@ -2746,7 +2746,7 @@ requireAuth().catch(function(){});
     var body = '<div class="pc-banner-info" style="margin-bottom:12px"><span>The AI reads the HVAC sheets, measures ducts and pipes, counts the devices and lays it all out as takeoff layers in the <b>' + esc(NWAiTakeoff.LABEL) + '</b> version of this bid' + (isAi ? ' (this one — the earlier AI marks are replaced)' : ' — your own takeoff is not touched') + '. Then you check and fix it in the AI review tab.</span></div>' +
       '<label class="pc-check" style="display:flex;gap:8px;padding:6px 0"><input type="radio" name="aiScope" value="all" checked> <span><b>Whole drawing set</b> — ' + plans.length + ' sheet' + (plans.length === 1 ? '' : 's') + '; the AI skips the ones that are not HVAC</span></label>' +
       (cp ? '<label class="pc-check" style="display:flex;gap:8px;padding:6px 0"><input type="radio" name="aiScope" value="one"> <span><b>Only this sheet</b> — ' + esc(planLabel(cp)) + '</span></label>' : '') +
-      '<div class="hint" style="margin-top:8px">About $0.06 a sheet and a few minutes per 10 sheets. Keep this page open while it runs — you can keep working.</div>';
+      '<div class="hint" style="margin-top:8px">Roughly $0.30–0.50 per HVAC plan sheet (each plan is read 2–3 times; the other sheets cost cents) and about 5 minutes per plan. Keep this page open while it runs — you can keep working.</div>';
     var dlg = P.modal({ title: 'Run AI Takeoffs', body: body, size: 'md', buttons: [{ label: 'Cancel', onClick: function() { dlg.close(); } }, { label: 'Run AI Takeoffs', primary: true, onClick: function() {
       var one = dlg.body.querySelector('input[name=aiScope]:checked').value === 'one';
       startAiTakeoff(one && cp ? { drawingId: cp.drawing.id, page: cp.page, sheetLabel: cpName } : {});
