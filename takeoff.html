@@ -15,12 +15,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
-<script src="nw-ai-takeoff.js?v=603"></script>
+<script src="nw-ai-takeoff.js?v=604"></script>
 <script src="est-drawings.js?v=584"></script>
 <script src="nw-catalog-picker.js?v=596"></script>
 <script src="nw-duct-weight.js?v=584"></script>
 <script src="geo-takeoff.js?v=601"></script>
-<script src="est-engine.js?v=585"></script>
+<script src="est-engine.js?v=604"></script>
 <style>
   /* ─── AI review tab (left panel) ─── */
   .tk-mode { display: flex; margin: 0 14px 6px; border: 1px solid var(--pc-border-strong, #d1d5db); border-radius: 4px; overflow: hidden; }
@@ -2743,7 +2743,7 @@ requireAuth().catch(function(){});
     if (!plans.length) { toast('Upload the plans first', 'error'); return; }
     if (!window.NWAiTakeoff) { toast('nw-ai-takeoff.js is not loaded — refresh the page', 'error'); return; }
     var cp = plans[planIdx], isAi = est && est.version_label === NWAiTakeoff.LABEL, cpName = cp ? (cp.sheet || ('page ' + cp.page)) : '';
-    var body = '<div class="pc-banner-info" style="margin-bottom:12px"><span>The AI reads the HVAC sheets, measures ducts and pipes, counts the devices and lays it all out as takeoff layers in the <b>' + esc(NWAiTakeoff.LABEL) + '</b> version of this bid' + (isAi ? ' (this one — the earlier AI marks are replaced)' : ' — your own takeoff is not touched') + '. Then you check and fix it in the AI review tab.</span></div>' +
+    var body = '<div class="pc-banner-info" style="margin-bottom:12px"><span>The AI reads the HVAC sheets, measures ducts and pipes, counts the devices and the equipment to install and lays it all out as takeoff layers in the <b>' + esc(NWAiTakeoff.LABEL) + '</b> version of this bid' + (isAi ? ' (this one — the earlier AI marks are replaced)' : ' — your own takeoff is not touched') + '. Ductwork, piping and insulation are priced in full; equipment, air outlets, dampers and louvers get quantities and install labor only (the suppliers quote them). Then you check and fix it in the AI review tab.</span></div>' +
       '<label class="pc-check" style="display:flex;gap:8px;padding:6px 0"><input type="radio" name="aiScope" value="all" checked> <span><b>Whole drawing set</b> — ' + plans.length + ' sheet' + (plans.length === 1 ? '' : 's') + '; the AI skips the ones that are not HVAC</span></label>' +
       (cp ? '<label class="pc-check" style="display:flex;gap:8px;padding:6px 0"><input type="radio" name="aiScope" value="one"> <span><b>Only this sheet</b> — ' + esc(planLabel(cp)) + '</span></label>' : '') +
       '<div class="hint" style="margin-top:8px">Roughly $0.30–0.50 per HVAC plan sheet (each plan is read 2–3 times; the other sheets cost cents) and about 5 minutes per plan. Keep this page open while it runs — you can keep working.</div>';

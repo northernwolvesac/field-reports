@@ -353,6 +353,17 @@
     }
     return c;
   }
+  // a plan the reader typed 'demo' that also carries new work is a duct plan with a demo list, not a demolition-only sheet
+  // (BAPS Robbinsville 11/18/2026: "HVAC FIRST FLOOR PLAN" / "HVAC ROOF PLAN" = the removals + the new ducts, diffusers and units on one
+  // sheet; typed 'demo', both were left out of the quantities and the takeoff). Needs 3+ new duct runs / device rows and no demo title.
+  var NEW_WORK_SKIP_RE = /existing|to remain|not new|demolish|demo\b|remove|relocat|by others|n\.?i\.?c\b|\(e\)/i;
+  function demoPlanNew(r) {
+    if (!r || typeof r !== 'object' || r.sheet_type !== 'demo' || /demo|removal|remove/i.test(String(r.sheet_title || ''))) return false;
+    var n = 0;
+    (Array.isArray(r.duct_runs) ? r.duct_runs : []).forEach(function (x) { if (x && x.size && Number(x.lf) > 0 && !NEW_WORK_SKIP_RE.test((x.notes || '') + ' ' + x.size)) n++; });
+    (Array.isArray(r.air_devices) ? r.air_devices : []).forEach(function (a) { if (a && a.tag && Number(a.qty) > 0 && !NEW_WORK_SKIP_RE.test(a.notes || '')) n++; });
+    return n >= 3;
+  }
   function collect(pages, opts) {
     opts = opts || {};
     // tags that are never air devices however the reader typed them (BOSS: 60 sprinkler heads "SP" came back as grilles)
@@ -363,6 +374,7 @@
     var sheets = pages.filter(function (p) { return p.result && !p.result.parse_error && p.sheet_type !== 'quote' && !(p.status === 'skipped' && p.result.triage && p.result.triage.superseded); });   // a sheet replaced by a later copy never counts
     // a reader result with a list field that came back as a string / object (Cannon Hill: scope_notes) must not stop the pricing — such a field reads as empty
     var LISTS = ['air_devices', 'equipment', 'duct_runs', 'pipe_runs', 'demo', 'scope_notes', 'rigging', 'questions'];
+    sheets = sheets.map(function (p) { if (!demoPlanNew(p.result)) return p; return Object.assign({}, p, { sheet_type: 'duct_plan', result: Object.assign({}, p.result, { sheet_type: 'duct_plan', demo_plan: true }) }); });
     sheets = sheets.map(function (p) { var bad = LISTS.filter(function (k) { return p.result[k] != null && !Array.isArray(p.result[k]); }); if (!bad.length) return p; var r2 = Object.assign({}, p.result); bad.forEach(function (k) { r2[k] = []; }); return Object.assign({}, p, { result: r2 }); });
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var TM = typicalMults(sheets, opts.sheetMult), typical = [];
@@ -754,7 +766,7 @@
         risers.push(sh);
       }
       if (type === 'pipe_plan') pipeFloors[String(r.floor || sh)] = 1;
-      if (isDemo) (r.demo || []).forEach(function (d) { demo.push({ item: d.item, qty: Number(d.qty || 0), sheet: sh }); });
+      if (isDemo || r.demo_plan) (r.demo || []).forEach(function (d) { demo.push({ item: d.item, qty: Number(d.qty || 0), sheet: sh }); });
       wetTaps += Number(r.wet_taps || 0);
       (r.rigging || []).forEach(function (x) { rig.push({ tag: String(x.tag || '').trim(), key: norm(x.tag), weight_lb: Number(x.weight_lb || 0), where: x.where, floor: x.floor, sheet: sh }); });
       // the reader sometimes returns the notes as one string or an object — only a list of note objects is read (Cannon Hill: "forEach is not a function" stopped the whole pricing)
@@ -1202,6 +1214,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, typicalMults: typicalMults, floorList: floorList, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, truthFromEstimate: truthFromEstimate, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
+  window.NWEngine = { build: build, collect: collect, demoPlanNew: demoPlanNew, typicalMults: typicalMults, floorList: floorList, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, truthFromEstimate: truthFromEstimate, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
     applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();
