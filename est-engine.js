@@ -364,6 +364,41 @@
     (Array.isArray(r.air_devices) ? r.air_devices : []).forEach(function (a) { if (a && a.tag && Number(a.qty) > 0 && !NEW_WORK_SKIP_RE.test(a.notes || '')) n++; });
     return n >= 3;
   }
+  // Existing / to-remain ductwork on a renovation sheet is not new work (BAPS Robbinsville 11/19/2026: the roof plan HVAC ROOF PLAN shows the existing rooftop
+  // AHUs with their duct connections — 72x20, 82x24, 87x38, 94x32 … — and the reader listed them as plain runs, ~$25K of ductwork that is already built).
+  // A run is existing when (1) its note says so (existing / to remain / (E) …), or — only on a sheet that shows existing and new work together (demo_plan) —
+  // (2) its note ties it to a unit tag (AHU-2-6, RTU-1 …) without saying "new", or (3) it is far larger than anything the job calls new
+  // (dimension >= 48" and >= 2x the largest run any sheet marks "new") and is not marked new itself.
+  var NEW_WORD_RE = /\bnew\b|proposed|install|replac|\badd(ed)?\b/i, UNIT_TAG_RE = /\b(?:AHU|RTU|ERV|HRV|DOAS|MAU|FCU|CUH|EF|SF|RF|AC|HP|CU|PU)[-\s]?\d[\w-]*/i;
+  function runMaxDim(size) {
+    var s = String(size || ''), m = /(\d+(?:\.\d+)?)\s*["″”]?\s*[xX×]\s*(\d+(?:\.\d+)?)/.exec(s);
+    if (m) return Math.max(+m[1], +m[2]);
+    m = /(\d+(?:\.\d+)?)/.exec(s); return m ? +m[1] : 0;
+  }
+  function newMaxDimOf(sheets) {
+    var mx = 0;
+    (sheets || []).forEach(function (p) {
+      var r = p && p.result; if (!r || !Array.isArray(r.duct_runs)) return;
+      r.duct_runs.forEach(function (x) { if (x && x.size && NEW_WORD_RE.test(x.notes || '') && !NEW_WORK_SKIP_RE.test((x.notes || '') + ' ' + x.size)) mx = Math.max(mx, runMaxDim(x.size)); });
+    });
+    return mx || 24;
+  }
+  // why a reader run is not new work ('' = it is): ctx = { demoPlan: sheet shows existing + new together, newMaxDim }
+  function existingRunWhy(x, ctx) {
+    var notes = String((x && x.notes) || ''), size = String((x && x.size) || '');
+    if (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test(notes + ' ' + size)) return 'noted existing / to remain';
+    if (!ctx || !ctx.demoPlan || NEW_WORD_RE.test(notes)) return '';
+    var m = UNIT_TAG_RE.exec(notes); if (m) return 'tied to the unit ' + m[0].toUpperCase() + ' on a renovation sheet and the note does not say new';
+    var d = runMaxDim(size), ref = ctx.newMaxDim || 24;
+    if (d >= 48 && d >= 2 * ref) return 'oversized main (' + d + '" side, the largest new run on the job is ' + ref + '") on a renovation sheet, not marked new';
+    return '';
+  }
+  // a duct size the geometry traced on a renovation sheet: only the size rule applies (there is no note)
+  function existingSizeWhy(size, ctx) {
+    if (!ctx || !ctx.demoPlan) return '';
+    var d = runMaxDim(size), ref = ctx.newMaxDim || 24;
+    return d >= 48 && d >= 2 * ref ? 'traced main (' + d + '" side) on a renovation sheet, far above the largest new run (' + ref + '")' : '';
+  }
   function collect(pages, opts) {
     opts = opts || {};
     // tags that are never air devices however the reader typed them (BOSS: 60 sprinkler heads "SP" came back as grilles)
@@ -376,6 +411,7 @@
     var LISTS = ['air_devices', 'equipment', 'duct_runs', 'pipe_runs', 'demo', 'scope_notes', 'rigging', 'questions'];
     sheets = sheets.map(function (p) { if (!demoPlanNew(p.result)) return p; return Object.assign({}, p, { sheet_type: 'duct_plan', result: Object.assign({}, p.result, { sheet_type: 'duct_plan', demo_plan: true }) }); });
     sheets = sheets.map(function (p) { var bad = LISTS.filter(function (k) { return p.result[k] != null && !Array.isArray(p.result[k]); }); if (!bad.length) return p; var r2 = Object.assign({}, p.result); bad.forEach(function (k) { r2[k] = []; }); return Object.assign({}, p, { result: r2 }); });
+    var exBase = { newMaxDim: newMaxDimOf(sheets) }, existingRuns = [];
     var quotes = pages.filter(function (p) { return p.sheet_type === 'quote' && p.result && !p.result.parse_error && p.result.use !== false; });
     var TM = typicalMults(sheets, opts.sheetMult), typical = [];
     sheets = sheets.map(function (p) {
@@ -627,7 +663,9 @@
           });
         });
         {
-          var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || '')) ? 0 : Number(x.lf || 0)); }, 0);
+          var exCtx = { demoPlan: !!r.demo_plan, newMaxDim: exBase.newMaxDim };
+          var isEx = function (x, rec) { var why = existingRunWhy(x, exCtx); if (why && rec && Number(x.lf) > 0) existingRuns.push({ sheet: sh, size: String(x.size || ''), lf: Number(x.lf) || 0, system: x.system || '', why: why, note: String(x.notes || '').slice(0, 120) }); return !!why; };
+          var aiFt = (r.duct_runs || []).reduce(function (a, x) { return a + (existingRunWhy(x, exCtx) ? 0 : Number(x.lf || 0)); }, 0);
           var coarseDup = !!coarseSet[sh];
           if (coarseDup) skipped.push(sh + ' (overall plan at a smaller scale — the enlarged plans cover it)');
           // the AI's reading of the same sheet is the cross-check: a measurement more than 3x it (+40 ft) (the wrong line style paired up: OGCP 5200 gave
@@ -654,7 +692,7 @@
           if (mergeGeo) {
             var aiBySize = {}, aiSys = {}, geoSys = {};
             (r.duct_runs || []).forEach(function (x) {
-              if (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || ''))) return;
+              if (isEx(x, false)) return;
               var z0 = sizeOf(x.size); if (!z0) return;
               var k0 = (x.shape === 'round' || x.shape === 'oval' || z0.round ? 'round' : 'rect') + '|' + (z0.round ? z0.w : z0.w + 'x' + z0.h);
               aiBySize[k0] = (aiBySize[k0] || 0) + Number(x.lf || 0);
@@ -683,6 +721,7 @@
             addFittings(sh, r.geo.fittings);
             Object.keys(r.geo.sizes || {}).forEach(function (sz) {
               var z = sizeOf(sz); if (!z) return;
+              var exW = existingSizeWhy(sz, exCtx); if (exW) { existingRuns.push({ sheet: sh, size: sz, lf: r.geo.sizes[sz] * GEO_FITTINGS, system: '', why: exW, note: 'traced from the drawing lines' }); return; }
               var shape = /Ø/.test(sz) ? 'round' : 'rect';
               var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
               var o = duct[k] = duct[k] || { shape: shape, size: z.round ? z.w + '"Ø' : z.w + 'x' + z.h, lf: 0, sheets: [], geo: true };
@@ -702,7 +741,7 @@
             ductRisers.n += r.geo.riser_n || 0; ductRisers.ft += r.geo.riser_ft || 0; ductRisers.sheets.push(sh + ' (' + (r.geo.riser_n || 0) + ')');
           }
           if (takeoffSheet && !coarseDup && !mergeGeo && (weakGeo || !(r.geo && r.geo.total_ft > 0))) (r.duct_runs || []).forEach(function (x) {
-            if (/existing|to remain|not new|demolish|relocat|by others|\(e\)/i.test((x.notes || '') + ' ' + (x.size || ''))) return;   // "(E)16x10 to remain" is not new work (414 W 14th)
+            if (isEx(x, true)) return;   // "(E)16x10 to remain" is not new work (414 W 14th); on a renovation sheet the unit-tied and oversized mains too (BAPS roof plan)
             var z = sizeOf(x.size); if (!z) return;
             var shape = x.shape === 'round' || x.shape === 'oval' || z.round ? 'round' : 'rect';
             var k = shape + '|' + (z.round ? z.w : z.w + 'x' + z.h);
@@ -773,7 +812,7 @@
       (Array.isArray(r.scope_notes) ? r.scope_notes : []).forEach(function (n) { if (n && n.mech_scope) notes.push({ sheet: sh, source: n.source, text: n.text, often_missed: !!n.often_missed }); });
       (r.questions || []).forEach(function (q) { questions.push({ sheet: sh, q: q }); });
     });
-    return { devCheck: devCheck, pipeAiSheets: pipeAiSheets, linCallouts: linCallouts, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
+    return { existingRuns: existingRuns, devCheck: devCheck, pipeAiSheets: pipeAiSheets, linCallouts: linCallouts, linGeoSheets: linGeoSheets, slotSheets: slotSheets, sched: sched, planEq: planEq, devices: devices, duct: duct, pipe: pipe, demo: demo, notes: notes, questions: questions,
       symDropped: symDropped, colourBars: colourBars, noLenEa: noLenEa, unitMounted: unitMounted,
       rig: rig, pipeRisers: pipeRisers, floors: Object.keys(floors), ductSheets: sheetLabels(ductSheets), pipeSheets: sheetLabels(pipeSheets), schedVav: Object.keys(schedVav).length, ductDrops: ductDrops, wetTaps: wetTaps, skipped: skipped, geoCheck: geoCheck, risers: risers, ductRisers: ductRisers, fittings: fittings, pipeFittings: pipeFit, typical: typical, srSheets: srSheets, srDoubled: srDoubled, srSingle: srSingle, pipeFloors: Object.keys(pipeFloors), quotes: quotes.map(function (p) { return p.result; }) };
   }
@@ -980,6 +1019,11 @@
       if (g.ai && Math.abs(g.geo - g.ai) / Math.max(g.geo, g.ai) > 0.35)
         flags.push({ category: g.what === 'Pipe' ? 'pipework' : 'ductwork', item: (g.what || 'Duct') + ' length ' + g.sheet, flag: 'drawing geometry ' + Math.round(g.geo) + ' ft vs AI reading ' + Math.round(g.ai) + ' ft — geometry used; check the sheet' });
     });
+    if (C.existingRuns && C.existingRuns.length) {
+      var exBy = {}; C.existingRuns.forEach(function (x) { var k = x.sheet + ' ' + x.size; exBy[k] = exBy[k] || { ft: 0, why: x.why }; exBy[k].ft += x.lf; });
+      var exList = Object.keys(exBy).map(function (k) { return k + ' ' + Math.round(exBy[k].ft) + ' ft'; });
+      flags.push({ category: 'ductwork', item: 'Existing ductwork not priced', flag: C.existingRuns.length + ' duct run' + (C.existingRuns.length === 1 ? '' : 's') + ' (' + Math.round(C.existingRuns.reduce(function (a, x) { return a + x.lf; }, 0)) + ' ft) left out as existing / to remain — ' + exList.slice(0, 12).join('; ') + (exList.length > 12 ? '; …' : '') + '. If one is new work, restore it from its EXISTING layer in the Takeoff' });
+    }
     (C.typical || []).forEach(function (t) {
       if (t.unknown) flags.push({ category: 'ductwork', item: 'Typical floors', flag: t.sheet + ' is a TYPICAL plan but its title does not say which floors — counted once; set ×N on the sheet row' });
       else if (t.n > 1) flags.push({ category: 'ductwork', item: 'Typical floors', flag: t.sheet + ' counted × ' + t.n + (t.floors ? ' (floors ' + t.floors[0] + '–' + t.floors[t.floors.length - 1] + (t.floors.length !== t.floors[t.floors.length - 1] - t.floors[0] + 1 ? ': ' + t.floors.join(', ') : '') + ')' : '') + ' — ' + (t.why || 'sheet title') + '; every duct, pipe, device and plan equipment row on it is multiplied. Shop drawings / T&B still count the plan sheet once — change Floors if they go per floor' });
@@ -1214,6 +1258,6 @@
 
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 
-  window.NWEngine = { build: build, collect: collect, demoPlanNew: demoPlanNew, typicalMults: typicalMults, floorList: floorList, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, truthFromEstimate: truthFromEstimate, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
+  window.NWEngine = { build: build, collect: collect, demoPlanNew: demoPlanNew, existingRun: existingRunWhy, existingSize: existingSizeWhy, existingCtx: function (pages, r) { return { demoPlan: !!(r && r.demo_plan), newMaxDim: newMaxDimOf(pages) }; }, typicalMults: typicalMults, floorList: floorList, ductRate: ductRate, pipeRate: pipeRate, makeRates: makeRates, installHours: installHours, STD: STD, DUCT_FAMILIES: DUCT_FAMILIES, familyFor: familyFor, sysNorm: sysNorm, truthFromEstimate: truthFromEstimate, orgSettings: orgSettings, estimateRow: estimateRow, servicesRates: servicesRates, symbolRowDropped: symbolRowDropped, devWords: devWords,
     applyCorrections: applyCorrections, devKey: devKey, eqKey: eqKey, norm: norm, equipment: equipment, equipmentRows: equipmentRows };
 })();
