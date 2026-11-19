@@ -1897,6 +1897,14 @@ var AE = (function() {
       return { line: x, tag: tag, key: tag.toUpperCase().replace(/[^A-Z0-9]/g, ''), hits: [] };
     });
     var eqKey = function(str) { return String(str || '').replace(/^\s*\((?:N|NEW)\)\s*|^\s*NEW\s+/i, '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+    // OCR of an outlined sheet splits and misreads tags (BAPS M101: IU-138 → "1U 138", IU-142 → "U 142"): the letters may read 1/0/5/8 for
+    // I/O/S/B, and a 3+ digit number may lose the first letter of a 2+ letter prefix; the number itself must match exactly
+    var eqMatch = function(key, c) {
+      if (c === key) return true;
+      var m = /^([A-Z]+)(\d.*)$/.exec(key); if (!m || c.length <= m[2].length || c.slice(-m[2].length) !== m[2]) return false;
+      var pre = c.slice(0, c.length - m[2].length).replace(/1/g, 'I').replace(/0/g, 'O').replace(/5/g, 'S').replace(/8/g, 'B');
+      return pre === m[1] || (m[2].length >= 3 && m[1].length >= 2 && pre === m[1].slice(1));
+    };
     var eqSheet = function(p) { var r = p.result || {}, f0 = files.find(function(x) { return x.id === p.file_id; }) || {};
       return eqLines.length && p.status === 'done' && f0.kind !== 'quote' && f0.kind !== 'specs' && (r.equipment || []).length && !/^(schedule|legend|specs|demo|controls)$/.test(r.sheet_type || ''); };
     var list = pages.filter(function(p) { var r = p.result || {}; return eqSheet(p) || (isDuctPlan(p) && r.geo && r.geo.total_ft > 0) || ((isPipePlan(p) || isDuctPlan(p)) && r.geo_pipe && r.geo_pipe.total_ft > 0) || (isRiserSheet(p) && r.geo_riser && r.geo_riser.total_ft > 0)
@@ -2090,7 +2098,15 @@ var AE = (function() {
           var eqTx = textItems;
           if (!eqTx) { try { eqTx = withLabels(await NWGeo.extract(page), p).text || []; } catch (eT2) { eqTx = []; } (res.ocr_words || []).forEach(function(w) { if (w && w[0]) eqTx.push({ str: String(w[0]), x0: w[1], x1: w[1], y0: w[2], y1: w[2] }); }); }
           var eqPri = (isDuctPlan(p) || isPipePlan(p)) ? 0 : (res.sheet_type === 'enlarged' ? 1 : 2);
-          (eqTx || []).forEach(function(t) { var k = eqKey(t.str); if (k.length < 2 || !/\d/.test(k)) return; eqLines.forEach(function(e) { if (e.key === k) e.hits.push({ d: d, pg: p.page_no, pt: V((t.x0 + t.x1) / 2, (t.y0 + t.y1) / 2), pri: eqPri, sheet: res.sheet_no || 'p' + p.page_no, ptft: ptft }); }); });
+          // each text item alone and joined with the next one on the same line ("ACCU" + "1", "1U" + "138")
+          var eqCand = [];
+          (eqTx || []).forEach(function(t, ti) {
+            eqCand.push({ s: t.str, x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2 });
+            var t2 = (eqTx || [])[ti + 1]; if (!t2) return;
+            var gap = t2.x0 - t.x1, cy = (t.y0 + t.y1) / 2, cy2 = (t2.y0 + t2.y1) / 2;
+            if (Math.abs(cy - cy2) < 6 && gap > -4 && gap < (t.word ? 60 : 12)) eqCand.push({ s: String(t.str) + ' ' + String(t2.str), x: (t.x0 + t2.x1) / 2, y: (cy + cy2) / 2 });
+          });
+          eqCand.forEach(function(c) { var k = eqKey(c.s); if (k.length < 2 || !/\d/.test(k)) return; eqLines.forEach(function(e) { if (/\d/.test(e.key) && eqMatch(e.key, k)) e.hits.push({ d: d, pg: p.page_no, pt: V(c.x, c.y), pri: eqPri, sheet: res.sheet_no || 'p' + p.page_no, ptft: ptft }); }); });
         }
         if (ptft && !haveScale[d.id + ':' + p.page_no]) scales.push({ drawing_id: d.id, page_number: p.page_no, tool_type: 'scale', points: [[0, 0]], label: scaleLabelFor(ptft) + ' (auto)', computed_value: 1, computed_unit: 'ft', scale_pixels_per_foot: ptft, color: '#dc2626', notes: 'Read from the sheet by the AI Estimator' });
         pdf.destroy();
