@@ -514,7 +514,9 @@
     '.nwp-lines ul,.nwp-lines ol{margin:0 0 6px 20px;padding:0}.nwp-lines li{margin:0 0 3px;line-height:1.4}' +
     '.nwp-paper .ff-times,.nwp-paper font[face*="Times"]{font-family:"Times New Roman",Times,serif}.nwp-paper .ff-courier,.nwp-paper font[face*="Courier"]{font-family:"Courier New",Courier,monospace}' +
     '.nwp-paper font[size="1"]{font-size:7pt}.nwp-paper font[size="2"]{font-size:8pt}.nwp-paper font[size="3"]{font-size:8.6pt}.nwp-paper font[size="4"]{font-size:10pt}.nwp-paper font[size="5"]{font-size:12pt}.nwp-paper font[size="6"]{font-size:14pt}.nwp-paper font[size="7"]{font-size:18pt}' +
-    '.nwp-page2{page-break-before:always;padding-top:4px}' +
+    // Terms / price / Accepted By continue right after Exclusions on the same page (Russ 11/20/2026: the forced page 2 left
+    // a nearly empty page and pushed the price onto a page of its own); the PDF pagination still never cuts a line in half
+    '.nwp-page2{padding-top:0}' +
     '.nwp-page2 .nwp-lines.n410 p{margin:0 0 5px}' +
     '.nwp-page2 .nwp-terms{margin:0 0 6px;line-height:1.5}' +
     '.nwp-price{text-align:right;font-size:20px;font-weight:700;margin:28px 0 4px;font-variant-numeric:tabular-nums;page-break-inside:avoid}' +
@@ -576,7 +578,7 @@
     // page 2
     h += '<div class="nwp-page2">';
     if (show410) {
-      h += '<div class="nwp-h" style="margin-top:0">410A System Notes:</div><div class="nwp-lines n410">';
+      h += '<div class="nwp-h">410A System Notes:</div><div class="nwp-lines n410">';
       R410A_NOTES.forEach(function (t, i) { h += '<p>' + (i + 1) + '. ' + esc(t) + '</p>'; });
       h += '</div>';
     }
@@ -1020,6 +1022,15 @@
     });
   }
 
+  // A hand-edited proposal (Edit Mode → estimates.proposal_html) stores the <style id="nwp-style"> of the day it was saved,
+  // so layout fixes never reached it (Havas Q10174 kept the forced Terms page). Swap in the current sheet CSS — the edited
+  // text and its inline formatting are untouched.
+  function refreshStyle() {
+    Array.prototype.forEach.call(document.querySelectorAll('style#nwp-style'), function (st) {
+      if (st.textContent !== PAPER_CSS) st.textContent = PAPER_CSS;
+    });
+  }
+
   function exportPdf(paperEl, opts) {
     opts = opts || {};
     if (typeof paperEl === 'string') paperEl = document.querySelector(paperEl);
@@ -1029,6 +1040,7 @@
     // The Proposal tab hands over its padded wrapper (#propPaper, max 960 px + padding) around the 8.5 in sheet; exporting the wrapper
     // shifted the sheet right and cut its right edge. Always work from the sheet itself.
     var sheet = (paperEl.classList && paperEl.classList.contains('nwp-paper')) ? paperEl : (paperEl.querySelector && paperEl.querySelector('.nwp-paper')) || paperEl;
+    refreshStyle(paperEl);
 
     // text PDF first (selectable, sharp, small, clean page breaks); the old picture-based export stays as the fallback
     var build = vectorPdf(sheet, filename).catch(function (err) {
@@ -1266,8 +1278,9 @@
     });
     y += 8;
 
-    // Force page 2 if still on page 1 (per template's PageBreakIfPage1 logic)
-    if (doc.internal.getCurrentPageInfo().pageNumber === 1) {
+    // Terms + price box continue on the same page after Exclusions (Russ 11/20/2026); a new page only when the
+    // Terms heading, its text and the price box (~150 pt) no longer fit above the footer
+    if (y > 792 - 60 - 150) {
       doc.addPage();
       y = 60;
     }
@@ -1629,6 +1642,7 @@
     hasR410a: hasR410a,
     CATEGORIES: CATEGORIES,
     PAPER_CSS: PAPER_CSS,
+    refreshStyle: refreshStyle,
     defaultSettings: defaultSettings,
     mergeSettings: mergeSettings,
     officeFor: officeFor,

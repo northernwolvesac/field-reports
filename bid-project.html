@@ -24,7 +24,7 @@
 <script src="bid-actions.js?v=584"></script>
 <script src="nw-ai-takeoff.js?v=604"></script>
 <script src="est-drawings.js?v=584"></script>
-<script src="nw-proposal.js?v=584"></script>
+<script src="nw-proposal.js?v=607"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -1816,6 +1816,7 @@ requireAuth().catch(function(){});
     if (propSettings.editMode) return;
     if (propSettings.htmlOverride && currentVersion.proposal_html) {
       paper.innerHTML = currentVersion.proposal_html;
+      if (window.NWProposal && NWProposal.refreshStyle) NWProposal.refreshStyle();   // saved edits keep their text, get today's sheet CSS
       $('propModeLabel').textContent = 'Saved edits (not live)';
       $('propModeLabel').classList.remove('on');
       return;
@@ -1835,7 +1836,7 @@ requireAuth().catch(function(){});
     if (on && !canEdit) { viewOnly(); var cb = document.querySelector('[data-psw="editMode"]'); if (cb) cb.checked = false; return; }
     propSettings.editMode = on;
     if (on) {
-      if (propSettings.htmlOverride && currentVersion.proposal_html) paper.innerHTML = currentVersion.proposal_html;
+      if (propSettings.htmlOverride && currentVersion.proposal_html) { paper.innerHTML = currentVersion.proposal_html; if (window.NWProposal && NWProposal.refreshStyle) NWProposal.refreshStyle(); }
       paper.setAttribute('contenteditable', 'true');
       $('propToolbar').classList.add('show');
       $('propModeLabel').textContent = 'Edit Mode — changes autosave';
