@@ -340,7 +340,7 @@
   function missingFn(err) { return !!err && (err.code === 'PGRST202' || err.code === '42883' || err.code === '42P01' || err.code === 'PGRST205' || /could not find the (function|table)|does not exist/i.test(err.message || '')); }
   async function trashAvailable() {
     if (trashOk !== null) return trashOk;
-    var r = await sb().from('estimate_drawings_trash').select('id', { head: true, count: 'exact' }).limit(1);
+    var r = await sb().from('estimate_drawings_trash').select('id').limit(1);   // not head: a HEAD on a missing table comes back 204 with no error
     trashOk = !r.error;
     return trashOk;
   }
