@@ -19,7 +19,13 @@
      signedUrl(storage_path, opts)       → Promise<string>   cached ~55 min; opts.download = true | 'file name.pdf'
      doc(row)                            → Promise<PDFDocumentProxy>  cached per drawing id
      thumbnail(row, page=1, width=142)   → Promise<dataURL>  JPEG, in-flight promise cached (id:page:width); rendered at min(2×width, 800px)
-     remove(row)                         → Promise<void>     deletes the row (throws when 0 rows deleted → RLS), and the storage object when no other row shares it
+     remove(row)                         → Promise<{trashed:bool}>  moves the drawing + its marks to the trash (est_trash_drawing, 30 days,
+                                           drawing-trash.sql); before that SQL is run: deletes the row + the storage object when no other row shares it
+     trashAvailable()                    → Promise<bool>     the trash table exists (drawing-trash.sql run)
+     trashList(rootId)                   → Promise<rows[]>   trashed drawings of the root estimate, newest first (+ profiles.full_name of deleted_by);
+                                           also purges the snapshots older than 30 days once per page load
+     restore(trashId)                    → Promise<{drawing_id, marks, skipped}>
+     deleteForever(trashId)              → Promise<void>     drops the snapshot now + the PDF when nothing else uses it
      rename(id, filename)                → Promise<row>
      download(row)                       → Promise<void>     opens a signed download URL in a new tab
      forget(idOrRow)                     → clears the pdf.js / thumbnail cache for one drawing (or everything when omitted)
@@ -329,20 +335,70 @@
   }
 
   // ─── remove / rename / download ─────────────────────────────────────
+  // ─── trash (drawing-trash.sql, Russ 11/21/2026: a deleted drawing took the whole takeoff with it) ───
+  var trashOk = null, purged = false;
+  function missingFn(err) { return !!err && (err.code === 'PGRST202' || err.code === '42883' || err.code === '42P01' || err.code === 'PGRST205' || /could not find the (function|table)|does not exist/i.test(err.message || '')); }
+  async function trashAvailable() {
+    if (trashOk !== null) return trashOk;
+    var r = await sb().from('estimate_drawings_trash').select('id', { head: true, count: 'exact' }).limit(1);
+    trashOk = !r.error;
+    return trashOk;
+  }
+  async function removeStorage(paths) {
+    paths = (paths || []).filter(Boolean);
+    if (!paths.length) return;
+    var rm = await sb().storage.from(BUCKET).remove(paths);
+    if (rm.error) console.warn('est-drawings: storage remove', rm.error.message);
+  }
+  async function purgeExpired() {
+    if (purged) return; purged = true;
+    var r = await sb().rpc('est_trash_purge');
+    if (r.error) { console.warn('est-drawings: trash purge', r.error.message); return; }
+    await removeStorage(r.data);
+  }
+  async function trashList(rootId) {
+    if (!rootId || !(await trashAvailable())) return [];
+    purgeExpired().catch(function (e) { console.warn('est-drawings: trash purge', e); });
+    var r = await sb().from('estimate_drawings_trash').select('id,drawing_id,estimate_id,filename,storage_path,page_count,mark_count,deleted_by,deleted_at,profiles:deleted_by(full_name)')
+      .eq('estimate_id', rootId).order('deleted_at', { ascending: false });
+    if (r.error) {   // the profiles embed needs the FK; fall back to the plain columns
+      r = await sb().from('estimate_drawings_trash').select('id,drawing_id,estimate_id,filename,storage_path,page_count,mark_count,deleted_by,deleted_at').eq('estimate_id', rootId).order('deleted_at', { ascending: false });
+      if (r.error) throw new Error(r.error.message);
+    }
+    return r.data || [];
+  }
+  async function restore(trashId) {
+    var r = await sb().rpc('est_restore_drawing', { p_trash: trashId });
+    if (r.error) throw new Error(r.error.message);
+    return r.data || {};
+  }
+  async function deleteForever(trashId) {
+    var r = await sb().rpc('est_trash_purge', { p_id: trashId });
+    if (r.error) throw new Error(r.error.message);
+    await removeStorage(r.data);
+  }
+
   async function remove(row) {
     if (!row || !row.id) throw new Error('remove: drawing row required');
     var client = sb();
+    if (await trashAvailable()) {
+      var t = await client.rpc('est_trash_drawing', { p_id: row.id });
+      if (!t.error) { forget(row); return { trashed: true }; }
+      if (!missingFn(t.error)) throw new Error(t.error.message);
+      trashOk = false;   // table there but the functions are not: old behaviour below
+    }
     // .select('id') so an RLS-filtered delete (0 rows, no error) is reported instead of silently "succeeding"
     var del = await client.from('estimate_drawings').delete().eq('id', row.id).select('id');
     if (del.error) throw new Error(del.error.message);
     if (!del.data || !del.data.length) throw new Error('Drawing was not deleted (not found or no permission)');
     forget(row);
-    if (!row.storage_path) return;
+    if (!row.storage_path) return { trashed: false };
     // copied projects share the same storage object — keep it while another row still points at it
     var others = await client.from('estimate_drawings').select('id', { count: 'exact', head: true }).eq('storage_path', row.storage_path);
-    if (!others.error && (others.count || 0) > 0) return;
+    if (!others.error && (others.count || 0) > 0) return { trashed: false };
     var rm = await client.storage.from(BUCKET).remove([row.storage_path]);
     if (rm.error) console.warn('est-drawings: storage remove', rm.error.message);
+    return { trashed: false };
   }
   async function rename(id, filename) {
     filename = String(filename || '').trim();
@@ -365,6 +421,7 @@
     detectPage: detectPage, detectSheets: detectSheets,
     signedUrl: signedUrl, doc: doc, thumbnail: thumbnail, forget: forget,
     remove: remove, rename: rename, download: download,
+    trashAvailable: trashAvailable, trashList: trashList, restore: restore, deleteForever: deleteForever,
     scaleLabel: scaleLabel, scaleToPpf: scaleToPpf, sanitizeName: sanitizeName, storagePath: storagePath, pageCount: pageCount
   };
 })();

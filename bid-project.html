@@ -23,7 +23,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
 <script src="nw-ai-takeoff.js?v=604"></script>
-<script src="est-drawings.js?v=584"></script>
+<script src="est-drawings.js?v=608"></script>
 <script src="nw-proposal.js?v=607"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
@@ -1212,7 +1212,7 @@ requireAuth().catch(function(){});
   // ═══════════════════════════════════════════════════════════════
   //  DOCUMENTS
   // ═══════════════════════════════════════════════════════════════
-  var drawings = [], attachments = [];
+  var drawings = [], attachments = [], trash = [];
   var docSel = { type: 'drawings', id: null };
   var docsLoadedOnce = false;
   var thumbGen = 0;
@@ -1255,6 +1255,7 @@ requireAuth().catch(function(){});
     if (window.EstDrawings && EstDrawings.applyOrder) drawings = EstDrawings.applyOrder(drawings, await EstDrawings.loadOrder(rootId()));   // file order = what the takeoff shows
     var a = await supabaseClient.from('project_files').select('id, filename, size_bytes, category, storage_path, content_type, uploaded_by, created_at').eq('estimate_id', rootId()).order('created_at', { ascending: false });
     attachments = a.error ? [] : (a.data || []);
+    try { trash = window.EstDrawings && EstDrawings.trashList ? await EstDrawings.trashList(rootId()) : []; } catch(e) { console.warn('trash', e); trash = []; }
     if (docSel.type === 'drawing' && !drawings.some(function(x) { return x.id === docSel.id; })) docSel = { type: 'drawings', id: null };
     docsLoadedOnce = true;
     renderDocTree();
@@ -1271,8 +1272,10 @@ requireAuth().catch(function(){});
     drawings.forEach(function(d) {
       html += '<div class="bp-tree-row sub' + (docSel.type === 'drawing' && docSel.id === d.id ? ' sel' : '') + '" data-sel="drawing" data-id="' + d.id + '"><span class="ic">' + icon('folder', 16) + '</span><span class="nm" title="' + esc(d.filename) + '">' + esc(d.filename) + '</span><span class="cnt">' + (d.page_count || 1) + '</span><span data-tree-kebab="drawing" data-id="' + d.id + '"></span></div>';
     });
+    if (trash.length) html += '<div class="bp-tree-row sub" data-trash="1" title="Deleted drawings are kept 30 days with their takeoff marks"><span class="ic">' + icon('delete', 16) + '</span><span class="nm">Trash</span><span class="cnt">' + trash.length + '</span></div>';
     html += '<div class="bp-tree-row' + (docSel.type === 'attachments' ? ' sel' : '') + '" data-sel="attachments"><span class="ic">' + icon('description') + '</span><span class="nm">Attachments</span><span class="cnt">' + attachments.length + '</span><span data-tree-kebab="attachments"></span></div>';
     host.innerHTML = html;
+    var tr = host.querySelector('[data-trash]'); if (tr) tr.addEventListener('click', openTrash);
     Array.prototype.forEach.call(host.querySelectorAll('[data-sel]'), function(row) {
       row.addEventListener('click', function(ev) {
         if (ev.target.closest('.pc-kebab')) return;
@@ -1328,11 +1331,56 @@ requireAuth().catch(function(){});
   }
   async function deleteDrawing(d) {
     if (!canEdit) return viewOnly();
-    var ok = await PC.confirm({ title: 'Delete drawing', message: 'Delete "' + d.filename + '"? All takeoff measurements drawn on its ' + (d.page_count || 1) + ' page(s) — in every estimate version — will be deleted too.', okLabel: 'Delete', danger: true });
-    if (!ok) return;
     if (!window.EstDrawings) { toast('est-drawings.js not loaded', 'error'); return; }
-    try { await EstDrawings.remove(d); toast('Drawing deleted', 'success'); loadDocs(); }
+    var toTrash = EstDrawings.trashAvailable ? await EstDrawings.trashAvailable() : false;
+    var ok = await PC.confirm(toTrash
+      ? { title: 'Move drawing to Trash', message: 'Move "' + d.filename + '" to the Trash? Its takeoff marks (every estimate version) go with it and leave the takeoff and the estimate quantities. You can restore the drawing with all its marks from Documents → Trash for 30 days.', okLabel: 'Move to Trash', danger: true }
+      : { title: 'Delete drawing', message: 'Delete "' + d.filename + '"? All takeoff measurements drawn on its ' + (d.page_count || 1) + ' page(s) — in every estimate version — will be deleted too.', okLabel: 'Delete', danger: true });
+    if (!ok) return;
+    try {
+      var res = await EstDrawings.remove(d);
+      toast(res && res.trashed ? 'Moved to Trash — restore it from Documents → Trash within 30 days' : 'Drawing deleted', 'success');
+      await loadDocs();
+      if (frameReady && frameReady.takeoff) sendCmd('takeoff', 'refresh');
+    }
     catch(e) { toast('Delete failed: ' + (e.message || e), 'error'); }
+  }
+  // Trash: deleted drawings with their takeoff marks, 30 days (drawing-trash.sql, Russ 11/21/2026)
+  function usDate(ts) { var d = new Date(ts); if (isNaN(d)) return ''; var p = function(n) { return (n < 10 ? '0' : '') + n; }; return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+  function openTrash() {
+    var body = document.createElement('div');
+    var m = PC.modal({ title: 'Trash — deleted drawings', body: body, size: 'md', buttons: [{ label: 'Close', onClick: function() { m.close(); } }] });
+    function draw() {
+      if (!trash.length) { body.innerHTML = '<div class="pc-empty">The Trash is empty.</div>'; return; }
+      body.innerHTML = '<p class="pc-muted" style="margin:0 0 10px;font-size:12px">Deleted drawings are kept 30 days. Restore puts the drawing back with all its takeoff marks; open the Takeoff afterwards so the estimate quantities update.</p>' +
+        trash.map(function(t) {
+          var left = Math.max(0, 30 - Math.floor((Date.now() - new Date(t.deleted_at).getTime()) / 86400000));
+          var who = (t.profiles && t.profiles.full_name) || '';
+          return '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--pc-border,#e5e7eb)">' +
+            '<div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(t.filename) + '">' + esc(t.filename) + '</div>' +
+            '<div class="pc-muted" style="font-size:12px">' + (t.page_count || 1) + ' page(s) · ' + (t.mark_count || 0) + ' takeoff mark(s) · deleted ' + esc(usDate(t.deleted_at)) + (who ? ' by ' + esc(who) : '') + ' · ' + left + ' day(s) left</div></div>' +
+            '<button type="button" class="pc-btn pc-btn-primary pc-btn-sm" data-restore="' + t.id + '"' + (canEdit ? '' : ' disabled') + '>Restore</button>' +
+            '<button type="button" class="pc-btn pc-btn-outline pc-btn-sm" data-forever="' + t.id + '"' + (canEdit ? '' : ' disabled') + ' title="Delete permanently">Delete forever</button></div>';
+        }).join('');
+      Array.prototype.forEach.call(body.querySelectorAll('[data-restore]'), function(b) { b.onclick = async function() {
+        if (!canEdit) return viewOnly();
+        b.disabled = true;
+        try {
+          var r = await EstDrawings.restore(b.getAttribute('data-restore'));
+          toast('Drawing restored with ' + (r.marks || 0) + ' takeoff mark(s)' + (r.skipped ? ' (' + r.skipped + ' skipped — their layer was deleted)' : ''), 'success');
+          await loadDocs(); draw();
+          if (frameReady && frameReady.takeoff) sendCmd('takeoff', 'refresh');
+        } catch(e) { b.disabled = false; toast('Restore failed: ' + (e.message || e), 'error'); }
+      }; });
+      Array.prototype.forEach.call(body.querySelectorAll('[data-forever]'), function(b) { b.onclick = async function() {
+        if (!canEdit) return viewOnly();
+        var t = trash.find(function(x) { return x.id === b.getAttribute('data-forever'); });
+        if (!(await PC.confirm({ title: 'Delete forever', message: 'Permanently delete "' + (t ? t.filename : 'this drawing') + '" and its ' + (t ? t.mark_count || 0 : 0) + ' takeoff mark(s)? This cannot be undone.', okLabel: 'Delete forever', danger: true }))) return;
+        try { await EstDrawings.deleteForever(b.getAttribute('data-forever')); toast('Deleted permanently', 'success'); await loadDocs(); draw(); }
+        catch(e) { toast('Delete failed: ' + (e.message || e), 'error'); }
+      }; });
+    }
+    draw();
   }
   async function downloadDrawing(d) {
     if (!window.EstDrawings) { toast('est-drawings.js not loaded', 'error'); return; }

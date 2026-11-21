@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="bid-actions.js?v=584"></script>
 <script src="nw-ai-takeoff.js?v=604"></script>
-<script src="est-drawings.js?v=584"></script>
+<script src="est-drawings.js?v=608"></script>
 <script src="nw-catalog-picker.js?v=596"></script>
 <script src="nw-duct-weight.js?v=584"></script>
 <script src="geo-takeoff.js?v=601"></script>
@@ -514,7 +514,7 @@ requireAuth().catch(function(){});
     else if (cmd === 'aiTakeoff') aiTakeoffDialog();
     else if (cmd === 'aiReview') setReviewMode(true);
     else if (cmd === 'openPlan') { var i = plans.findIndex(function(p) { return p.drawing.id === payload.drawingId && (!payload.page || p.page === Number(payload.page)); }); if (i >= 0) openPlan(i); }
-    else if (cmd === 'refresh') { loadLayers().then(loadDrawings).then(renderAll); }
+    else if (cmd === 'refresh') { loadLayers().then(loadDrawings).then(function() { renderAll(); scheduleSync(); }); }   // scheduleSync: a drawing moved to / restored from the Trash changes the line quantities
     else if (cmd === 'flush') { flushSync(); }
     else if (cmd === 'refreshLayers') { loadLayers().then(function() { allMeas = allMeas.filter(ownMark); meas = meas.filter(ownMark); if (activeLayerId && !layerById(activeLayerId)) activeLayerId = null; renderAll(); }); }   // estimate-side changes: layers only (deleting a layer there cascades to its marks)   // loadDrawings re-derives `meas` for the open plan
     else if (cmd === 'export') exportPdf();
