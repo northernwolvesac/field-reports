@@ -86,10 +86,10 @@ begin
     returning storage_path)
   select array_agg(distinct storage_path) into paths from gone;
   return query
-    select p from unnest(coalesce(paths, '{}'::text[])) p
-     where p is not null
-       and not exists (select 1 from public.estimate_drawings d where d.storage_path = p)
-       and not exists (select 1 from public.estimate_drawings_trash t where t.storage_path = p);
+    select u.path from unnest(coalesce(paths, '{}'::text[])) as u(path)
+     where u.path is not null
+       and not exists (select 1 from public.estimate_drawings d where d.storage_path = u.path)
+       and not exists (select 1 from public.estimate_drawings_trash x where x.storage_path = u.path);
 end $$;
 
 grant execute on function public.est_trash_drawing(uuid), public.est_restore_drawing(uuid), public.est_trash_purge(uuid) to authenticated;

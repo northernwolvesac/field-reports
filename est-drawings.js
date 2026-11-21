@@ -339,7 +339,7 @@
   var trashOk = null, purged = false;
   function missingFn(err) { return !!err && (err.code === 'PGRST202' || err.code === '42883' || err.code === '42P01' || err.code === 'PGRST205' || /could not find the (function|table)|does not exist/i.test(err.message || '')); }
   async function trashAvailable() {
-    if (trashOk !== null) return trashOk;
+    if (trashOk) return true;   // only a yes is cached: a page opened before drawing-trash.sql was run picks it up on the next delete
     var r = await sb().from('estimate_drawings_trash').select('id').limit(1);   // not head: a HEAD on a missing table comes back 204 with no error
     trashOk = !r.error;
     return trashOk;
@@ -385,7 +385,7 @@
       var t = await client.rpc('est_trash_drawing', { p_id: row.id });
       if (!t.error) { forget(row); return { trashed: true }; }
       if (!missingFn(t.error)) throw new Error(t.error.message);
-      trashOk = false;   // table there but the functions are not: old behaviour below
+      trashOk = null;   // table there but the functions are not: old behaviour below
     }
     // .select('id') so an RLS-filtered delete (0 rows, no error) is reported instead of silently "succeeding"
     var del = await client.from('estimate_drawings').delete().eq('id', row.id).select('id');
