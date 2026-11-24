@@ -44,6 +44,11 @@ Facts established (see `source/` crops):
 - ADE pricing for SX-1 & 2 (fans only): $20,000 + tax; $20,950 if ordered on/after 12/07/2026; 8-10 week lead; VFDs separate
   ($2,700 for 2 Yaskawa). Fans not ordered yet (PO NWAC1318 covers air outlets & VAVs only).
 
+Drawing currency check (11/24/2026): latest issued set in Drive is **Bulletin 4** (narrative dated 8/21/2026, filed 9/25/2026,
+DRAWINGS/Bulletin 4). Its only mechanical change is M-201 (1st floor: electrical/bike room relocation, AC-1-4, ERV-5, EUH-1-2/1-6).
+M-003 and M-207 were not reissued, so Rev 0 is still current for SX-1/SX-2. No later bulletin, ASI or SK found in Drive or email;
+Christine's RFP email carries no sketch (only a signature logo).
+
 Position: the fan type in the request is what is already scheduled, so equipment is about cost-neutral if it stays an AX of
 the same duty. Any added cost is the ductwork / mounting change (inline or relocated fan, discharge, supports, roof work,
 rated enclosure, duct shop drawing revision) plus delay to release. Price only after the design team issues a sketch / bulletin.
