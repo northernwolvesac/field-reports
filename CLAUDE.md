@@ -11,6 +11,7 @@ Read these before doing estimating, proposal, RFI or engineering work:
 - `Reference/Engineering Notes/` - technical facts established on jobs (equipment, wiring, code items).
 - `Reference/Projects/` - one folder per active job: `Project Record.md` (status, people, open items) and `source/` documents. Read it first when working on that job.
 - `Reference/Change Orders/` - one folder per CO breakdown with the record, build script and issued PDF.
+- `Reference/Submittals/` - NWAC standard submittal packages (build script, current manufacturer data sheets in `source/`); outputs also go to `submittals-library/` for the app.
 
 Working rules learned from the team:
 

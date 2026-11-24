@@ -1171,9 +1171,15 @@ var SUBMITTAL_LIBRARY = [
     file: 'pipe-insulation-fiberglass.pdf', label: 'Fiberglass Pipe Insulation (HW)' },
   { keywords: ['armaflex', 'elastomeric', 'pipe insulation refrig', 'pipe insulation chw', 'pipe insulation chill', 'pipe insulation - refrig', 'pipe insulation - chill', 'closed cell pipe', 'refrigerant insulation'],
     file: 'pipe-insulation-armaflex.pdf', label: 'Armaflex Refrigerant/CHW Pipe Insulation' },
-  { keywords: ['refrigerant piping', 'refrigerant line', 'acr copper', 'refrigeration piping', 'refrigerant condensate piping'],
-    exclude: ['insulation', 'armaflex'],
-    file: 'refrigerant-piping-package.pdf', label: 'Refrigerant Piping Package' },
+  // A2L (R-32 / R-454B) refrigerant piping is the default for new work; the R-410A package is used only when
+  // the submittal names R-410A. Source and build script: Reference/Submittals/A2L Refrigerant Piping (R-32, R-454B)/
+  { keywords: ['refrigerant piping', 'refrigerant line', 'acr copper', 'refrigeration piping', 'r-32 piping', 'r32 piping',
+               'r-454b piping', 'r454b piping', 'a2l piping', 'a2l refrigerant'],
+    exclude: ['insulation', 'armaflex', '410a', 'r-410', 'condensate'],
+    file: 'refrigerant-piping-a2l-package.pdf', label: 'Refrigerant Piping Package - A2L (R-32 / R-454B)' },
+  { keywords: ['410a', 'r-410'],
+    exclude: ['insulation', 'armaflex', 'unit', 'condenser', 'heat pump', 'vrf system', 'fan coil', 'equipment'],
+    file: 'refrigerant-piping-package.pdf', label: 'Refrigerant Piping Package - R-410A' },
   { keywords: ['condensate drain', 'condensate pipe', 'condensation drain', 'condensate pvc'],
     exclude: ['pump', 'insulation'],
     file: 'condensate-drain-pipe.pdf', label: 'Condensate Drain Piping' },
