@@ -103,20 +103,24 @@
       if (/balanc|testing/i.test(d)) has.tab = true;
       if (/start.?up|commission/i.test(d)) has.startup = true;
     });
-    var out = [];
+    // Default template = Alissultan's Q10233 (11/23/2026): equipment lines (a bare 'Furnish and install' to fill in when the
+    // estimate has none), duct / pipe / outlets (all three while the estimate has no quantities yet), Submittals, 3rd Party
+    // balancing and the 1 year warranty on every proposal; no trailing periods. The letter shows it as a bold numbered list.
+    var out = [], any = !!(has.duct || has.pipe || has.outlets || equip.length);
     equip.forEach(function (e) {
       var q = Math.round(e.qty * 100) / 100;
-      out.push('Furnish and install ' + e.name + ((e.unit && e.unit !== 'ea') ? '' : ' (' + q + ')') + '.');
+      out.push('Furnish and install ' + e.name + ((e.unit && e.unit !== 'ea') ? '' : ' (' + q + ')'));
     });
-    if (has.duct) out.push('Furnish and install All Ductwork with accessories and insulation.');
-    if (has.pipe) out.push('Furnish and install All Pipework with accessories and insulation.');
-    if (has.outlets) out.push('Furnish and install All air outlets, diffusers, linear diffusers and dampers.');
+    if (!equip.length) out.push('Furnish and install');
+    if (has.duct || !any) out.push('Furnish and install All Ductwork with accessories and insulation');
+    if (has.pipe || !any) out.push('Furnish and install All Pipework with accessories and insulation');
+    if (has.outlets || !any) out.push('Furnish and install All air outlets, diffusers, linear diffusers and dampers');
     if (has.controls) out.push('Furnish and install standalone controls');
     if (has.crane) out.push('Provide Crane rigging');
-    if (has.submittals) out.push('Provide all Submittals and Shop Drawings.');
-    if (has.tab) out.push('Providing Testing and 3rd Party Air Balancing with reports.');
-    if (has.startup) out.push('Provide Start Up.');
-    out.push('Provide 1 year Labor Warranty.');
+    out.push('Provide all Submittals and Shop Drawings');
+    out.push('Providing Testing and 3rd Party Air Balancing with reports');
+    if (has.startup) out.push('Provide Start Up');
+    out.push('Provide 1 year Labor Warranty');
     return out;
   }
   function hasR410a(est, lines) {
@@ -553,7 +557,7 @@
     h += '<br>' + esc(ctx.estimatorPhone || o.phone);
     if (m.estimatorEmail) h += '<br>' + esc(m.estimatorEmail);
     h += '</div></div>';
-    h += '<div class="nwp-customer"><span style="color:#6b7280">Customer</span><br>' + (cust ? '<b>' + esc(cust) + '</b>' : '<span style="color:#9ca3af">—</span>');
+    h += '<div class="nwp-customer"><span style="color:#6b7280">Customer</span><br>' + esc(cust || 'ALL BIDDERS');
     if (S.contactName) h += '<br>' + esc(S.contactName);
     if (S.contactEmail) h += '<br>' + esc(S.contactEmail);
     h += '</div></div>';
@@ -562,17 +566,20 @@
 
     // project block
     h += '<div class="nwp-info">';
-    h += '<p><span class="lbl">Project:</span> <b>' + esc(e.name || '') + '</b></p>';
-    if (e.project_address) h += '<p><span class="lbl">Address:</span> ' + esc(String(e.project_address).replace(/\r?\n/g, ', ')) + '</p>';
-    if (S.drawingsDate) h += '<p><span class="lbl">Mechanical drawings dated:</span> ' + esc(S.drawingsDate) + '</p>';
+    // Q10233 template: the three lines are always there (an empty one is filled in Edit Mode), labels in body colour
+    h += '<p>Project: <b>' + esc(e.name && !/^new project$/i.test(e.name) ? e.name : '') + '</b></p>';
+    h += '<p>Address: <b>' + esc(String(e.project_address || '').replace(/\r?\n/g, ', ')) + '</b></p>';
+    h += '<p>Mechanical drawings dated: <b>' + esc(S.drawingsDate || '') + '</b></p>';
     h += '</div>';
 
     h += '<div class="nwp-h">Scope of Work</div><div class="nwp-lines' + (scopeRich ? ' rich' : '') + '">';
-    if (scopeRich) h += richToHtml(e.scope_summary); else scope.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
+    if (scopeRich) h += richToHtml(e.scope_summary);   // formatted by the estimator: as typed
+    else h += '<ol>' + scope.map(function (t) { return '<li><b>' + esc(t.replace(/^\d+[.)]\s+/, '')) + '</b></li>'; }).join('') + '</ol>';
     h += '</div>';
 
     h += '<div class="nwp-h">Exclusions / Notes</div><div class="nwp-lines ex' + (exclRich ? ' rich' : '') + '">';
-    if (exclRich) h += richToHtml(m.exclusions); else excl.forEach(function (t) { h += '<p>' + esc(t) + '</p>'; });
+    if (exclRich) h += richToHtml(m.exclusions);
+    else h += '<ul>' + excl.map(function (t) { return '<li>' + esc(t.replace(/^[-*•]\s*/, '')) + '</li>'; }).join('') + '</ul>';
     h += '</div>';
 
     // page 2

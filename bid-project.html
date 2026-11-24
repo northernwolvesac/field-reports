@@ -24,7 +24,7 @@
 <script src="bid-actions.js?v=584"></script>
 <script src="nw-ai-takeoff.js?v=604"></script>
 <script src="est-drawings.js?v=610"></script>
-<script src="nw-proposal.js?v=607"></script>
+<script src="nw-proposal.js?v=611"></script>
 <style>
   /* NW logo header is mounted by PC.mountHeader(); its styles live in procore-ui.css (.pc-page .dash-header …) */
   :root { --nav-h: 60px; }
@@ -1792,7 +1792,7 @@ requireAuth().catch(function(){});
     var scopeVal = (currentVersion.scope_summary || '').trim() ? currentVersion.scope_summary : autoScope();
     var exclVal = (currentVersion.exclusions || '').trim() ? currentVersion.exclusions : stdExcl();
     var scopeEd = NWProposal.rich.editor(sc, { value: scopeVal, disabled: !canEdit, placeholder: 'Scope of work', onChange: function(v) { saveField('scope_summary', v, autoScope); } });
-    var exclEd = NWProposal.rich.editor(ex, { value: exclVal, baseItalic: true, disabled: !canEdit, placeholder: 'Exclusions / notes', onChange: function(v) { saveField('exclusions', v, stdExcl); } });
+    var exclEd = NWProposal.rich.editor(ex, { value: exclVal, disabled: !canEdit, placeholder: 'Exclusions / notes', onChange: function(v) { saveField('exclusions', v, stdExcl); } });
     $('propScopeReset').addEventListener('click', function(ev) {
       ev.preventDefault(); if (!canEdit) return viewOnly();
       currentVersion.scope_summary = null; queueSave('scope_summary', null); scopeEd.setValue(autoScope()); rerenderSoon();
