@@ -33,6 +33,15 @@ BLUE = colors.HexColor('#236fa1'); NAVY = colors.HexColor('#1F3A5F'); LIGHT = co
 GREY = colors.HexColor('#6a767c'); LINE = colors.HexColor('#9AA5B1')
 
 TITLE = 'Refrigerant Piping (A2L) - Pipe, Fittings, Valves & Accessories'
+# Template hooks: other NWAC submittal templates import this module and override these (see ../*/build_*.py).
+DIVIDER_HEADER = 'Refrigerant Piping (A2L)'
+COVER_TITLE = lambda P: ['Refrigerant Piping %s -' % P['refrig'], 'Pipe, Fittings, Valves & Accessories']
+SCHEDULE_ENCL = 'Refrigerant pipe & fitting schedule with A2L notes; valve & accessory schedule'
+TEMPLATE_LINE = 'NWAC standard submittal  |  refrigerant piping for A2L refrigerants'
+TEMPLATE_FOOTER = 'NWAC Standard Submittal - Refrigerant Piping (A2L)'
+LIB_FILE = 'refrigerant-piping-a2l-package.pdf'
+ITEM_LABELS = {'pipe-insulation-armaflex': 'Armacell - AP ArmaFlex tube, 520 adhesive, tape, WB finish',
+               'anchors': 'DeWalt - Hangermate+ concrete screw anchors'}
 
 # ---------------------------------------------------------------- content
 REFRIG = 'R-32 / R-454B (A2L)'
@@ -66,9 +75,8 @@ NOTES = [
     '<b>Testing:</b> dry-nitrogen pressure test at the equipment manufacturer\'s test pressure (not above component '
     'ratings), 24-hour hold with temperature correction; evacuation to 500 microns or lower with decay test; written '
     'test report.',
-    '<b>Identification:</b> markers per ASME A13.1 showing the refrigerant designation (R-32 or R-454B) and "A2L", at '
-    '20 ft maximum, at each side of wall and floor penetrations and at each valve and access port; stamped brass valve '
-    'tags at isolation valves.',
+    '<b>Identification:</b> pipe markers and valve tags, where required by the contract documents, are submitted '
+    'separately (NWAC identification submittal).',
     '<b>Supports:</b> spacing per NYC Mechanical Code Table 305.4 and MSS SP-58, and within 2 ft of each change of '
     'direction and of each equipment connection. Insulated lines bear on protection shields; insulation is continuous '
     'through supports.',
@@ -93,8 +101,6 @@ ACCESSORY_ROWS = [
     ('Hanger rod / nuts / washers', 'ITP Fig. 54 / 56 / 52', '3/8" continuous threaded rod, zinc plated', ''),
     ('Beam attachments', 'ITP Fig. 61, 229, 21', 'Top beam clamp, beam clamp w/ extension, C-clamp', 'Steel structure'),
     ('Concrete anchors', 'DeWalt Hangermate+', 'Screw anchor for rod hanging, ICC-ES listed', 'Concrete slab / deck'),
-    ('Pipe markers', 'Brimar System #1 / EZ markers', 'ASME A13.1-2023, legend "R-32 (A2L)"', '20 ft max'),
-    ('Valve tags', 'Brimar stamped brass', '1-1/2" dia, .032" brass, chain', 'Each isolation valve'),
 ]
 
 SECTIONS = [  # (divider title, contents line, [(file, label)])
@@ -115,10 +121,6 @@ SECTIONS = [  # (divider title, contents line, [(file, label)])
     ('HANGERS & SUPPORTS', 'Strut, cushion clamps, shields, rod, nuts, washers, beam clamps, concrete anchors', [
         ('source/ITP - Volume 5 Catalog - selected pages.pdf', None),
         ('LIB:anchors.pdf', None)]),
-    ('IDENTIFICATION', 'Refrigerant pipe markers and valve tags', [
-        ('source/Brimar - System 1 Pipe Markers 2025.pdf', None),
-        ('source/Brimar - EZ Pipe Markers 2025.pdf', None),
-        ('source/Brimar - Brass Valve Tags 2025.pdf', None)]),
 ]
 
 PROJECTS = os.path.join(HERE, 'projects')   # one JSON per job; see projects/_TEMPLATE.json
@@ -225,7 +227,7 @@ def schedule_pages(path, project_line, footer, refrig):
 def divider(path, title, contents, project_line, footer, items):
     W, H = letter
     c = canvas.Canvas(path, pagesize=letter)
-    header(c, W, H, TITLE.split(' - ')[0], project_line, footer)
+    header(c, W, H, DIVIDER_HEADER, project_line, footer)
     c.setFillColor(NAVY); c.rect(40, H / 2 + 10, W - 80, 70, stroke=0, fill=1)
     c.setFillColor(colors.white); c.setFont('Arial-Bold', 26); c.drawCentredString(W / 2, H / 2 + 36, title)
     c.setFillColor(colors.black); c.setFont('Arial', 11); c.drawCentredString(W / 2, H / 2 - 12, contents)
@@ -268,7 +270,7 @@ def cover(path, P):
     band('TO / FROM')
     field(48, 'SUBMITTED TO', P['to']); yy = field(W / 2, 'SUBMITTED BY', P['by']); y[0] = yy - 10
     band('SUBMITTAL')
-    field(48, 'TITLE / EQUIPMENT', ['Refrigerant Piping %s -' % P['refrig'], 'Pipe, Fittings, Valves & Accessories'])
+    field(48, 'TITLE / EQUIPMENT', COVER_TITLE(P))
     field(W / 2 - 30, 'SPEC SECTION', P['spec']); field(W - 200, 'TYPE', 'Product Data'); y[0] -= 38
     field(48, 'MANUFACTURER', 'Per schedule'); field(W / 2 - 30, 'MODEL / TAGS', 'Per schedule')
     field(W - 200, 'ACTION REQUESTED', 'For Approval'); y[0] -= 30
@@ -279,7 +281,7 @@ def cover(path, P):
                      W - 112) - 6
     y[0] -= 4
     band('ENCLOSURES')
-    encl = ['Refrigerant pipe & fitting schedule with A2L notes; valve & accessory schedule'] + \
+    encl = [SCHEDULE_ENCL] + \
            ['%s - %s' % (s[0].title(), s[1]) for s in SECTIONS]
     c.setFont('Arial', 8.6)
     for i, e in enumerate(encl, 1):
@@ -289,16 +291,16 @@ def cover(path, P):
                        'with the contract documents, except as noted above.</i>',
                        ParagraphStyle('i', fontName='Arial', fontSize=8.5, leading=11, textColor=GREY)), 48, y[0] + 6, W - 96)
     # reviewer boxes
-    bx = 52; bh = min(100, y[0] - 22 - bx)
+    bx = 50; bh = max(56, min(100, y[0] - 20 - bx))
     c.setStrokeColor(LINE); c.rect(48, bx, (W - 96) / 2 - 6, bh); c.rect(W / 2 + 6, bx, (W - 96) / 2 - 6, bh)
     c.setFont('Arial-Bold', 8); c.setFillColor(GREY)
     c.drawString(58, bx + bh - 14, 'REVIEWER ACTION'); c.drawString(W / 2 + 16, bx + bh - 14, 'REVIEWER STAMP / COMMENTS')
     c.setFont('Arial', 9.5); c.setFillColor(colors.black)
     for i, t in enumerate(['No Exceptions Taken', 'Approved as Noted', 'Revise and Resubmit', 'Rejected']):
-        xx = 60 + (i // 2) * 130; yy = bx + bh - 36 - (i % 2) * 22
+        xx = 60 + (i // 2) * 130; yy = bx + bh - 31 - (i % 2) * 17
         c.rect(xx, yy, 8, 8); c.drawString(xx + 14, yy, t)
     c.setFont('Arial', 7.5); c.setFillColor(GREY)
-    c.drawString(48, 36, 'Northern Wolves Air Conditioning  ·  New York & New Jersey  ·  SUB-%s Rev %s' % (P['no'], P['rev']))
+    c.drawString(48, 34, 'Northern Wolves Air Conditioning  ·  New York & New Jersey  ·  SUB-%s Rev %s' % (P['no'], P['rev']))
     c.showPage(); c.save()
 
 
@@ -309,8 +311,8 @@ def build(out, P=None):
         footer = 'SUB-%s Rev %s' % (P['no'], P['rev'])
         refrig = P['refrig']
     else:
-        project_line = 'NWAC standard submittal  |  refrigerant piping for A2L refrigerants'
-        footer = 'NWAC Standard Submittal - Refrigerant Piping (A2L)'
+        project_line = TEMPLATE_LINE
+        footer = TEMPLATE_FOOTER
         refrig = REFRIG
     doc = pymupdf.open()
     if P:
@@ -321,8 +323,7 @@ def build(out, P=None):
         items = []
         for f, _ in files:
             nm = os.path.basename(f.replace('LIB:', '')).replace('.pdf', '')
-            items.append({'pipe-insulation-armaflex': 'Armacell - AP ArmaFlex tube, 520 adhesive, tape, WB finish',
-                          'anchors': 'DeWalt - Hangermate+ concrete screw anchors'}.get(nm, nm))
+            items.append(ITEM_LABELS.get(nm, nm))
         dp = os.path.join(TMP, 'div%d.pdf' % i)
         divider(dp, title, contents, project_line, footer, items)
         doc.insert_pdf(pymupdf.open(dp))
@@ -330,7 +331,7 @@ def build(out, P=None):
             path = os.path.join(LIB, f[4:]) if f.startswith('LIB:') else os.path.join(HERE, f)
             doc.insert_pdf(pymupdf.open(path))
     doc.set_metadata({'title': (('SUB-%s Rev %s - ' % (P['no'], P['rev'])) if P else '') + TITLE,
-                      'author': 'Northern Wolves Air Conditioning', 'producer': 'NWAC build_a2l_package.py'})
+                      'author': 'Northern Wolves Air Conditioning', 'producer': 'NWAC submittal builder'})
     doc.save(out, garbage=4, deflate=True)
     return len(doc)
 
@@ -338,7 +339,7 @@ def build(out, P=None):
 if __name__ == '__main__':
     import sys, shutil
     if len(sys.argv) == 1:          # no argument: rebuild the app library template
-        lib_out = os.path.join(LIB, 'refrigerant-piping-a2l-package.pdf')
+        lib_out = os.path.join(LIB, LIB_FILE)
         print(lib_out, build(lib_out), 'pages')
     for arg in sys.argv[1:]:        # each argument: a project JSON -> project submittal with cover
         P = load_project(arg if os.path.isabs(arg) or os.path.exists(arg) else os.path.join(PROJECTS, arg))

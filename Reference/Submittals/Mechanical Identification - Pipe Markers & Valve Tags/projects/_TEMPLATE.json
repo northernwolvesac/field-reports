@@ -1,0 +1,23 @@
+{
+  "_help": "Copy this file to projects/<Job name>.json, fill in, then run: python3 build_identification_package.py \"projects/<Job name>.json\". refrig: \"R-32 (A2L)\" or \"R-454B (A2L)\". response: leave [] for Rev 0; add reviewer comments and answers for resubmittals. out: optional file name.",
+  "no": "0XX",
+  "rev": "0",
+  "date": "MM/DD/YYYY",
+  "name": "Project name",
+  "address": "Street, City, State ZIP",
+  "owner": "GC / customer",
+  "to": "GC / customer",
+  "architect": "Architect / Engineer",
+  "contract": "\u2014",
+  "pm": "\u2014",
+  "spec": "23 05 53",
+  "by": [
+    "Northern Wolves Air Conditioning",
+    "Fatima Moutchou",
+    "55 9th Street, Unit 55A-2, Brooklyn, NY 11215",
+    "fatima@northernwolvesac.com"
+  ],
+  "refrig": "R-32 (A2L)",
+  "response": [],
+  "out": ""
+}

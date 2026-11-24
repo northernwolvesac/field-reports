@@ -19,8 +19,9 @@
   "refrig": "R-32 (A2L)",
   "response": [
     "Engineer's note 1 (Jack Green Associates, 10/23/2026): \"Revise from 410A to R32 refrigerant.\"",
-    "Response: revised for R-32 (ASHRAE 34 group A2L). Pipe, fitting and valve schedules, notes and labeling updated for R-32; all product data replaced with current manufacturer data sheets.",
-    "Condensate drain piping and valves removed from this submittal; they will be submitted separately."
+    "Response: revised for R-32 (ASHRAE 34 group A2L); schedules, notes and product data updated with current manufacturer data sheets.",
+    "Condensate drain piping and valves removed from this submittal; they will be submitted separately.",
+    "Valve tags and pipe markers were not requested in the review; if required, they will be submitted separately."
   ],
   "out": "SUB-005 Rev 1 - 419-421 West Broadway PH - Refrigerant Piping R-32.pdf"
 }

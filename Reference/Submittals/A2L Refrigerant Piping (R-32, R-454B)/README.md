@@ -22,7 +22,8 @@ from 410A to R32". No page of it is reused here.
 
 ## Files
 
-- `build_a2l_package.py`: the builder.
+- `build_a2l_package.py`: the builder. The identification template imports it and reuses the cover, dividers and
+  project-JSON system through the hooks at the top of the file (`DIVIDER_HEADER`, `COVER_TITLE`, `LIB_FILE`, ...).
 - `projects/`: one JSON per job. `419-421 West Broadway PH.json` produced SUB-005 Rev 1.
 - `source/`: current manufacturer data sheets, downloaded 11/24/2026 from the manufacturers' own sites.
 
@@ -38,7 +39,12 @@ from 410A to R32". No page of it is reused here.
 | Insulation | Armacell AP ArmaFlex, 520 adhesive, tape, WB finish | app library `pipe-insulation-armaflex.pdf` |
 | Supports | ITP 7200/7201 strut, 8500 cushion clamp, Fig. 167 shield, Fig. 54/56/52, Fig. 61/229/21 | itpny.net Volume 5 catalog (selected pages) |
 | Anchors | DeWalt Hangermate+ | app library `anchors.pdf` |
-| Identification | Brimar System #1 / EZ markers (ASME A13.1-2023), stamped brass valve tags | pipemarker.com 2025 bulletins |
+
+## Identification
+
+Pipe markers and valve tags are not part of this package. When the contract documents or the engineer require
+them, use the separate template in `../Mechanical Identification - Pipe Markers & Valve Tags/`. The engineer did not
+ask for them on 419-421 West Broadway PH, so they are not in SUB-005 Rev 1.
 
 ## Open points
 

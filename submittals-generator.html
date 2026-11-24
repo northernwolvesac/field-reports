@@ -1175,8 +1175,12 @@ var SUBMITTAL_LIBRARY = [
   // the submittal names R-410A. Source and build script: Reference/Submittals/A2L Refrigerant Piping (R-32, R-454B)/
   { keywords: ['refrigerant piping', 'refrigerant line', 'acr copper', 'refrigeration piping', 'r-32 piping', 'r32 piping',
                'r-454b piping', 'r454b piping', 'a2l piping', 'a2l refrigerant'],
-    exclude: ['insulation', 'armaflex', '410a', 'r-410', 'condensate'],
+    exclude: ['insulation', 'armaflex', '410a', 'r-410', 'condensate', 'identification', 'marker', 'valve tag', 'label'],
     file: 'refrigerant-piping-a2l-package.pdf', label: 'Refrigerant Piping Package - A2L (R-32 / R-454B)' },
+  // Separate submittal, only when identification is required. Source: Reference/Submittals/Mechanical Identification - Pipe Markers & Valve Tags/
+  { keywords: ['valve tag', 'pipe marker', 'pipe label', 'piping identification', 'mechanical identification',
+               'identification for hvac', 'identification for piping', '23 05 53'],
+    file: 'mechanical-identification-package.pdf', label: 'Mechanical Identification - Pipe Markers & Valve Tags' },
   { keywords: ['410a', 'r-410'],
     exclude: ['insulation', 'armaflex', 'unit', 'condenser', 'heat pump', 'vrf system', 'fan coil', 'equipment'],
     file: 'refrigerant-piping-package.pdf', label: 'Refrigerant Piping Package - R-410A' },
