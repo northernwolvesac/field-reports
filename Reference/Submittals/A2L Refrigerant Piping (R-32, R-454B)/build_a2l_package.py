@@ -3,9 +3,9 @@
 Refrigerant piping only (no condensate, water or hydronic items). Every data sheet is a current manufacturer
 original in source/ (downloaded 11/24/2026). No pages from other contractors' packages.
 
-Run: python3 build_a2l_package.py
-Out: ../../../submittals-library/refrigerant-piping-a2l-package.pdf   (app library template, no cover / project)
-     SUB-005 Rev 1 - 419-421 West Broadway PH - Refrigerant Piping R-32.pdf   (project submittal with cover)
+Run: python3 build_a2l_package.py                          -> submittals-library/refrigerant-piping-a2l-package.pdf
+     python3 build_a2l_package.py projects/<job>.json       -> project submittal with cover, in this folder
+New job: copy projects/_TEMPLATE.json, fill it in, run the second command.
 """
 import os
 import pymupdf
@@ -121,20 +121,20 @@ SECTIONS = [  # (divider title, contents line, [(file, label)])
         ('source/Brimar - Brass Valve Tags 2025.pdf', None)]),
 ]
 
-PROJECT = dict(
-    no='005', rev='1', date='11/24/2026', name='419-421 West Broadway PH',
-    address='419-421 West Broadway, Manhattan, NY 10012', owner='Certified G.I., Inc.',
-    to='Certified G.I., Inc.', by=['Northern Wolves Air Conditioning', 'Fatima Moutchou',
-                                   '55 9th Street, Unit 55A-2, Brooklyn, NY 11215', 'fatima@northernwolvesac.com'],
-    refrig='R-32 (A2L)',
-    response=[
-        'Engineer\'s note 1 (Jack Green Associates, 10/23/2026): "Revise from 410A to R32 refrigerant."',
-        'Response: revised for R-32 (ASHRAE 34 group A2L). Pipe, fitting and valve schedules, notes and labeling '
-        'updated for R-32; all product data replaced with current manufacturer data sheets.',
-        'Condensate drain piping and valves removed from this submittal; they will be submitted separately.',
-    ],
-    out=os.path.join(HERE, 'SUB-005 Rev 1 - 419-421 West Broadway PH - Refrigerant Piping R-32.pdf'),
-)
+PROJECTS = os.path.join(HERE, 'projects')   # one JSON per job; see projects/_TEMPLATE.json
+
+
+def load_project(path):
+    import json
+    with open(path) as f:
+        P = json.load(f)
+    P.setdefault('rev', '0'); P.setdefault('contract', '—'); P.setdefault('pm', '—'); P.setdefault('architect', '—')
+    P.setdefault('spec', '23 23 00'); P.setdefault('refrig', 'R-32 (A2L)'); P.setdefault('response', [])
+    P.setdefault('to', P.get('owner', '—'))
+    P['out'] = os.path.join(HERE, P.get('out') or 'SUB-%s Rev %s - %s - Refrigerant Piping %s.pdf' % (
+        P['no'], P['rev'], P['name'], P['refrig'].split(' ')[0]))
+    return P
+
 
 # ---------------------------------------------------------------- drawing helpers
 cell = ParagraphStyle('c', fontName='Arial', fontSize=8, leading=9.8)
@@ -261,18 +261,19 @@ def cover(path, P):
         return yy
 
     band('PROJECT')
-    field(48, 'PROJECT', P['name']); field(W / 2, 'PROJECT / CONTRACT NO.', '—'); y[0] -= 29
+    field(48, 'PROJECT', P['name']); field(W / 2, 'PROJECT / CONTRACT NO.', P['contract']); y[0] -= 29
     field(48, 'ADDRESS', P['address']); field(W / 2, 'OWNER / CUSTOMER', P['owner']); y[0] -= 29
-    field(48, 'ARCHITECT / ENGINEER', 'TRA Studio Architecture / Jack Green Associates'); field(W / 2, 'PROJECT MANAGER', '—')
+    field(48, 'ARCHITECT / ENGINEER', P['architect']); field(W / 2, 'PROJECT MANAGER', P['pm'])
     y[0] -= 30
     band('TO / FROM')
     field(48, 'SUBMITTED TO', P['to']); yy = field(W / 2, 'SUBMITTED BY', P['by']); y[0] = yy - 10
     band('SUBMITTAL')
     field(48, 'TITLE / EQUIPMENT', ['Refrigerant Piping %s -' % P['refrig'], 'Pipe, Fittings, Valves & Accessories'])
-    field(W / 2 - 30, 'SPEC SECTION', '23 23 00'); field(W - 200, 'TYPE', 'Product Data'); y[0] -= 38
+    field(W / 2 - 30, 'SPEC SECTION', P['spec']); field(W - 200, 'TYPE', 'Product Data'); y[0] -= 38
     field(48, 'MANUFACTURER', 'Per schedule'); field(W / 2 - 30, 'MODEL / TAGS', 'Per schedule')
     field(W - 200, 'ACTION REQUESTED', 'For Approval'); y[0] -= 30
-    band('REVISION %s - RESPONSE TO REVIEW COMMENTS' % P['rev'])
+    if P['response']:
+        band('REVISION %s - RESPONSE TO REVIEW COMMENTS' % P['rev'])
     for ln in P['response']:
         y[0] = place(c, Paragraph(ln, ParagraphStyle('r', fontName='Arial', fontSize=9.2, leading=12)), 56, y[0] + 6,
                      W - 112) - 6
@@ -335,7 +336,11 @@ def build(out, P=None):
 
 
 if __name__ == '__main__':
-    lib_out = os.path.join(LIB, 'refrigerant-piping-a2l-package.pdf')
-    print(lib_out, build(lib_out), 'pages')
-    print(PROJECT['out'], build(PROJECT['out'], PROJECT), 'pages')
-    import shutil; shutil.rmtree(TMP, ignore_errors=True)
+    import sys, shutil
+    if len(sys.argv) == 1:          # no argument: rebuild the app library template
+        lib_out = os.path.join(LIB, 'refrigerant-piping-a2l-package.pdf')
+        print(lib_out, build(lib_out), 'pages')
+    for arg in sys.argv[1:]:        # each argument: a project JSON -> project submittal with cover
+        P = load_project(arg if os.path.isabs(arg) or os.path.exists(arg) else os.path.join(PROJECTS, arg))
+        print(P['out'], build(P['out'], P), 'pages')
+    shutil.rmtree(TMP, ignore_errors=True)

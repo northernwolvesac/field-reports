@@ -23,3 +23,4 @@ Working rules learned from the team:
 - Manhattan office buildings in these bids are on condenser water (CWS/R), not chilled water. Check the drawings.
 - Deliverables are built with reportlab / pymupdf scripts kept next to the PDF so they can be regenerated. LibreOffice is not reliable in the remote container.
 - Web fetches: most vendor sites are blocked by the egress proxy; Amazon S3 hosted PDFs (Mitsubishi metuspublicassets, some distributor copies) work.
+- Refrigerant piping submittals: use the A2L template in `Reference/Submittals/A2L Refrigerant Piping (R-32, R-454B)/` (refrigerant only, no condensate or hydronic items). Never reuse pages from another contractor's submittal package; all data sheets must be current manufacturer originals.

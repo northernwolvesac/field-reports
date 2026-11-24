@@ -4,15 +4,26 @@ Refrigerant piping only: no condensate, water or hydronic items. Built 11/24/202
 Sound Refrigeration A/C. That package was used on 419-421 West Broadway PH as SUB-005 Rev 0 and was returned "revise
 from 410A to R32". No page of it is reused here.
 
+## How to use (company template)
+
+1. **In the app:** the submittal generator attaches `submittals-library/refrigerant-piping-a2l-package.pdf` to any
+   "refrigerant piping" submittal (the app adds the cover). The R-410A package is used only when the title says 410A.
+2. **As a stand-alone submittal with our cover:**
+   - copy `projects/_TEMPLATE.json` to `projects/<Job name>.json` and fill it in. Fields:
+     - submittal no., rev, date
+     - project, address, GC, architect / engineer, spec section
+     - `refrig`: "R-32 (A2L)" or "R-454B (A2L)"
+     - `response`: reviewer comments and our answers for resubmittals; leave empty for Rev 0
+   - run `python3 build_a2l_package.py "projects/<Job name>.json"`. The PDF is written to this folder.
+3. **To change content:**
+   - Schedules, notes, the accessory list or sections: edit the lists at the top of `build_a2l_package.py`.
+   - A data sheet: replace the file in `source/` with the newer manufacturer version.
+   - Then run `python3 build_a2l_package.py` (no argument) to refresh the app library file, and commit.
+
 ## Files
 
-- `build_a2l_package.py` builds both outputs:
-  - `submittals-library/refrigerant-piping-a2l-package.pdf`: the app library template, no cover. The submittal
-    generator attaches it to "refrigerant piping" submittals; the R-410A package is used only when the title says
-    410A.
-  - `SUB-005 Rev 1 - 419-421 West Broadway PH - Refrigerant Piping R-32.pdf`: the project resubmittal, with our cover
-    and the response to the engineer's note.
-- To make it for another job, add a `PROJECT` dict and call `build(out, P)`.
+- `build_a2l_package.py`: the builder.
+- `projects/`: one JSON per job. `419-421 West Broadway PH.json` produced SUB-005 Rev 1.
 - `source/`: current manufacturer data sheets, downloaded 11/24/2026 from the manufacturers' own sites.
 
 ## Contents

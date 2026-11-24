@@ -1,0 +1,26 @@
+{
+  "no": "005",
+  "rev": "1",
+  "date": "11/24/2026",
+  "name": "419-421 West Broadway PH",
+  "address": "419-421 West Broadway, Manhattan, NY 10012",
+  "owner": "Certified G.I., Inc.",
+  "to": "Certified G.I., Inc.",
+  "architect": "TRA Studio Architecture / Jack Green Associates",
+  "contract": "\u2014",
+  "pm": "\u2014",
+  "spec": "23 23 00",
+  "by": [
+    "Northern Wolves Air Conditioning",
+    "Fatima Moutchou",
+    "55 9th Street, Unit 55A-2, Brooklyn, NY 11215",
+    "fatima@northernwolvesac.com"
+  ],
+  "refrig": "R-32 (A2L)",
+  "response": [
+    "Engineer's note 1 (Jack Green Associates, 10/23/2026): \"Revise from 410A to R32 refrigerant.\"",
+    "Response: revised for R-32 (ASHRAE 34 group A2L). Pipe, fitting and valve schedules, notes and labeling updated for R-32; all product data replaced with current manufacturer data sheets.",
+    "Condensate drain piping and valves removed from this submittal; they will be submitted separately."
+  ],
+  "out": "SUB-005 Rev 1 - 419-421 West Broadway PH - Refrigerant Piping R-32.pdf"
+}
