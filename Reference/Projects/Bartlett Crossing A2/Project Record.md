@@ -53,5 +53,10 @@ Position: the fan type in the request is what is already scheduled, so equipment
 the same duty. Any added cost is the ductwork / mounting change (inline or relocated fan, discharge, supports, roof work,
 rated enclosure, duct shop drawing revision) plus delay to release. Price only after the design team issues a sketch / bulletin.
 
+Reply to Christine (no price) drafted 11/24/2026 in Ruslan's Gmail (thread "31 Bartlett Street: RFP"), not yet sent:
+contract fan is already a hooded tubular axial (M-003/M-207 Rev 0, unchanged by Bulletin 4), SUB-009 R3 matches; equipment
+expected cost-neutral; cost is in ductwork/mounting; asked for sketch (arrangement, intake/discharge, duct routing/sizes, rated
+enclosure, SPD changes, CFM/SP/HP, curb/structural); fans not released, 8-10 wk lead, vendor price held to early Dec.
+
 ### Other
 - Duct shop drawings: Alexandre revising per Bulletin 3, submitted 11/13/2026 (2nd floor only; needs overlays from other trades).
