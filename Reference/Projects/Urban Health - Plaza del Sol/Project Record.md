@@ -69,7 +69,10 @@ As-builts: Dmitriy's 6/25/2025 set is final (Ruslan 11/25/2026).
 Status 11/25/2026:
 - [x] O&M manuals and warranties for Lennox, Mitsubishi, Rupp.
 - [x] TAB report and as-builts in the binder.
-- [ ] Send the package to Ryan Jennings. Labor warranty response: start-up was more than 1 year ago, so no labor warranty.
-  The files are too large for the Gmail connector (3.1 MB per call), so Ruslan sends them from his own mail.
+- [x] Package sent to Ryan Jennings 11/25/2026 (reply in the punch list thread, cc Andrei), including the labor warranty
+  response (start-up more than 1 year ago, no labor warranty). Delivered as a Drive folder link because the files are too
+  large to attach (Gmail connector limit 3.1 MB per call). Folder "HVAC Closeout Package - Northern Wolves (Nov 2026)"
+  (id 1tkt12EhN5WPBR5m0Y7UzCYZfw1fTuQl1) is inside the project Drive folder and holds 9 PDFs (01-09, each under 2.9 MB).
+  Ryan has view access.
 - [ ] DOH: EDC #29 air balance P.E. cover letter (open since June 2026).
 - [ ] Permit sign-off documentation: by GC / expeditor.
