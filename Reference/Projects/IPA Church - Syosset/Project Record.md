@@ -38,6 +38,43 @@ Greenheck FAQs 5 (web UI), 6 (SAT install), 12 (fan control mode), and booked th
 (3) ADE start-up 10/29 (programming checklist in the engineering note); (4) optional: send DMG an RFI / FYI recording the client-approved
 change (draft in the engineering note "Paper trail").
 
+## Closeout (requested 10/16/2026 by Lizbeth Astorga, CCC Project Administrator, liz@cccliny.com; due 10/30)
+
+GC: Core Concepts Contracting (CCC), 687 Old Willets Path, Hauppauge NY 11788. Jay Peck (Sr PM, jay@cccliny.com), Dennis Lamm
+(super, dennis@cccliny.com), Nicole LaMontagne (warranty addressee). CCC job C24-001. Substantial completion 10/26/2026.
+Final payment and retainage are held until the closeout package is accepted. Hard copies (original signature) and
+electronic copies are required, each showing the project name and full address (310 South Oyster Bay Road, Syosset, NY 11791).
+
+Required: (1) subcontractor material & installation warranty, (2) manufacturer warranties, (3) O&M manuals,
+(4) as-built drawings, (5) TAB report.
+
+What was done (checked Ruslan's Gmail and Drive 11/25/2026; Fatima has left NWAC):
+- 10/17 Leonid wrote our standard one-year labor warranty letter. Fatima sent it to Dennis 10/24 ("use only the warranty
+  letter", 10/27). Nothing else was submitted. Fatima's Drive holds only that letter and CCC's sample.
+- 11/24 Liz rejected the warranty ("not acceptable, use our project warranty template") and re-listed items 2-5.
+- 11/24 W-001 (app / Drive IOM & WARRANTY) is still our standard wording, not CCC's. Superseded by W-002.
+- 11/25 W-002 built on CCC's template wording: `Closeout/W-002 Warranty Letter (CCC template) - India Pentecostal
+  Assembly.pdf` (`Closeout/build_warranty_letter.py`). Needs Ruslan's original signature. Note the template makes us
+  liable for damage to others' work, structures and furnishings and for owner-incurred correction costs.
+- Drive project folder (NW Projects / India Pentecostal Assembly Church): As Builts and TAB Report folders are empty.
+
+Still open:
+- [ ] W-002 signed (wet ink) and sent to Liz, hard copy to CCC.
+- [ ] Manufacturer warranties and O&Ms: Greenheck RVE ERU-1..3 (warranty statement is in submittal 230000-13 p.28),
+  LG VRF (HP-01..06 + indoor units), split system, Greenheck SP-B80 EF-01, ESD-403 louvers, Markel EWH-01/02, Price
+  air outlets, air curtain. Manufacturer sites (greenheck.com, lghvac.com, price, markel) are blocked from the cloud
+  container; get IOMs from the reps (ADE for Greenheck) or allow the hosts. DGX / KMAU-1 is "[FUTURE]" on M7.1: confirm
+  whether it was furnished before including it.
+- [ ] TAB report: balancing was scheduled 10/8-10/9 (Ruslan to Ryan, 10/6). Balancing firm not named in email; no report
+  received.
+- [ ] As-built drawings: no drafter or status found in email.
+- [ ] ERU final start-up (ADE, booked 10/29): no confirmation or final report in email; gas inspection was 10/28.
+  Only the 9/9 partial start-up reports exist (Ryan 9/10 and 9/24, 4 x .doc + photos).
+- [ ] VRF start-up report: Christino asked Ferguson (Michael Liranzo) 10/5; Ferguson says it did not supply the equipment.
+  The VRF supplier on the POs is Klima (PO NWAC0547, NWAC1063). VRF central controller set-up also unresolved.
+- [ ] GC recap 10/27 items: firestopping all floors, duct collar and return grille room 111, resend completed scope list.
+- [ ] ADE 11/24 asks for the PO number for an "India Church" lien waiver.
+
 ## Files in `source/`
 
 - `Greenheck ERU submittal 230000-13 (reviewed DMG 2025-04-22).pdf`: P281653R03, wiring diagrams G31 (p.15), Y07 (p.18), sequence p.25.
