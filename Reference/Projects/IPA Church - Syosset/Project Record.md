@@ -48,7 +48,8 @@ electronic copies are required, each showing the project name and full address (
 Required: (1) subcontractor material & installation warranty, (2) manufacturer warranties, (3) O&M manuals,
 (4) as-built drawings, (5) TAB report.
 
-What was done (checked Ruslan's Gmail and Drive 11/25/2026; Fatima has left NWAC):
+What was done (checked Ruslan's Gmail and Drive 11/25/2026; Fatima, Leonid, Sharon and Jonathan have left NWAC, so CCC billing
+and closeout contacts previously addressed to Leonid now go to projects@):
 - 10/17 Leonid wrote our standard one-year labor warranty letter. Fatima sent it to Dennis 10/24 ("use only the warranty
   letter", 10/27). Nothing else was submitted. Fatima's Drive holds only that letter and CCC's sample.
 - 11/24 Liz rejected the warranty ("not acceptable, use our project warranty template") and re-listed items 2-5.
