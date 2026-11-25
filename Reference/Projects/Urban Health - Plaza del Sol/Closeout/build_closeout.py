@@ -30,8 +30,8 @@ DOCS = os.path.join(HERE, 'docs')
 TMP = os.path.join(HERE, '_pages')
 LOGO = os.path.join(HERE, '..', '..', '..', '..', 'logo-full.png'); LOGO_W, LOGO_H = 2367, 1303
 OUT = os.path.join(HERE, 'Urban Health - HVAC Closeout Package.pdf')
-FINAL = False                       # True removes the DRAFT marks and the pending sheets' red banner
-DATE = 'November 24, 2026'
+FINAL = True                        # True removes the DRAFT marks and the pending sheets' red banner
+DATE = 'November 25, 2026'
 WARRANTY_START = None               # e.g. 'March 2, 2026'; None -> "date of substantial completion"
 
 pdfmetrics.registerFont(TTFont('LS', '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'))
@@ -60,50 +60,26 @@ DIRECTORY = [
     ('RTU supplier', 'Lennox Commercial - Northeast (order 830518044)', 'Matthew Recenello',
      'Northeast.Commercial@lennoxind.com  |  973-939-3923'),
     ('Mini split supplier', 'Homans Associates (Mitsubishi Electric)', 'Rajiv Dyal', 'rajiv.dyal@homans.com  |  646-276-3300'),
-    ('Fans / heaters / sound traps', 'Engineered Air Solutions (Rupp Air, Berko)', 'Randy Sapoff',
+    ('Exhaust fan supplier', 'Engineered Air Solutions (Rupp Air)', 'Randy Sapoff',
      'rsapoff@engineeredairsolutions.com  |  973-536-2220'),
-    ('Air outlets supplier', 'SRS Enterprises, Inc.', 'Mark Richter', 'mrichter@srs-enterprises.com  |  732-740-6120'),
 ]
 
 # key, section title, schedule rows (tag, qty, description, manufacturer / model, location), approved submittals, supplier
+# The GC asked for O&M manuals and manufacturer warranties only (no submittals) -> submittal lists left empty.
 EQUIPMENT = [
     ('RTU', 'Packaged Rooftop Units RTU-1 to RTU-6',
-     [('RTU-1 to RTU-6', '6', 'Packaged rooftop unit, 4 ton, 1,670 CFM, gas heat 65 MBH two-stage, economizer, 208/3/60',
-       'Lennox Energence LGT048H4E', 'Roof (steel dunnage)')],
-     ['230000-2 RTU-1 to 6 Lennox LGT048H4E.pdf'], 'Lennox Commercial'),
-    ('TSTAT', 'RTU Thermostats',
-     [('T-1 to T-6', '6', 'Programmable thermostat, standalone (no BMS)', 'Lennox ComfortSense 8500 (17G75)', 'Served spaces')],
+     [('RTU-1 to RTU-6', '6', 'Packaged gas / electric rooftop unit, 4 ton, R-410A, economizer, 208/3/60, '
+       'ComfortSense 8500 thermostat', 'Lennox LGT048H4E (LGT048H4EB1Y)', 'Roof (steel dunnage)')],
      [], 'Lennox Commercial'),
-    ('CURB', 'RTU Curbs, Vibration Isolation and Roof Penetrations',
-     [('RTU-1 to RTU-6', '6', 'Vibration isolation curb, 24 in., 2 in. spring', 'CDI 7-0024-2060', 'Roof'),
-      ('-', '-', 'Spring isolators', 'Mason Industries SLF', 'Roof dunnage'),
-      ('-', '-', 'Pipe and duct penetration curbs', 'Pate PCA/PCC; Thybar TC-3', 'Roof')],
-     ['230000-5b RTU Vibration Isolation Curbs CDI.pdf', '230000-5a Vibration Isolators Mason SLF.pdf',
-      '230000-4 Pipe Penetration Curb.pdf', '230000-8 Duct Penetration Curb.pdf'], 'Lennox / NWAC'),
-    ('ST', 'RTU Sound Traps',
-     [('-', '12', 'Rectangular duct silencers (8) 14x14x30, (4) 16x16x30', 'Per as-shipped data (submitted: Pottorff RFN)',
-       'RTU supply / return ducts')],
-     ['230000-12 RTU Silencers.pdf'], 'Engineered Air Solutions'),
     ('MS', 'IT Room Ductless Split System AC-A / ACC-A',
      [('AC-A', '1', 'Wall mounted indoor unit, 1 ton, cooling only, PAR-40MAAU controller, condensate pump',
        'Mitsubishi PKA-A12LA', 'IT room'),
       ('ACC-A', '1', 'Outdoor condensing unit with wind baffle WB-PA4', 'Mitsubishi PUY-A12NKA7', 'Roof')],
-     ['230000-3 IT Room Mini Split Mitsubishi.pdf', '230000-9 Refrigerant Pipe Insulation Supports.pdf'], 'Homans Associates'),
+     [], 'Homans Associates'),
     ('TX', 'Exhaust Fans TX-1 to TX-6',
-     [('TX-1 to TX-6', '6', 'Ceiling / inline exhaust fans, ECM, 115/1, backdraft damper', 'Rupp Air DR10HRA / DR12HRA '
-       '(final models per as-shipped data)', 'Toilets / exam areas')],
-     ['230000-11 Exhaust Fans Rupp.pdf'], 'Engineered Air Solutions'),
-    ('EUH', 'Electric Wall Heaters',
-     [('EUH', '5', 'Architectural programmable electric wall heater', 'Berko SmartSeries SSARWH', 'Vestibules / stairs')],
-     ['230000-10 Electric Wall Heaters Berko.pdf'], 'Engineered Air Solutions'),
-    ('AO', 'Air Outlets',
-     [('CD-A', '73', 'Square plaque ceiling diffuser with neck damper', 'Titus OMNI (per approved submittal)', '2nd floor'),
-      ('CR-A / ER-A', '91', 'Return / exhaust grilles with dampers', 'Titus 3FL with AG-75 damper (per approved submittal)', '2nd floor')],
-     ['230000-17 Air Outlets.pdf'], 'SRS Enterprises'),
-    ('DUCT', 'Ductwork Insulation and Jacketing',
-     [('-', '-', 'Outdoor duct insulation and weatherproof jacketing', 'JM Linacoustic RC-HP, Manson AK Board, '
-       '3M VentureClad', 'Roof')],
-     ['230000-7 Outdoor Duct Insulation and Jacketing.pdf'], 'General Insulation Co.'),
+     [('TX-1 to TX-6', '6', 'Direct drive centrifugal downblast roof exhaust fans, 115/1/60', 'Rupp Air DR10HRA / DR12HRA',
+       'Roof')],
+     [], 'Engineered Air Solutions'),
 ]
 
 MAINTENANCE = [
@@ -118,11 +94,6 @@ MAINTENANCE = [
      'outdoor unit and wind baffle clear of debris and snow.'),
     ('TX-1 to TX-6', 'Inspect and clean fan wheel, housing and grille every 6 months; check backdraft damper operation; '
      'verify fan speed setting and amp draw annually.'),
-    ('Electric wall heaters', 'Vacuum grille and element area before each heating season; verify thermostat operation '
-     'and limit control.'),
-    ('Sound traps / ductwork', 'Inspect duct and silencer joints, insulation and outdoor jacketing annually; reseal '
-     'jacketing seams as required.'),
-    ('Diffusers and grilles', 'Clean faces annually; do not change damper settings set by the air balancer.'),
 ]
 
 
@@ -166,7 +137,7 @@ def cover():
     y = H - 1.3 * inch - lh - 0.6 * inch
     c.setFillColor(NAVY); c.setFont('LSB', 24); c.drawCentredString(W / 2, y, 'HVAC CLOSEOUT DOCUMENTS'); y -= 30
     c.setFont('LS', 13); c.setFillColor(colors.black)
-    c.drawCentredString(W / 2, y, 'Operation & Maintenance Manuals  |  Warranties & Guarantee  |  As-Built Drawings'); y -= 60
+    c.drawCentredString(W / 2, y, 'Operation & Maintenance Manuals  |  Manufacturer Warranties  |  As-Built Drawings  |  TAB Report'); y -= 60
     c.setFont('LSB', 15); c.drawCentredString(W / 2, y, PROJECT); y -= 20
     c.setFont('LS', 12); c.drawCentredString(W / 2, y, ADDRESS); y -= 50
     rows = [('Owner', 'Urban Health Plan, Inc.'), ('General Contractor', 'Sentinel Builders, LLC'),
@@ -275,7 +246,6 @@ def build():
     parts.append((cover(), None))
     parts.append((None, 'TOC'))
     parts.append((directory_and_schedule(), 'Project Directory and Equipment Schedule'))
-    parts.append((guarantee(), 'Contractor Guarantee (NWAC labor warranty)'))
     parts.append((maintenance(), 'Maintenance Instructions'))
     status = []
     for i, (key, title, sched, subs, supplier) in enumerate(EQUIPMENT, 1):
@@ -284,7 +254,7 @@ def build():
         parts.append((sheet('10_%02d_div.pdf' % i, 'SECTION %d - %s' % (i, title.upper()), lines), '%d. %s' % (i, title)))
         if om:
             parts += [(f, None) for f in om]
-        elif key not in ('CURB', 'DUCT'):
+        elif True:
             parts.append((sheet('10_%02d_om.pdf' % i, 'O&M MANUAL - %s' % title,
                                 ['Installation, operation and maintenance manual to be inserted.', 'Requested from %s.' % supplier],
                                 pending=True), None))
@@ -301,7 +271,7 @@ def build():
         wa = found('warranty', key)
         if wa:
             parts += [(f, None) for f in wa]
-        elif key not in ('CURB', 'DUCT', 'TSTAT'):
+        elif True:
             parts.append((sheet('20_%s.pdf' % key, 'WARRANTY - %s' % title, ['Requested from %s.' % supplier], pending=True), None))
     n += 1
     ab = sorted(glob.glob(os.path.join(DOCS, 'asbuilt', '*.pdf')), reverse=True)
@@ -345,8 +315,42 @@ def build():
             pg.insert_text((W - 0.75 * inch - 40, H - 0.3 * inch), 'Page %d of %d' % (i + 1, len(out)), fontsize=7,
                            color=(0.35, 0.35, 0.35))
     out.set_toc([[1, t, pg] for t, pg in toc])
-    out.save(OUT, garbage=3, deflate=True)
+    out.subset_fonts()                                   # vendor manuals embed full fonts; ~25% smaller
+    out.rewrite_images(dpi_threshold=160, dpi_target=150, quality=70)
+    out.save(OUT, garbage=4, deflate=True, deflate_images=True, deflate_fonts=True, use_objstms=1)
+    split_parts(pymupdf.open(OUT), toc)
     return len(out), status
+
+
+PART_LIMIT = 9.3e6      # Gmail connector attachment limit is 10 MB per file
+
+
+def split_parts(full, toc):
+    """Save e-mailable parts under PART_LIMIT, breaking at section starts where possible; parts 2+ repeat cover + contents."""
+    for f in glob.glob(OUT.replace('.pdf', ' - Part *.pdf')):
+        os.remove(f)
+    starts = sorted(pg - 1 for t, pg in toc)              # 0-based first page of each section
+    def size(a, b, front):
+        v = pymupdf.open()
+        if front:
+            v.insert_pdf(full, from_page=0, to_page=1)
+        v.insert_pdf(full, from_page=a, to_page=b)
+        return len(v.tobytes(garbage=4, deflate=True, use_objstms=1)), v
+    ranges, a, n = [], 0, len(full)
+    while a < n:
+        lo, hi = a, n - 1                                 # largest b with size(a..b) under the limit
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if size(a, mid, bool(ranges))[0] <= PART_LIMIT: lo = mid
+            else: hi = mid - 1
+        b = lo
+        if b < n - 1:
+            brk = [s for s in starts if a + 10 < s <= b]  # prefer ending just before a section divider
+            if brk: b = brk[-1] - 1
+        ranges.append((a, b)); a = b + 1
+    for i, (a, b) in enumerate(ranges, 1):
+        _, v = size(a, b, i > 1)
+        v.save(OUT.replace('.pdf', ' - Part %d of %d.pdf' % (i, len(ranges))), garbage=4, deflate=True, use_objstms=1)
 
 
 if __name__ == '__main__':

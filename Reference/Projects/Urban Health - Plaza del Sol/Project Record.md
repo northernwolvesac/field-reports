@@ -51,21 +51,25 @@ OLA Field Observation Report 11/12/2026 (`source/`):
   3. Guaranties and maintenance instructions
   4. Proof that permits are closed
 
-Binder: `Closeout/build_closeout.py` builds "Urban Health - HVAC Closeout Package.pdf". The draft output is git-ignored. Its sections:
-- cover, contents, directory, equipment schedule
-- NWAC 1-year guarantee letter (for signature)
-- maintenance instructions
-- per-equipment O&M plus approved submittals
-- warranties, as-builts, TAB report
+Binder: `Closeout/build_closeout.py` builds "Urban Health - HVAC Closeout Package.pdf" (205 pages, ~20 MB) plus
+e-mail parts "... - Part N of 4.pdf" (each under 9.3 MB; Gmail connector limit is 10 MB per file). Outputs are git-ignored; re-run the script.
+Per Ruslan 11/25/2026: GC needs O&M manuals and manufacturer warranties only (no submittals, no NWAC guarantee letter).
+Contents: directory, equipment schedule, maintenance instructions, O&M (Lennox, Mitsubishi, Rupp), warranties, as-builts, TAB.
 
-Drop vendor files into `Closeout/docs/om|warranty|asbuilt|tab/` and re-run. Set FINAL=True to remove the DRAFT marks.
+Sources of the manufacturer documents (downloaded 11/24-25/2026, `Closeout/docs/om` and `docs/warranty`):
+- Lennox LGT/LCT036-072 R-410A Installation/Operation/Maintenance 508286-01 (7/2022) - lennox.com; Lennox Equipment
+  Limited Warranty W900008-03 - lennox.com (1 yr components, 5 yr compressor, 10 yr aluminized heat exchanger, 3 yr coils).
+- Mitsubishi PKA-A-LA installation + operation manuals, PUY-A NKA7 installation manual (English pages) - Mitsubishi
+  S3 library s3.amazonaws.com/enter.mehvac.com; P-Series limited warranty Rev 10.24.2025 (products bought 5/2019-10/2025).
+- Rupp Air Power Roof Ventilators IOM - ruppair.com/manuals/ExhaustFans/Exhaust-oim.pdf; Rupp warranty policy
+  (24 months from shipment) reproduced from ruppair.com/warranty-info.
+TAB: A.L.E Testing & Balancing job 6722, final report 6/11/2026, revised 9/21/2026 (`docs/tab`).
+As-builts: Dmitriy's 6/25/2025 set is final (Ruslan 11/25/2026).
 
-Status 11/24/2026:
-- [x] Approved submittals collected (230000-2,3,4,5,7,8,9,10,11,12,17). 230000-6 (duct standards) was R&R and is not included.
-- [x] NWAC guarantee letter drafted (1 year from substantial completion). Fill in WARRANTY_START if the start-up / completion date is confirmed.
-- [x] Maintenance instructions page.
-- [ ] Vendor O&Ms and warranties. Request emails drafted 11/24 in Ruslan's Gmail (not sent yet) to Lennox, Homans, EAS and SRS.
-- [ ] As-builts. The 6/25/2025 set is in the binder. Email sent 11/24 to Dmitriy for the final As-Built set (PDF + DWG).
-- [ ] TAB report. Not found in email. Ruslan asked Andrei for a copy on 11/24. Andrei says it was sent to Ryan, but that is unconfirmed.
-- [ ] DOH: the EDC #29 air balance P.E. cover letter is still open from June 2026.
+Status 11/25/2026:
+- [x] O&M manuals and warranties for Lennox, Mitsubishi, Rupp.
+- [x] TAB report and as-builts in the binder.
+- [ ] Send the package to Ryan Jennings. Labor warranty response: start-up was more than 1 year ago, so no labor warranty.
+  The files are too large for the Gmail connector (3.1 MB per call), so Ruslan sends them from his own mail.
+- [ ] DOH: EDC #29 air balance P.E. cover letter (open since June 2026).
 - [ ] Permit sign-off documentation: by GC / expeditor.
