@@ -231,7 +231,7 @@ requireAuth().catch(function(){});
     'Notify Northern Wolves in writing within 48 hours of any change to price, lead time or scope. No substitutions without written approval.',
     'All deliveries must be coordinated in advance with the Northern Wolves Project Manager listed above. Delivery hours, freight elevator, loading dock and building rules vary by site and will be confirmed by the PM. Driver must have the PO number and job name.'
   ];
-  var DEFAULT_DIST = 'Alikhan Ilyas — Estimator (alikhan@northernwolvesac.com) · Fatima Moutchou — APM (fatima@northernwolvesac.com) · Karen Perez — Office / QuickBooks (karen@northernwolvesac.com)';
+  var DEFAULT_DIST = 'Alikhan Ilyas — Estimator (alikhan@northernwolvesac.com) · Northern Wolves Projects — submittals (projects@northernwolvesac.com) · Karen Perez — Office / QuickBooks (karen@northernwolvesac.com)';
   var TERMS = [
     ['Offer and acceptance.', 'This Purchase Order ("PO") is Northern Wolves Inc.\'s ("NW") offer to the Vendor named on page 1. It becomes binding on the earlier of Vendor\'s written acknowledgement, commencement of work, or shipment of goods, unless Vendor gives NW written objection within ten (10) days of receipt. This PO, its attachments and the referenced drawings, specifications and approved submittals are the entire agreement and supersede all prior quotations and communications. Vendor\'s terms printed on quotations, acknowledgements or invoices do not apply.'],
     ['Scope and compliance.', 'Goods and services shall conform to the drawings, specifications and approved submittals referenced on page 1, including all accessories, options and controls required for a complete and code-compliant installation, and to applicable NYC/NYS codes, UL/ETL listings and AHRI ratings. No substitutions or deviations without NW\'s prior written approval.'],
@@ -369,7 +369,7 @@ requireAuth().catch(function(){});
     $('fJob').value = p.short_code || '';
     $('fShipTo').value = 'Jobsite — ' + addr(p);
     $('fDelivContact').value = p.pm_name ? p.pm_name + ', PM' : '';
-    $('fSubTo').value = ['Fatima Moutchou (fatima@northernwolvesac.com)', p.pm_name ? p.pm_name + ' (PM)' : ''].filter(Boolean).join(' and ');
+    $('fSubTo').value = ['Northern Wolves Projects (projects@northernwolvesac.com)', p.pm_name ? p.pm_name + ' (PM)' : ''].filter(Boolean).join(' and ');
     updateNumber();
   }
 
