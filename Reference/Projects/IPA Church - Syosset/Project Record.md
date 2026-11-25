@@ -73,7 +73,21 @@ Still open:
 - [ ] VRF start-up report: Christino asked Ferguson (Michael Liranzo) 10/5; Ferguson says it did not supply the equipment.
   The VRF supplier on the POs is Klima (PO NWAC0547, NWAC1063). VRF central controller set-up also unresolved.
 - [ ] GC recap 10/27 items: firestopping all floors, duct collar and return grille room 111, resend completed scope list.
-- [ ] ADE 11/24 asks for the PO number for an "India Church" lien waiver.
+- [ ] ADE 11/24 asks for the PO number for an "India Church" lien waiver (PO is NWAC0554-IPA).
+
+11/25/2026 decisions and requests (Ruslan):
+- Sign W-002 on CCC's template wording (after checking the 3/19/2025 subcontract warranty section and completed-ops insurance).
+- Closeout emails go under projects@. Gmail drafts created 11/25 (from Ruslan's mailbox, cc projects@; switch From to projects@):
+  - Mike, Klima (michaelm@klimany.com), PO NWAC0547-IPA: LG Multi V 5 (1 HP + 4 HR systems), indoor units, DFS IT-room
+    system: O&M/IOM, LG warranty, VRF start-up report.
+  - Mark Richter, SRS (mrichter@srs-enterprises.com), POs NWAC0560/1131/1272-IPA: Metalaire outlets, 8 Markel heaters,
+    2 United Enertech louvers: O&M, warranties.
+  - Ryan Adams, ADE (radams@adehvac.com), PO NWAC0554-IPA: 3 RVE ERUs, DGX MAU, 2 kitchen exhaust fans, EF-01: IOM,
+    warranties with serials, final ERU (and MAU) start-up reports. So the DGX MAU and kitchen fans were furnished.
+  - Fatima (personal, fatima1moutchou@gmail.com): re-issue final HVAC shop drawings as AS-BUILT dated 11.20.2026, no layout
+    changes, PDFs + CAD to projects@.
+  - Requested by Wed 12/2/2026.
+- TAB is in our scope (proposal #2716: "3rd party Testing and Balancing w/reports"); balancing firm still to identify.
 
 ## Files in `source/`
 
