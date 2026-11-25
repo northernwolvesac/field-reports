@@ -90,6 +90,24 @@ Still open:
   - Requested by Wed 12/2/2026.
 - TAB is in our scope (proposal #2716: "3rd party Testing and Balancing w/reports"); balancing firm still to identify.
 
+### Closeout package (Drive) - started 11/25/2026
+
+Drive folder "Closeout Package - India Pentecostal Assembly (HVAC)" (id 1lWqKg5hyaUx6fWKVg6FCoRlbqlal3Cpj) inside the project
+folder. Local copies: `Closeout/docs/`. The link goes to CCC (Liz) only when complete.
+- 01 Subcontractor Warranty Letter: W-002 UNSIGNED. Replace with the signed scan before sending the link.
+- 02 Manufacturer Warranties: Greenheck DOAS (ERU-1..3), Greenheck MUA (KMAU-1), Greenheck fan (KEF-1,2), Metal Industries
+  (Metalaire air outlets).
+- 03 O&M: Greenheck RVE IOM 486913, CUE IOM 471560, ERU controls (G31, Y07, Web UI), Metalaire diffuser and grille IOMs,
+  louver IOM, Markel heater instructions 9940. NOT uploaded: Greenheck DGX IOM 482886 (4.1 MB, over the 3.1 MB per-file
+  connector limit); upload by hand or split.
+- 04 As-Built Drawings: waiting on Fatima (requested 11/25).
+- 05 TAB Report: balancing firm still to identify.
+Vendor replies 11/25: Ryan (ADE) sent Greenheck docs and the 9/9 partial start-up reports; ADE returns 12/9 for final
+start-up. Gaps from ADE: EF-01 (Greenheck SP-B80) IOM and SP warranty (the fan warranty sent excludes model SP), ERU final
+start-up reports. Mark (SRS) sent Metalaire, louver and Markel docs; confirm the Markel 303/304/305-series instructions cover
+the scheduled F3032/H3032 heaters. Mike Micara (Klima) sent the LG package to Christino by WeTransfer (not in Ruslan's mailbox):
+get it from Christino.
+
 ## Files in `source/`
 
 - `Greenheck ERU submittal 230000-13 (reviewed DMG 2025-04-22).pdf`: P281653R03, wiring diagrams G31 (p.15), Y07 (p.18), sequence p.25.
